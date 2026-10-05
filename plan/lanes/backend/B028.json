@@ -71,6 +71,5 @@
     "Target membership already removed concurrently -> 404, no audit success event.",
     "Transaction deadlock on transfer -> retry once, then 409."
   ],
-  "unblocks_gate": "G3",
-  "notes": "CONTRACT GAP: whether admins may promote to admin is not stated; conservative reading used (owner only). CONTRACT GAP: workspace-level removal effect on live sessions is not described beyond CT-RBAC rule 2; the relay (B043) subscribes to `centcom:membership`. This channel name is internal to the backend, not a contract."
+  "unblocks_gate": "G3"
 }

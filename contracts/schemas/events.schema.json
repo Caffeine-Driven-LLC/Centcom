@@ -1068,6 +1068,14 @@
             "pattern": "^mem_[0-9A-HJKMNP-TV-Z]{26}$"
           },
           "maxItems": 200
+        },
+        "approvers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^mem_[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "maxItems": 200
         }
       },
       "required": [
@@ -1185,6 +1193,7 @@
         "state": {
           "type": "string",
           "enum": [
+            "pending",
             "live",
             "paused",
             "ended",

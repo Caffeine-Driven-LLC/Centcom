@@ -80,6 +80,5 @@
     "Export requested for a huge range -> rejected early when a COUNT estimate exceeds the cap (422 with pointer `/from`).",
     "Cursor from a different filter set -> 400 problem+json."
   ],
-  "unblocks_gate": "G5",
-  "notes": "CONTRACT GAP: no audit event schema, no `exp_` id prefix in CT-IDS, and no stable action-name catalogue exist; the shape above is provisional and `exp_`-style ids are generated with the `exp` prefix pending a Contract PR. The emitter (B036) owns the canonical column set; this lane reads it. CONTRACT GAP: audit_log_days = 0 denial code is an `entitlement_*` code not named in the contracts."
+  "unblocks_gate": "G5"
 }

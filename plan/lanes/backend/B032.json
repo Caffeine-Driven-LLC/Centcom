@@ -71,5 +71,5 @@
     "Unknown template id at runtime -> throws at enqueue time, never at delivery."
   ],
   "unblocks_gate": "G5",
-  "notes": "Only three templates are in this lane; other lanes add theirs through `registerTemplate` in their own files. Email copy is server-side here, unlike notifications (CT-NOTIF-PAYLOAD uses keys); this is intentional because email has no client message table. CONTRACT GAP: none for the contracts consumed."
+  "notes": "Only three templates are in this lane; other lanes add theirs through `registerTemplate` in their own files. Email copy is server-side here, unlike notifications (CT-NOTIF-PAYLOAD uses keys); this is intentional because email has no client message table."
 }

@@ -53,10 +53,31 @@ Where the catalogue says `list:obj`, the objects are:
 |---|---|
 | `queue.state.items[]` | `{item: que_, submitter: mem_, state: queued\|approved\|running\|held, position: int\|null, size: int, kind: message\|command, ts, agent_id?: agt_}` |
 | `control.roster.members[]` | `{id: mem_, name, slot: int, role: host\|editor\|viewer, device: dev_, connected: bool}` |
-| `diff.share.files[]` / `message.user.attachments[]` (secret) | `{name, size, blob?: blb_, sha256?}` |
+| `diff.share.files[]` (secret) | `{name, size, patch?: unified diff ≤ 64 KiB, blob?: blb_, sha256?}` |
+| `message.user.attachments[]` (secret) | `{name, size, blob?: blb_, sha256?}` |
 
 ### Server identity
 Frames stamped by the server carry `from: "srv"` (the literal string). Clients accept `control.member_joined`, `control.member_left`, `control.roster`, `control.host_changed`, `control.session_state`, `control.rotate_key`, `queue.state` and `sys.*` **only** when `from` is `srv`, and ignore them otherwise. On LAN the host stamps `srv` as well. Member-originated frames always carry a `mem_` id.
+
+### Limits and bounds (normative)
+| Thing | Bound |
+|---|---|
+| `file.lock.ttl_ms` | default 300 000 (5 min); min 5 000; max 3 600 000; the relay clamps |
+| `approval.request.expires_at` | at most 24 h after the frame `ts`; default 10 min when the client omits it (clients SHOULD always send it) |
+| `approver` meaning | `host`: the host; `owner`: workspace owner/admin members present in the session; `any_editor`: any editor |
+| Who may send `approval.decision` | the host always; members listed in `control.policy.approvers`; the roles named by the request's `approver` |
+| `control.mute.until` | at most 7 days after the frame `ts` (longer is clamped) |
+| `presence.cursor` `ct` | ≤ 4 KiB |
+| reactions | ≤ 20 per member per target frame; comments ≤ 200 per target frame |
+| `queue.reject` / auto-approve reason | auto-approval is recorded in the audit event (actor `srv`, reason = policy), not on the frame |
+| `sys.slow_down.p` | `{for_ms, reason: "rate" \| "outbound"}` |
+| `sys.notice` levels | `usage_warning`→`warn`, `quota_reached`→`error`, `plan_changed`→`info`, `member_limit_near`→`warn`, `maintenance_soon`→`warn`, `client_update_available`→`info`, `history_retention_changed`→`info` |
+
+### Slots with several devices
+Slots belong to the **member**, not the device. The same member connecting from two devices shares one slot (the newer connection supersedes the older, CT-WS-ENVELOPE).
+
+### Session lifecycle states
+`pending` (created, host not yet connected) → `live` → `paused` (host away beyond grace / key rotation needed) → `ended` (host ended) or `expired` (idle 24 h). REST `Session.state` uses the same five values. A session with a LAN origin never has a backend state.
 
 ### Size and rate rules
 - `message.assistant.delta` ≤ 4 KiB plaintext per frame, ≤ 10/s per agent.

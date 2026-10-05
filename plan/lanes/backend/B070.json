@@ -85,5 +85,5 @@
     "Customer exists in Stripe but DB insert failed -> next ensureCustomer finds it by metadata search (workspace id) and links it instead of creating a duplicate."
   ],
   "unblocks_gate": "G4",
-  "notes": "Size L is fair (gateway + persistence + route). SPLIT? gateway/catalogue vs persistence/route if it overruns. CONTRACT GAP: the subscription response shape is not specified beyond 'Subscription state (active|trialing|past_due|canceled)'; the 'free/none' view for unsubscribed workspaces is this lane's proposal."
+  "notes": "Size L is fair (gateway + persistence + route). SPLIT? gateway/catalogue vs persistence/route if it overruns."
 }

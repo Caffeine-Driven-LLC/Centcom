@@ -69,5 +69,5 @@
     "Lock dir not writable -> in-memory locks only with one warning."
   ],
   "unblocks_gate": "G5",
-  "notes": "TTL values are product choices (contract only says `ttl_ms` optional). CONTRACT GAP: encoding of `path_hmac` (base64url vs hex) is only constrained by the schema pattern `^[A-Za-z0-9_-]+$`; base64url without padding is used. Per-epoch rehash on key rotation is assumed by the client."
+  "notes": "TTL values are product choices (contract only says `ttl_ms` optional)."
 }

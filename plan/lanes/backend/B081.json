@@ -87,6 +87,5 @@
     "Redis outage -> `emitWebhookEvent` falls back to an outbox table row (`webhook_outbox`) drained when Redis returns; no event lost.",
     "Secret decryption key unavailable -> deliveries pause (no unsigned sends), alert metric `webhook_secret_unavailable_total`."
   ],
-  "unblocks_gate": "G5",
-  "notes": "CONTRACT GAP: the contract names no event type for `POST /v1/webhooks/{id}/test`; this lane sends the first subscribed event type with synthetic ids in `data` and a `Centcom-Event-Type` header of that type (to be confirmed by Contract PR). CONTRACT GAP: the body `id` is documented as `dlv_` while the header is `Centcom-Event-Id`; both carry the delivery id here. SPLIT? Management API and delivery engine could be two lanes if schedule slips. Deliverable log retention is 30 days (assumption, enforced by B090)."
+  "unblocks_gate": "G5"
 }

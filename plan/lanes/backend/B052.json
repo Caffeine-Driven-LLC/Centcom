@@ -24,7 +24,7 @@
     "Quota warning logic and notices: B076; usage aggregation: B075.",
     "Frame sequencing, ack and fan-out: B041/B044.",
     "Client-side display of queue bodies.",
-    "Trusted-list management endpoints (CONTRACT GAP, see notes)."
+    "Trusted-list management: the list is `control.policy.trusted`, set by the host through B051."
   ],
   "implements": [
     "CT-WS-QUEUE"
@@ -91,6 +91,5 @@
     "Instance restart -> queue rebuilt from queue_item rows plus frames after updated_seq; version continues without gaps.",
     "Reorder lists unknown item ids -> unknown ids ignored, known items keep relative order, sender gets sys.error `queue_item_gone` once."
   ],
-  "unblocks_gate": "G3",
-  "notes": "CONTRACT GAP: no error code is defined for submit by a muted member or locked session; this lane uses `forbidden`. CONTRACT GAP: the 'trusted list' for auto_approve='trusted' has no endpoint or field in the contracts; the lane reads a TrustedListPort that defaults to the workspace owners/admins until the contract defines it. CONTRACT GAP: queue.approve has only `item` in p, so the auto-approve 'policy as reason' is recorded in the audit event, not on the frame. Size L is fair; SPLIT? the auto-approve policy could be a separate lane."
+  "unblocks_gate": "G3"
 }

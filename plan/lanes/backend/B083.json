@@ -78,6 +78,5 @@
     "Cache and DB disagree on rev -> cache is discarded and reloaded; clients may see a 15 s stale value at most.",
     "Corrupt `User-Agent` header -> treated as unknown version."
   ],
-  "unblocks_gate": "G5",
-  "notes": "CONTRACT GAP: how an anonymous client is bucketed for percentage rollouts is unspecified; anonymous callers are not bucketed (only 0 %/100 % public flags). Flag key naming convention is not in a contract; `[a-z0-9_.-]{1,64}` is used."
+  "unblocks_gate": "G5"
 }

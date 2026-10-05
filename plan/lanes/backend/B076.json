@@ -85,5 +85,5 @@
     "Entitlement limit changes mid-evaluation -> re-read limits inside the evaluation transaction; stale rev causes one re-run."
   ],
   "unblocks_gate": "G4",
-  "notes": "Assumption: B075 exposes a post-commit hook or queue event when aggregates change; if it only offers polling, the 60 s sweep carries the load. The channel name `relay:notice:{wsp}` is defined here and must be agreed with the B044/B045 owners. The `usage.threshold` webhook is enqueued directly on the BullMQ queue `webhook.events` defined in B081. CONTRACT GAP: no `notice` level mapping is given for usage_warning/quota_reached; chosen `warn` and `error`."
+  "notes": "Assumption: B075 exposes a post-commit hook or queue event when aggregates change; if it only offers polling, the 60 s sweep carries the load. The channel name `relay:notice:{wsp}` is defined here and must be agreed with the B044/B045 owners. The `usage.threshold` webhook is enqueued directly on the BullMQ queue `webhook.events` defined in B081."
 }

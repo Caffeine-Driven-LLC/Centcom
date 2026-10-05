@@ -79,6 +79,5 @@
     "Provider returns no email -> login rejected with a clear page (we require an email).",
     "Client secret missing for a provider -> that provider's routes return 404 and the provider is omitted from login pages; startup logs a warning."
   ],
-  "unblocks_gate": "G1",
-  "notes": "CONTRACT GAP: social login is outside CT-AUTH, so routes and the `identities` table are internal decisions. Adds dependency jose (MIT) if not already added by B017; coordinate versions."
+  "unblocks_gate": "G1"
 }

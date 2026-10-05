@@ -26,7 +26,8 @@ Two plans, **100 lanes each**, built in parallel by different people (or agents)
 | [`GRAPH.md`](GRAPH.md) | Layers, parallelism, critical path (generated) |
 | [`CONTRACT_MATRIX.md`](CONTRACT_MATRIX.md) | Every contract × the lanes that implement/consume it (generated) |
 | [`INTEGRATION.md`](INTEGRATION.md) | Gates G0-G6 and who unblocks them (generated) |
-| [`OPEN_ITEMS.md`](OPEN_ITEMS.md) | Remaining contract questions and split candidates, collected from the cards (generated) |
+| [`DECISIONS.md`](DECISIONS.md) | Every question raised while writing the cards, and how it was resolved |
+| [`SIZING.md`](SIZING.md) | Lanes that may need splitting at kickoff (generated) |
 | [`LANE_CARD_SPEC.md`](LANE_CARD_SPEC.md) | Card format and the rules `validate_plan.py` enforces |
 | [`PR_TEMPLATE.md`](PR_TEMPLATE.md) | Pull request template for lanes |
 

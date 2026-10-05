@@ -69,6 +69,5 @@
     "Out-of-order signals (approval resolved without needed) -> ignored with a debug log, state unchanged.",
     "Clock drift/backwards -> `since` still non-decreasing per agent (clamped)."
   ],
-  "unblocks_gate": "G3",
-  "notes": "CONTRACT GAP: CT-STATE-MAP says which categories travel as `agent.state` but the 'outcome (agent-level)' wording does not list which of celebrate, ci-*, pr-* count; this lane emits only success, error, crash, warning, tests-pass, tests-fail, merge-conflict, deploying (when a hint is given) and saving. `context-full` is under 'limits' (client-local) so it is surfaced as a local UI state, not on the wire. Event schema `agent.state.since` semantics ('state started at') assumed."
+  "unblocks_gate": "G3"
 }

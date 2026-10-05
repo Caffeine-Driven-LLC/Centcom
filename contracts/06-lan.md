@@ -29,6 +29,8 @@ Two machines on the same network collaborate with **no backend and no account**.
 
 A guest must prove it knows a short **pairing code** shown on the host screen (8 chars `[A-Z2-9]` without ambiguous glyphs, valid 5 minutes, one use per guest, rate-limited 5 attempts per code).
 
+Parameters (pinned): suite `CPACE-RISTR255-SHA512` (IRTF CPace draft, Appendix test vectors are the conformance vectors); DSI `CPaceRistretto255`; password-related string `PRS` = the pairing code (UTF-8); channel identifier `CI = lv(host_fp) ‖ lv(guest_fp) ‖ lv(sid)` where `lv(x)` = 2-byte big-endian length ‖ UTF-8 bytes; session id `sid` = the LAN session id. Key confirmation: `confirm_X = BLAKE2b-256(key = ISK, data = "centcom.lan.confirm." ‖ X ‖ transcript)` with `X` ∈ `host|guest` and `transcript` = the concatenation of all four `lan.pair.*` messages as sent. libsodium must be the **sumo** build (ristretto255 scalar-mult helpers).
+
 Protocol: **CPace** (balanced PAKE; draft-irtf-cfrg-cpace) over ristretto255 using libsodium, with the host's session id and both device fingerprints as the channel identifiers. Output: a shared secret `ISK` used to
 1. authenticate both sides (key confirmation MACs exchanged), and
 2. wrap the session key grant: the host sends `key.grant` sealed to the guest's X25519 key **after** confirmation.

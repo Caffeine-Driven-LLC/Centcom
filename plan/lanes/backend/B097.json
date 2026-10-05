@@ -75,6 +75,5 @@
     "Advisory database outage in CI -> `security:deps` fails closed on main, warns on PRs after 1 retry.",
     "New dependency lacks licence metadata -> treated as failure until reviewed."
   ],
-  "unblocks_gate": "G6",
-  "notes": "CONTRACT GAP: the relay's WebSocket URL/path is not specified in any contract; the WAF module takes it as the variable `ws_path_regex`. The security-header test must also be run against the relay's HTTP upgrade response, which the relay lane owns. This lane's scripts live in `infra/security/` because the backend layout has no `tools/` directory."
+  "unblocks_gate": "G6"
 }

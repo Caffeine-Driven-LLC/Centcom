@@ -25,6 +25,7 @@ Example: `ses_01JA3Z8K2M5N7P9Q0R1S2T3V4W`.
 | snapshot | `snp` | | project | `prj` |
 | upload / blob | `blb` | | request | `req` |
 | data export | `exp` | | push subscription | `psh` |
+| usage event | `use` | | status incident | `inc` |
 
 - IDs are opaque to clients. Clients MUST NOT parse the ULID part for meaning except for sort order (lexicographic order = creation order, within one generator's clock skew).
 - Server-generated IDs are generated server-side. **Client-generated IDs** are allowed (and required) for: queue item `que_`, frame `msg_`, approval request `apr_`. They MUST be ULIDs from a monotonic generator; the server treats them as idempotency keys.
@@ -128,13 +129,14 @@ Response:
 ```json
 { "data": [ ... ], "next_cursor": "opaque-or-null", "has_more": true }
 ```
-- Cursors are opaque, URL-safe, expire after 24 h, and are bound to the same filters.
+- Cursors are opaque, URL-safe, expire after 24 h, and are bound to the same filters. An expired, malformed or mismatched cursor returns `400 cursor_invalid`.
 - Never offset-based. Order is stable within a cursor.
 
 ### Idempotency
 - Every **POST** that creates or changes state accepts `Idempotency-Key: <ULID or UUID>` (≤ 64 chars).
 - The server stores key → (request fingerprint, response) for **24 h**. Replaying the same key with the same body returns the stored response (status + body) with `Idempotency-Replayed: true`. Same key with a different body → `409 idempotency_conflict`.
-- Required (rejected with `idempotency_key_required` otherwise) on: checkout creation, invite creation, usage event ingest, webhook endpoint creation.
+- A duplicate that arrives while the first request with the same key is still running waits up to 10 s for its result, then returns `409 conflict` with `Retry-After: 1`.
+- Required (rejected with `400 idempotency_key_required` otherwise) on: checkout creation, invite creation, usage event ingest, webhook endpoint creation.
 
 ### Rate limits
 Headers on every API response (IETF `RateLimit` draft):
@@ -167,10 +169,10 @@ JSON bodies ≤ 256 KiB except `POST /v1/usage/events` (≤ 1 MiB) and snapshot 
   "status": "operational | degraded | partial_outage | major_outage",
   "updated_at": "2026-10-05T18:07:41.123Z",
   "components": [{"id":"relay-eu","name":"Relay (EU)","status":"operational"}],
-  "incidents": [{"id":"inc_1","title":"Elevated latency","status":"investigating","started_at":"…","updates":[{"at":"…","text":"…"}]}],
+  "incidents": [{"id":"inc_01JA3Z8K2M5N7P9Q0R1S2T3V4W","title":"Elevated latency","status":"investigating","started_at":"…","updates":[{"at":"…","text":"…"}]}],
   "min_client_version": "1.2.0",
   "contract_version": "1.0.0",
   "deprecations": [{"what":"/v1/foo","sunset":"2027-03-01"}]
 }
 ```
-Cached 15 s at the edge. Clients show degraded/outage banners from this and MUST NOT block local or LAN use because of it.
+Incident `status` is one of `investigating | identified | monitoring | resolved`. Cached 15 s at the edge. Clients show degraded/outage banners from this and MUST NOT block local or LAN use because of it.

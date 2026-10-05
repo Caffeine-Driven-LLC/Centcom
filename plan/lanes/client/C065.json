@@ -58,7 +58,8 @@
     "`usage_warning {pct:80}` sets `quota().level === 'warning'`; `quota_reached` sets `reached` and stays until `resets_at`; neither stops `flush()` nor any local command.",
     "A 422 with `errors[].pointer` drops that batch, logs only the code and pointer, and continues with later batches.",
     "Events without `session_id` of a hosted session (LAN/local) are never added to the spool; when logged out a single warning is logged and events are discarded.",
-    "`stop()` flushes within 5 s or leaves the spool intact for the next run."
+    "`stop()` flushes within 5 s or leaves the spool intact for the next run.",
+    "Every produced usage event `id` matches `^use_[0-9A-HJKMNP-TV-Z]{26}$` (client-generated, CT-IDS)."
   ],
   "tests": [
     "usage/batcher.test.ts: size/count limits, key stability, rate spacing on fake clock.",
@@ -81,6 +82,5 @@
     "Clock set wrong -> `at` is the client time; the server tolerates skew only for tokens, so events are timestamped from the injected clock and never from the server in this lane.",
     "Disk unwritable -> memory-only queue (cap 1 000 events) with a warning; events beyond the cap dropped oldest first."
   ],
-  "unblocks_gate": "G4",
-  "notes": "CONTRACT GAP: the format of usage event `id` is not given in CT-IDS (no prefix listed); this card uses a plain 26-char ULID. The contract also does not say whether the client should report `queue_items`/`relay_bytes`; this card does not (the relay records those)."
+  "unblocks_gate": "G4"
 }

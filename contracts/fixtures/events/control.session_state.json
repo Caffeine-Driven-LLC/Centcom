@@ -10,7 +10,7 @@
     "k": "control.session_state",
     "seq": 1042,
     "p": {
-      "state": "live"
+      "state": "pending"
     }
   },
   "secret_payload": null

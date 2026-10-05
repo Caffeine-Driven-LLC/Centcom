@@ -83,6 +83,5 @@
     "Workspace switch -> cache keyed per workspace id; a pending fetch for the old workspace is discarded.",
     "Disk cache unreadable -> ignore and refetch; never block startup."
   ],
-  "unblocks_gate": "G4",
-  "notes": "CONTRACT GAP: the error codes for entitlement denials (`entitlement_*`) and the checkout request body fields (plan, seats, currency) live only in errors.json/openapi.yaml; the card follows those files. Quota behaviour at 100 % blocks only hosted work server-side; this lane only informs the UI."
+  "unblocks_gate": "G4"
 }

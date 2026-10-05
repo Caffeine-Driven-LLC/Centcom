@@ -80,6 +80,5 @@
     "Stripe timeout -> 503 with retry_after_s; the client retries with the same Idempotency-Key and gets the same session.",
     "Customer creation succeeded but session failed -> customer reused on retry (B070)."
   ],
-  "unblocks_gate": "G4",
-  "notes": "CONTRACT GAP: request bodies for checkout and portal are not specified (summary says only 'Create a hosted checkout session -> {url}'); the bodies above are proposals. The EUR and USD currency options follow CT-IDS. Trial and promo handling is deferred to B079."
+  "unblocks_gate": "G4"
 }

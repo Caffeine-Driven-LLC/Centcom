@@ -72,5 +72,5 @@
     "Rule file locked/unwritable -> rule kept for the session only, user warned once."
   ],
   "unblocks_gate": "G3",
-  "notes": "Delegated approvers are defined by CT-RBAC ('host (and delegated approvers)') but the wire has only `approver: host|owner|any_editor`; how delegation is granted is not specified. CONTRACT GAP: delegation mechanism (who is a delegated approver, how the client learns it). Implemented conservatively as: host always; `any_editor` honoured only if the session policy says so. SPLIT? engine vs approval broker could be separate PRs."
+  "notes": "Delegated approvers are defined by CT-RBAC ('host (and delegated approvers)') but the wire has only `approver: host|owner|any_editor`; how delegation is granted is not specified."
 }

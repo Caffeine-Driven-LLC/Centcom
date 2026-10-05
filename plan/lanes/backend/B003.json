@@ -94,6 +94,5 @@
     "Clock moves backwards -> generator keeps ULID monotonic by incrementing the previous random part.",
     "Invalid input to a helper -> return null/false or a Result error, never throw for external data."
   ],
-  "unblocks_gate": "G0",
-  "notes": "CONTRACT GAP."
+  "unblocks_gate": "G0"
 }

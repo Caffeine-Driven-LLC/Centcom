@@ -78,6 +78,5 @@
     "Token store unavailable -> 503 with `retry_after_s`; no fallback.",
     "User row in `pending_deletion` or `deleted` state -> treated as non-existent for sign-in (same generic response)."
   ],
-  "unblocks_gate": "G1",
-  "notes": "CONTRACT GAP: login methods are explicitly outside the CT-AUTH wire contract, so these browser routes have no contract definition; paths are internal and may be renamed. Depends on B032 only through the `MagicLinkMailer` interface."
+  "unblocks_gate": "G1"
 }

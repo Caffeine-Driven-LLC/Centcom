@@ -11,12 +11,13 @@
   ],
   "goal": "Let a user delete their account (30-day grace, then irreversible purge) and request a downloadable export of their own data, exactly as CT-API-ACCOUNTS describes, without ever exporting or retaining other people's data or session ciphertext content.",
   "scope_in": [
-    "DELETE /v1/me: validate no blocking state, mark the user `deletion_scheduled_at = now + 30 d`, revoke all refresh tokens and devices, write audit, return 202 with `Location` pointing at `/v1/me` (CONTRACT GAP below).",
+    "DELETE /v1/me: validate no blocking state, mark the user `deletion_scheduled_for = now + 30 d` (exposed on `GET /v1/me`), revoke all refresh tokens and devices, write audit, return 202 with `Location` pointing at `/v1/me`; the grace period can be ended early by `POST /v1/me/restore`.",
     "POST /v1/me/export (Idempotency-Key accepted) and GET /v1/me/export/{id}: enqueue an export job, report status `pending|running|ready|failed|expired`, return a signed download URL (TTL 15 min per request) when ready.",
     "BullMQ job `account-export`: builds one JSON document of the user's own records (profile, preferences, devices with public-key fingerprints, memberships, API-key metadata without secrets, own notification preferences, own audit events) and stores it in the blob store as `exports/<usr>/<exp>.json`.",
     "BullMQ job `account-purge`: scheduled for the grace deadline; hard-deletes the user's rows and pseudonymises audit rows; idempotent and resumable.",
     "Service function `cancelDeletion(userId)` that clears the schedule (to be called by login flows; no HTTP endpoint).",
-    "Migration adding `users.deletion_scheduled_at`, `users.deleted_at` and table `account_exports`."
+    "Migration adding `users.deletion_scheduled_at`, `users.deleted_at` and table `account_exports`.",
+    "`POST /v1/me/restore` cancels a pending deletion during the 30-day grace period; `GET /v1/me` exposes `deletion_scheduled_for`."
   ],
   "scope_out": [
     "GET /v1/me and PATCH /v1/me (B022).",
@@ -47,7 +48,8 @@
     "TS: `interface AccountLifecycleService { requestDeletion(userId: string, ctx: RequestCtx): Promise<{ scheduledFor: string }>; cancelDeletion(userId: string): Promise<void>; requestExport(userId: string, ctx: RequestCtx): Promise<{ id: string; status: ExportStatus }>; getExport(userId: string, exportId: string): Promise<ExportView>; }`",
     "TS: `purgeUser(deps: PurgeDeps, userId: string): Promise<void>` used by the `account-purge` job.",
     "DB: `users.deletion_scheduled_at timestamptz null`, `users.deleted_at timestamptz null`; table `account_exports(id text pk, user_id, status, blob_key, size_bytes, created_at, expires_at, error_code)`.",
-    "BullMQ queues `account-export` (attempts 5) and `account-purge` (delayed job, jobId `purge:<usr>` so it is unique)."
+    "BullMQ queues `account-export` (attempts 5) and `account-purge` (delayed job, jobId `purge:<usr>` so it is unique).",
+    "POST /v1/me/restore -> 200 User | 409 conflict | 410 gone (CT-API-ACCOUNTS)"
   ],
   "acceptance": [
     "DELETE /v1/me returns 202; `users.deletion_scheduled_at` equals now + 30 d (+-1 s); all of the user's refresh tokens are revoked and a request using an old access token's device gets 401 `device_revoked` within 1 s of the call.",
@@ -57,7 +59,8 @@
     "GET /v1/me/export/{id} for another user's export returns 404 (not 403); a `ready` export returns a `download_url` that expires in 900 s (+-5 s) and the file is valid JSON that contains no other user's email, no token, no key secret, no `ct` value.",
     "An export in `ready` status becomes `expired` after 7 days and its blob is deleted by the same job family; polling then returns status `expired` without a URL.",
     "`account-purge` run after the grace deadline deletes the user row, devices, tokens, memberships, API keys, notifications, preferences and exports; audit rows keep the `aud_` id but `actor_id` becomes the constant `usr_deleted`; running the job twice is a no-op.",
-    "If the user calls `cancelDeletion` before the deadline, the delayed purge job is removed and the purge job, if it still fires, exits without deleting anything."
+    "If the user calls `cancelDeletion` before the deadline, the delayed purge job is removed and the purge job, if it still fires, exits without deleting anything.",
+    "`POST /v1/me/restore` within the grace period clears `deletion_scheduled_for` (200 with the User) and a second call returns 409; after the grace period it returns 410 `gone`."
   ],
   "tests": [
     "account-lifecycle.routes.test.ts: delete, repeat delete, blocked by sole-owner rule, export create/poll/replay, cross-user 404.",
@@ -80,6 +83,5 @@
     "Purge job fails halfway (e.g. FK) -> transaction rolls back per entity group, job retries, pager metric `account_purge_failed_total` increments; user stays in scheduled state.",
     "Export requested for a user already scheduled for deletion -> still allowed during grace (data-portability right)."
   ],
-  "unblocks_gate": "G6",
-  "notes": "CONTRACT GAP: contract says DELETE /v1/me returns a `Location` of status but defines no deletion-status endpoint nor a way to cancel; this card points `Location` at /v1/me and offers `cancelDeletion` as a service function only."
+  "unblocks_gate": "G6"
 }

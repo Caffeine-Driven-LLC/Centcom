@@ -91,6 +91,5 @@
     "Server's `seq` jumps backwards (relay reset) -> emit `gap` with a protocol warning, force reconnect with `last_seq:null`, rely on snapshot/history.",
     "SeqStore load fails -> start with `last_seq:null` (full resume path), log a warning."
   ],
-  "unblocks_gate": "G2",
-  "notes": "CONTRACT GAP: the pure ack frame is described as `{ack: n}`; this card sends `{v:1,t:'ack',sid,ack:n}` using the top-level `ack` field of the envelope."
+  "unblocks_gate": "G2"
 }

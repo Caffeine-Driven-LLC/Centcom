@@ -89,5 +89,5 @@
     "Port already in use -> exit non-zero with a clear log line."
   ],
   "unblocks_gate": "G2",
-  "notes": "Module auto-discovery (`apps/relay/src/*/module.ts`) is the integration mechanism that keeps relay lanes' deliverables disjoint; downstream lanes B038-B050 export a default `RelayModule` from their own folder. CONTRACT GAP: CT-VER lists no version field on the relay's HTTP surface other than `/v1/status` (served by the API); this lane keeps version info in logs and in `sys.welcome` (B038). CONTRACT GAP: the `sys.error` code for overload (4503) is not named in a visible errors.json; use the registry's 503-class code."
+  "notes": "Module auto-discovery (`apps/relay/src/*/module.ts`) is the integration mechanism that keeps relay lanes' deliverables disjoint; downstream lanes B038-B050 export a default `RelayModule` from their own folder."
 }

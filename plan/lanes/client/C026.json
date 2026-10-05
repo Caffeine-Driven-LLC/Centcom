@@ -75,5 +75,5 @@
     "Resume handle rejected by the runner (SDK session expired) -> load transcript read-only, offer to continue as a fresh agent with the transcript summary as context, and tell the user plainly."
   ],
   "unblocks_gate": null,
-  "notes": "Local session ids reuse the `ses_` prefix from CT-IDS so a later LAN/relay adoption can keep the id shape, but a local id is never sent to a server. CONTRACT GAP: none; the local log format is client-private. SPLIT? Not needed if the picker UI stays out of scope."
+  "notes": "Local session ids reuse the `ses_` prefix from CT-IDS so a later LAN/relay adoption can keep the id shape, but a local id is never sent to a server."
 }

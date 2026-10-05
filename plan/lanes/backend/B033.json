@@ -66,5 +66,5 @@
     "Token generator entropy source failure -> throws; callers surface 500, never fall back to a weaker source."
   ],
   "unblocks_gate": "G5",
-  "notes": "B029 owns the `InviteUrlBuilder` port and a minimal fallback; this lane supplies the full implementation through the Fastify plugin. CONTRACT GAP: share-link URL form (`/v1/share-links/{token}/join`) has no entry in the CT-DEEPLINK table; B068 decides."
+  "notes": "B029 owns the `InviteUrlBuilder` port and a minimal fallback; this lane supplies the full implementation through the Fastify plugin."
 }

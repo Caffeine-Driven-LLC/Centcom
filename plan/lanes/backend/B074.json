@@ -83,6 +83,5 @@
     "Redis stream hint fails -> ingestion still succeeds; B075's periodic sweep finds new rows by received_at.",
     "Idempotency store down -> fail closed with 503 for this required-key endpoint."
   ],
-  "unblocks_gate": "G4",
-  "notes": "CONTRACT GAP: the response body for POST /v1/usage/events and the event id format are not specified; {accepted, duplicates} and a 8..40 char [A-Za-z0-9_-] id are proposals (CT-IDS defines no usage event prefix). Per-type qty caps and the 31-day window are lane choices. Contract text says Role 'device', so API-key principals are rejected."
+  "unblocks_gate": "G4"
 }

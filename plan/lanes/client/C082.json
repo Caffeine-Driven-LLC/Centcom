@@ -16,7 +16,8 @@
     "Silent refresh using grant_type `refresh_token` with the cookie; single-flight across tabs via Web Locks (`navigator.locks.request('centcom-refresh')`) and BroadcastChannel to share the new access token.",
     "Auth store (Zustand): `{status: 'unknown'|'anonymous'|'authenticated'; user?: Me; accessToken?: string (memory only)}` plus `useAuth()` and a fetch wrapper adding `Authorization: Bearer`, refresh-once-on-401 `token_expired` semantics from CT-ERR/CT-AUTH.",
     "Route guards (`requireAuth`, `requireRole`) and sign-out: `POST /v1/auth/revoke` then clear store, broadcast to other tabs.",
-    "`GET /v1/me` bootstrap, exposing plan, active workspace and entitlement revision (`ent` claim) to other web lanes."
+    "`GET /v1/me` bootstrap, exposing plan, active workspace and entitlement revision (`ent` claim) to other web lanes.",
+    "Device registration for the browser: generate X25519 and Ed25519 keys with WebCrypto (non-extractable where supported, kept in IndexedDB) and pass `device_pubkeys` and `device_name` on the authorize request (CT-AUTH 'Devices for the web app'); browsers without Ed25519 fall back to viewer-only."
   ],
   "scope_out": [
     "Login methods (magic link, GitHub, Google): backend authorize page only.",
@@ -54,7 +55,8 @@
     "Two tabs hitting expiry simultaneously cause exactly one refresh request (mock counts) and both end authenticated.",
     "401 `token_expired` triggers exactly one refresh + retry; a second 401 signs out; `token_revoked`, `device_revoked`, `token_invalid` sign out without refresh; `refresh_reuse_detected` signs out and shows 'Signed out for your safety'.",
     "Access token is refreshed when < 60 s remain (15 min lifetime); the timer survives tab sleep by checking on `visibilitychange`.",
-    "Sign-out calls /v1/auth/revoke, clears memory, and other open tabs become anonymous within 1 s."
+    "Sign-out calls /v1/auth/revoke, clears memory, and other open tabs become anonymous within 1 s.",
+    "After login the mock backend records one device with both public keys for the web client, and the access token carries a `dev` claim; with Ed25519 unavailable the app starts in viewer-only mode and says so."
   ],
   "tests": [
     "pkce.test.ts: RFC 7636 test vectors for S256, verifier charset/length.",
@@ -77,6 +79,5 @@
     "Network down during refresh -> stay authenticated with expired token marked, retry with backoff 500 ms x2^n cap 30 s; requests queue max 20 for 10 s then fail with typed error.",
     "Authorize returns error params (`access_denied`) -> neutral message, no details from the query rendered as HTML."
   ],
-  "unblocks_gate": "G1",
-  "notes": "CONTRACT GAP: PKCE authorize does not carry `device_pubkeys`, so no `dev_` identity or key registration exists for browsers; E2E in the web app (C083/C084/C085) cannot sign frames until the contract defines web device registration. CONTRACT GAP: CT-AUTH says web refresh cookie is scoped to /v1/auth/token; the `authorization_code` response body shape (access token field names) is taken from RFC 6749."
+  "unblocks_gate": "G1"
 }

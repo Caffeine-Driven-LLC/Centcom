@@ -29,6 +29,7 @@ Login *methods* (magic link, GitHub, Google) are the backend's business behind t
 Device flow details:
 - `client_id` values: `centcom-cli`, `centcom-web`, `centcom-tui` (fixed, public clients).
 - `user_code`: 8 chars `[A-Z2-9]` minus ambiguous (`0,O,1,I,L`), displayed as `ABCD-EFGH`. TTL 10 min, poll `interval` 5 s; `slow_down` → +5 s; errors per RFC 8628 (`authorization_pending`, `slow_down`, `access_denied`, `expired_token`).
+- `verification_uri` is `https://centcom.dev/device`; `verification_uri_complete` appends `?user_code=ABCD-EFGH`.
 - The CLI shows `verification_uri_complete` and also tries to open the browser.
 - Device registration happens here: the public keys (X25519 for key wrapping, Ed25519 for signing; see CT-CRYPTO) are bound to the new `dev_` ID and the issued tokens.
 
@@ -46,6 +47,7 @@ API keys carry an explicit subset chosen at creation.
 
 ### API keys
 - Format: `cen_live_<32 base62>` / `cen_test_<32 base62>`; shown once; server stores `sha256(pepper‖key)` and the first 8 chars as a display prefix.
+- The stored/displayed prefix is the first 12 characters (e.g. `cen_live_Ab3k`); rotating a key = create a new one, then revoke the old one (there is no rotate endpoint).
 - Sent as `Authorization: Bearer <key>`. Keys cannot create relay tickets or join sessions (machine principals are not members); they may read/manage workspace resources per scope.
 
 ### Request authentication
@@ -56,6 +58,15 @@ API keys carry an explicit subset chosen at creation.
 
 ### Devices for the web app
 The web app is also a *device*. During the PKCE flow it generates an X25519 and an Ed25519 keypair with WebCrypto (non-extractable where the browser supports it, stored in IndexedDB), and passes the public halves and a device name as `device_pubkeys` / `device_name` on `GET /v1/auth/authorize`; the resulting tokens carry a `dev_` id exactly like a CLI device. Browsers that cannot generate Ed25519 keys fall back to read-only participation (viewer) and cannot sign frames.
+
+### Token endpoint details
+`POST /v1/auth/token` accepts `application/json` or `application/x-www-form-urlencoded`; success body (RFC 6749): `{access_token, token_type: "Bearer", expires_in, refresh_token, scope}`. Errors are problem+json with the RFC 6749/8628 codes in `errors.json`.
+
+### CORS
+The API allows credentials and the `X-Centcom-Client` header for the origin `https://app.centcom.dev` only (and `http://localhost:*` when the server runs in dev mode); `Access-Control-Allow-Origin` is never `*` on authenticated routes.
+
+### Authorization code
+PKCE authorization codes live **60 seconds**, are single-use, and are bound to the `code_challenge`, `client_id` and `redirect_uri`. The default scope for `centcom-web` equals the CLI default scope.
 
 ### Web sessions
 The web app uses the PKCE flow and keeps tokens in memory + a `Secure; HttpOnly; SameSite=Lax` refresh cookie scoped to `/v1/auth/token`. CSRF: the token endpoint requires a custom header `X-Centcom-Client: web`.
@@ -103,6 +114,13 @@ A workspace member's *default* session role: owner/admin/member → `editor`, gu
 | Presence, cursors, reactions, comments | ✓ | ✓ | ✓ (reactions, comments only) |
 | Kick, mute, change roles, end session, transfer host | ✓ | — | — |
 | Read history | ✓ | ✓ | ✓ |
+
+### Details that were ambiguous (resolved in v1.1.0)
+- **Who may set which workspace role:** the `owner` may assign any role except a second `owner` (use transfer). An `admin` may assign `member`, `billing` or `guest`; only the `owner` may grant or remove `admin`.
+- **What a `guest` may read** of a workspace: `GET /v1/workspaces/{id}` returns `{id, name}`; `GET …/members` returns `{id, display_name, role}` per member. Nothing else (no emails, settings, projects, billing).
+- **Seats:** only `owner`, `admin`, `member` consume seats (CT-ENTITLEMENTS).
+- **The `admin` scope** is internal: it is issued only to staff by an internal identity provider and is never obtainable through the public flows. Admin endpoints are not part of this contract.
+- **Share-link guests** have no registered device. They receive a limited relay ticket with `role: viewer`, no `dev` claim, and may **not** send signed content; they may send only `presence.update` and `reaction` (both cleartext). They decrypt using the view key carried in the share-link fragment (CT-CRYPTO §4a).
 
 ### Enforcement rules
 1. **The server is the only authority.** Every REST and WS action is authorised server-side from the token and current membership state, never from client-sent role claims.

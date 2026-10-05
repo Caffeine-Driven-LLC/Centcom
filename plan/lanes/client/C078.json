@@ -66,6 +66,5 @@
     "conflict.detected references an unknown agent id -> show 'an agent' and keep the banner.",
     "Lock `ct` cannot be decrypted (waiting_for_key) -> fall back to hmac label, upgrade label when key arrives."
   ],
-  "unblocks_gate": "G5",
-  "notes": "CONTRACT GAP: the schema does not define a frame that asks the holder to release a lock or lets a waiting agent 'take turns'; the actions are realised locally (queue order of the waiting agent) and via branch-off (new worktree through C017). No new event kinds are invented."
+  "unblocks_gate": "G5"
 }

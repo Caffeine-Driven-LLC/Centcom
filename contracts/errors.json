@@ -626,6 +626,14 @@
       "retryable": true,
       "title": "Too many pairing attempts",
       "type": "https://centcom.dev/errors/pair_locked_out"
+    },
+    {
+      "code": "cursor_invalid",
+      "status": 400,
+      "area": "generic",
+      "retryable": false,
+      "title": "Cursor invalid or expired",
+      "type": "https://centcom.dev/errors/cursor_invalid"
     }
   ]
 }

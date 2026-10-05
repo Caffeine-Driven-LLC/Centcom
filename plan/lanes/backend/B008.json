@@ -65,6 +65,5 @@
     "Partial failure -> whole migration rolls back (single transaction).",
     "Later lane needs another column -> add via its own migration, never edit this file (checksum guard)."
   ],
-  "unblocks_gate": "G1",
-  "notes": "CONTRACT GAP: the legal values of sessions.state are not enumerated in the contracts (only `paused` and `expired` are named); store as unconstrained text now and constrain once CT-WS-SESSION-EVENTS `control.session_state` lists them."
+  "unblocks_gate": "G1"
 }

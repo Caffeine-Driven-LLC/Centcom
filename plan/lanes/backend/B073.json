@@ -79,6 +79,5 @@
     "Invite accepted concurrently while decreasing seats -> lock makes one of them win; loser gets 409.",
     "B030 port unavailable -> fail closed (503), never assume zero seats in use."
   ],
-  "unblocks_gate": "G4",
-  "notes": "CONTRACT GAP: the contract summary only says 'Change seat count (returns proration preview with ?preview=true)'; the request/response shapes and the base-plus-add-on item model are proposals. Pricing structure (5 included + add-ons) follows the Team column in CT-ENTITLEMENTS but the Stripe item layout is a product decision."
+  "unblocks_gate": "G4"
 }

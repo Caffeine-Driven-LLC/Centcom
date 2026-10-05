@@ -76,6 +76,5 @@
     "Hydration fails -> session sequencing paused (503-class) and alert metric `relay_hydrate_failed_total`; not silently reset.",
     "Client sends `sys.resume` twice concurrently -> second is ignored with `sys.error` `invalid_frame`."
   ],
-  "unblocks_gate": "G2",
-  "notes": "CONTRACT GAP: behaviour for `last_seq: null` is implied by the handshake example only. SPLIT? size L: hydration could be separate."
+  "unblocks_gate": "G2"
 }

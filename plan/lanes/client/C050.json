@@ -74,6 +74,5 @@
     "Runner crashes before any output -> final `result` line (JSON modes) with `is_error:true`, error code taken from the typed error, else `error.code:'unknown'`, exit 1.",
     "Stdout closed early (EPIPE) -> interrupt the agent through lane C030 and exit 0 silently."
   ],
-  "unblocks_gate": "G1",
-  "notes": "CONTRACT GAP: CT-ERR defines no process exit codes; the table here is a client-local convention and must be documented in the README and docs. Mapping rule suggestions: 401 -> 4, 403 -> 3 only for tool permissions (API 403 `forbidden` -> 1), 429 -> 5, 5xx/offline -> 6. Print-mode resume/continue is deferred until lane C026 can be a dependency; `--allow` rule syntax is owned by lane C015."
+  "unblocks_gate": "G1"
 }

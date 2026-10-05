@@ -84,5 +84,5 @@
     "Entitlements read for a deleted workspace -> 404."
   ],
   "unblocks_gate": "G4",
-  "notes": "Price amounts are product decisions kept in seed-plans.ts config; the contract example shows 1900 USD only as shape. CONTRACT GAP: shape of the /v1/plans response is not specified; the proposal above must be confirmed. The `tokens_month` and `queue_items_month` reference values are not in the contract's default table; seed uses null (unlimited) for all plans. GET /v1/workspaces/{id}/entitlements and GET /v1/plans are CT-API-BILLING routes owned here because no other planned lane lists them."
+  "notes": "Price amounts are product decisions kept in seed-plans.ts config; the contract example shows 1900 USD only as shape."
 }

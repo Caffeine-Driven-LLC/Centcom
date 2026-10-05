@@ -30,6 +30,7 @@
     },
     "category": {
       "enum": [
+        "trial_ending",
         "approval_needed",
         "queue_turn",
         "mention",

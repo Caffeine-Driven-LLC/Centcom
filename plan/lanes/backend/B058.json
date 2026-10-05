@@ -66,6 +66,5 @@
     "state-map.json missing or unparsable at startup -> fail fast with a clear config error; the relay refuses to start.",
     "A new state key appears after a contract bump without classification -> CI drift test fails; runtime treats it as unknown (forwarded)."
   ],
-  "unblocks_gate": "G5",
-  "notes": "CONTRACT GAP: 09-state-map.md lists wire categories in prose only (idle, work, human-needed, outcome, merge-conflict, deploying, saving); individual keys such as `listening`, `prompt-received` and `host-session` are not explicitly assigned. This lane classifies by category text and records the ambiguous keys in a constant with a TODO-free comment citing the contract; a human should confirm."
+  "unblocks_gate": "G5"
 }

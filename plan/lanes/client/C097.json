@@ -77,6 +77,5 @@
     "State dir unwritable -> print the redacted report to stderr only if `--print` is passed, else explain.",
     "Relay check cannot distinguish blocked WS from relay down -> status `warn` with both hypotheses in `next_step`."
   ],
-  "unblocks_gate": "G6",
-  "notes": "CONTRACT GAP: there is no crash-report ingest endpoint or crash event type in the contracts (CT-TELEMETRY only allows `error.shown {code}`), so v1 crash reporting is local with manual sharing; if product wants upload, a Contract PR must add it. Kept at S: doctor checks are independent small functions; SPLIT? if more than ~14 checks are added."
+  "unblocks_gate": "G6"
 }

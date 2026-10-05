@@ -1,11 +1,10 @@
-# Centcom REST contract (OpenAPI 3.1). Generated; edit via Contract PR. See x-gaps at the bottom for assumptions.
 openapi: 3.1.0
 info:
   title: Centcom REST API
-  version: 1.0.0
-  description: Machine-readable REST contract for Centcom (contract_version 1.0.0). Wins over contracts/02-rest-api.md
-    on disagreement. Errors are RFC 9457 problem+json with stable codes from errors.json. Clients must ignore unknown
-    response fields and tolerate unknown enum values (CT-VER).
+  version: 1.1.0
+  description: Machine-readable REST contract for Centcom (contract_version 1.0.0). Wins over contracts/02-rest-api.md on disagreement. Errors
+    are RFC 9457 problem+json with stable codes from errors.json. Clients must ignore unknown response fields and tolerate unknown enum values
+    (CT-VER).
   license:
     name: Proprietary
 servers:
@@ -46,8 +45,7 @@ paths:
       tags:
       - Auth
       summary: Start device authorization flow
-      description: Starts an RFC 8628 device flow and registers the device public keys; no authentication required
-        (public clients, 20 req/min/IP).
+      description: Starts an RFC 8628 device flow and registers the device public keys; no authentication required (public clients, 20 req/min/IP).
       x-contract: CT-AUTH
       x-scopes: []
       x-role: public
@@ -109,8 +107,8 @@ paths:
       tags:
       - Auth
       summary: Token endpoint
-      description: 'Exchanges a device code, PKCE authorization code or refresh token for tokens; public endpoint,
-        web clients must send X-Centcom-Client: web.'
+      description: 'Exchanges a device code, PKCE authorization code or refresh token for tokens; public endpoint, web clients must send X-Centcom-Client:
+        web.'
       x-contract: CT-AUTH
       x-scopes: []
       x-role: public
@@ -191,8 +189,7 @@ paths:
       tags:
       - Auth
       summary: Browser authorize (PKCE)
-      description: Public browser endpoint that starts an authorization-code + PKCE (S256 only) flow and redirects
-        to the login page or redirect_uri.
+      description: Public browser endpoint that starts an authorization-code + PKCE (S256 only) flow and redirects to the login page or redirect_uri.
       x-contract: CT-AUTH
       x-scopes: []
       x-role: public
@@ -293,8 +290,8 @@ paths:
       tags:
       - Auth
       summary: Revoke a refresh token or device
-      description: Revokes a refresh token or one of the caller's devices per RFC 7009 (always 200 for unknown tokens);
-        any authenticated user for own credentials.
+      description: Revokes a refresh token or one of the caller's devices per RFC 7009 (always 200 for unknown tokens); any authenticated user
+        for own credentials.
       x-contract: CT-AUTH
       x-scopes:
       - profile
@@ -422,8 +419,7 @@ paths:
       tags:
       - Auth
       summary: Revoke a device
-      description: Revokes one of the caller's devices, kills its tokens and flags its keys; any authenticated user,
-        own devices only.
+      description: Revokes one of the caller's devices, kills its tokens and flags its keys; any authenticated user, own devices only.
       x-contract: CT-AUTH
       x-scopes:
       - profile
@@ -484,8 +480,7 @@ paths:
       tags:
       - Accounts
       summary: Current user
-      description: Returns the current user, plan summary, active workspace and entitlement revision; any authenticated
-        user.
+      description: Returns the current user, plan summary, active workspace and entitlement revision; any authenticated user.
       x-contract: CT-API-ACCOUNTS
       x-scopes:
       - profile
@@ -542,8 +537,7 @@ paths:
       tags:
       - Accounts
       summary: Update profile
-      description: Updates display name, locale, avatar slot and telemetry opt-in; any authenticated user, own profile
-        only.
+      description: Updates display name, locale, avatar slot and telemetry opt-in; any authenticated user, own profile only.
       x-contract: CT-API-ACCOUNTS
       x-scopes:
       - profile
@@ -613,11 +607,11 @@ paths:
           $ref: '#/components/responses/ServiceUnavailable'
     delete:
       operationId: deleteMe
-      tags:
+      tags: &id001
       - Accounts
       summary: Begin account deletion
-      description: Starts account deletion with a 30-day grace period (Location points at the status resource);
-        any authenticated user, own account only.
+      description: Starts account deletion with a 30-day grace period (Location points at the status resource); any authenticated user, own account
+        only.
       x-contract: CT-API-ACCOUNTS
       x-scopes:
       - profile
@@ -635,7 +629,7 @@ paths:
       - device_revoked
       - client_too_old
       - forbidden
-      security:
+      security: &id002
       - bearerAuth:
         - profile
       parameters:
@@ -749,8 +743,7 @@ paths:
       tags:
       - Accounts
       summary: Export status
-      description: Returns export status and, when ready, a signed download URL; any authenticated user, own exports
-        only.
+      description: Returns export status and, when ready, a signed download URL; any authenticated user, own exports only.
       x-contract: CT-API-ACCOUNTS
       x-scopes:
       - profile
@@ -875,8 +868,7 @@ paths:
       tags:
       - Accounts
       summary: Get a device
-      description: Returns one of the caller's devices (name, platform, last seen, key fingerprint); any authenticated
-        user, own devices only.
+      description: Returns one of the caller's devices (name, platform, last seen, key fingerprint); any authenticated user, own devices only.
       x-contract: CT-API-ACCOUNTS
       x-scopes:
       - profile
@@ -940,8 +932,7 @@ paths:
       tags:
       - Accounts
       summary: Revoke a device
-      description: Revokes one of the caller's devices and kills its tokens; any authenticated user, own devices
-        only.
+      description: Revokes one of the caller's devices and kills its tokens; any authenticated user, own devices only.
       x-contract: CT-API-ACCOUNTS
       x-scopes:
       - profile
@@ -1002,8 +993,7 @@ paths:
       tags:
       - Accounts
       summary: Device public keys
-      description: Returns the public X25519 and Ed25519 keys of a device (CT-CRYPTO); only users who share a session
-        with the device owner.
+      description: Returns the public X25519 and Ed25519 keys of a device (CT-CRYPTO); only users who share a session with the device owner.
       x-contract: CT-API-ACCOUNTS
       x-scopes:
       - sessions:read
@@ -1134,8 +1124,8 @@ paths:
       tags:
       - Accounts
       summary: Create an API key
-      description: Creates an API key whose secret is returned once; admins and owners may create any key, members
-        only for themselves, subject to api_keys_max.
+      description: Creates an API key whose secret is returned once; admins and owners may create any key, members only for themselves, subject
+        to api_keys_max.
       x-contract: CT-API-ACCOUNTS
       x-scopes:
       - workspaces:write
@@ -1824,8 +1814,8 @@ paths:
       tags:
       - Workspaces
       summary: Remove a member or leave
-      description: Removes a member, or lets a member remove themselves; admins and owners, or the member themselves
-        (the owner cannot leave without transferring).
+      description: Removes a member, or lets a member remove themselves; admins and owners, or the member themselves (the owner cannot leave without
+        transferring).
       x-contract: CT-API-WORKSPACES
       x-scopes:
       - workspaces:write
@@ -2278,8 +2268,7 @@ paths:
       tags:
       - Workspaces
       summary: Accept an invite
-      description: Accepts the invite and creates the membership; any authenticated user holding a valid token (seat
-        entitlement is checked).
+      description: Accepts the invite and creates the membership; any authenticated user holding a valid token (seat entitlement is checked).
       x-contract: CT-API-WORKSPACES
       x-scopes:
       - profile
@@ -2359,8 +2348,7 @@ paths:
       tags:
       - Workspaces
       summary: Upload sealed key bundle
-      description: Uploads a sealed key bundle (CT-CRYPTO section 4) for an invite; session host only. Server stores
-        ciphertext only.
+      description: Uploads a sealed key bundle (CT-CRYPTO section 4) for an invite; session host only. Server stores ciphertext only.
       x-contract: CT-API-WORKSPACES
       x-scopes:
       - sessions:host
@@ -2835,8 +2823,7 @@ paths:
       tags:
       - Workspaces
       summary: Get workspace settings
-      description: Returns policies (default auto-approve level, history sharing, retention override); members and
-        above.
+      description: Returns policies (default auto-approve level, history sharing, retention override); members and above.
       x-contract: CT-API-WORKSPACES
       x-scopes:
       - workspaces:read
@@ -3079,8 +3066,8 @@ paths:
       tags:
       - Sessions
       summary: Create a session
-      description: Creates a command post after checking the relay entitlement and concurrent-session limit; members
-        and above (not billing or guests).
+      description: Creates a command post after checking the relay entitlement and concurrent-session limit; members and above (not billing or
+        guests).
       x-contract: CT-API-SESSIONS
       x-scopes:
       - sessions:host
@@ -3919,8 +3906,7 @@ paths:
       tags:
       - Sessions
       summary: Commit a snapshot
-      description: Commits an uploaded snapshot with {seq, sha256, size, kid}; the server verifies size and hash
-        only; host only.
+      description: Commits an uploaded snapshot with {seq, sha256, size, kid}; the server verifies size and hash only; host only.
       x-contract: CT-API-SESSIONS
       x-scopes:
       - sessions:host
@@ -4180,8 +4166,7 @@ paths:
       tags:
       - Sessions
       summary: Join via share link
-      description: Public, rate-limited join as a limited viewer guest using a share-link token; returns a relay
-        ticket.
+      description: Public, rate-limited join as a limited viewer guest using a share-link token; returns a relay ticket.
       x-contract: CT-API-SESSIONS
       x-scopes: []
       x-role: public
@@ -4562,8 +4547,7 @@ paths:
       tags:
       - Billing
       summary: Change seat count
-      description: Changes the seat count, or with ?preview=true returns a proration preview without changing; owner
-        and billing roles.
+      description: Changes the seat count, or with ?preview=true returns a proration preview without changing; owner and billing roles.
       x-contract: CT-API-BILLING
       x-scopes:
       - billing:write
@@ -4973,8 +4957,7 @@ paths:
       tags:
       - Usage
       summary: Ingest usage events
-      description: Ingests up to 500 usage events (body up to 1 MiB) deduped by id; devices of authenticated users
-        only, 60 req/min/device.
+      description: Ingests up to 500 usage events (body up to 1 MiB) deduped by id; devices of authenticated users only, 60 req/min/device.
       x-contract: CT-API-USAGE
       x-scopes:
       - usage:write
@@ -5056,8 +5039,7 @@ paths:
       tags:
       - Audit
       summary: List audit events
-      description: Lists audit events with filters actor, action, from and to; admins and owners, requires audit_log_days
-        > 0.
+      description: Lists audit events with filters actor, action, from and to; admins and owners, requires audit_log_days > 0.
       x-contract: CT-API-AUDIT
       x-scopes:
       - audit:read
@@ -5862,8 +5844,7 @@ paths:
       tags:
       - Webhooks
       summary: Create a webhook endpoint
-      description: Creates a webhook endpoint and returns its signing secret once; admins and owners, subject to
-        webhooks_max.
+      description: Creates a webhook endpoint and returns its signing secret once; admins and owners, subject to webhooks_max.
       x-contract: CT-API-WEBHOOKS
       x-scopes:
       - webhooks:write
@@ -6030,8 +6011,7 @@ paths:
       tags:
       - Webhooks
       summary: Update a webhook endpoint
-      description: Updates url, events or enabled flag, or rotates the secret with rotate_secret:true; admins and
-        owners.
+      description: Updates url, events or enabled flag, or rotates the secret with rotate_secret:true; admins and owners.
       x-contract: CT-API-WEBHOOKS
       x-scopes:
       - webhooks:write
@@ -6536,8 +6516,7 @@ paths:
       tags:
       - Flags
       summary: Evaluate feature flags
-      description: Returns flags evaluated for the caller (anonymous allowed), cached by ETag; no scope required,
-        profile scope used when authenticated.
+      description: Returns flags evaluated for the caller (anonymous allowed), cached by ETag; no scope required, profile scope used when authenticated.
       x-contract: CT-API-FLAGS
       x-scopes: []
       x-role: any (anonymous allowed)
@@ -6591,8 +6570,7 @@ paths:
       tags:
       - Telemetry
       summary: Ingest telemetry
-      description: Accepts an opt-in telemetry batch of up to 100 events and always returns 204, even when dropped;
-        anonymous or authenticated.
+      description: Accepts an opt-in telemetry batch of up to 100 events and always returns 204, even when dropped; anonymous or authenticated.
       x-contract: CT-TELEMETRY
       x-scopes: []
       x-role: any (anonymous allowed)
@@ -6705,8 +6683,7 @@ paths:
       tags:
       - Status
       summary: Readiness
-      description: Readiness probe; 200 only when DB, Redis and migrations are OK, otherwise 503 with failing checks;
-        no authentication.
+      description: Readiness probe; 200 only when DB, Redis and migrations are OK, otherwise 503 with failing checks; no authentication.
       x-contract: CT-STATUS
       x-scopes: []
       x-role: public
@@ -6829,20 +6806,41 @@ paths:
           $ref: '#/components/responses/InternalError'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
+  /v1/me/restore:
+    post:
+      tags: *id001
+      operationId: restoreAccount
+      summary: Cancel a pending account deletion
+      description: Cancels a scheduled deletion during the 30-day grace period. Any authenticated user may restore their own account.
+      x-scopes:
+      - profile
+      x-role: any
+      x-idempotency: none
+      x-contract: CT-API-ACCOUNTS
+      security: *id002
+      responses:
+        '200':
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '409':
+          $ref: '#/components/responses/Conflict'
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: EdDSA access token (15 min, aud centcom-api). OAuth scopes are listed per operation in x-scopes
-        (profile, workspaces:read, ...).
+      description: EdDSA access token (15 min, aud centcom-api). OAuth scopes are listed per operation in x-scopes (profile, workspaces:read,
+        ...).
     apiKeyAuth:
       type: http
       scheme: bearer
       bearerFormat: cen_live_/cen_test_ API key
-      description: Machine credential with an explicit scope subset. Cannot mint relay tickets or join sessions.
-        Accepted only on operations that list it in `security`.
+      description: Machine credential with an explicit scope subset. Cannot mint relay tickets or join sessions. Accepted only on operations that
+        list it in `security`.
   parameters:
     Limit:
       name: limit
@@ -6922,8 +6920,8 @@ components:
         type: boolean
   responses:
     BadRequest:
-      description: '400: invalid_request, idempotency_key_required, unsupported_protocol, invalid_grant, authorization_pending,
-        slow_down, expired_token, invalid_scope, invalid_frame, protocol_violation, signature_invalid'
+      description: '400: invalid_request, idempotency_key_required, unsupported_protocol, invalid_grant, authorization_pending, slow_down, expired_token,
+        invalid_scope, invalid_frame, protocol_violation, signature_invalid'
       headers:
         X-Request-Id:
           $ref: '#/components/headers/X-Request-Id'
@@ -6944,8 +6942,8 @@ components:
       - protocol_violation
       - signature_invalid
     Unauthorized:
-      description: '401: unauthorized, token_expired, token_invalid, token_revoked, device_revoked, refresh_reuse_detected,
-        invalid_client, ticket_invalid, ticket_replayed'
+      description: '401: unauthorized, token_expired, token_invalid, token_revoked, device_revoked, refresh_reuse_detected, invalid_client, ticket_invalid,
+        ticket_replayed'
       headers:
         X-Request-Id:
           $ref: '#/components/headers/X-Request-Id'
@@ -6975,9 +6973,9 @@ components:
       x-error-codes:
       - payment_required
     Forbidden:
-      description: '403: access_denied, forbidden, not_a_member, role_insufficient, entitlement_required, seat_limit_reached,
-        member_limit_reached, subscription_inactive, owner_required, session_full, session_locked, host_required,
-        muted, queue_not_allowed, webhook_limit_reached, api_key_limit_reached, pair_bad_code'
+      description: '403: access_denied, forbidden, not_a_member, role_insufficient, entitlement_required, seat_limit_reached, member_limit_reached,
+        subscription_inactive, owner_required, session_full, session_locked, host_required, muted, queue_not_allowed, webhook_limit_reached, api_key_limit_reached,
+        pair_bad_code'
       headers:
         X-Request-Id:
           $ref: '#/components/headers/X-Request-Id'
@@ -7020,8 +7018,8 @@ components:
       - device_unknown
       - snapshot_missing
     Conflict:
-      description: '409: conflict, idempotency_conflict, member_exists, session_paused, queue_item_gone, lock_denied,
-        key_required, key_unknown, snapshot_hash_mismatch, account_deletion_pending, export_not_ready'
+      description: '409: conflict, idempotency_conflict, member_exists, session_paused, queue_item_gone, lock_denied, key_required, key_unknown,
+        snapshot_hash_mismatch, account_deletion_pending, export_not_ready'
       headers:
         X-Request-Id:
           $ref: '#/components/headers/X-Request-Id'
@@ -7396,8 +7394,7 @@ components:
       - status
       - code
       - request_id
-      description: RFC 9457 problem details (CT-ERR). Defined inline; no contracts/schemas/problem.schema.json existed
-        when written.
+      description: RFC 9457 problem details (CT-ERR). Defined inline; no contracts/schemas/problem.schema.json existed when written.
     Page:
       type: object
       properties:
@@ -7477,8 +7474,7 @@ components:
       - plan
       - active_workspace
       - ent
-      description: Current user, plan summary, active workspace and entitlement revision (the access-token `ent`
-        claim).
+      description: Current user, plan summary, active workspace and entitlement revision (the access-token `ent` claim).
     MeUpdate:
       type: object
       properties:
@@ -7936,8 +7932,7 @@ components:
         bundle:
           type: string
           pattern: ^[A-Za-z0-9_-]+$
-          description: crypto_box_seal of the epoch keys to the one-time invite public key (CT-CRYPTO section 4),
-            base64url
+          description: crypto_box_seal of the epoch keys to the one-time invite public key (CT-CRYPTO section 4), base64url
       required:
       - bundle
     Project:
@@ -8051,7 +8046,8 @@ components:
         state:
           type: string
           enum:
-          - active
+          - pending
+          - live
           - paused
           - ended
           - expired
@@ -8754,8 +8750,8 @@ components:
       properties:
         id:
           type: string
-          maxLength: 40
-          description: Client ULID; dedupe key
+          pattern: ^use_[0-9A-HJKMNP-TV-Z]{26}$
+          description: Client-generated ULID with prefix use_ (CT-IDS)
         type:
           type: string
           enum:
@@ -8973,8 +8969,7 @@ components:
       - title_key
       - body_key
       - priority
-      description: CT-NOTIF-PAYLOAD. Defined inline; no contracts/schemas/notification.schema.json existed when
-        written.
+      description: CT-NOTIF-PAYLOAD. Defined inline; no contracts/schemas/notification.schema.json existed when written.
     ReadAllResult:
       type: object
       properties:
@@ -9747,8 +9742,7 @@ components:
         - client_id
       discriminator:
         propertyName: grant_type
-      description: 'Sent as application/json or application/x-www-form-urlencoded. Web clients must send X-Centcom-Client:
-        web.'
+      description: 'Sent as application/json or application/x-www-form-urlencoded. Web clients must send X-Centcom-Client: web.'
     TokenResponse:
       type: object
       properties:
@@ -10023,42 +10017,5 @@ components:
       - data
       - next_cursor
       - has_more
-x-security-none: 'Public operations declare `security: []` (no authentication). Operations with optional authentication
-  declare `security: [{}, {bearerAuth: []}]`.'
-x-gaps:
-- contracts/schemas/{problem,entitlements,notification,webhook,release-manifest,telemetry}.schema.json did not exist
-  when written; all are defined inline in components.schemas and must be reconciled with the JSON Schemas once they
-  land.
-- 'CT-IDS defines no prefix for export jobs or push subscriptions; assumed exp_ and psh_ ULIDs (ExportId, PushSubscriptionId).
-  Invoice ids and usage-event ids are left as opaque strings (event id: client ULID, max 40).'
-- 05-crypto.md says POST /v1/invites/{id}/key-bundle but 02-rest-api.md says PUT; PUT is used (02 is the index that
-  lists the operation; response 204).
-- Session state enum is not defined in the docs; assumed active|paused|ended|expired from CT-WS-ENVELOPE idle rules.
-- 'Workspace settings fields assumed: auto_approve (ask|trusted|everyone, from control.policy), share_history (bool),
-  history_retention_days (nullable override <= plan history_days).'
-- API keys are assumed to be workspace-scoped (request carries workspace); scopes limited to the non-internal scopes
-  (admin excluded).
-- DELETE /v1/me returns 202 with Location /v1/me (no dedicated deletion-status endpoint exists); /v1/me shows deletion_scheduled_for.
-- 'Success codes chosen conservatively: 201 for creates (incl. checkout, accept-invite, snapshot begin, api key,
-  push subscription), 202 for async (export, deletion, webhook test/redeliver), 200 for join-token, portal, seats,
-  coupon, usage ingest, commit, end, claim-host.'
-- Usage ingest returns 200 {accepted, duplicates, rejected[]} (response not specified in docs); batch limit 500
-  events, body 1 MiB.
-- If-Match is optional (not required) on PATCH/PUT/DELETE; ETag is returned on workspace, settings, entitlements,
-  notification preferences, webhook, flags, releases and /v1/me.
-- GET /v1/auth/devices and GET /v1/devices are both listed in the docs and are modelled as the same paginated Device
-  list (distinct operationIds).
-- POST /v1/auth/revoke always returns 200 with empty body for unknown tokens (RFC 7009); authentication required
-  (bearer) to revoke devices.
-- GET /v1/releases/{channel}/latest requires query params platform and arch; the response is a ReleaseManifest whose
-  artifacts are filtered to that platform/arch.
-- Plan prices schema (interval, per-seat or per-workspace unit, Money) is assumed; docs only say public plans and
-  prices in USD/EUR.
-- Webhook management accepts API keys with webhooks:write; session-bound operations (join-token, snapshot, history,
-  share links) accept access tokens only (machine principals are not members).
-- Auth-only security on /v1/telemetry/events and /v1/flags is optional ([{}, bearerAuth]); anonymous telemetry never
-  links install_id to usr_.
-- Token endpoint accepts JSON or x-www-form-urlencoded (RFC 6749 style); OAuth errors are returned as problem+json
-  with the RFC 8628 code in `code`.
-- GET /v1/workspaces/{id}/usage/summary lists scope billing:read per the doc with role member+; the scope/role mismatch
-  is kept as documented.
+x-security-none: 'Public operations declare `security: []` (no authentication). Operations with optional authentication declare `security: [{},
+  {bearerAuth: []}]`.'

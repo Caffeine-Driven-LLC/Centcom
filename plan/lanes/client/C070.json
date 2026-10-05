@@ -76,6 +76,5 @@
     "Network failure mid-download -> remove partial file, exit 1, suggest re-run (export id printed).",
     "Large log (millions of rows) -> `list` stays bounded by `--limit`; `export` is the path for bulk data."
   ],
-  "unblocks_gate": "G5",
-  "notes": "CONTRACT GAP: the audit event object fields and the export job status values are defined only in openapi.yaml; the card assumes the table columns above map to `ts/actor/action/target/outcome`-like fields and must be reconciled with openapi.yaml."
+  "unblocks_gate": "G5"
 }

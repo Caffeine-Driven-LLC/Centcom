@@ -18,13 +18,13 @@ Management endpoints: CT-API-WEBHOOKS. Schema: `schemas/webhook.schema.json`.
   "data": { }
 }
 ```
-Headers: `Centcom-Event-Id`, `Centcom-Event-Type`, `Centcom-Delivery-Attempt`, `Centcom-Signature: t=<unix>,v1=<hex hmac-sha256>`.
+Headers: `Centcom-Event-Id` (equals the body `id`; the same delivery keeps its id across retries), `Centcom-Event-Type`, `Centcom-Delivery-Attempt`, `Centcom-Signature: t=<unix>,v1=<hex hmac-sha256>`.
 
 ### Signing
 `v1 = HMAC_SHA256(secret, t + "." + raw_body)`. Receivers reject if `|now − t| > 300 s`. Secrets are per endpoint, shown once, rotatable with a 24 h overlap (both `v1` signatures sent during overlap).
 
 ### Retries
-Any non-2xx or timeout → retry with exponential backoff: 1 m, 5 m, 30 m, 2 h, 6 h, 12 h, 24 h (7 attempts, ~45 h). After the last failure the endpoint is marked `failing`; after 3 consecutive days of failure it is disabled and owners are notified. Deliveries may arrive **out of order and more than once**; receivers dedupe on `id`.
+Any non-2xx or timeout → retry with exponential backoff: 1 m, 5 m, 30 m, 2 h, 6 h, 12 h, 24 h (7 attempts, ~45 h). After the last failure the endpoint is marked `failing`; after 3 consecutive days of failure it is disabled and owners are notified. The test endpoint sends a `webhook.test` event. Deliveries may arrive **out of order and more than once**; receivers dedupe on `id`.
 
 ### Event types (v1)
 | Type | `data` |
@@ -38,6 +38,7 @@ Any non-2xx or timeout → retry with exponential backoff: 1 m, 5 m, 30 m, 2 h, 
 | `billing.invoice.paid` / `.payment_failed` | `{invoice, amount, currency}` |
 | `usage.threshold` | `{limit, pct}` |
 | `api_key.created` / `.revoked` | `{key, scopes}` |
+| `webhook.test` | `{endpoint}` (sent by `POST /v1/webhooks/{id}/test`) |
 
 No webhook payload ever contains session content, paths, branch names, or keys.
 
@@ -59,7 +60,8 @@ Schema: `schemas/notification.schema.json`. One shape serves the in-app inbox, O
 }
 ```
 - **No display text on the wire**: `title_key` / `body_key` are looked up in each client's message table (so copy, language and tone live in the client). `params` carries only ids and enums (nothing from `ct`).
-- Categories: `approval_needed`, `queue_turn`, `mention`, `member_joined`, `member_left`, `agent_done`, `ci_failed`, `pr_merged`, `usage_warning`, `quota_reached`, `billing_issue`, `invite_received`, `update_available`, `security_alert`.
+- Categories: `trial_ending`, `approval_needed`, `queue_turn`, `mention`, `member_joined`, `member_left`, `agent_done`, `ci_failed`, `pr_merged`, `usage_warning`, `quota_reached`, `billing_issue`, `invite_received`, `update_available`, `security_alert`.
+- `params` keys per category (ids and enums only): `approval_needed {agent, session, risk}` · `queue_turn {session, item}` · `mention {session, from}` · `member_joined|member_left {session, member}` · `agent_done {session, agent, outcome}` · `ci_failed|pr_merged {session, agent}` · `usage_warning {limit, pct}` · `quota_reached {limit}` · `billing_issue {kind: payment_failed\|card_expiring}` · `trial_ending {days}` · `invite_received {workspace}` · `update_available {version, channel}` · `security_alert {kind}`. `action.type` ∈ `open_session | open_billing | open_invite | open_update | none`.
 - Channels per category (user-configurable, CT-API-NOTIFY): `inbox`, `push`, `email`, `os` (client-local). Defaults: approval_needed → inbox+push+os; billing_issue → inbox+email; others → inbox.
 - Quiet hours suppress `push` and `os`, never `security_alert` or `billing_issue`.
 - Priority: `low|normal|high`. High may bypass quiet hours only for `approval_needed` if the user opted in.

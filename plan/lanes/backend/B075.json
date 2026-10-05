@@ -87,6 +87,5 @@
     "EntitlementService bumpRev fails -> quota_state is not marked crossed (same transaction boundary or retry), so the crossing is retried next run.",
     "Relay counter source unavailable -> client-reported metrics still aggregate; relay-derived metrics are skipped and retried, flagged by a metric."
   ],
-  "unblocks_gate": "G4",
-  "notes": "CONTRACT GAP: the usage/summary response shape is not specified; the shape above mirrors the entitlement `limits`/`usage`/`warnings` fields. 'ent' claim refresh happens through rev bumps. Warnings in the contract only name 80 percent explicitly, 100 percent is added as a quota_reached signal by B076; this lane records both crossings but only 80 appears in warnings[] if product prefers (open question)."
+  "unblocks_gate": "G4"
 }

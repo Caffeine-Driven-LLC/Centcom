@@ -81,6 +81,5 @@
     "Email provider down -> reminder job retries; notification and email are independent so one failing does not suppress the other.",
     "Missing workspace mapping for a Stripe event -> DLQ with the event id; no state change."
   ],
-  "unblocks_gate": "G4",
-  "notes": "CONTRACT GAP: CT-NOTIF-PAYLOAD has category `billing_issue` but no param vocabulary; this lane uses `params: {kind: 'payment_failed'}` only if the registry allows it, otherwise empty params. The `SessionEnder` adapter needs the session lifecycle service (B053), which is not in this lane's depends_on; wire it at integration time. Retry counts of Stripe itself are not part of the contract."
+  "unblocks_gate": "G4"
 }

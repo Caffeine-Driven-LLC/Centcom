@@ -70,6 +70,5 @@
     "Many connections hit the cap at once (network event) -> closes are spread by 0-500 ms jitter to avoid a reconnect storm.",
     "Timer leak on close -> all grace timers are cleared in `onClose`."
   ],
-  "unblocks_gate": "G3",
-  "notes": "CONTRACT GAP: the contract shows `sys.slow_down` as S->C with 'client must reduce rate for p.for_ms' but also uses it for outbound-buffer pressure; this card sends it in both situations (inbound rate limit in B041, outbound pressure here) and documents `p.reason`. If `reason` is not allowed by the schema, drop it."
+  "unblocks_gate": "G3"
 }

@@ -79,6 +79,5 @@
     "Sweep missed (process pause) -> lock TTL in Redis still expires keys; next sweep reconciles by emitting expire for locks it can still see in the index.",
     "Duplicate file.lock frame (same sid, from, id) -> same outcome replayed, no double waiter entry."
   ],
-  "unblocks_gate": "G5",
-  "notes": "CONTRACT GAP: the clear p for file.lock has `ttl_ms` optional with no default or bounds; defaults and clamps here are this lane's choices. Waiter queue behaviour (queued position) has no wire representation; waiters are told only via the eventual server grant, so clients see a 'deny' then a later 'acquire'."
+  "unblocks_gate": "G5"
 }

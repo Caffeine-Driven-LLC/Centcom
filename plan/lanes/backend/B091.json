@@ -76,5 +76,5 @@
     "Region unavailable -> variables allow moving relay regions without recreating the data layer."
   ],
   "unblocks_gate": "G6",
-  "notes": "SPLIT? Postgres and Redis provider choice (Fly Postgres vs managed provider) is an open decision: the module interface (`url` secret output, HA flag, PITR flag) hides it, but the ADR should be filed before prod. Backup/PITR resources are added by B099 into `infra/terraform/modules/backup/`; WAF rules into `infra/terraform/modules/waf/` by B097. CONTRACT GAP: relay WebSocket URL and path are not defined by any contract; the `relay_urls` output is the only place it appears and clients must receive it via the session-create 'region hint'."
+  "notes": "SPLIT? Postgres and Redis provider choice (Fly Postgres vs managed provider) is an open decision: the module interface (`url` secret output, HA flag, PITR flag) hides it, but the ADR should be filed before prod. Backup/PITR resources are added by B099 into `infra/terraform/modules/backup/`; WAF rules into `infra/terraform/modules/waf/` by B097."
 }

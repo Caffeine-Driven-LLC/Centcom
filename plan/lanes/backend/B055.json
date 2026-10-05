@@ -89,6 +89,5 @@
     "Blob get fails on read -> 503 with retry_after_s; partial page is never returned.",
     "Purge partially fails -> response 202-style retry via job; GET during purge returns only frames not yet deleted and the purge is resumable."
   ],
-  "unblocks_gate": "G2",
-  "notes": "CONTRACT GAP: the history response frame shape reuses the envelope (CT-WS-ENVELOPE) but the OpenAPI document is not yet in contracts/, so item shape is the envelope minus nothing. Whether guests may read history is not stated; this lane gates it on share_history. Deliverable migration prefix 0055 = lane number."
+  "unblocks_gate": "G2"
 }

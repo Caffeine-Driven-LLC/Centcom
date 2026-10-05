@@ -1176,7 +1176,7 @@ Provide `data-theme="hc"` (planned): `bg.base #000`, `text.primary #FFF`, border
 
 ### 19.7 Asset sizes (current build)
 
-GIF variants total about 173 MB (the `group` and `squad` crowds are ~75 MB and ~38 MB). **Do not commit them**; regenerate with `python3 assets/mascot/build.py` (≈ 2 minutes). Commit the JSON, SVG and source.
+The full mascot GIF set is committed under `assets/mascot/gif/` (about 173 MB: five solo colours plus the duo, trio, squad and group crowds; the group and squad crowds are ~75 MB and ~38 MB). Regenerate any time with `python3 assets/mascot/build.py` (about two minutes). The app does **not** ship these GIFs: it reads `animations.json` and renders or recolours at runtime. If the repo size becomes a problem, move `assets/mascot/gif/` to Git LFS or a release asset without changing any path.
 
 ---
 

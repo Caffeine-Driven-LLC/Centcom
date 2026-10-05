@@ -83,6 +83,5 @@
     "Out-of-order agent.state after agent.exit (race) -> ignored, counter incremented.",
     "Entitlements cache stale during downgrade -> spawn uses the entitlement rev at that time; mismatch resolved by the next invalidation (<= 30 s)."
   ],
-  "unblocks_gate": "G5",
-  "notes": "CONTRACT GAP: the rejection code for exceeding max_parallel_agents is not defined; `forbidden` is used with a descriptive detail until errors.json gains an entitlement code."
+  "unblocks_gate": "G5"
 }

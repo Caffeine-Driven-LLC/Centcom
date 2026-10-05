@@ -60,6 +60,5 @@
     "Runner rejects the model id -> keep the previous model, emit a toast `Couldn't switch to <id>. Still using <previous>.`, return a typed error.",
     "Config contains a non-string `model` -> ignore it, log at warn with the key name only, fall back to catalog default."
   ],
-  "unblocks_gate": null,
-  "notes": "CONTRACT GAP: no contract defines model ids or prices; the catalog is client data and its values must be filled from the provider's published list at implementation time. Sub-agent model override depends on lane C024's spawn options."
+  "unblocks_gate": null
 }

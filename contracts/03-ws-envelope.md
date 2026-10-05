@@ -58,7 +58,7 @@ Schema: `schemas/envelope.schema.json`. Fixtures: `fixtures/envelope/*.json`.
 | `sys.welcome` | S→C | no | Accepts. Carries chosen protocol, caps, `member`, `slot`, `role`, roster snapshot version, heartbeat settings, server time |
 | `sys.ping` / `sys.pong` | both | no | Heartbeat |
 | `sys.error` | S→C (or C→S for protocol faults on LAN host) | no | Problem+json body in `p` (CT-ERR); may be followed by close |
-| `sys.slow_down` | S→C | no | Backpressure: client must reduce rate for `p.for_ms` |
+| `sys.slow_down` | S→C | no | Backpressure: client must reduce rate for `p.for_ms`; `p.reason` is `rate` (inbound limit) or `outbound` (its own buffer is filling) |
 | `sys.notice` | S→C | no | Server notices (usage warnings, plan changes, maintenance). `p: {code, level, params}`; catalogue in CT-WS-SESSION-EVENTS |
 | `sys.resume` | C→S | no | Resume request (`p.last_seq`), when not in `hello` |
 | `sys.resumed` | S→C | no | Replay window result: `{from_seq, to_seq, count}` or `{snapshot_required: true, snapshot_seq}` |
@@ -67,9 +67,12 @@ Schema: `schemas/envelope.schema.json`. Fixtures: `fixtures/envelope/*.json`.
 | `queue` | both | **yes** | Queue operations (CT-WS-QUEUE) |
 | `control` | C→S, S→C | **yes** | Authority actions (CT-WS-CONTROL) |
 | `presence` | both | no (ephemeral, coalesced) | Presence and ephemeral indicators (CT-WS-PRESENCE) |
-| `ack` | C→S | no | Pure ack frame `{ack: n}` when nothing else to send |
+| `ack` | C→S | no | Pure ack frame `{"v":1,"t":"ack","sid":"ses_…","ack":n}` (top-level `ack` field) when nothing else to send |
 
 Only **sequenced** frames are buffered, replayed and acked. Ephemeral frames (`presence`, pings) are never replayed.
+
+### Relay address
+The WebSocket URL is **not** hard-coded: `POST /v1/sessions/{id}/join-token` returns `relay_url` (a `wss://` URL for the right region) and the client MUST connect to exactly that URL. The canonical form is `wss://relay-<region>.centcom.dev/v1/ws`.
 
 ### Handshake
 ```
@@ -83,6 +86,7 @@ S → C  presence roster frames
 ```
 - The server MUST receive `sys.hello` within **5 s** of upgrade, else close `4408`.
 - Ticket is verified (signature, `aud`, `exp`, single-use `jti`, session and membership live check). Failure → `sys.error` then close `4401`/`4403`.
+- `last_seq: null` means a fresh join: the server sends `welcome`, the roster and presence, **no replay**, and (if the client wants history) the client calls the history/snapshot endpoints (CT-RESUME).
 - A second connection for the same `(member, device)` supersedes the first (the old one gets `sys.bye reason=superseded`, close `4409`).
 
 ### Heartbeat
@@ -97,7 +101,11 @@ S → C  presence roster frames
 - The server keeps an in-memory **replay buffer** per session of at least the last **5 000 frames or 10 minutes**, whichever is larger, plus durable ciphertext history (CT-RESUME).
 - A client must keep unacked outbound frames and resend them (same `id`) after reconnect; the server's `(sid, from, id)` de-dup makes this safe.
 
+`welcome.p` also carries `session: {mode: "command_post" | "branch", state: "pending|live|paused|ended|expired"}` so a client can apply mode-specific rules (e.g. only the host emits `message.user` in command-post mode).
+
 ### Limits (server-advertised in `welcome.limits`, defaults below)
+`limits` keys: `max_frame_bytes`, `seq_rate`, `seq_burst`, `presence_rate`, `outbound_buffer_bytes`, `max_members`, `queue_limit`. Unknown keys are ignored.
+
 | Limit | Default |
 |---|---|
 | Max frame size | 256 KiB |
@@ -123,11 +131,11 @@ S → C  presence roster frames
 | 4503 | Server overloaded; retry later (`retry_after_s` in the preceding `sys.error`) |
 
 ### Reconnection (client)
-1. On any close except 4401/4403/4404/4426, reconnect with exponential backoff: 250 ms × 2ⁿ, full jitter, cap 15 s.
+1. On any close except 4401/4403/4404/4409/4426, reconnect with exponential backoff: 250 ms × 2ⁿ, full jitter, cap 15 s.
 2. Fetch a **new relay ticket** (`POST /v1/sessions/{id}/join-token`) for each attempt (tickets are single-use).
 3. Send `sys.hello` with `last_seq` = highest contiguous seq processed.
 4. Resend any unacked outbound frames after `welcome`.
-5. For 4401 refresh the access token first; for 4403/4404 stop and tell the user.
+5. For 4401 refresh the access token first; for 4403/4404 stop and tell the user; for 4409 (superseded by another connection of the same device) stop and do **not** reconnect (it would start a supersede loop); after 3 closes with 4400 within 60 s stop and report a protocol error.
 
 ### Compression
 `permessage-deflate` is **not** used (ciphertext does not compress). Optional capability `compress.zstd` is reserved for cleartext snapshots; not used in v1.

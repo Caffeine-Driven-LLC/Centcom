@@ -70,6 +70,5 @@
     "Member disconnects while typing -> timer cancelled; B047's offline handling applies.",
     "Cursor flood from a malicious client -> excess silently dropped, repeated floods (> 10x limit for 10 s) close 4429 via B046 hooks."
   ],
-  "unblocks_gate": "G5",
-  "notes": "CONTRACT GAP: the cursor `ct` size cap of 4 KiB is a lane decision (contract gives only the global 192 KiB limit); product may adjust via config. Client behaviour 'cursors disappear after 10 s' is not enforced by the relay."
+  "unblocks_gate": "G5"
 }

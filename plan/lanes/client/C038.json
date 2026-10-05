@@ -77,6 +77,5 @@
     "Missing secret part (`command` absent) -> show `summary` only and hide `[e]`.",
     "Decision callback throws or the send fails -> keep the prompt open, show `Couldn't send your answer. Try again.`, and re-enable keys."
   ],
-  "unblocks_gate": "G3",
-  "notes": "CONTRACT GAP: `approval.decision` carries no field for an edited command; edit is therefore only possible when the approver is the machine running the agent, and the edited command stays local. Scope `session` has no key in DESIGN §10.1.4; it is reachable only from the rules UI (not part of v1 keys)."
+  "unblocks_gate": "G3"
 }

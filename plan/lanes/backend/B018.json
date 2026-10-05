@@ -82,6 +82,5 @@
     "Login session expired mid-flow -> redirect to login again preserving a signed return_to.",
     "Allow-list config invalid -> API refuses to start."
   ],
-  "unblocks_gate": "G1",
-  "notes": "CONTRACT GAP: the authorization code TTL (60 s used here) and the default scope for the web client are not specified; both are config. The login page URL is a deployment decision."
+  "unblocks_gate": "G1"
 }

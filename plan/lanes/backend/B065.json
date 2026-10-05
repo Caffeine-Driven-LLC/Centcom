@@ -73,5 +73,5 @@
     "Invalid UUID/ULID in path -> 404 (not 400) to avoid probing."
   ],
   "unblocks_gate": "G5",
-  "notes": "Uses the pagination library from B025 through its public interface only. CONTRACT GAP: the X-Unread-Count header is an additive extra, not in the contract; remove if reviewers object."
+  "notes": "Uses the pagination library from B025 through its public interface only."
 }

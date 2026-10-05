@@ -49,7 +49,8 @@
     "With the outbox at 10,000 events a further event drops the oldest `tokens_in`/`tokens_out` event first and increments a `dropped` counter exposed in `snapshot()`; `agent_minutes` events are dropped last.",
     "`budget.sessionUsd=1.00` produces exactly one `cost.alert` warn at $0.80 and one error at $1.00 per session, not repeated on later turns.",
     "Unknown model (no price) sets `estimated: true` and cost 0 rather than throwing.",
-    "No usage event contains text, paths, branch names or model names."
+    "No usage event contains text, paths, branch names or model names.",
+    "Every produced usage event `id` matches `^use_[0-9A-HJKMNP-TV-Z]{26}$` (client-generated, CT-IDS)."
   ],
   "tests": [
     "accounting/cost.test.ts: rounding, cache pricing, unknown model.",
@@ -70,6 +71,5 @@
     "Provider usage fields missing on a turn -> record the turn with zero tokens, set `estimated: true`, and never block the turn.",
     "Clock moves backwards -> clamp negative durations to zero."
   ],
-  "unblocks_gate": "G4",
-  "notes": "CONTRACT GAP: CT-API-USAGE does not state the format of the event `id` (only that it dedupes); this lane uses a monotonic ULID without prefix. Free LAN usage is also counted locally but never uploaded unless a later lane decides otherwise."
+  "unblocks_gate": "G4"
 }

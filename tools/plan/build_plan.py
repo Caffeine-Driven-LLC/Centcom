@@ -152,24 +152,6 @@ Repo: `{repo}` · Rules: [`plan/GUIDELINES.md`](../GUIDELINES.md) · Format: [`p
             ls = sorted(i for i, cd in all_cards[p].items() if cd.get('unblocks_gate') == gid)
             t.append(f'- **{p}** lanes: {", ".join(ls) or "-"}')
     open(os.path.join(PLAN, 'INTEGRATION.md'), 'w').write('\n'.join(t) + '\n')
-    # open items: contract gaps and split candidates, collected from card notes
-    import re
-    gaps, splits = [], []
-    for pl in PLANS:
-        for i, c in sorted(all_cards[pl].items()):
-            note = c.get('notes') or ''
-            for seg in re.split(r'(?=CONTRACT GAP)', note):
-                if seg.startswith('CONTRACT GAP') and len(seg.strip()) > 20:
-                    gaps.append((i, seg.strip().replace('\n', ' ')))
-            for seg in re.split(r'(?<=[.!?])\s+', note):
-                if re.search(r'\bSPLIT\b|split', seg) and not seg.startswith('CONTRACT GAP'):
-                    splits.append((i, seg.strip().replace('\n', ' ')))
-    o = ['# Open items\n', 'Collected automatically from lane-card `notes`. Nothing here blocks a lane: each card says how to proceed conservatively. Items are for the **contract owners** (gaps) and **plan leads** (splits) to triage before or during the gates.\n',
-         f'## Contract gaps ({len(gaps)})\n', 'Resolve with a Contract PR (GUIDELINES §9) or close as "internal decision". Until then follow the card’s conservative reading behind a flag.\n']
-    o += [f'- **{i}**: {t}' for i, t in gaps]
-    o += ['', f'## Split candidates ({len(splits)})\n', 'Lanes whose authors think they may exceed their size. Split before starting if the owner agrees (new IDs go through a plan PR).\n']
-    o += [f'- **{i}**: {t}' for i, t in splits]
-    open(os.path.join(PLAN, 'OPEN_ITEMS.md'), 'w').write('\n'.join(o) + '\n')
     n = sum(len(v) for v in all_cards.values())
     print(f'rendered {n} cards; critical path backend {stats["backend"]["days"]}d, client {stats["client"]["days"]}d')
 

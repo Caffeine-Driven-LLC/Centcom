@@ -90,5 +90,5 @@
     "New binary fails a post-apply `--version` smoke check -> automatic rollback to `centcom.prev`."
   ],
   "unblocks_gate": "G6",
-  "notes": "Manifest fields (artifact url, sha256, size, signature, min_client_version, notes url) come from schemas/release-manifest.schema.json, which is not present in the contracts/ snapshot. CONTRACT GAP: the exact byte string covered by the Ed25519 artifact signature (artifact bytes vs. hash vs. canonical manifest entry) must be stated by the schema/CT-API-RELEASES; this card assumes the signature covers the artifact SHA-256 digest bytes until clarified."
+  "notes": "Manifest fields (artifact url, sha256, size, signature, min_client_version, notes url) come from schemas/release-manifest.schema.json, which is not present in the contracts/ snapshot."
 }

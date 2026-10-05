@@ -73,6 +73,5 @@
     "Invoice references an unknown workspace (customer mapping missing) -> drop with error log and DLQ for B072, never create a row.",
     "Cursor invalid or expired -> 400 problem+json per CT-PAGE."
   ],
-  "unblocks_gate": "G4",
-  "notes": "CONTRACT GAP: no Invoice response schema and no invoice id prefix exist in CT-IDS or schemas; the shape above is provisional and the id is the opaque Stripe invoice id until a Contract PR defines both. CONTRACT GAP: the REST table lists the role for invoices as owner/billing while CT-RBAC lists owner, admin and billing for 'View billing, invoices'; this lane follows the CT-RBAC matrix through the B021 engine. There are no separate tax endpoints in the contract; tax information is carried inside the invoice object."
+  "unblocks_gate": "G4"
 }

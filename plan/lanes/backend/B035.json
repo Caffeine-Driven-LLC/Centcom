@@ -66,6 +66,5 @@
     "PATCH with stale `If-Match` -> 412 `precondition_failed`.",
     "Workspace soft-deleted mid-request -> 404."
   ],
-  "unblocks_gate": "G5",
-  "notes": "CONTRACT GAP: project fields ('named repo references') are not specified; `name` and opaque `repo_ref` are proposed. Recommendation to clients (documentation only): store a hash of the normalised remote, not the URL."
+  "unblocks_gate": "G5"
 }

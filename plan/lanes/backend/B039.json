@@ -75,6 +75,5 @@
     "Validator package missing a newer kind -> treated as unknown kind (pass-through), never as an error.",
     "Exception in validation -> caught, frame dropped, `relay_codec_errors_total` incremented, connection kept."
   ],
-  "unblocks_gate": "G2",
-  "notes": "CONTRACT GAP: the registry code for 'frame too large' is not visible; use the 413-class code from errors.json."
+  "unblocks_gate": "G2"
 }

@@ -85,6 +85,5 @@
     "Concurrent create at the limit -> limit enforced under a row lock/serialisable transaction so the cap is never exceeded.",
     "Last-used update fails -> ignored with a metric; authentication still succeeds."
   ],
-  "unblocks_gate": "G4",
-  "notes": "CONTRACT GAP: the POST /v1/api-keys request body and response fields live in openapi.yaml; the shape above is provisional. The contract's 8-char display prefix of `cen_live_...` is just `cen_live`; implemented as specified, flag for a contract clarification. The title mentions 'rotate' but no rotate endpoint exists in CT-API-ACCOUNTS; implemented as an internal service function only."
+  "unblocks_gate": "G4"
 }

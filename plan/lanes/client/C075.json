@@ -102,5 +102,5 @@
     "Host loses power -> session is over (no failover in LAN); guests detect the dead connection within 50 s and end their local view."
   ],
   "unblocks_gate": "G3",
-  "notes": "SPLIT? Queue/control authority and history/snapshots could be two PRs (engine core first)."
+  "notes": "SPLIT? Queue/control authority and history/snapshots could be two PRs (engine core first).\nContract v1.1.0: as LAN host you play the relay: handle `control.rotate_request` by emitting `control.rotate_key` from `srv`; honour `control.policy.trusted` and `approvers`; stamp server frames with `from: \"srv\"`."
 }

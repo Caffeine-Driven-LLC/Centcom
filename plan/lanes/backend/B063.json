@@ -91,6 +91,5 @@
     "Email provider down -> email jobs retry with backoff up to 24 h, then dead-letter; inbox unaffected.",
     "Redis unavailable at publish -> publish throws a typed retryable error; the producing lane decides (outbox) and must not lose the event silently."
   ],
-  "unblocks_gate": "G5",
-  "notes": "CONTRACT GAP: per-category `params` keys and `action.type` values other than `open_session` are not defined; this lane defines provisional allow-lists in params.ts (ids and enums only) and uses action types open_session and open_billing with deeplinks from CT-DEEPLINK."
+  "unblocks_gate": "G5"
 }

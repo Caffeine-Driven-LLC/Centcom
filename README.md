@@ -27,7 +27,7 @@ python3 play.py typing --color red     # one animation, any of 5 colours
 xdg-open gallery.html                  # browse, recolour, tile into crowds
 ```
 
-The large generated GIF crowds are not committed; regenerate with `python3 assets/mascot/build.py`.
+All generated GIFs (5 colours + duo/trio/squad/group crowds) are committed under `assets/mascot/gif/`; regenerate with `python3 assets/mascot/build.py`.
 
 ## Check the plan and contracts
 

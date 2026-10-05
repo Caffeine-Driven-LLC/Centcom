@@ -10,7 +10,7 @@
   ],
   "goal": "Relay-side handling of branch.update and conflict.detected so members learn about branch divergence and overlapping work from metadata, without the relay seeing branch names or paths.",
   "scope_in": [
-    "Pass-through sequencing for branch.update (encrypted-only) with per-agent rate limit of 1 frame per 2 s (latest wins) and size limit 192 KiB on ct.",
+    "Pass-through sequencing for branch.update (encrypted-only): validated and delivered unchanged; size limit 192 KiB on ct. The relay never drops or merges sequenced frames; senders coalesce at the source (SHOULD be <= 1 per 2 s per agent).",
     "Handler for conflict.detected (hybrid) validating p.agent_ids against the agent registry and p.path_hmacs against the lock store, with de-dup of identical (agent_ids, path_hmacs) sets within 30 s.",
     "Server-side conflict detection from lock denials (from B059 port): when a deny occurs for path_hmac P, emit conflict.detected from the server with holder and requester agent ids and [P] (once per pair per 30 s).",
     "Only agents present in the registry and owned by connected members may be referenced; others are dropped."
@@ -47,7 +47,7 @@
   ],
   "acceptance": [
     "A branch.update frame with a non-empty p, or without ct, is rejected `invalid_frame`; a valid frame is sequenced and fanned out unchanged (ct byte-identical).",
-    "5 branch.update frames for one agent within 2 s sequence the first and the last only (latest wins, middle dropped).",
+    "5 branch.update frames for one agent within 2 s are all sequenced and delivered in order (the relay does not coalesce); the per-member sequenced-frame rate limit (B041) still applies.",
     "conflict.detected whose agent_ids include an unknown agent is rejected `invalid_frame`; one with 201 path_hmacs is rejected (schema max 200).",
     "Same lock denial twice within 30 s produces one server conflict.detected; after 30 s a second one is produced; two different pairs produce two.",
     "Server-originated conflict.detected has `from` = server, includes both agent ids and the single path_hmac, and includes no ct.",
@@ -56,7 +56,7 @@
   ],
   "tests": [
     "branches.handler.test.ts: validation and fan-out identity",
-    "branches.rate.test.ts: coalescing with fake clock",
+    "branches.passthrough.test.ts: no relay-side dropping or merging of branch.update",
     "conflict.signal.test.ts: dedupe window, server-originated signals",
     "branches.authz.test.ts",
     "branches.privacy.test.ts"
@@ -64,13 +64,12 @@
   "guardrails": [
     "MUST NOT decrypt, parse or store ct of branch.update.",
     "MUST NOT originate any conflict signal that includes information beyond agent ids and path_hmacs.",
-    "Dropped (coalesced) branch.update frames MUST NOT be acked as sequenced; sender is told nothing and does not retry (they are advisory).",
+    "MUST NOT drop, merge or reorder sequenced branch.update frames: every sequenced frame is delivered (CT-WS-SESSION-EVENTS size and rate rules).",
     "MUST NOT use branch or conflict signals to block any other frame."
   ],
   "failure_modes": [
     "Registry port unavailable -> pass-through frames with unverified agent ids are rejected with 503-class sys.error, branch.update still passes.",
     "Burst of denials (1 000/s) -> signal rate capped to 10 conflict.detected per session per second, rest counted and dropped."
   ],
-  "unblocks_gate": "G5",
-  "notes": "CONTRACT GAP: the contract sequences every branch.update and does not allow dropping events, so the 1-per-2-s coalescing here is a lane choice that contract owners should confirm; if rejected, remove the rate limit and keep only the 30 s conflict de-dup. LockDenialPort is satisfied by B059 at integration time (no depends_on edge)."
+  "unblocks_gate": "G5"
 }

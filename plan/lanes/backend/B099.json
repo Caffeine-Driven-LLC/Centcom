@@ -75,6 +75,5 @@
     "Second-provider replication fails -> alert after 24 h; primary backups unaffected.",
     "Drill exceeds RTO -> drill fails, issue filed with timing breakdown; launch gate G6 fails if the last drill is older than 35 days or failed."
   ],
-  "unblocks_gate": "G6",
-  "notes": "CONTRACT GAP: no contract defines the deletion log; this lane assumes the account deletion lane (B026) writes a durable, restorable log (e.g. a `deletion_log` table outside normal purge) and exposes a read function; confirm the table name with that owner. History frames are ciphertext, so restoring them leaks nothing new, but deleted workspaces' blobs must also be re-purged using the same replay mechanism."
+  "unblocks_gate": "G6"
 }

@@ -78,6 +78,5 @@
     "Pub/sub subscription lost -> fall back to the 2 s polling re-check and log; resubscribe with backoff.",
     "Room evicted while a late join races -> `getOrCreate` is atomic; the joiner gets a fresh room."
   ],
-  "unblocks_gate": "G3",
-  "notes": "CONTRACT GAP: the catalogue says in command-post mode only the host emits events marked `*`, but the session mode is not carried in any frame; this lane applies role checks only and leaves mode-specific restrictions to B051/B052 via the `session.mode` field once B053 provides it. Placement of the first-event handling for unknown kinds from `viewer`s is conservative (rejected)."
+  "unblocks_gate": "G3"
 }

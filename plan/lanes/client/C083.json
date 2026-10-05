@@ -82,6 +82,5 @@
     "Snapshot hash mismatch -> discard, retry once, then show 'earlier history unavailable' and continue with live frames.",
     "Tab hidden for > 5 min -> heartbeat missed; reconnect on visibility, resume with last_seq."
   ],
-  "unblocks_gate": "G3",
-  "notes": "CONTRACT GAP: browsers have no registered device (see C082 notes), so signing frames and unsealing key.grant for a web device is undefined; until resolved the web client is receive-only for encrypted content it can obtain via a grant addressed to a registered web device. SPLIT? transcript renderer and queue UI could be two lanes; keep as L. Markdown renderer dependency must be justified (prefer marked + DOMPurify or micromark with no HTML)."
+  "unblocks_gate": "G3"
 }

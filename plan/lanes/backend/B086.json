@@ -77,6 +77,5 @@
     "Probe flapping -> hysteresis of 3 failures before `major_outage` and 2 successes before recovery.",
     "Migration table missing -> `/readyz` 503, `/healthz` unaffected."
   ],
-  "unblocks_gate": "G1",
-  "notes": "CONTRACT GAP: incident `status` values other than `investigating` (e.g. identified, monitoring, resolved) and the `inc_` id prefix are not defined; this lane uses `investigating|identified|monitoring|resolved` provisionally and consumers must tolerate unknown values (CT-VER robustness rule). This lane covers the API app; the relay's own liveness endpoints belong to B037."
+  "unblocks_gate": "G1"
 }

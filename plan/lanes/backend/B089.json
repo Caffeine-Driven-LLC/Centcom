@@ -71,6 +71,5 @@
     "Very common short trigram query -> bounded by limit and timeout, returns partial page with `has_more`.",
     "Deleted/ended entities -> still searchable by staff within retention, flagged `ended` in the label."
   ],
-  "unblocks_gate": "G6",
-  "notes": "CONTRACT GAP: the REST contracts define no search endpoint; this lane is internal tooling and the `member` scope function is prepared but not exposed publicly. The lane depends on B054 only; wiring the plugin into the admin listener happens in the composition root edited by the admin API lane (one-line registration)."
+  "unblocks_gate": "G6"
 }

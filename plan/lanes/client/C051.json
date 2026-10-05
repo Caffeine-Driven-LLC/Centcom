@@ -106,5 +106,5 @@
     "Cursor expired (24 h) or bound to other filters -> surface the typed error; `paginate` stops and the caller restarts from the first page."
   ],
   "unblocks_gate": "G1",
-  "notes": "SPLIT? Generator plus runtime is a full L; if it overruns, ship the runtime first with a hand-maintained operations table and land the generator as a follow-up PR. CONTRACT GAP: the error code for an expired/invalid pagination cursor is not named in CT-PAGE; handled as a generic 4xx until errors.json says otherwise."
+  "notes": "SPLIT? Generator plus runtime is a full L; if it overruns, ship the runtime first with a hand-maintained operations table and land the generator as a follow-up PR."
 }

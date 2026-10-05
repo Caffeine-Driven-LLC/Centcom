@@ -68,5 +68,5 @@
     "DB unavailable -> typed unavailable error, no partial user."
   ],
   "unblocks_gate": "G1",
-  "notes": "Email release semantics for deleted accounts are not specified by the contracts; B026 decides. CONTRACT GAP: avatar_slot range is not defined in CT-API-ACCOUNTS; accept integer 0..255 and tighten when the contract says. markDeleted is declared here but used by B026."
+  "notes": "Email release semantics for deleted accounts are not specified by the contracts; B026 decides."
 }

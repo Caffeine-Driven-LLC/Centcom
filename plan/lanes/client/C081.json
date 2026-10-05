@@ -86,5 +86,5 @@
     "`localStorage` throws (private mode) -> fall back to OS theme in memory."
   ],
   "unblocks_gate": "G6",
-  "notes": "CSP string, one line: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://api.centcom.dev wss://relay.centcom.dev wss://relay-eu.centcom.dev wss://relay-us.centcom.dev; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self'. CONTRACT GAP: redirect and CORS origin list for `centcom.dev` web origin versus `api.centcom.dev` is not in the contracts; assumed CORS with credentials allowed for the web origin on /v1/auth/token. Assumes packages/net exports are browser-safe (no node: imports); if not, request a browser entry from the owning lanes. DESIGN.md says high-contrast `data-theme=\"hc\"` is planned; the theme switch reserves the value but ships dark/light/auto only."
+  "notes": "CSP string, one line: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://api.centcom.dev wss://relay.centcom.dev wss://relay-eu.centcom.dev wss://relay-us.centcom.dev; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self'."
 }

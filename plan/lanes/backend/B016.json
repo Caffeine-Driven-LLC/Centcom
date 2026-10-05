@@ -81,6 +81,5 @@
     "User approves after expiry -> approval rejected with `expired_token` semantics; the page can offer retry.",
     "Concurrent polls racing the approval -> exactly one receives tokens (row lock / status compare-and-set)."
   ],
-  "unblocks_gate": "G1",
-  "notes": "CONTRACT GAP: the `verification_uri` host/path (the browser approval page) is not specified; make it config `DEVICE_VERIFICATION_URI`. The page needs a logged-in browser session supplied by the login lanes. Device creation here duplicates registry logic owned by B020; B020's `registerDevice` should be adopted in a follow-up. SPLIT? L-sized."
+  "unblocks_gate": "G1"
 }

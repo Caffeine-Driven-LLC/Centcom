@@ -81,6 +81,5 @@
     "Prune fails after blob delete -> row marked 'deleting', retried by next prune; GET never returns a descriptor whose blob is gone.",
     "Duplicate begin storms (10 in 1 s) -> each creates a pending row but pending count per session is capped at 3, further begins return 429 with retry_after_s."
   ],
-  "unblocks_gate": "G2",
-  "notes": "CONTRACT GAP: the commit failure code for a hash mismatch is not in the registry; use 422 with errors[] pointers until errors.json exists. The 15 min pending expiry and pending cap of 3 are this lane's conservative defaults."
+  "unblocks_gate": "G2"
 }

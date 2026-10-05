@@ -75,6 +75,5 @@
     "DB write fails after sequencing -> frame stays in the log; a repair job rebuilds the reaction table from the durable log on restart (idempotent).",
     "Target msg_ id not present in history -> still stored (late joiners may not have it); no error."
   ],
-  "unblocks_gate": "G5",
-  "notes": "CONTRACT GAP: whether reaction targets must exist and the per-target comment cap are not specified; caps here are lane defaults. The reaction code set is taken from p_reaction in events.schema.json (the prose says 'codes map to pixel animations'). Migration prefix 0062 = lane number."
+  "unblocks_gate": "G5"
 }

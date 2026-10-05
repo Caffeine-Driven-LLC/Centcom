@@ -75,6 +75,5 @@
     "Trial ends without payment method -> Stripe moves the subscription; this lane relies on B072/B078 for the resulting status, no special handling.",
     "Concurrent redeem of one single-use code by two workspaces -> exactly one succeeds, other gets the generic 422."
   ],
-  "unblocks_gate": "G4",
-  "notes": "CONTRACT GAP: the error registry has no coupon-specific codes; use the registry's generic validation error for 422 and add specific codes via a Contract PR if product wants them. CONTRACT GAP: the success response body of coupon redeem is not specified; the subscription summary is assumed. CONTRACT GAP: no notification category for 'trial ending'; this lane sends email only."
+  "unblocks_gate": "G4"
 }

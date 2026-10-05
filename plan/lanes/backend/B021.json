@@ -85,5 +85,5 @@
     "Audit sink down -> denial still enforced; failure counted and logged."
   ],
   "unblocks_gate": "G1",
-  "notes": "Matrix rows map 1:1 to the action catalogue; the mapping table lives in packages/core/src/rbac/matrix.ts with comments citing each CT-RBAC row. CONTRACT GAP: the 'guest (limited)' read of workspace/members is not defined field by field; this lane returns a boolean and leaves field filtering to the workspace lanes."
+  "notes": "Matrix rows map 1:1 to the action catalogue; the mapping table lives in packages/core/src/rbac/matrix.ts with comments citing each CT-RBAC row."
 }

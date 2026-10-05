@@ -82,6 +82,5 @@
     "NotifyPort failure -> approval still routed; notification retried by dispatcher outbox; failure counted.",
     "Host disconnected when request arrives -> request is kept; notification is sent; on expiry the deny is still emitted."
   ],
-  "unblocks_gate": "G5",
-  "notes": "CONTRACT GAP: timeout default and maximum are not specified; this lane requires expires_at from the sender and bounds it to 24 h. The meaning of approver='owner' (session creator vs workspace owner) is not defined; this lane implements workspace owner/admin members present in the session. Delegation to arbitrary members is not in the contracts, so no delegation endpoint is added."
+  "unblocks_gate": "G5"
 }

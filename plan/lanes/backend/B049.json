@@ -15,7 +15,7 @@
     "Epoch tracker per session: `current_kid` (starts `k1`), epoch start time and frame count since rotation; persisted in Redis `relay:ses:{sid}:epoch`.",
     "`EpochSignal.rotate(sid, reason)`: emits server `control.rotate_key {kid:'k<e+1>', reason}` through B044 `emitServer`; reasons limited to `member_removed`, `scheduled`, `requested`.",
     "Enforcement: after a member has acked a `rotate_key` seq, encrypted frames from that member with an older `ct.kid` are rejected; frames with a newer-than-current kid are rejected.",
-    "Detection of a rotation commit: a `key.grant` from the host whose `p.kids` contains `k<current+1>` advances the epoch and triggers `rotate_key` (reason `requested`, or `scheduled` if the 7 d / 100 000 frame trigger was due).",
+    "Rotation trigger: a host `control.rotate_request {reason: scheduled|requested}` (CT-WS-CONTROL) makes the relay advance the epoch counter and emit exactly one `control.rotate_key` for the next kid; a non-host sender gets `forbidden`. Replays of the same frame id emit nothing new (B041 de-dup). `key.grant` frames are routed and validated but do not themselves advance the epoch.",
     "Scheduled-rotation due flag: when an epoch is 7 days old or has 100 000 frames, `EpochTracker.due()` reports `scheduled` and a metric is set; the relay never rotates by itself (the host decides)."
   ],
   "scope_out": [
@@ -53,7 +53,7 @@
     "When called right after a kick emission, the two frames carry consecutive seq numbers (test with a concurrent flood of 100 frames/s: kick+rotate remain adjacent).",
     "After member M has acked the `rotate_key` seq, M sending an encrypted frame with `ct.kid:'k1'` gets `sys.error` `invalid_frame` and the frame is not sequenced; a frame sent before M's ack with the old kid is accepted (in-flight tolerance).",
     "A frame with `ct.kid:'k9'` while current is `k2` is rejected.",
-    "A host `key.grant` with `kids:['k2']` when current is `k1` advances the epoch to `k2` and emits exactly one `rotate_key`; a second identical grant does not emit another.",
+    "A host `control.rotate_request` with current kid `k1` emits exactly one `control.rotate_key {kid:'k2'}`; replaying the same frame id emits nothing; the same request from an editor returns `sys.error` `forbidden`.",
     "`due()` returns `scheduled` once an epoch is 7 days old or has 100 000 frames, and the metric `relay_epoch_rotation_due` is set; the relay does not rotate by itself."
   ],
   "tests": [
@@ -76,6 +76,5 @@
     "Host disconnected when rotation is needed -> rotate is still signalled by the caller (kick path) but session pausing is B053/B051's job.",
     "Grant for a device that left between validation and delivery -> delivered anyway (sealed to a key only that device holds); no harm."
   ],
-  "unblocks_gate": "G3",
-  "notes": "CONTRACT GAP: no client->relay frame exists to request a non-kick rotation (CT-CRYPTO says the relay emits `rotate_key` after the host publishes grants for the next epoch); this card treats a host `key.grant` with the next kid as the commit signal. Scheduled rotation is the host's job (every 7 days or 100 000 frames); the relay only exposes `due()`."
+  "unblocks_gate": "G3"
 }

@@ -75,6 +75,5 @@
     "Signing key missing -> service refuses to start.",
     "Empty result -> `{data: [], next_cursor: null, has_more: false}`."
   ],
-  "unblocks_gate": "G1",
-  "notes": "CONTRACT GAP: no dedicated error code exists for an expired/invalid cursor in the .md contracts; use the generic validation error until errors.json lists one. Adds no third-party dependency (node:crypto)."
+  "unblocks_gate": "G1"
 }

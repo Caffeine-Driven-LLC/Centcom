@@ -83,5 +83,5 @@
     "Findings from the pentest -> tracked as issues with the TM id; document updated within the retest window."
   ],
   "unblocks_gate": "G6",
-  "notes": "The pentest itself and fixes belong to the launch process; this lane only prepares. CONTRACT GAP: none for content, but CT-CRYPTO is client-implemented and consumed here only as a trust assumption (relay never sees plaintext)."
+  "notes": "The pentest itself and fixes belong to the launch process; this lane only prepares."
 }

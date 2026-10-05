@@ -313,6 +313,26 @@
               },
               "limits": {
                 "type": "object"
+              },
+              "session": {
+                "type": "object",
+                "properties": {
+                  "mode": {
+                    "enum": [
+                      "command_post",
+                      "branch"
+                    ]
+                  },
+                  "state": {
+                    "enum": [
+                      "pending",
+                      "live",
+                      "paused",
+                      "ended",
+                      "expired"
+                    ]
+                  }
+                }
               }
             }
           }

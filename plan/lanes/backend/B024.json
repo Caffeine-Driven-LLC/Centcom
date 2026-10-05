@@ -76,6 +76,5 @@
     "Handler throws -> in-flight lock released; nothing stored for 5xx; 4xx AppErrors are stored.",
     "Process crash mid-request -> the lock expires after 30 s and the client retry re-executes."
   ],
-  "unblocks_gate": "G1",
-  "notes": "CONTRACT GAP: HTTP statuses for `idempotency_key_required` (400 assumed) and the exact in-flight duplicate behaviour are not specified in CT-PAGE; the conservative reading above is used. `idempotency_conflict` is stated as 409."
+  "unblocks_gate": "G1"
 }

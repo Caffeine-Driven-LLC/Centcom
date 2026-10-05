@@ -76,6 +76,5 @@
     "Export job fails -> danger banner with retry; polling stops.",
     "Webhooks limit reached -> create disabled with entitlement message."
   ],
-  "unblocks_gate": "G5",
-  "notes": "CONTRACT GAP: the audit event object fields and the delivery object fields are not enumerated in the Markdown contract; the UI renders a minimal subset (id `aud_`, actor, action, time) and tolerates others. The CT-WEBHOOKS table abbreviates `.joined / .left / .role_changed` suffixes; the picker uses the expanded 18 strings."
+  "unblocks_gate": "G5"
 }

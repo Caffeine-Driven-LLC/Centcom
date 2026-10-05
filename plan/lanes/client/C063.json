@@ -60,7 +60,8 @@
     "`/v1/status` reporting `partial_outage` yields NetState `degraded` (banner) but does not close any open socket or block any command.",
     "Simulating a 45 s timer gap (fake clock jump) triggers a forced reconnect of every open RelayClient within 2 s + jitter, each with a fresh ticket.",
     "SeqStore persistence: after restart the first hello carries the persisted `last_seq` and the mock replays only frames after it.",
-    "Cached entitlements are reported as usable for display for 24 h offline and `stale:true` afterwards; hosted-action gating is never decided by this stale cache alone."
+    "Cached entitlements are reported as usable for display for 24 h offline and `stale:true` afterwards; hosted-action gating is never decided by this stale cache alone.",
+    "A frame buffered offline under `k1` is sent after reconnect under `k2` when a `control.rotate_key` arrived meanwhile; its `id` is unchanged and the mock decrypts it with the `k2` key."
   ],
   "tests": [
     "offline/net-state.test.ts: transitions with the mock killed/paused/degraded; mapping to mascot states.",
@@ -73,17 +74,17 @@
   "guardrails": [
     "MUST NOT block, delay or fail LAN or local-only functionality because the backend is down, degraded or unreachable (ARCHITECTURE §5; CT-STATUS).",
     "MUST NOT store plaintext message bodies in the durable outbox: store the already-encrypted-and-signed frame (ciphertext) only, with file mode 0600, and never log its contents.",
-    "MUST keep frame ids unchanged across restarts so server de-dup holds; MUST NOT re-encrypt a stored frame with a different nonce under the same id.",
+    "MUST keep frame ids unchanged across restarts so server de-dup holds; a frame that was already transmitted MUST be resent byte-identical, and only never-sent frames may be (re-)encrypted. Outbox payloads at rest MUST be encrypted with a device-local key from the OS keychain.",
     "MUST bound the outbox (500 frames / 4 MiB per session) and refuse loudly rather than evict silently.",
     "MUST NOT replay stored frames after the session ended or the member was removed (4403/4404): discard and tell the user.",
     "MUST NOT spin: reconnect scheduling is owned by C054's backoff; this lane only observes and coordinates."
   ],
   "failure_modes": [
     "Corrupt or truncated outbox file -> ignore the damaged tail, keep the valid prefix, warn once.",
-    "Key epoch rotated while frames were buffered offline (stored under old `kid`) -> drop with a visible 'could not send, re-send manually' notice instead of sending under a stale epoch, unless the old key is still accepted by contract (it is not for new frames after rotate_key).",
+    "Key epoch rotated while frames are buffered offline -> never-sent frames are re-encrypted under the current epoch (fresh nonce and signature, same frame id) when sent; already-transmitted frames are resent byte-identical.",
     "Disk full or unwritable state dir -> offline buffering disabled with a warning; the live path is unaffected.",
     "Status endpoint unreachable but relay connected -> NetState stays `online` (status is advisory)."
   ],
   "unblocks_gate": "G2",
-  "notes": "G2 checks 'resume survives a forced disconnect'; the acceptance items on forced disconnect and snapshot restore are the ones the gate script will run. CONTRACT GAP: the contract does not state how frames queued under an old epoch must be treated after `rotate_key`; this card drops and notifies (conservative)."
+  "notes": "G2 checks 'resume survives a forced disconnect'; the acceptance items on forced disconnect and snapshot restore are the ones the gate script will run."
 }

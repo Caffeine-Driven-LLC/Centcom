@@ -16,7 +16,8 @@ Column legend: **Scope** = OAuth scope required (CT-AUTH). **Role** = minimum ro
 |---|---|---|---|:-:|---|
 | GET | `/v1/me` | profile | any | — | Current user, plan summary, active workspace, entitlement revision |
 | PATCH | `/v1/me` | profile | any | — | Update display name, locale, avatar slot, telemetry opt-in |
-| DELETE | `/v1/me` | profile | any | — | Begin account deletion (30-day grace; `Location` of status) |
+| DELETE | `/v1/me` | profile | any | — | Begin account deletion (30-day grace). `GET /v1/me` then carries `deletion_scheduled_for` |
+| POST | `/v1/me/restore` | profile | any | — | Cancel a pending account deletion during the grace period |
 | POST | `/v1/me/export` | profile | any | A | Request a data export |
 | GET | `/v1/me/export/{id}` | profile | any | — | Export status and signed download URL |
 | GET | `/v1/devices` | profile | any | — | List own devices |
@@ -48,7 +49,7 @@ Column legend: **Scope** = OAuth scope required (CT-AUTH). **Role** = minimum ro
 | PUT | `/v1/invites/{id}/key-bundle` | sessions:host | host | — | Upload sealed key bundle (CT-CRYPTO §4) |
 | GET | `/v1/invites/{token}/key-bundle` | profile | invitee | — | Fetch the sealed bundle once |
 | GET | `/v1/workspaces/{id}/projects` | workspaces:read | member+ | — | Projects (named repo references) |
-| POST | `/v1/workspaces/{id}/projects` | workspaces:write | member+ | A | Create project |
+| POST | `/v1/workspaces/{id}/projects` | workspaces:write | member+ | A | Create project `{name (1-60), repo (opaque ≤ 128 chars; clients SHOULD send a hash of the normalised remote, never the URL)}` |
 | PATCH | `/v1/projects/{id}` | workspaces:write | member+ | — | Update |
 | DELETE | `/v1/projects/{id}` | workspaces:write | admin+ | — | Delete |
 | GET | `/v1/workspaces/{id}/settings` | workspaces:read | member+ | — | Policies: default auto-approve level, history sharing, retention override |
@@ -71,7 +72,7 @@ Column legend: **Scope** = OAuth scope required (CT-AUTH). **Role** = minimum ro
 | GET | `/v1/sessions/{id}/snapshot` | sessions:read | participant | — | Latest snapshot descriptor + pre-signed GET |
 | POST | `/v1/sessions/{id}/snapshot` | sessions:host | host | A | Begin snapshot upload (pre-signed PUT) |
 | POST | `/v1/sessions/{id}/snapshot/{snp}/commit` | sessions:host | host | A | Commit `{seq, sha256, size, kid}` |
-| POST | `/v1/sessions/{id}/share-links` | sessions:host | host | A | Create a viewer-only guest link |
+| POST | `/v1/sessions/{id}/share-links` | sessions:host | host | A | Create a viewer-only guest link. Body `{expires_in_s (≤ 86400, default 3600), max_uses (≤ 50, default 10)}`; response `{token, url, expires_at}` (the `#k=` fragment is added by the client, CT-CRYPTO §4a) |
 | DELETE | `/v1/sessions/{id}/share-links/{token}` | sessions:host | host | — | Revoke |
 | POST | `/v1/share-links/{token}/join` | none | public | — | Join as limited viewer guest (rate-limited) |
 
@@ -95,7 +96,7 @@ Stripe webhooks are **not** part of this contract (internal).
 
 | Method | Path | Scope | Role | Idem | Summary |
 |---|---|---|---|:-:|---|
-| POST | `/v1/usage/events` | usage:write | device | R | Batch of usage events `[{id, type, qty, at, session_id?, agent_id?}]` (≤ 500), deduped by `id`. Types: `agent_minutes`, `tokens_in`, `tokens_out`, `queue_items`, `relay_bytes` |
+| POST | `/v1/usage/events` | usage:write | device | R | Batch of usage events `[{id (`use_` ULID, client-generated), type, qty, at, session_id?, agent_id?}]` (≤ 500), deduped by `id`; response `{accepted, duplicates, rejected[]}`. Types: `agent_minutes`, `tokens_in`, `tokens_out`, `queue_items`, `relay_bytes` |
 
 ## CT-API-AUDIT
 
@@ -104,6 +105,8 @@ Stripe webhooks are **not** part of this contract (internal).
 | GET | `/v1/workspaces/{id}/audit` | audit:read | admin+ | — | Audit events (filters `actor`, `action`, `from`, `to`) |
 | POST | `/v1/workspaces/{id}/audit/exports` | audit:read | admin+ | A | Export (CSV/JSON) |
 | GET | `/v1/workspaces/{id}/audit/exports/{exp}` | audit:read | admin+ | — | Export status/download |
+
+Audit `action` names (stable): `workspace.create|update|delete`, `member.add|remove|role_change`, `invite.create|accept|revoke`, `session.create|end`, `control.kick|mute|unmute|role|transfer_host|end|policy`, `api_key.create|revoke`, `webhook.create|update|delete`, `billing.checkout|portal|seats|coupon`, `auth.device_revoked`, `permission.denied`, `history.purge`. Denied access to audit when `audit_log_days = 0` returns `403 entitlement_required`.
 
 ## CT-API-NOTIFY
 
@@ -141,13 +144,13 @@ Delivery payloads and signing: CT-WEBHOOKS.
 | GET | `/v1/releases/{channel}/latest` | none | public | — | Latest manifest for `platform` + `arch` (`channel` ∈ `stable|beta|nightly`) |
 | GET | `/v1/releases/{channel}/manifest.json` | none | public | — | Full manifest (all platforms) |
 
-Manifest schema: `schemas/release-manifest.schema.json`. Artifacts are signed (Ed25519) and served from a CDN; the API returns URLs only.
+Manifest schema: `schemas/release-manifest.schema.json`. Artifacts are signed (Ed25519) and served from a CDN; the signature covers the **32 raw bytes of the artifact's SHA-256 digest**; the API returns URLs only.
 
 ## CT-API-FLAGS
 
 | Method | Path | Scope | Role | Idem | Summary |
 |---|---|---|---|:-:|---|
-| GET | `/v1/flags` | none or profile | any | — | Flags evaluated for the caller (anonymous allowed). `{flags:{key:value}, rev, ttl_s}` cached by ETag |
+| GET | `/v1/flags` | none or profile | any | — | Flags evaluated for the caller (anonymous allowed). `{flags:{key:value}, rev, ttl_s}` cached by ETag. Flag keys match `[a-z0-9_.-]{1,64}`. Percentage rollouts hash the `usr_` id; anonymous callers only ever see flags that are fully on or off |
 
 ## CT-TELEMETRY (ingest; payloads in 08)
 

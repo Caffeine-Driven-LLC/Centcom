@@ -75,6 +75,5 @@
     "Accept succeeds but key-bundle fetch fails (network) -> retry up to 3 times with backoff; leave the user in the session with 'Waiting for the host to let you in'.",
     "429 on share-link join -> show Retry-After countdown."
   ],
-  "unblocks_gate": "G3",
-  "notes": "CONTRACT GAP: CT-DEEPLINK does not say how a fragment key `#k` is carried into the desktop handler; implemented conservatively: not carried (the desktop uses the key bundle or host grant). Fragment key naming mismatch: CT-CRYPTO calls the one-time invite key `I_x` whose private half is in `#k=`."
+  "unblocks_gate": "G3"
 }

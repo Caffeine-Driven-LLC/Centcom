@@ -74,6 +74,5 @@
     "Stored document fails validation after a code change (stale shape) -> service returns defaults merged with valid parts and logs a warning, never a 500.",
     "Concurrent PUTs -> last write wins unless If-Match given; version increments atomically."
   ],
-  "unblocks_gate": "G5",
-  "notes": "CONTRACT GAP: the preference document shape (channels x categories, quiet hours fields) is described only in prose in CT-API-NOTIFY; the shape above is this lane's proposal pending openapi.yaml. 'High may bypass quiet hours only for approval_needed if the user opted in' is modelled as quiet_hours.allow_high_approval."
+  "unblocks_gate": "G5"
 }

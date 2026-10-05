@@ -81,6 +81,5 @@
     "Staff user removed mid-session -> next request denied (staff table checked each request, cache <= 5 s).",
     "Target not found -> 404 with audit outcome `error`."
   ],
-  "unblocks_gate": "G6",
-  "notes": "CONTRACT GAP: the `admin` scope is declared 'internal only' in CT-AUTH but nothing defines how it is issued; this lane assumes an internal IdP/allow-listed login produces it, tracked as an operational decision. Admin routes are not part of any public contract and are excluded from the OpenAPI document. `implements` is empty because the internal API realises no wire contract."
+  "unblocks_gate": "G6"
 }

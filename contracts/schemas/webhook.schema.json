@@ -36,7 +36,8 @@
         "billing.invoice.payment_failed",
         "usage.threshold",
         "api_key.created",
-        "api_key.revoked"
+        "api_key.revoked",
+        "webhook.test"
       ]
     },
     "created_at": {
