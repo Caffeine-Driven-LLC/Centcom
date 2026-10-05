@@ -1,0 +1,31 @@
+{
+  "kind": "key.grant",
+  "frame": {
+    "v": 1,
+    "t": "event",
+    "id": "msg_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+    "sid": "ses_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+    "from": "mem_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+    "ts": "2026-10-05T18:07:41.123Z",
+    "k": "key.grant",
+    "seq": 1042,
+    "p": {
+      "to_device": "dev_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+      "kids": [
+        "short text"
+      ]
+    },
+    "ct": {
+      "alg": "xchacha20poly1305",
+      "kid": "k1",
+      "n": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "c": "AAAA"
+    },
+    "sig": "AAAA"
+  },
+  "secret_payload": {
+    "grants": [
+      {}
+    ]
+  }
+}

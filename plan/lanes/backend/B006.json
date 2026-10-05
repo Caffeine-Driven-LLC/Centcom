@@ -1,0 +1,77 @@
+{
+  "id": "B006",
+  "title": "Error layer: problem+json, error registry, error handler",
+  "plan": "backend",
+  "phase": "P0 Foundations",
+  "size": "M",
+  "role": "platform",
+  "depends_on": [
+    "B003",
+    "B005"
+  ],
+  "goal": "Every HTTP error leaves the API as RFC 9457 problem+json with a stable registry code, request_id and correct retry hints, thrown through typed errors instead of strings.",
+  "scope_in": [
+    "Error registry module built from the errors.json output of B003: `ErrorCode` union, `status`, default `title` and `retryable` per code.",
+    "`AppError` class (code, detail, errors[], retryAfterS, cause) plus helpers: `badRequest`, `unauthorized`, `forbidden`, `notFound`, `conflict`, `unprocessable`, `tooManyRequests`, `unavailable`, `validationFailed(errors)`.",
+    "Fastify error handler plugin (apps/api/src/plugins/error-handler.ts) and not-found handler producing `application/problem+json` with `type` `https://centcom.dev/errors/<code>`, `instance` (route path), `request_id`, and `retry_after_s` + `Retry-After` for 429/503/retryable codes.",
+    "Mapping of validation failures from B003 validators to `errors[]` with JSON Pointer; mapping of unknown thrown errors to a generic 500 without leaking message or stack.",
+    "`toProblem(err, ctx)` pure function shared with the relay for `sys.error` frame bodies (same shape per CT-ERR)."
+  ],
+  "scope_out": [
+    "The WebSocket `sys.error` frame sending logic (relay lanes).",
+    "Rate-limit and idempotency decisions (B023, B024) which only throw errors from this layer.",
+    "Per-endpoint error documentation (openapi.yaml, contract-owned)."
+  ],
+  "implements": [
+    "CT-ERR"
+  ],
+  "consumes": [
+    "CT-IDS",
+    "CT-PAGE"
+  ],
+  "build_against": "Fastify `inject()` with throwaway routes that throw each error type; registry loaded from the generated JSON in packages/contracts.",
+  "deliverables": [
+    "packages/core/src/errors/registry.ts",
+    "packages/core/src/errors/app-error.ts",
+    "packages/core/src/errors/problem.ts",
+    "packages/core/src/errors/index.ts",
+    "packages/core/test/errors/",
+    "apps/api/src/plugins/error-handler.ts",
+    "apps/api/test/error-handler.test.ts"
+  ],
+  "interfaces": [
+    "`class AppError extends Error { code: ErrorCode; status: number; detail?: string; errors?: FieldError[]; retryAfterS?: number }`.",
+    "`interface Problem { type: string; title: string; status: number; code: string; detail?: string; instance?: string; request_id: string; retry_after_s?: number; errors?: FieldError[] }`.",
+    "`toProblem(err: unknown, ctx: {requestId: string; instance?: string}): Problem`.",
+    "`errorHandlerPlugin: FastifyPluginAsync`; content type `application/problem+json`.",
+    "`isRetryable(status: number, method: string, hasIdempotencyKey: boolean): boolean` implementing the CT-ERR retry table."
+  ],
+  "acceptance": [
+    "A thrown `forbidden()` yields HTTP 403, `content-type: application/problem+json`, body with `code:'forbidden'`, `status:403`, `request_id` equal to the `X-Request-Id` header.",
+    "A schema validation failure yields a body whose `errors[0].pointer` is a JSON Pointer such as `/events/3/qty`.",
+    "429 and 503 problems carry `retry_after_s` (integer) and a matching `Retry-After` header; 400/403/404 never do.",
+    "An unexpected `TypeError` yields 500 with a generic detail; the original message appears only in the server log (redacted), and the response contains no stack or file path.",
+    "Unknown route yields 404 problem; wrong method yields 405 problem with `Allow` header; body larger than 256 KiB yields 413-class problem; malformed JSON yields 400 problem.",
+    "`detail` strings never contain the request body or header values (test with a body containing a bearer token).",
+    "`isRetryable(503,'POST',false)` is false and `isRetryable(503,'GET',false)` is true; 429 on POST without a key is not retryable."
+  ],
+  "tests": [
+    "problem.test.ts: shape for every registry code (table-driven).",
+    "handler.test.ts: thrown types, validation mapping, 404/405/413/400.",
+    "leak.test.ts: secrets in request never appear in response or log output.",
+    "retry-table.test.ts: matrix from CT-ERR."
+  ],
+  "guardrails": [
+    "MUST only emit `code` values present in the registry generated from contracts; MUST NOT invent codes.",
+    "MUST NOT include stack traces, SQL, file paths, other users' data or secrets in `detail`.",
+    "MUST set `request_id` on every problem, including errors raised before routing.",
+    "MUST give uniform timing/shape for auth failures (same body structure whether the user exists or not)."
+  ],
+  "failure_modes": [
+    "Error occurs while serialising an error -> fall back to a static minimal 500 problem body.",
+    "Code missing from registry -> handler logs an error and responds with the status-class generic code (CT-ERR rule 7).",
+    "Reply already sent (stream) -> log and destroy the socket, do not write a second response."
+  ],
+  "unblocks_gate": "G1",
+  "notes": ""
+}

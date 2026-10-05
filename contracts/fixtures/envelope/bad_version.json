@@ -1,0 +1,10 @@
+{
+  "schema": "envelope.schema.json",
+  "valid": false,
+  "note": "unsupported protocol major",
+  "data": {
+    "v": 2,
+    "t": "sys.ping",
+    "p": {}
+  }
+}

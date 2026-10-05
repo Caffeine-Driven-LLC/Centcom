@@ -1,0 +1,79 @@
+{
+  "id": "C050",
+  "title": "Non-interactive mode: print, JSON output, pipes",
+  "plan": "client",
+  "phase": "P2 TUI",
+  "size": "M",
+  "role": "runtime",
+  "depends_on": [
+    "C013",
+    "C025"
+  ],
+  "goal": "Run Centcom without a TUI: `centcom -p \"prompt\"` runs one task and prints the result as text, JSON or streaming JSON lines, composes with pipes, and exits with predictable codes.",
+  "scope_in": [
+    "Flags in `apps/cli/src/print/`: `-p, --print [prompt]`, `--output-format text|json|stream-json` (default `text`), `--input-format text|stream-json` (default `text`), `--model <id|alias>`, `--max-turns <n>` (default 50), `--timeout <seconds>` (default none), `--permission-mode <ask|accept-edits|plan>`, `--allow <rule>` (repeatable, rule syntax from lane C015), `--cwd <dir>`.",
+    "Prompt sources: argument, else stdin when it is a pipe (`cat log | centcom -p \"explain\"` appends stdin as a fenced block to the prompt; cap 1 MiB, over cap exits 2 with `Input is too large (max 1 MiB).`).",
+    "Output: `text` streams the assistant text to stdout only; `json` prints one final object `{type:'result', is_error, result, usage:{tokens_in, tokens_out}, session_id, duration_ms}`; `stream-json` prints one JSON object per line using the event kinds of CT-WS-SESSION-EVENTS (`message.assistant.delta`, `message.assistant.done`, `tool.request`, `tool.result`, `approval.request`, `agent.state`, `agent.exit`) with the decrypted-payload field names, ending with the same `result` line.",
+    "stdout carries data only; progress, warnings and logs go to stderr; no colour, spinner, mascot or alt screen when not a TTY (and with `NO_COLOR`).",
+    "Non-interactive permissions: requests that need approval are never prompted; they are denied with `tool.result` status `denied` unless allowed by `--permission-mode`/`--allow`; if any were denied the process exits 3 after finishing.",
+    "Exit-code table in `exit-codes.ts` mapping typed errors from lane C006 (CT-ERR `code`/status) to: 0 success, 1 general failure, 2 usage error, 3 permission denied, 4 authentication required (`unauthenticated`-class 401), 5 quota or rate limit (429-class), 6 network/unavailable (5xx, offline), 124 timeout, 130 interrupted (SIGINT/SIGTERM via lane C030).",
+    "JSON error output: on failure with `json` or `stream-json` the final line is `{type:'result', is_error:true, error:{code, title, status, detail, request_id, retry_after_s}}` built from the CT-ERR problem+json fields, never the raw HTTP body."
+  ],
+  "scope_out": [
+    "Interactive TUI (lanes C034-C049) and first-run flows.",
+    "Persisting or resuming sessions from print mode (lane C026 integration happens later; `--no-session-persistence` is accepted and ignored in this lane).",
+    "Login and account commands (lane C053); print mode only reports `auth-required` with exit 4.",
+    "Joining or hosting multiplayer sessions (session lanes)."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-ERR",
+    "CT-WS-SESSION-EVENTS"
+  ],
+  "build_against": "Scripted fake runner from lane C013's test kit and the in-memory bus (lane C025); error cases use CT-ERR problem+json bodies from fixtures typed by lane C006; CLI tests spawn the built binary with the pty/pipe harness of lane C008. No backend.",
+  "deliverables": [
+    "apps/cli/src/print/",
+    "apps/cli/src/print/README.md"
+  ],
+  "interfaces": [
+    "`runPrint(deps: {runner: AgentRunner; bus: EventBus; io: {stdin: NodeJS.ReadStream; stdout: NodeJS.WriteStream; stderr: NodeJS.WriteStream}; clock: Clock; errors: ErrorMapper}, opts: PrintOptions): Promise<number>` (returns exit code; never calls `process.exit`)",
+    "`type PrintOptions = {prompt?: string; outputFormat: 'text'|'json'|'stream-json'; inputFormat: 'text'|'stream-json'; model?: string; maxTurns: number; timeoutS?: number; permissionMode?: string; allow: string[]; cwd?: string}`",
+    "`exitCodeFor(err: unknown): number` and the exported constant table `EXIT_CODES`",
+    "`formatResult(r: PrintResult, fmt: 'json'|'stream-json'): string`",
+    "CLI: `centcom -p \"...\" [--output-format ...]`; exit codes as listed in scope."
+  ],
+  "acceptance": [
+    "`centcom -p \"hi\"` with the fake runner prints only the assistant text plus a trailing newline on stdout, nothing on stderr except warnings, exit 0.",
+    "`--output-format json` prints exactly one line of valid JSON on stdout with `type:'result'`, `is_error:false`, `usage.tokens_in`, `usage.tokens_out` and `session_id`; piping into `jq .result` works.",
+    "`--output-format stream-json` prints one JSON object per line, each with a `kind` from the allowed set and a final `result` line; every line parses and unknown internal kinds are not emitted.",
+    "`echo \"data\" | centcom -p \"summarize\"` includes the stdin text in the prompt; a 2 MiB stdin exits 2 with the documented message on stderr and no agent run.",
+    "A tool request needing approval with no `--allow` rule yields a `tool.result` with status `denied`, the run continues, and the exit code is 3; the same run with `--permission-mode accept-edits` for an edit tool exits 0.",
+    "A 429 problem+json (`code: quota_exceeded`, `retry_after_s: 3600`) makes the process exit 5; in `json` mode the final line has `error.code:'quota_exceeded'`, `error.status:429`, `error.retry_after_s:3600` and `error.request_id`; with `text` the message goes to stderr.",
+    "SIGINT during a run stops the agent via lane C030 and exits 130 after printing a final `result` line with `is_error:true` in JSON modes; `--timeout 5` with a stuck runner exits 124 at 5 s (+/-200 ms fake clock).",
+    "Closing the reading end of the pipe (`| head -1`) stops the agent within 1 s and exits without an EPIPE stack trace.",
+    "With stdout not a TTY or `NO_COLOR=1`, the output contains no ESC bytes."
+  ],
+  "tests": [
+    "print/text-json.test.ts: formats for success and failure paths.",
+    "print/stream-json.test.ts: line schema validation, ordering, final result, kinds allow-list.",
+    "print/stdin.test.ts: pipe input, cap, empty prompt, TTY with no prompt exits 2.",
+    "print/permissions.test.ts: deny-by-default, allow rules, exit 3.",
+    "print/exit-codes.test.ts: table-driven mapping of CT-ERR codes/statuses.",
+    "print/signals.test.ts: SIGINT, SIGTERM, timeout, EPIPE using the pipe harness."
+  ],
+  "guardrails": [
+    "MUST write only machine-readable data to stdout in `json` and `stream-json` modes; any human text goes to stderr.",
+    "MUST NOT approve anything implicitly: no prompt can be shown, so unanswered approvals are denied; there is no flag in this lane that approves everything.",
+    "MUST switch on `code` from CT-ERR (never on `title`/`detail`) when mapping to exit codes, treat unknown codes by HTTP status class, and never print internal paths or tokens in `detail`.",
+    "MUST NOT include secrets, tokens or environment values in any output line, and MUST apply the redaction helper of lane C005 to stderr diagnostics.",
+    "MUST NOT call `process.exit` in library code; the binary entry maps the returned code.",
+    "MUST bound memory: stdin cap 1 MiB, buffered output flushed per line, stream-json lines over 1 MiB are truncated with `truncated:true`."
+  ],
+  "failure_modes": [
+    "Missing prompt and stdin is a TTY -> exit 2 with a one-line usage message, no agent started.",
+    "Runner crashes before any output -> final `result` line (JSON modes) with `is_error:true`, error code taken from the typed error, else `error.code:'unknown'`, exit 1.",
+    "Stdout closed early (EPIPE) -> interrupt the agent through lane C030 and exit 0 silently."
+  ],
+  "unblocks_gate": "G1",
+  "notes": "CONTRACT GAP: CT-ERR defines no process exit codes; the table here is a client-local convention and must be documented in the README and docs. Mapping rule suggestions: 401 -> 4, 403 -> 3 only for tool permissions (API 403 `forbidden` -> 1), 429 -> 5, 5xx/offline -> 6. Print-mode resume/continue is deferred until lane C026 can be a dependency; `--allow` rule syntax is owned by lane C015."
+}

@@ -1,0 +1,71 @@
+{
+  "id": "B012",
+  "title": "Local dev environment: compose stack, seed data, one-command up",
+  "plan": "backend",
+  "phase": "P0 Foundations",
+  "size": "S",
+  "role": "platform",
+  "depends_on": [
+    "B008",
+    "B009"
+  ],
+  "goal": "`pnpm dev:up` starts Postgres, Redis, an S3-compatible store and a mail catcher locally, migrates and seeds them, and prints the URLs.",
+  "scope_in": [
+    "docker-compose file with postgres:16, redis:7, minio (S3 API, stands in for R2) and mailpit, named volumes, health checks, ports bound to 127.0.0.1 only.",
+    "tools/dev/up.sh and tools/dev/down.sh: start stack, wait for health, run `centcom-db migrate`, run seed, write a git-ignored `.env.local` from `.env.example` names.",
+    "Seed script creating deterministic dev data: 3 users (owner, member, guest), 1 workspace `acme-dev`, memberships with each of those workspace roles, 2 devices with fixed test keys, 1 paused session; ids fixed so docs and tests can refer to them.",
+    "docs/dev-environment.md: ports, URLs, reset instructions, how to run the API against the stack."
+  ],
+  "scope_out": [
+    "Production infra, Terraform, Fly config (infra lanes).",
+    "Test containers (B010 handles automated tests).",
+    "Seeding billing/entitlement data (billing lanes)."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-IDS",
+    "CT-RBAC"
+  ],
+  "build_against": "Docker or Podman compose only; no cloud services, no network after image pull.",
+  "deliverables": [
+    "infra/compose/docker-compose.yml",
+    "infra/compose/minio-init.sh",
+    "tools/dev/up.sh",
+    "tools/dev/down.sh",
+    "tools/dev/seed.ts",
+    "tools/dev/reset.sh",
+    "docs/dev-environment.md"
+  ],
+  "interfaces": [
+    "Commands: `pnpm dev:up`, `pnpm dev:down`, `pnpm dev:reset`, `pnpm dev:seed`.",
+    "Local endpoints: Postgres `127.0.0.1:5432`, Redis `127.0.0.1:6379`, MinIO API `127.0.0.1:9000` console `9001`, Mailpit SMTP `1025` UI `8025`.",
+    "Seed constants exported from tools/dev/seed.ts: `SEED.users.owner.id`, `SEED.workspace.id`, etc."
+  ],
+  "acceptance": [
+    "On a clean machine with Docker, `pnpm dev:up` reaches all services healthy and exits 0 within 90 s (images cached).",
+    "After `dev:up`, the users table has exactly 3 rows, memberships has 3 with roles owner, member, guest, and migrations are at the latest version.",
+    "Running `dev:up` twice is idempotent: no duplicate seed rows, no errors.",
+    "`dev:reset` wipes volumes and brings the stack back to the seeded state.",
+    "All published ports are bound to 127.0.0.1 (verified from `docker compose config`).",
+    "The seeded device keys are documented as test-only and are not valid on any non-dev config.",
+    "`.env.local` is created only if missing and is listed in .gitignore."
+  ],
+  "tests": [
+    "seed.test.ts: seed runs twice against a B010 test stack, counts stable.",
+    "compose-lint: `docker compose config -q` passes in CI.",
+    "smoke script test (optional, CI-only): up, health checks of services, down."
+  ],
+  "guardrails": [
+    "MUST bind every container port to 127.0.0.1, never 0.0.0.0.",
+    "MUST NOT include any value usable in staging/production (fixed dev passwords are `dev-only` and the seed refuses to run when NODE_ENV=production).",
+    "MUST NOT embed real third-party API keys; Stripe/Postmark/OAuth are stubbed or absent in dev.",
+    "MUST NOT let the seed run against a database not named like `centcom_dev` or `test_*`."
+  ],
+  "failure_modes": [
+    "Port already in use -> script prints which port and the override env var instead of failing opaquely.",
+    "Health check not green in 90 s -> script prints the failing service's last 50 log lines and exits 1.",
+    "Seed fails midway -> transaction rollback; rerun is safe."
+  ],
+  "unblocks_gate": "G1",
+  "notes": "Root package.json scripts dev:up etc. are defined by B001 and call these files. .env.local generation reads names from the .env.example delivered by B004."
+}

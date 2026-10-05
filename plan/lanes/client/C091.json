@@ -1,0 +1,81 @@
+{
+  "id": "C091",
+  "title": "Web webhooks and audit UI",
+  "plan": "client",
+  "phase": "P5 Web",
+  "size": "S",
+  "role": "web",
+  "depends_on": [
+    "C069",
+    "C070",
+    "C081"
+  ],
+  "goal": "Workspace admins can create, test, rotate and monitor webhook endpoints and browse and export the audit log from the web app, with secrets shown exactly once.",
+  "scope_in": [
+    "Routes in apps/web/src/integrations/: `/w/:wsp/webhooks`, `/w/:wsp/webhooks/:id` (detail + deliveries), `/w/:wsp/audit`.",
+    "Webhooks via CT-API-WEBHOOKS: list, create (url HTTPS, `events[]` from the CT-WEBHOOKS event type list, Idempotency-Key required), PATCH url/events/enabled, `rotate_secret:true`, DELETE, `POST /v1/webhooks/{id}/test`, deliveries list and redeliver.",
+    "One-time secret reveal: modal with copy button, explicit 'I saved it' close, secret held in memory only and cleared on close; shows `Centcom-Signature` header format and a copy-paste verification snippet (HMAC-SHA256 over `t + \".\" + raw_body`, 300 s tolerance).",
+    "Delivery log table with status, attempt, time, redeliver action; endpoint health chip (`failing`, disabled) with the 7-attempt retry schedule explained.",
+    "Audit viewer via GET /v1/workspaces/{id}/audit with filters `actor`, `action`, `from`, `to`, cursor pagination, and export via POST .../audit/exports then poll GET .../audit/exports/{exp} for download.",
+    "Entitlement-aware states: `webhooks_max` and `audit_log_days` (0 = feature off) shown via empty/upgrade-hint states."
+  ],
+  "scope_out": [
+    "Webhook delivery, signing and retry on the server; CLI webhook commands (C069) and audit commands (C070).",
+    "Receiving webhooks (no receiver in the web app).",
+    "Billing flows and workspace RBAC admin.",
+    "API keys UI."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-API-WEBHOOKS",
+    "CT-WEBHOOKS",
+    "CT-API-AUDIT",
+    "CT-ENTITLEMENTS",
+    "CT-RBAC",
+    "CT-PAGE",
+    "CT-ERR"
+  ],
+  "build_against": "Mock backend (lane C007) with webhook endpoints, delivery logs (including failing), audit events and export job states; signed example payloads from fixtures/webhooks/*.json when present.",
+  "deliverables": [
+    "apps/web/src/integrations/",
+    "apps/web/test/integrations/"
+  ],
+  "interfaces": [
+    "Routes: /w/:wsp/webhooks, /w/:wsp/webhooks/:id, /w/:wsp/audit",
+    "export function verifySnippet(lang: 'node'|'python'|'curl'): string  // static docs text, no secrets",
+    "export function useAuditLog(wsp: WorkspaceId, f: AuditFilter): {pages: AuditEvent[][]; fetchMore(): Promise<void>}",
+    "WEBHOOK_EVENT_TYPES: readonly string[]  // exactly the list in CT-WEBHOOKS"
+  ],
+  "acceptance": [
+    "Creating an endpoint with an `http://` URL (non-localhost) is rejected client-side with an inline error before any request; `https://` succeeds with an Idempotency-Key header.",
+    "The signing secret appears once; after closing the modal it cannot be re-shown (test reloads the page and asserts absence in DOM, memory store and storage).",
+    "Rotate secret shows the new secret once and a note about the 24 h overlap (both `v1` signatures sent).",
+    "Event picker lists exactly the 18 event type strings of CT-WEBHOOKS (grouped by prefix) and sends only the selected types in `events[]`.",
+    "Deliveries table shows the 7 retry attempts' states and `Redeliver` posts with Idempotency-Key; failure to redeliver toasts the CT-ERR message.",
+    "Audit export: POST creates an export, UI polls every 3 s up to 2 min, then offers download link; if `audit_log_days` is 0 the audit route shows the feature-off state with a billing link.",
+    "Audit filters round-trip through URL query (`actor`, `action`, `from`, `to`) without storing anything sensitive; keyboard-only operable; axe 0 serious/critical.",
+    "Non-admin roles see neither routes nor nav items and get a neutral 403 page when deep-linking."
+  ],
+  "tests": [
+    "webhooks.form.validation.test.tsx.",
+    "webhooks.secret-once.test.tsx.",
+    "webhooks.deliveries.test.tsx.",
+    "audit.filters-paging.test.tsx.",
+    "audit.export-polling.test.ts.",
+    "integrations.rbac.test.tsx.",
+    "integrations.a11y.test.tsx."
+  ],
+  "guardrails": [
+    "MUST NOT persist, log or put webhook secrets in URLs, storage or error reports; clear after modal close.",
+    "MUST enforce HTTPS in the form (localhost only when the workspace is in test mode as indicated by the API) in addition to server validation.",
+    "MUST NOT render audit `details` as HTML; show text only and truncate to 500 chars with an expand control.",
+    "Admin-only: MUST NOT fetch these endpoints for roles lacking permission (avoids audited denied attempts)."
+  ],
+  "failure_modes": [
+    "Test delivery times out (10 s) -> show the delivery with `timeout` status and the retry schedule.",
+    "Export job fails -> danger banner with retry; polling stops.",
+    "Webhooks limit reached -> create disabled with entitlement message."
+  ],
+  "unblocks_gate": "G5",
+  "notes": "CONTRACT GAP: the audit event object fields and the delivery object fields are not enumerated in the Markdown contract; the UI renders a minimal subset (id `aud_`, actor, action, time) and tolerates others. The CT-WEBHOOKS table abbreviates `.joined / .left / .role_changed` suffixes; the picker uses the expanded 18 strings."
+}

@@ -1,0 +1,78 @@
+{
+  "id": "B095",
+  "title": "Load testing and capacity model",
+  "plan": "backend",
+  "phase": "P7 Ops",
+  "size": "L",
+  "role": "qa",
+  "depends_on": [
+    "B045",
+    "B093"
+  ],
+  "goal": "Prove the system's capacity and find its limits: scripted load tests for the API and the relay (including reconnect storms and multi-node routing), and a capacity model that turns measured per-instance numbers into instance counts and cost for launch targets.",
+  "scope_in": [
+    "k6 scenarios for REST (`infra/loadtest/k6/api-mixed.js`: /v1/me, sessions list, join-token, usage ingest, entitlements) and a Node-based WebSocket load driver built on the client simulator (B011) for the relay (handshake, steady chat traffic with random ciphertext, queue ops, presence, resume).",
+    "Launch targets encoded as thresholds: 20 000 concurrent WS connections cluster-wide; 2 000 concurrent sessions of avg 5 members; 5 000 sequenced frames/s aggregate; fan-out p95 < 150 ms and p99 < 400 ms in-region; API 500 req/s mixed with p95 < 300 ms and p99 < 800 ms and error rate < 0.5 %; usage ingest 100 batches/s.",
+    "Scenarios: ramp (0 -> target in 10 min), soak (1 h at 70 % target), spike (x2 for 2 min), reconnect storm (kill one relay node holding 5 000 connections, all clients resumed within 60 s with no seq gap), cross-node fan-out (members of one session spread over 3 nodes).",
+    "Capacity model script `infra/loadtest/capacity/model.ts`: inputs are measured connections/instance at CPU 60 %, memory per connection, frames/s per vCPU, API req/s per instance; outputs instance counts for 1x, 2x, 5x launch targets with N+1, plus monthly cost estimate from a price table.",
+    "Result artefacts: `infra/loadtest/reports/<date>-<scenario>.json` (k6 summary + resource samples) and `docs/ops/capacity-model.md` generated from the latest report.",
+    "Safety: synthetic data only, tests run against stage; refusal to run against prod hostnames."
+  ],
+  "scope_out": [
+    "Chaos / failure injection (B096).",
+    "Building dashboards (B093) or tuning relay code (findings are filed against the owning lanes).",
+    "Client-side performance tests.",
+    "Stage environment provisioning (B091)."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-WS-ENVELOPE",
+    "CT-RESUME",
+    "CT-WS-SESSION-EVENTS",
+    "CT-PAGE",
+    "CT-API-USAGE",
+    "CT-AUTH",
+    "CT-STATUS"
+  ],
+  "build_against": "Run scaled-down profiles (200 connections, 20 req/s) against the compose stack from B012 with the simulator from B011 and the real relay cross-node routing; full-scale runs occur against stage by the owner. No real client is needed.",
+  "deliverables": [
+    "infra/loadtest/",
+    "docs/ops/capacity-model.md"
+  ],
+  "interfaces": [
+    "Commands: `pnpm loadtest:api --profile smoke|ramp|soak|spike`, `pnpm loadtest:relay --profile smoke|ramp|soak|storm|crossnode`, `pnpm capacity:model --report <file>`.",
+    "Env: `LOADTEST_TARGET` (must match allow-list `*.stage.centcom.dev` or `localhost`), `LOADTEST_TOKEN_MINT_URL` (stage test-only minter).",
+    "Report JSON `{scenario, started_at, target, thresholds: [{name, ok, value, limit}], resources: {...}, passed: boolean}`.",
+    "k6 thresholds as code in each scenario file; capacity model exports `plan(targets, measurements): InstancePlan`."
+  ],
+  "acceptance": [
+    "The `smoke` profile (200 connections, 20 req/s, 3 min) runs in CI-sized time (< 5 min) against the compose stack and passes thresholds; thresholds are assertions (non-zero exit on breach).",
+    "In stage, the `ramp` profile reaches 20 000 connections and 5 000 frames/s and the report shows fan-out p95 < 150 ms, p99 < 400 ms, close code 4429/4503 rate < 0.1 %, no frame loss (every sequenced frame delivered to all session members, verified by seq continuity checks in the driver).",
+    "The `storm` profile kills one relay node holding 5 000 connections: >= 99.9 % of clients resume (via hot buffer or snapshot path) within 60 s, with no duplicate or missing seq after dedupe.",
+    "The API mix at 500 req/s for 30 min has p95 < 300 ms, p99 < 800 ms, error rate < 0.5 %, and 429 responses appear only on deliberately over-limit buckets.",
+    "`pnpm capacity:model` produces a table with instance counts for 1x/2x/5x targets with N+1 headroom and cost, and fails when any input measurement is older than 30 days.",
+    "The runner refuses to start when `LOADTEST_TARGET` is not allow-listed (test with `api.centcom.dev` -> exit code 2).",
+    "All frames sent by the driver carry random bytes in `ct`; a scan of the relay logs and DB after a run finds none of the driver's canary strings."
+  ],
+  "tests": [
+    "unit tests for the capacity model (known inputs -> known outputs), threshold evaluation and target allow-list.",
+    "smoke profile in CI nightly against compose.",
+    "driver self-test: seq continuity checker detects injected gaps and duplicates.",
+    "report schema validation test.",
+    "dry-run test of the prod refusal."
+  ],
+  "guardrails": [
+    "MUST NOT run against production hostnames or production credentials; the allow-list check is in code and in the workflow.",
+    "MUST use synthetic users/workspaces created with a test-only minter that exists only in stage/dev.",
+    "MUST NOT send real content: ciphertext is random bytes; no real emails or personal data in fixtures.",
+    "MUST cap the load generator's own resources (connections per process <= 5 000) and document the number of generator hosts needed.",
+    "MUST clean up created sessions/users after runs (`pnpm loadtest:cleanup`)."
+  ],
+  "failure_modes": [
+    "Generator saturation (CPU > 85 %) -> run marked invalid, not passed, to avoid false results.",
+    "Stage throttled by Fly or provider limits -> run aborts with explicit reason and partial report.",
+    "Token minter unavailable -> run aborts before generating load."
+  ],
+  "unblocks_gate": "G6",
+  "notes": "SPLIT? L-size is realistic only if the WS driver reuses the simulator; if B011 lacks bulk-client support, a thin driver is built here. Launch numbers (20k connections etc.) are working assumptions to be ratified by product; changing them only changes thresholds. A stage-only token minter is a test hook and must be provided by the auth lanes behind a stage-only flag; if missing, the driver uses the device flow with pre-seeded users."
+}

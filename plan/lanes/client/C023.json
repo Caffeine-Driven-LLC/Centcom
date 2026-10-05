@@ -1,0 +1,68 @@
+{
+  "id": "C023",
+  "title": "Memory store (project and user memory)",
+  "plan": "client",
+  "phase": "P1 Agent runtime",
+  "size": "S",
+  "role": "runtime",
+  "depends_on": [
+    "C013"
+  ],
+  "goal": "Persistent project and user memory: Markdown notes the agent can read at start and the user can edit, stored locally with size caps and a refusal to store secrets.",
+  "scope_in": [
+    "Locations: project instructions file `CENTCOM.md` at the repo root (read-only for the store unless the user asks) plus `.centcom/memory/*.md`; user memory `<config dir>/memory/*.md`. File names `^[a-z0-9][a-z0-9-]{0,63}\\.md$`.",
+    "API to list, read, write (create/overwrite), append, remove and search (case-insensitive substring, max 50 hits) memory entries; frontmatter `description` (<= 200 chars) used in listings.",
+    "Caps: file <= 32 KiB, 200 files per scope, injected context <= 16 KiB total (`render(maxChars)` truncates oldest-first and says so).",
+    "Secret guard: `write`/`append` refuse content for which `looksLikeSecret` (lane C005) finds a match or that contains a PEM block or a `cen_live_`/`cen_test_` key, returning `SecretRejected` without echoing the content.",
+    "Atomic writes (temp + rename), file mode 0600, directories 0700; project memory dir is added to `.git/info/exclude` unless `memory.commit_project` is true in user config.",
+    "`render(scope, maxChars)` returning the text appended to the system prompt (project, then user), each file prefixed with its name and description."
+  ],
+  "scope_out": [
+    "Automatic memory extraction from conversations by the model (v1: explicit writes only).",
+    "Syncing memory to the backend or teammates: memory is local; never sent over the wire or to telemetry.",
+    "Editor UI: TUI/CLI lanes."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-IDS"
+  ],
+  "build_against": "Temp directories with an in-memory or real fs adapter; no network.",
+  "deliverables": [
+    "packages/agent/src/memory/",
+    "docs/memory.md"
+  ],
+  "interfaces": [
+    "`createMemoryStore(deps: { fs: MemFs; dirs: { projectRoot?: string; user: string }; log: Logger; config: { commitProject: boolean } }): MemoryStore`",
+    "`interface MemoryStore { list(scope: 'project'|'user'): Promise<MemoryMeta[]>; read(scope, name: string): Promise<string | undefined>; write(scope, name: string, content: string): Promise<void>; append(scope, name: string, text: string): Promise<void>; remove(scope, name: string): Promise<void>; search(query: string, scope?): Promise<MemoryHit[]>; render(maxChars?: number): Promise<string> }`",
+    "Local error identifiers: `SecretRejected`, `TooLarge`, `InvalidName`, `LimitReached`."
+  ],
+  "acceptance": [
+    "`write('user','notes.md', 'api key cen_live_' + 32 chars)` rejects with `SecretRejected` and nothing is written; the error message contains no part of the content.",
+    "A 32 KiB + 1 byte write rejects with `TooLarge`; a name `../x.md` or `a/b.md` rejects with `InvalidName`.",
+    "`render(16384)` over 40 KiB of entries returns <= 16384 chars, newest files kept, and ends with a marker `[older memory omitted]`.",
+    "Writes are atomic: simulated crash between temp write and rename leaves the old content intact; resulting file mode is 0600 on POSIX.",
+    "`search('deploy')` returns at most 50 hits ordered by file then line, each hit containing the file name and a <= 200-char snippet.",
+    "With default config `.centcom/memory/` appears once in `.git/info/exclude` after the first project write; with `commitProject:true` it does not.",
+    "201st file in a scope rejects with `LimitReached`."
+  ],
+  "tests": [
+    "crud.test.ts, secret-guard.test.ts (20 secret shapes).",
+    "caps.test.ts, render.test.ts.",
+    "atomic.test.ts, search.test.ts.",
+    "exclude.test.ts, name-validation.test.ts."
+  ],
+  "guardrails": [
+    "MUST refuse to persist anything that looks like a secret, and MUST NOT include rejected content in errors or logs.",
+    "MUST NOT transmit memory over the network, include it in telemetry, snapshots or `branch.update`; it is local context only.",
+    "MUST NOT log memory contents or file names beyond counts.",
+    "MUST validate names to prevent path traversal and write only inside the memory directories (realpath check).",
+    "Project memory MUST NOT be committed by default."
+  ],
+  "failure_modes": [
+    "Disk full / EACCES on write -> typed error, existing file untouched.",
+    "Memory dir missing -> created on first write (0700); reads return empty.",
+    "Non-UTF-8 file -> skipped in `render` and flagged `unreadable` in `list`."
+  ],
+  "unblocks_gate": "G6",
+  "notes": "CENTCOM.md is a product naming choice for the project instructions file; change via ADR if the team prefers another name."
+}

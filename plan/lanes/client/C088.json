@@ -1,0 +1,80 @@
+{
+  "id": "C088",
+  "title": "Web invites and join flow with deep links",
+  "plan": "client",
+  "phase": "P5 Web",
+  "size": "M",
+  "role": "web",
+  "depends_on": [
+    "C087"
+  ],
+  "goal": "Invite links (/j/<token> and /i/<token>) work in the browser: preview without signing in, accept after signing in, hand off to the desktop app via centcom:// with a confirmation, and keep E2E key material only in the URL fragment.",
+  "scope_in": [
+    "Routes in apps/web/src/invite/: `/j/:token` (join a session) and `/i/:token` (workspace invite), calling `GET /v1/invites/{token}` for the public preview (workspace name, inviter, role, expiry).",
+    "Fragment handling: read `#k=<base64url>` once into memory, immediately `history.replaceState` to remove the fragment; the key is never sent to any server, logged, or stored.",
+    "Actions: 'Open in Centcom' (builds `centcom://join/<token>` or `centcom://invite/<token>`), 'Continue in browser' (sign in via C082 then `POST /v1/invites/{token}/accept`, then `GET /v1/invites/{token}/key-bundle` once and open it with the fragment key).",
+    "Share link guests: `POST /v1/share-links/{token}/join` as limited viewer without an account (route `/g/:token` documented as web twin; see notes).",
+    "Neutral error states for expired, revoked, used and malformed tokens; no detail leakage.",
+    "Deep-link parser/validator `parseDeepLink(url)` for centcom:// and https://centcom.dev forms of CT-DEEPLINK (join, session, auth callback, billing, invite) used by the web app."
+  ],
+  "scope_out": [
+    "OS protocol-handler registration for centcom:// (C094) and CLI handling of the link.",
+    "Workspace and member admin UI (C087), session view (C083).",
+    "Creating invites (C087) and uploading key bundles (host client).",
+    "Sealed-box opening primitive (C056); this lane calls it."
+  ],
+  "implements": [
+    "CT-DEEPLINK"
+  ],
+  "consumes": [
+    "CT-API-WORKSPACES",
+    "CT-API-SESSIONS",
+    "CT-CRYPTO",
+    "CT-RBAC",
+    "CT-AUTH",
+    "CT-ERR"
+  ],
+  "build_against": "Mock backend (lane C007): GET /v1/invites/{token}, POST accept, GET key-bundle (returns once, then 404/410), POST /v1/share-links/{token}/join; fixture invite tokens (valid, expired, revoked, used).",
+  "deliverables": [
+    "apps/web/src/invite/",
+    "apps/web/test/invite/"
+  ],
+  "interfaces": [
+    "Routes: /j/:token, /i/:token, /g/:token",
+    "export function parseDeepLink(raw: string): DeepLink | {kind: 'invalid'}  // DeepLink = {kind: 'join'|'invite'|'session'|'auth_callback'|'billing'; id?: string; focus?: 'approval'|'queue'}",
+    "export function toAppUrl(link: DeepLink): string  // centcom://...",
+    "export function takeFragmentKey(win: Window): Uint8Array | null  // reads and strips #k=, returns 32 bytes or null"
+  ],
+  "acceptance": [
+    "Loading /j/<token>#k=… calls GET /v1/invites/{token} with no fragment in the request URL (network log assertion) and `location.hash` is empty within the same tick after read.",
+    "Token regex: 160-bit URL-safe (>= 27 base64url chars); malformed tokens show the neutral error without any network call.",
+    "Expired/revoked/used invites show one neutral message ('This invite isn't valid anymore') with 'Ask for a new link'; the page text never reveals which of the three.",
+    "'Open in Centcom' navigates to `centcom://join/<token>` (fragment key is not included; the desktop app asks the user to paste or receives it via the key bundle path) and the page remains usable if no handler opens within 1.5 s.",
+    "Accept flow: accept -> fetch key-bundle once -> open with fragment key -> proceed to /s/:id; a second visit gets a neutral error since the bundle is deleted on acceptance.",
+    "Unknown query parameters are ignored; `focus` accepts only `approval|queue`; invalid values are dropped, not errors.",
+    "No `Referrer` leakage: pages set `Referrer-Policy: no-referrer`; outbound links use rel=noopener noreferrer (header test).",
+    "axe 0 serious/critical on all invite states; flow works keyboard-only."
+  ],
+  "tests": [
+    "deeplink.parse.test.ts: valid/invalid table for each row of the CT-DEEPLINK table, property test for junk input.",
+    "fragment.strip.test.ts with jsdom history.",
+    "invite.flow.test.tsx with mock states.",
+    "invite.leak.test.ts: scans fetch/XHR/console for fragment value.",
+    "invite.a11y.test.tsx."
+  ],
+  "guardrails": [
+    "MUST NEVER send, log, store, or place in any URL/query the fragment key `k`; hold it in memory only until the bundle is opened, then zero the buffer.",
+    "MUST show a confirmation before acting on any link ('Join <name>'s session?') and MUST NOT perform destructive actions from a link.",
+    "MUST validate every parameter; invalid links show a neutral error, never the parse failure detail.",
+    "MUST NOT auto-accept an invite on page load; acceptance requires an explicit click after sign-in.",
+    "Preview content (names) is untrusted: render as text only."
+  ],
+  "failure_modes": [
+    "Preview 404/410 -> neutral invalid-invite state.",
+    "Key bundle missing but session joinable -> join in `waiting_for_key` state with the host-grant fallback copy.",
+    "Accept succeeds but key-bundle fetch fails (network) -> retry up to 3 times with backoff; leave the user in the session with 'Waiting for the host to let you in'.",
+    "429 on share-link join -> show Retry-After countdown."
+  ],
+  "unblocks_gate": "G3",
+  "notes": "CONTRACT GAP: CT-DEEPLINK does not say how a fragment key `#k` is carried into the desktop handler; implemented conservatively: not carried (the desktop uses the key bundle or host grant). Fragment key naming mismatch: CT-CRYPTO calls the one-time invite key `I_x` whose private half is in `#k=`."
+}

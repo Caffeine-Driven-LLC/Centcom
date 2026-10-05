@@ -1,0 +1,14 @@
+{
+  "schema": "problem.schema.json",
+  "valid": true,
+  "note": "",
+  "data": {
+    "type": "https://centcom.dev/errors/quota_exceeded",
+    "title": "Quota exceeded",
+    "status": 429,
+    "code": "quota_exceeded",
+    "detail": "Monthly agent-minutes used.",
+    "request_id": "req_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+    "retry_after_s": 3600
+  }
+}

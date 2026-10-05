@@ -1,0 +1,19 @@
+{
+  "kind": "agent.state",
+  "frame": {
+    "v": 1,
+    "t": "event",
+    "id": "msg_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+    "sid": "ses_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+    "from": "mem_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+    "ts": "2026-10-05T18:07:41.123Z",
+    "k": "agent.state",
+    "seq": 1042,
+    "p": {
+      "agent_id": "agt_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+      "state": "approved",
+      "since": "2026-10-05T18:07:41.123Z"
+    }
+  },
+  "secret_payload": null
+}

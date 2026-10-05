@@ -1,0 +1,76 @@
+{
+  "id": "C087",
+  "title": "Web workspace and members management",
+  "plan": "client",
+  "phase": "P5 Web",
+  "size": "M",
+  "role": "web",
+  "depends_on": [
+    "C051",
+    "C081"
+  ],
+  "goal": "Workspace owners and admins can create and manage workspaces, members, roles, projects and workspace policies from the web app, with every control matching the CT-RBAC matrix and every denial handled gracefully.",
+  "scope_in": [
+    "Routes in apps/web/src/workspace/: `/workspaces` (list/create), `/w/:wsp` (overview), `/w/:wsp/members`, `/w/:wsp/projects`, `/w/:wsp/settings` using GET/POST /v1/workspaces, GET/PATCH /v1/workspaces/{id}, members endpoints, projects endpoints, settings endpoints.",
+    "Members table (DESIGN.md 10.2.9): name, role chip (owner, admin, member, billing, guest), joined date; actions change role (PATCH /v1/workspaces/{id}/members/{mem}), remove/leave (DELETE), transfer ownership (POST .../transfer-ownership) with typed confirmation.",
+    "Invite management list and create dialog (email or link, role, seat check) calling GET/POST /v1/workspaces/{id}/invites and DELETE /v1/invites/{id}; Idempotency-Key on every create (required for invites).",
+    "Workspace settings form: rename, default auto-approve (`ask|trusted|everyone` mirroring control.policy values), history sharing, retention override via GET/PATCH /v1/workspaces/{id}/settings with `If-Match` ETag handling.",
+    "Role-aware UI: controls hidden/disabled by the matrix with a tooltip reason; delete workspace (owner) with name-typed confirmation and the 7-day billing wind-down note."
+  ],
+  "scope_out": [
+    "Invite acceptance and /j/<token>, /i/<token> flows (C088).",
+    "Billing screens (C089), audit and webhooks (C091), notifications (C090).",
+    "Auth (C082) and shell primitives (C081).",
+    "Seat purchase / proration (C089)."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-API-WORKSPACES",
+    "CT-RBAC",
+    "CT-ENTITLEMENTS",
+    "CT-PAGE",
+    "CT-ERR",
+    "CT-AUTH"
+  ],
+  "build_against": "Mock backend (lane C007) generated from OpenAPI for all /v1/workspaces*, invites, projects, settings endpoints, with ETag, 412 `precondition_failed`, 403 `forbidden`, and seat-limit entitlement errors.",
+  "deliverables": [
+    "apps/web/src/workspace/",
+    "apps/web/test/workspace/"
+  ],
+  "interfaces": [
+    "Routes: /workspaces, /w/:wsp, /w/:wsp/members, /w/:wsp/projects, /w/:wsp/settings",
+    "export function useWorkspace(id: WorkspaceId): {data?: Workspace; etag?: string; update(patch: WorkspacePatch): Promise<void>}",
+    "export function can(role: WorkspaceRole, action: WorkspaceAction): boolean  // UI mirror of CT-RBAC matrix only",
+    "export type WorkspaceAction = 'update_settings'|'invite'|'remove_member'|'change_role'|'transfer_ownership'|'view_billing'|'change_plan'|'read_audit'|'manage_webhooks'|'delete_workspace'"
+  ],
+  "acceptance": [
+    "`can()` matches the CT-RBAC workspace matrix for all 5 roles x 10 actions (table-driven test generated from the matrix; includes admin may not change owner role).",
+    "Member list paginates with cursor (`limit=50`, `next_cursor`, `has_more`) and loads more on scroll or 'Load more' without duplicates.",
+    "PATCH settings sends `If-Match` with the stored ETag; on 412 `precondition_failed` the form shows 'Changed elsewhere' with a refresh-and-reapply action; no silent overwrite.",
+    "Creating an invite twice from a double-click sends one request key (same Idempotency-Key) and results in one invite; the response `Idempotency-Replayed: true` is handled without error.",
+    "Changing a role as a non-admin (forged) yields 403 `forbidden`; UI shows a danger toast with the CT-ERR text and reverts the select within 300 ms.",
+    "Delete workspace and transfer ownership require typing the workspace name; confirm button label repeats the verb ('Delete workspace'); modal has no mascot.",
+    "Seat limit reached shows the entitlement banner with a single 'See billing' link, not a modal; axe 0 serious/critical; table keyboard navigation row-by-row."
+  ],
+  "tests": [
+    "workspace.rbac.matrix.test.ts from the contract matrix.",
+    "workspace.members.paging.test.tsx.",
+    "workspace.etag.test.tsx for 412 flow.",
+    "workspace.invites.idempotency.test.ts.",
+    "workspace.destructive-confirm.test.tsx.",
+    "workspace.a11y.test.tsx."
+  ],
+  "guardrails": [
+    "MUST treat `can()` as presentation only; every mutation relies on the server result and handles `forbidden` after optimistic UI.",
+    "MUST send Idempotency-Key on invite creation (required: otherwise `idempotency_key_required`) and on transfer-ownership; keys are ULIDs stored only for the life of the dialog.",
+    "MUST NOT expose other members' emails to `guest` or `member` roles beyond what the API returns (render only returned fields).",
+    "Destructive actions MUST require typed confirmation and MUST NOT auto-dismiss; no mascot in these surfaces."
+  ],
+  "failure_modes": [
+    "429 -> honour Retry-After; disable submit with countdown text.",
+    "Entitlement error on invite (seat limit) -> inline banner 'No free seats' with link to billing; no retry.",
+    "Workspace deleted elsewhere (404) -> redirect to /workspaces with info toast."
+  ],
+  "unblocks_gate": "G6",
+  "notes": ""
+}

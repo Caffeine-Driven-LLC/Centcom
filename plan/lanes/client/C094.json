@@ -1,0 +1,85 @@
+{
+  "id": "C094",
+  "title": "Installer and packaging: npm, Homebrew, standalone binaries",
+  "plan": "client",
+  "phase": "P6 Distribution",
+  "size": "L",
+  "role": "release",
+  "depends_on": [
+    "C002",
+    "C012"
+  ],
+  "goal": "Users can install Centcom with npm, Homebrew or a standalone single-file binary on Linux, macOS and Windows, and the OS opens centcom:// links in it, all from reproducible, checksummed, signable build outputs.",
+  "scope_in": [
+    "npm packaging: `@centcom/cli` meta package with per-platform `optionalDependencies` (`@centcom/cli-linux-x64`, `-linux-arm64`, `-darwin-x64`, `-darwin-arm64`, `-win32-x64`) holding the Node SEA binary; bin name `centcom`; NO install/postinstall scripts.",
+    "Standalone builds with Node 22 Single Executable Applications via `tools/package/build-sea.ts` for the 5 targets, producing `centcom-<version>-<os>-<arch>.tar.gz` (zip on Windows), a `SHA256SUMS` file, and the manifest input consumed by the release signer (C012 placeholders).",
+    "Homebrew tap formula template `packaging/homebrew/centcom.rb` (url + sha256 per macOS/Linux arch, `test do` runs `centcom --version`) and the script that updates it per release.",
+    "curl installer `packaging/install.sh` (POSIX sh) and `packaging/install.ps1`: detect platform, download from the release CDN URL, verify SHA256SUMS and the Ed25519 signature before installing to `~/.local/bin` (or `%LOCALAPPDATA%\\Centcom\\bin`), no sudo.",
+    "OS protocol-handler registration for `centcom://`: Linux `.desktop` + `xdg-mime default centcom.desktop x-scheme-handler/centcom`; macOS app-bundle `Info.plist` CFBundleURLTypes (shim app `Centcom Link.app` forwarding to the binary); Windows HKCU\\Software\\Classes\\centcom registry key. Handler runs `centcom link <url>`.",
+    "`centcom link <url>` entry (apps/cli/src/protocol-handler/): parse with the shared deep-link rules, show the confirmation prompt ('Join <name>'s session?'), never act without confirmation.",
+    "`centcom install-handler [--uninstall]` and `centcom --version --json` (`{version, contract, platform, arch, node, channel}`)."
+  ],
+  "scope_out": [
+    "Update download/verify/apply logic (C068) and update channels wiring (C095).",
+    "Signing key custody, notarisation accounts and Authenticode certificates (C012 provides placeholders; real credentials are an ops task).",
+    "CI workflow definitions (C002) beyond the packaging scripts they call.",
+    "Docs for installation (C096)."
+  ],
+  "implements": [
+    "CT-DEEPLINK"
+  ],
+  "consumes": [
+    "CT-API-RELEASES",
+    "CT-VER",
+    "CT-IDS",
+    "CT-AUTH"
+  ],
+  "build_against": "Local builds only; release manifest and CDN URLs served by the mock backend (lane C007) `/v1/releases/{channel}/latest` and a static file server; deep-link fixtures from the CT-DEEPLINK table.",
+  "deliverables": [
+    "tools/package/",
+    "packaging/",
+    "apps/cli/src/protocol-handler/",
+    "docs/packaging-notes.md"
+  ],
+  "interfaces": [
+    "pnpm package:sea --target <linux-x64|linux-arm64|darwin-x64|darwin-arm64|win32-x64> --out dist/",
+    "pnpm package:npm  // builds the meta + 5 platform packages into dist/npm/",
+    "centcom link <centcom://...>  // exit 0 handled, 2 invalid link, 3 user declined",
+    "centcom install-handler [--uninstall] [--dry-run]",
+    "Artifacts: dist/centcom-<version>-<os>-<arch>.{tar.gz|zip}, dist/SHA256SUMS, dist/artifacts.json ({name, os, arch, size, sha256}[])"
+  ],
+  "acceptance": [
+    "Standalone binary size <= 120 MB uncompressed and <= 45 MB compressed per target; build fails above the limits.",
+    "`centcom --version` cold start p95 <= 250 ms (warm cache <= 150 ms) on the CI reference runner for linux-x64, measured over 20 runs.",
+    "The npm packages contain no `scripts.install|preinstall|postinstall` (test reads every package.json) and `npm pack --dry-run` lists only dist files, license and README; total published size of the linux-x64 package <= 50 MB.",
+    "Two builds of the same commit produce byte-identical archives (SOURCE_DATE_EPOCH set; `diffoscope`-free hash compare) on linux-x64.",
+    "install.sh refuses to install when SHA256SUMS or the signature does not verify (tampered archive test exits non-zero and leaves no files in the install dir).",
+    "On each OS in CI (ubuntu, macos, windows) `centcom install-handler` registers the scheme and `xdg-mime query default` / `defaults read` / `reg query` shows it; `--uninstall` removes every entry it created.",
+    "`centcom link 'centcom://join/<token>'` prompts and exits 3 on 'n' with no network call; `centcom link 'centcom://foo'` exits 2 with a neutral message and prints nothing from the URL.",
+    "Homebrew formula `brew audit --strict` and `brew test centcom` pass in CI on macOS arm64."
+  ],
+  "tests": [
+    "package.sea.size.test.ts and package.reproducible.test.ts.",
+    "package.npm.no-scripts.test.ts.",
+    "install.sh.verify.test.sh (tampered, truncated, wrong arch).",
+    "handler.register.matrix (3 OS CI jobs).",
+    "protocol-handler.link.test.ts: valid/invalid/declined cases.",
+    "brew.audit (CI job)."
+  ],
+  "guardrails": [
+    "MUST verify checksum AND signature before executing or moving any downloaded binary; installers MUST abort on any failure and clean up temp files.",
+    "MUST NOT run install scripts or require sudo; MUST NOT modify shell rc files without an explicit `--modify-path` flag.",
+    "MUST pin all build tooling versions exactly and build on clean runners; secrets (signing keys) are never present in packaging scripts, only referenced via CI secrets names.",
+    "The centcom:// handler MUST confirm before acting and MUST NOT perform destructive actions from a link (CT-DEEPLINK); unknown parameters ignored; invalid links produce a neutral error.",
+    "MUST NOT write tokens or the URL fragment key into shell history, logs or desktop entries.",
+    "Licence of every bundled dependency must be MIT/Apache-2.0/BSD/ISC (checked by C099 scripts)."
+  ],
+  "failure_modes": [
+    "Unsupported platform/arch -> installer exits 1 with the list of supported targets.",
+    "Handler registration lacks permission (no xdg-utils) -> print manual instructions, exit 0 with warning.",
+    "CDN unreachable -> install.sh retries 3 times with backoff 1 s/3 s/9 s then fails, leaving nothing installed.",
+    "macOS Gatekeeper quarantine flag -> installer clears `com.apple.quarantine` only for files it just verified."
+  ],
+  "unblocks_gate": "G6",
+  "notes": ""
+}

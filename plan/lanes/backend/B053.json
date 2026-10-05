@@ -1,0 +1,92 @@
+{
+  "id": "B053",
+  "title": "Session lifecycle service: create, live, paused, ended, expired, host-loss policy",
+  "plan": "backend",
+  "phase": "P3 Relay",
+  "size": "M",
+  "role": "realtime",
+  "depends_on": [
+    "B007",
+    "B043"
+  ],
+  "goal": "A session lifecycle service that owns session rows and the state machine (live, paused, ended, expired), including host-loss pause, 24 h expiry and failover eligibility, so REST and relay agree on one state.",
+  "scope_in": [
+    "Session repository and tables (sessions columns beyond the B008 skeleton: name, state, host_member, region, policy defaults, ended_at, expires_at, last_host_seen_at).",
+    "createSession, getSession, listSessions (filters workspace/state/mine), renameSession, setPolicyDefaults, endSession.",
+    "State machine: live <-> paused, live|paused -> ended (host or owner/admin), paused -> expired after 24 h, rows are created directly in `live` with last_host_seen_at = now (so the 10 min host-absent grace also covers a host that never connects).",
+    "Host-loss policy: host absent > 10 min grace -> paused; > 24 h paused -> expired; host-absent 120 s + auto-failover enabled -> failover candidate (longest-connected editor).",
+    "Concurrent-session limit check against entitlement `max_concurrent_sessions` and `relay_access`.",
+    "Emits control.session_state through the relay port and a session.* domain event (for webhooks) on every transition.",
+    "Expiry sweeper as an idempotent function invoked by a worker schedule (registration is a one-line job in B053 deliverables, scheduling infra from the worker app)."
+  ],
+  "scope_out": [
+    "HTTP routes: B054.",
+    "Host-claim REST authorization and join tokens: B054.",
+    "Relay socket handling and host presence detection: B040/B043 (this lane receives onHostConnected/onHostDisconnected calls).",
+    "History/snapshot retention purge: B055/B056/B090.",
+    "Control frame handling (end by host over WS): B051 calls endSession here."
+  ],
+  "implements": [
+    "CT-API-SESSIONS"
+  ],
+  "consumes": [
+    "CT-WS-ENVELOPE",
+    "CT-WS-CONTROL",
+    "CT-ENTITLEMENTS",
+    "CT-IDS",
+    "CT-RBAC"
+  ],
+  "build_against": "Postgres via the B010 testcontainer (or the pg-mem-free in-process fake in packages/testkit), injected ClockPort, EntitlementsPort fake returning plan fixtures from contracts/fixtures/entitlements/*.json, and a RelayNotifierPort recorder.",
+  "deliverables": [
+    "apps/api/src/modules/sessions/lifecycle.ts",
+    "apps/api/src/modules/sessions/repository.ts",
+    "apps/api/src/modules/sessions/state-machine.ts",
+    "apps/api/src/modules/sessions/host-loss.ts",
+    "apps/api/src/modules/sessions/ports.ts",
+    "apps/api/src/modules/sessions/README.md",
+    "apps/api/test/sessions/lifecycle/",
+    "apps/worker/src/jobs/session-expiry.ts",
+    "packages/db/migrations/0053_sessions_lifecycle.sql"
+  ],
+  "interfaces": [
+    "SessionService.create(input: {workspaceId, creatorUserId, creatorMemberId, name, region, policy?}): Promise<Session>  // id 'ses_' + ULID, state starts 'live'",
+    "SessionService.get(id: SessionId): Promise<Session|null>; list(q: {workspace?, state?, mineUserId?, cursor?, limit}): Promise<Page<Session>>",
+    "SessionService.end(id, by: {memberId, reason: 'done'|'abandoned'|'error'}): Promise<Session>",
+    "SessionService.onHostConnected(id) / onHostDisconnected(id, at: Date) / sweep(now: Date): Promise<{paused:number, expired:number}>",
+    "transition(from: SessionState, event: LifecycleEvent): SessionState  // pure, throws SessionStateError",
+    "SessionState = 'live'|'paused'|'ended'|'expired'  (same set as p_control_session_state)",
+    "Worker job name: session.expiry.sweep (every 60 s)"
+  ],
+  "acceptance": [
+    "create returns a row with id matching ^ses_[0-9A-HJKMNP-TV-Z]{26}$, host = creator member, and refuses with 403 `entitlement_*` style error when relay_access is false or live hosted sessions already equal max_concurrent_sessions.",
+    "onHostDisconnected followed by 599 s of fake time leaves state live; at 600 s sweep sets paused and notifies the relay port once with state 'paused'.",
+    "A session paused for 24 h minus 1 s stays paused; at 24 h sweep sets expired; running sweep twice yields identical results (idempotent).",
+    "onHostConnected on a paused session moves it back to live and emits exactly one control.session_state live notification.",
+    "end is permitted for the host and for workspace owner/admin, rejected for editors/viewers, and is a no-op returning the session if already ended.",
+    "Illegal transitions (ended -> live, expired -> paused) throw SessionStateError and leave the DB row untouched (property test over all state x event pairs).",
+    "When the host has been absent 120 s and policy.auto_failover is true, host-loss evaluator returns the longest-connected editor member id; with no editors or the flag false it returns null and the session pauses at the grace limit.",
+    "list with state filter and cursor pagination returns stable order (ULID desc) across 3 pages of 50 with no duplicates when new sessions are inserted between pages."
+  ],
+  "tests": [
+    "lifecycle.state-machine.test.ts: exhaustive table and property test",
+    "lifecycle.host-loss.test.ts: timers with fake clock, failover candidate selection",
+    "lifecycle.limits.test.ts: entitlement checks for relay_access and max_concurrent_sessions",
+    "lifecycle.sweep.test.ts: idempotent sweep, concurrent sweepers using advisory lock",
+    "lifecycle.repository.test.ts: pagination stability against Postgres container"
+  ],
+  "guardrails": [
+    "MUST perform state transitions with a conditional UPDATE (WHERE state = expected) so two instances cannot both win a transition.",
+    "MUST NOT delete session rows or history on end/expire; retention jobs own deletion.",
+    "MUST make the sweeper safe to run on multiple workers (pg advisory lock or SKIP LOCKED).",
+    "MUST read plan limits from the entitlements port, never from plan names.",
+    "MUST emit the relay notification after the DB commit, never before.",
+    "Session names MUST be 1-80 chars, NFC-normalised, control characters rejected (CT-IDS Text)."
+  ],
+  "failure_modes": [
+    "Relay notifier unreachable on a transition -> transition still committed; notification retried through the outbox table with backoff, relay also reconciles on next connect.",
+    "Entitlements port timeout (2 s) -> create fails closed with 503 `retry_after_s: 5`, no row created.",
+    "Sweeper crash mid-run -> next run completes remaining rows; no row is expired twice or skipped."
+  ],
+  "unblocks_gate": "G2",
+  "notes": ""
+}

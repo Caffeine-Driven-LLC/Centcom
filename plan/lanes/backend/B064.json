@@ -1,0 +1,88 @@
+{
+  "id": "B064",
+  "title": "Push delivery: web push, APNs, FCM abstraction",
+  "plan": "backend",
+  "phase": "P4 Fleet",
+  "size": "M",
+  "role": "platform",
+  "depends_on": [
+    "B063"
+  ],
+  "goal": "Register push subscriptions and deliver notification payloads over web push, APNs and FCM through one provider abstraction, pruning dead tokens and never putting work content in a push.",
+  "scope_in": [
+    "POST /v1/push/subscriptions (Idempotency-Key accepted) and DELETE /v1/push/subscriptions/{id}, owned by the caller (profile scope).",
+    "Subscription registry with per-user cap of 10 and de-dup by endpoint/token.",
+    "PushProvider interface and three adapters: WebPushProvider (VAPID), ApnsProvider (token auth over HTTP/2), FcmProvider (HTTP v1 with service-account JWT).",
+    "PushSenderPort implementation used by B063: payload is the CT-NOTIF-PAYLOAD object trimmed to <= 3 KiB; retries 3 times with backoff; 404/410/UNREGISTERED deletes the subscription.",
+    "Worker job notify-push consuming BullMQ queue `notify.push` with per-provider concurrency and circuit breaker."
+  ],
+  "scope_out": [
+    "Deciding whether to push (routing, quiet hours): B063/B066.",
+    "Inbox endpoints: B065.",
+    "Client registration UX and service worker.",
+    "Rich notification content or actions beyond the CT-NOTIF-PAYLOAD fields."
+  ],
+  "implements": [
+    "CT-API-NOTIFY"
+  ],
+  "consumes": [
+    "CT-NOTIF-PAYLOAD",
+    "CT-AUTH",
+    "CT-PAGE",
+    "CT-ERR",
+    "CT-IDS"
+  ],
+  "build_against": "Provider interface with recording fakes; HTTP-level tests with nock-style local servers for the push services; VAPID/APNs/FCM credentials from test keys generated in the test; Fastify inject for routes.",
+  "deliverables": [
+    "apps/api/src/routes/push/index.ts",
+    "apps/api/src/modules/notifications/push/registry.ts",
+    "apps/api/src/modules/notifications/push/sender.ts",
+    "apps/api/src/modules/notifications/push/providers.ts",
+    "apps/api/src/modules/notifications/push/webpush-provider.ts",
+    "apps/api/src/modules/notifications/push/apns-provider.ts",
+    "apps/api/src/modules/notifications/push/fcm-provider.ts",
+    "apps/api/src/modules/notifications/push/README.md",
+    "apps/worker/src/jobs/notify-push.ts",
+    "apps/api/test/notifications/push/",
+    "packages/db/migrations/0064_push_subscriptions.sql"
+  ],
+  "interfaces": [
+    "POST /v1/push/subscriptions {kind:'web'|'apns'|'fcm', endpoint?:string, keys?:{p256dh:string,auth:string}, token?:string, device?:'dev_…'} -> 201 {id: opaque string, kind, created_at}",
+    "DELETE /v1/push/subscriptions/{id} -> 204",
+    "interface PushProvider { kind: 'web'|'apns'|'fcm'; send(sub: StoredSubscription, payload: Uint8Array, opts:{ttlS:number, urgency:'low'|'normal'|'high'}): Promise<'sent'|'gone'|'retry'|'failed'> }",
+    "PushSender implements PushSenderPort: enqueue(userId, notification)",
+    "Table push_subscription(id pk, user_id, device_id null, kind, endpoint null, token null, keys_enc bytea null, created_at, last_ok_at, fail_count)",
+    "Env: PUSH_VAPID_PUBLIC_KEY, PUSH_VAPID_PRIVATE_KEY, PUSH_VAPID_SUBJECT, APNS_KEY_ID, APNS_TEAM_ID, APNS_KEY_P8, APNS_TOPIC, FCM_PROJECT_ID, FCM_SERVICE_ACCOUNT_JSON"
+  ],
+  "acceptance": [
+    "POST with a valid web subscription (https endpoint, p256dh 65-byte, auth 16-byte base64url) returns 201; http:// endpoint, missing keys, or token longer than 4096 chars returns 422 with errors[] pointers.",
+    "Registering the same endpoint/token twice (also with the same Idempotency-Key) yields one row and the same id; the 11th distinct subscription for a user returns 409.",
+    "DELETE of another user's subscription returns 404; own returns 204 and a second DELETE returns 404.",
+    "A provider returning 410/404 (web), 410 Unregistered (APNs) or UNREGISTERED (FCM) deletes the subscription and does not retry.",
+    "A provider returning 5xx is retried 3 times with exponential backoff and jitter (base 1 s, cap 30 s) and then counted as failed; 5 consecutive failed sends over 24 h delete the subscription.",
+    "The bytes sent never exceed 3072 and contain only CT-NOTIF-PAYLOAD fields (no title/body text, no params outside the allow-list); verified by decoding the recorded payload.",
+    "Sending 1 000 pushes with 10 concurrent workers completes with per-provider concurrency never exceeding the configured limit (default 20 per provider).",
+    "Web push subscription keys (p256dh/auth) are stored encrypted at rest (keys_enc) and never returned by any endpoint or logged."
+  ],
+  "tests": [
+    "push.routes.test.ts: validation, cap, dedupe, ownership",
+    "push.webpush.test.ts: VAPID signing and payload encryption against a local push server",
+    "push.apns.test.ts and push.fcm.test.ts: auth token generation, status mapping",
+    "push.sender.test.ts: retry, prune, circuit breaker",
+    "push.privacy.test.ts: payload and log inspection"
+  ],
+  "guardrails": [
+    "MUST NOT include message text, code, paths, branch names or any ct-derived data in a push payload.",
+    "MUST NOT log endpoints, tokens or keys; log subscription id and provider only.",
+    "MUST require https endpoints and reject private/loopback hosts for web push endpoints (SSRF guard).",
+    "MUST scope every subscription to its owner; no endpoint lists subscriptions across users.",
+    "Provider credentials come from the B004 secrets loader; never from the repo."
+  ],
+  "failure_modes": [
+    "Provider timeout (10 s) -> counted as retry; circuit opens after 10 consecutive failures per provider for 60 s, jobs are delayed not dropped.",
+    "Invalid VAPID or APNs credentials -> fail fast at startup in production config validation, send path returns 'failed' without deleting subscriptions.",
+    "Subscription deleted between enqueue and send -> job completes as no-op."
+  ],
+  "unblocks_gate": "G5",
+  "notes": ""
+}

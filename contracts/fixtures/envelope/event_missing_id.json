@@ -1,0 +1,12 @@
+{
+  "schema": "envelope.schema.json",
+  "valid": false,
+  "note": "event frames need a client id",
+  "data": {
+    "v": 1,
+    "t": "event",
+    "sid": "ses_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+    "k": "message.user",
+    "p": {}
+  }
+}

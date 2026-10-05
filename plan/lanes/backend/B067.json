@@ -1,0 +1,75 @@
+{
+  "id": "B067",
+  "title": "Presence history and last-seen API",
+  "plan": "backend",
+  "phase": "P4 Fleet",
+  "size": "S",
+  "role": "realtime",
+  "depends_on": [
+    "B047"
+  ],
+  "goal": "Server-side presence history: record connection-derived join/leave timestamps per member and expose last-seen lookups internally, without storing presence payloads or adding a REST endpoint.",
+  "scope_in": [
+    "Consume connection events from the presence service (B047): member_connected, member_disconnected (after the 10 s grace) with timestamps, and write them to a compact log table.",
+    "Maintain last_seen_at per (session, member) and per device, updated at most once per 60 s per connection.",
+    "lastSeen(sid, memberId) and recentSessions(deviceId, limit) functions for other backend lanes (admin API, search, members listing).",
+    "Retention: log rows kept 30 days then deleted by an in-lane purge function that B090 schedules; last_seen rows live as long as the membership.",
+    "Metrics for connect/disconnect rates."
+  ],
+  "scope_out": [
+    "Live presence, typing, cursors and coalescing: B047/B048.",
+    "Any new REST endpoint or field (CONTRACT GAP: contracts expose no last-seen API; the members endpoint is B054).",
+    "Storing presence status/activity values or cursor data.",
+    "Retention scheduling: B090."
+  ],
+  "implements": [
+    "CT-WS-PRESENCE"
+  ],
+  "consumes": [
+    "CT-WS-ENVELOPE",
+    "CT-IDS"
+  ],
+  "build_against": "Fake PresenceEventSource emitting scripted connect/disconnect events with a fake clock; Postgres container for the tables.",
+  "deliverables": [
+    "apps/relay/src/presence-history/recorder.ts",
+    "apps/relay/src/presence-history/queries.ts",
+    "apps/relay/src/presence-history/purge.ts",
+    "apps/relay/src/presence-history/ports.ts",
+    "apps/relay/src/presence-history/README.md",
+    "apps/relay/test/presence-history/",
+    "packages/db/migrations/0067_presence_history.sql"
+  ],
+  "interfaces": [
+    "PresenceHistoryRecorder.onConnected(e:{sid, memberId, deviceId, at: Date}) / onDisconnected(e:{..., reason:'closed'|'timeout'|'kicked'})",
+    "PresenceHistory.lastSeen(sid, memberId): Promise<Date|null>",
+    "PresenceHistory.recentSessions(deviceId, limit<=50): Promise<{sid, lastSeen: Date}[]>",
+    "PresenceHistory.purgeOlderThan(cutoff: Date): Promise<number>",
+    "Tables presence_log(session_id, member_id, device_id, event 'connected'|'disconnected', reason, at) ; member_last_seen(session_id, member_id, device_id, last_seen_at, pk(session_id, member_id))"
+  ],
+  "acceptance": [
+    "A reconnect inside the 10 s grace window writes no disconnected/connected pair for the user (matching the presence service's own suppression) in a replayed scripted scenario.",
+    "lastSeen returns the disconnect time of the latest connection, or the current time bucket if the member is connected now; null for a member who never connected.",
+    "1 000 heartbeat-driven touches within a minute for one connection produce at most 1 write to member_last_seen per 60 s (verified by write counter).",
+    "purgeOlderThan(30 days ago) deletes only presence_log rows older than the cutoff and leaves member_last_seen untouched; returns the exact deleted count.",
+    "The tables contain no column for status, activity, cursor, path or name (schema allow-list test).",
+    "Kicked members' last_seen remains queryable for audit but recentSessions excludes sessions the device no longer belongs to."
+  ],
+  "tests": [
+    "presence-history.recorder.test.ts: grace window, write throttling",
+    "presence-history.queries.test.ts",
+    "presence-history.purge.test.ts",
+    "presence-history.privacy.test.ts: column allow-list"
+  ],
+  "guardrails": [
+    "MUST NOT persist presence payloads (status, activity, cursor); CT-WS-PRESENCE says presence is never stored durably, so only connection facts are recorded.",
+    "MUST NOT expose lastSeen outside the backend process boundary; no route is added by this lane.",
+    "MUST NOT write on the hot path synchronously; recorder buffers and flushes every 1 s or 200 events.",
+    "MUST apply the 30-day retention to presence_log (PII minimisation)."
+  ],
+  "failure_modes": [
+    "DB unavailable -> buffer up to 10 000 events in memory, then drop oldest with a counter; relay behaviour is unaffected.",
+    "Out-of-order events (disconnect before connect) -> ignored with debug log, last_seen only moves forward."
+  ],
+  "unblocks_gate": "G5",
+  "notes": "CONTRACT GAP: CT-WS-PRESENCE says presence is ephemeral and never stored durably, and no last-seen API exists in CT-API-SESSIONS. This lane therefore stores connection facts only and exposes no endpoint; if product wants a last-seen field on GET /v1/sessions/{id}/members it needs a Contract PR. The skeleton title says 'last-seen API'; it is implemented as an internal API."
+}

@@ -1,0 +1,76 @@
+{
+  "id": "C002",
+  "title": "CI pipeline: typecheck, lint, test, build matrix, contract-lock check",
+  "plan": "client",
+  "phase": "P0 Foundations",
+  "size": "M",
+  "role": "devx",
+  "depends_on": [
+    "C001"
+  ],
+  "goal": "Run typecheck, lint, tests and build on every PR across Linux, macOS and Windows, and fail the build if `contracts/` drifts from `contracts/CONTRACTS.lock`.",
+  "scope_in": [
+    "GitHub Actions workflow .github/workflows/ci.yml: jobs `contracts` (lock check + fixture validation), `static` (typecheck, lint, format:check), `test` (matrix ubuntu-latest, macos-latest, windows-latest x Node 22), `build` (matrix, uploads dist as artifact for 7 days).",
+    "Contract lock job runs `python3 tools/plan/lock.py --check` and fails on any diff; also fails if `contracts/index.json` `contract_version` differs from the value recorded in the lock.",
+    "Generated-code freshness job: runs `pnpm --filter @centcom/protocol gen --check` and `pnpm --filter @centcom/theme sync --check` and `pnpm --filter @centcom/mascot sync --check`; fails when output differs from committed files (jobs skip with a clear message until those lanes land).",
+    "Policy scripts in tools/ci/: check-licenses.mjs (allow MIT, Apache-2.0, BSD-2/3-Clause, ISC), check-no-install-scripts.mjs, check-exact-versions.mjs, scan-secrets.mjs (regexes for `cen_live_`, `cen_test_`, PEM private keys, JWTs, `sk-ant-`).",
+    "PR title check workflow .github/workflows/pr-title.yml: title must match `^C\\d{3}: .+` (lane id first) or a Conventional Commit; .github/pull_request_template.md copied from plan/PR_TEMPLATE.md.",
+    "Caching of the pnpm store keyed on pnpm-lock.yaml; per-job timeout-minutes 15; concurrency group cancels superseded runs on the same PR."
+  ],
+  "scope_out": [
+    "Release, signing and publishing workflows: lane C012.",
+    "The Vitest preset, coverage thresholds and pty harness: lane C008.",
+    "E2E / Playwright suites and conformance suite runner: later lanes (C100 owns the conformance suite).",
+    "Writing tools/plan/lock.py itself (it already exists in the shared plan tooling; this lane only calls it)."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-VER"
+  ],
+  "build_against": "Validate workflow YAML with the `rhysd/actionlint` action (pinned by SHA) in a self-check job, and run every tools/ci/*.mjs script locally against the repo and against fixture trees under tools/ci/__fixtures__/.",
+  "deliverables": [
+    ".github/workflows/ci.yml",
+    ".github/workflows/pr-title.yml",
+    ".github/pull_request_template.md",
+    "tools/ci/check-licenses.mjs",
+    "tools/ci/check-no-install-scripts.mjs",
+    "tools/ci/check-exact-versions.mjs",
+    "tools/ci/scan-secrets.mjs",
+    "tools/ci/__fixtures__/",
+    "tools/ci/ci.test.ts",
+    "docs/ci.md"
+  ],
+  "interfaces": [
+    "Required status checks (names are stable, branch protection depends on them): `ci / contracts`, `ci / static`, `ci / test (ubuntu-latest)`, `ci / test (macos-latest)`, `ci / test (windows-latest)`, `ci / build`.",
+    "CLI: `node tools/ci/<script>.mjs [--root <dir>]` exits 0 on pass, 1 on violation, printing one `path: reason` line per violation, never the matched secret text.",
+    "Env for jobs: `CI=1`, `NODE_OPTIONS=--max-old-space-size=4096`, `FORCE_COLOR=0`."
+  ],
+  "acceptance": [
+    "A PR that edits any file under contracts/ without updating CONTRACTS.lock makes job `ci / contracts` fail in under 60 s.",
+    "A PR with a dependency range (`^1.2.3`) in any package.json fails `check-exact-versions` and names the file and package.",
+    "A PR adding a dependency whose package.json has a `postinstall` script fails `check-no-install-scripts`.",
+    "`scan-secrets` fails on a fixture containing `cen_live_` + 32 base62 chars and on a PEM block, and passes on the repo; its output never contains the matched value.",
+    "Full CI wall-clock on a cached run is <= 10 minutes on all three OS; each job has `timeout-minutes: 15`.",
+    "All third-party actions are pinned by full commit SHA with a version comment; `permissions: contents: read` at workflow level, no job uses `pull_request_target`.",
+    "A PR titled `fix stuff` fails `pr-title`; `C002: ci pipeline` passes."
+  ],
+  "tests": [
+    "tools/ci/ci.test.ts: runs each policy script against tools/ci/__fixtures__/{good,bad-range,bad-script,bad-license,bad-secret}/ and asserts exit codes and messages.",
+    "Workflow lint: actionlint self-check job on .github/workflows/*.yml.",
+    "Dry run: `act`-free manual checklist in docs/ci.md for verifying branch-protection names."
+  ],
+  "guardrails": [
+    "MUST NOT use `pull_request_target`, `workflow_run` with untrusted checkout, or expose secrets to fork PRs; CI needs no secrets at all.",
+    "MUST NOT print matched secret values in logs; scan output lists path and rule id only.",
+    "MUST pin actions by SHA and pin Node to 22.x; MUST NOT use `latest` tags.",
+    "MUST NOT skip or mark as allowed-to-fail the contracts job; it is the cross-repo safety net.",
+    "MUST NOT run network-reaching tests in CI beyond loopback (tests use the mock backend from lane C007)."
+  ],
+  "failure_modes": [
+    "Cache restore fails -> job proceeds with a cold install, never fails the build.",
+    "Windows-only test flake -> job fails; no auto-retry above one re-run (`retries: 1` in Vitest is forbidden, flakes get fixed).",
+    "lock.py missing in the checkout -> `contracts` job fails with a message naming the missing file instead of passing silently."
+  ],
+  "unblocks_gate": "G0",
+  "notes": ""
+}

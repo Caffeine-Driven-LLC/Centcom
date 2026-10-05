@@ -1,0 +1,71 @@
+{
+  "id": "C077",
+  "title": "Shared cursors and selections in the TUI",
+  "plan": "client",
+  "phase": "P4 LAN",
+  "size": "S",
+  "role": "tui",
+  "depends_on": [
+    "C034",
+    "C059"
+  ],
+  "goal": "Teammates' cursors and selections are visible in the TUI where code or diffs are shown, in each person's Cento colour with a name tag, throttled and expiring exactly as the presence contract says.",
+  "scope_in": [
+    "Ink components `<RemoteCursors>` and `<SelectionHighlight>` in packages/tui/src/cursors/ that draw other members' presence.cursor positions over the diff view, transcript and file preview.",
+    "Outgoing cursor publisher: throttles local cursor/selection to <= 10 frames/s and sends only on change, via the presence client (C059).",
+    "Cursor lifecycle: tag fades to dim after 3 s idle, disappears 10 s after last update, removed immediately on member_left or offline.",
+    "Colour and identity rules from DESIGN.md 3.2, 4.6, 10.2.11, 12.2, 16.3: slot -> colour, name always shown, own cursor never labelled.",
+    "Terminal tiers: truecolor, 256, 16 and NO_COLOR fallbacks (reverse video plus initial) via the theme engine (C032)."
+  ],
+  "scope_out": [
+    "Presence transport, roster and coalescing logic (C059).",
+    "Web cursors (C085).",
+    "Pair-mode merged selection (C079).",
+    "Typing indicators and roster list UI."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-WS-PRESENCE",
+    "CT-WS-SESSION-EVENTS",
+    "CT-STATE-MAP"
+  ],
+  "build_against": "Feed `presence.cursor` fixtures (contracts/fixtures/events/presence.cursor.json) through a fake presence client and snapshot with the pty/TUI snapshot tester (C008); no network.",
+  "deliverables": [
+    "packages/tui/src/cursors/",
+    "packages/tui/test/cursors/"
+  ],
+  "interfaces": [
+    "export function RemoteCursors(props: {cursors: ReadonlyMap<MemberId, CursorState>; roster: RosterEntry[]; viewport: {path: string; firstLine: number; lines: number; cols: number}; selfMember: MemberId; now: number}): JSX.Element",
+    "export function slotToColour(slot: number, selfSlot: number): 'violet'|'red'|'yellow'|'green'|'brown'|'violet-outlined'",
+    "export function useCursorPublisher(client: PresenceClient, opts?: {maxHz?: number}): {publish(pos: {path?: string; line?: number; col?: number; selEndLine?: number; selEndCol?: number}): void}",
+    "CursorState = {member: MemberId; path?: string; line?: number; col?: number; selEndLine?: number; selEndCol?: number; updatedAt: number}"
+  ],
+  "acceptance": [
+    "Local publisher emits at most 10 presence.cursor frames in any 1 s window under a 1 000 events/s input burst, and the last position is always sent within 100 ms of the burst ending.",
+    "A remote cursor not updated for 3.0 s renders dim; at 10.0 s it is removed from the frame (fake clock tests at 2.9/3.0/9.9/10.0 s).",
+    "Self is violet, others take red, yellow, green, brown in slot order skipping self; the sixth participant renders violet with an outline marker; snapshot per colour tier.",
+    "Every cursor tag shows the member name (truncated with an ellipsis at 12 cells) and initial; with NO_COLOR the cursor is shown as reverse-video cell plus `name` text and is still distinguishable.",
+    "Selections render with the member colour at 20 % alpha equivalent (truecolor) or reverse/dim fallback; selection spanning multiple lines clips correctly at viewport edges.",
+    "Own cursor never produces a tag; cursors for a different `path` than the visible one are not drawn.",
+    "Cursor with line beyond the viewport draws an edge marker (up/down arrow plus name), not an error; 20 simultaneous cursors render in < 8 ms (benchmark with C008 harness)."
+  ],
+  "tests": [
+    "cursors.render.snap.test.tsx: snapshots per colour tier x light/dark theme.",
+    "cursors.throttle.test.ts: fake clock, burst and trailing edge.",
+    "cursors.expiry.test.ts: 3 s dim / 10 s removal / member_left removal.",
+    "cursors.privacy.test.ts: asserts the publisher never sends path text outside `ct` (p stays empty for presence.cursor)."
+  ],
+  "guardrails": [
+    "MUST NOT send cursor paths or line contents in cleartext `p`; presence.cursor is an encrypted kind (secret payload only).",
+    "MUST NOT rely on cursors being delivered; no feature may depend on a presence frame (CT-WS-PRESENCE).",
+    "MUST identify people by initial + name, never colour alone (DESIGN.md 16.3); MUST honour NO_COLOR and CENTO_REDUCE_MOTION (no fade animation, instant dim/hide).",
+    "MUST NOT block the render loop; redraw only the changed cells (DESIGN.md 19.3)."
+  ],
+  "failure_modes": [
+    "Cursor payload fails decrypt/validation -> drop that cursor, keep previous, log at debug without payload.",
+    "Unknown member in a cursor frame -> ignore until roster contains the member.",
+    "Terminal narrower than 60 columns -> tags collapse to initial only."
+  ],
+  "unblocks_gate": "G5",
+  "notes": "Open question: DESIGN.md says the cursor is a 4x6 pixel arrow; in a terminal a single cell is used (half-block pixel arrow only on truecolor with >= 2 rows free). Documented in README of the folder."
+}

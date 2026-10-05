@@ -1,0 +1,99 @@
+{
+  "id": "B003",
+  "title": "Contract codegen package (types and validators from contracts/)",
+  "plan": "backend",
+  "phase": "P0 Foundations",
+  "size": "M",
+  "role": "platform",
+  "depends_on": [
+    "B001"
+  ],
+  "goal": "One package turns contracts/ into TypeScript types, runtime validators, ID helpers and error-code constants so no other lane ever hand-writes a contract type.",
+  "scope_in": [
+    "Generator script that reads contracts/schemas/*.json (and openapi.yaml, errors.json when present) and emits types plus Ajv 2020-12 standalone validators into packages/contracts/src/generated/.",
+    "Hand-written ID helpers realising CT-IDS: prefix table, `newId`, `parseId`, `isId`, monotonic ULID generator with injected clock/RNG, 40-byte max length check.",
+    "Time, money and text helpers from CT-IDS: RFC 3339 ms-UTC formatter/parser, `Money` type with integer minor units, NFC normalisation and control-character rejection, display-name/workspace/session/slug length rules.",
+    "Validator facade: `validateEnvelope`, `validateEvent(kind, payload)`, `validateEntitlements`, etc. returning `{ok:true,value}|{ok:false,errors:[{pointer,code,detail}]}` with JSON Pointer paths.",
+    "`CONTRACT_VERSION` read from contracts/index.json (CT-VER build metadata).",
+    "Fixture-driven tests: every file in contracts/fixtures/** validates against its schema; `contracts:check` fails if generated output is stale."
+  ],
+  "scope_out": [
+    "Mapping errors to HTTP problem+json and the error handler (B006).",
+    "Using validators in Fastify routes or the relay (each consuming lane).",
+    "Encryption or signature verification of `ct`/`sig` (client concern per CT-CRYPTO; relay only checks shape)."
+  ],
+  "implements": [
+    "CT-IDS",
+    "CT-VER"
+  ],
+  "consumes": [
+    "CT-ERR",
+    "CT-WS-ENVELOPE",
+    "CT-WS-SESSION-EVENTS",
+    "CT-WS-PRESENCE",
+    "CT-WS-QUEUE",
+    "CT-WS-CONTROL",
+    "CT-RESUME",
+    "CT-ENTITLEMENTS",
+    "CT-WEBHOOKS",
+    "CT-NOTIF-PAYLOAD",
+    "CT-TELEMETRY",
+    "CT-STATE-MAP",
+    "CT-PAGE",
+    "CT-AUTH"
+  ],
+  "build_against": "Run against the files in contracts/ directly; no network. Use contracts/fixtures/events/*.json (42 files) as the first corpus.",
+  "deliverables": [
+    "packages/contracts/scripts/generate.ts",
+    "packages/contracts/src/generated/",
+    "packages/contracts/src/ids.ts",
+    "packages/contracts/src/time.ts",
+    "packages/contracts/src/money.ts",
+    "packages/contracts/src/text.ts",
+    "packages/contracts/src/validate.ts",
+    "packages/contracts/src/version.ts",
+    "packages/contracts/src/index.ts",
+    "packages/contracts/test/",
+    "packages/contracts/README.md"
+  ],
+  "interfaces": [
+    "`type IdPrefix = 'usr'|'wsp'|'dev'|'mem'|'inv'|'key'|'whk'|'ntf'|'snp'|'blb'|'ses'|'agt'|'que'|'msg'|'apr'|'sub'|'dlv'|'aud'|'prj'|'req'`.",
+    "`newId(prefix: IdPrefix, deps?: {now?: () => number; random?: () => Uint8Array}): string` (monotonic within a process).",
+    "`isId(prefix: IdPrefix, v: unknown): v is string`; `parseId(v: string): {prefix: IdPrefix; ulid: string} | null`.",
+    "`formatTimestamp(d: Date): string` (always `.mmmZ`); `parseTimestamp(s: string): Date | null`.",
+    "`normaliseText(s: string): string` (NFC) and `assertNoControlChars(s: string): void`.",
+    "`validate<K extends SchemaKey>(key: K, v: unknown): Result<SchemaType[K]>`; `CONTRACT_VERSION` constant.",
+    "`pnpm contracts:gen` regenerates; `pnpm contracts:check` exits 1 if generated files differ from a fresh run."
+  ],
+  "acceptance": [
+    "`newId('ses')` returns a string matching `^ses_[0-9A-HJKMNP-TV-Z]{26}$`; 1 000 000 consecutive ids from one generator are strictly increasing lexicographically even within the same millisecond.",
+    "`isId('usr','ses_01JA3Z8K2M5N7P9Q0R1S2T3V4W')` is false; any id longer than 40 bytes is rejected.",
+    "`formatTimestamp(new Date(0))` equals `1970-01-01T00:00:00.000Z`; `parseTimestamp` rejects strings without `Z` or without milliseconds.",
+    "`normaliseText` converts NFD `e` + U+0301 to NFC U+00E9; a string with U+0007 is rejected while `\\n` and `\\t` pass.",
+    "All 42 fixtures in contracts/fixtures/events validate; removing a required field from any fixture makes validation fail with a JSON Pointer to that field.",
+    "Validators ignore unknown properties and unknown enum values where the contract says extensible, and never throw on hostile input (fuzz 10 000 random JSON values, zero throws).",
+    "`pnpm contracts:check` exits 1 when a schema in contracts/schemas is edited without regenerating, and 0 after `pnpm contracts:gen`.",
+    "Generated validators are standalone (no runtime schema compilation, no `eval`/`new Function` at request time)."
+  ],
+  "tests": [
+    "ids.test.ts: format, monotonicity with frozen clock, prefix table completeness vs CT-IDS.",
+    "time-money-text.test.ts: examples and edge cases from CT-IDS.",
+    "fixtures.test.ts: every contracts/fixtures/** file validates against its declared schema.",
+    "fuzz.test.ts: property tests (fast-check) for parseId/parseTimestamp/validate never throwing.",
+    "generate.test.ts: stale-output detection."
+  ],
+  "guardrails": [
+    "MUST NOT hand-edit anything under packages/contracts/src/generated/; it is output only and has a header saying so.",
+    "MUST generate standalone validators at build time; MUST NOT use `eval` or `new Function` at runtime.",
+    "MUST fail generation (non-zero exit) if a schema referenced by contracts/index.json is missing, except openapi.yaml and errors.json which are skipped with a loud warning until present.",
+    "MUST use the platform CSPRNG (`crypto.randomFillSync`) for ULID randomness by default; injected RNG is for tests only.",
+    "MUST NOT emit fields that are not in the schema; helpers that build objects must pass the validator."
+  ],
+  "failure_modes": [
+    "Schema uses an unsupported JSON Schema feature -> generation fails with file and keyword, never emits a partial validator.",
+    "Clock moves backwards -> generator keeps ULID monotonic by incrementing the previous random part.",
+    "Invalid input to a helper -> return null/false or a Result error, never throw for external data."
+  ],
+  "unblocks_gate": "G0",
+  "notes": "CONTRACT GAP."
+}

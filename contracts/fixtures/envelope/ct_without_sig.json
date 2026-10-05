@@ -1,0 +1,18 @@
+{
+  "schema": "envelope.schema.json",
+  "valid": false,
+  "note": "encrypted frame missing signature",
+  "data": {
+    "v": 1,
+    "t": "event",
+    "id": "msg_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+    "sid": "ses_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+    "k": "message.user",
+    "ct": {
+      "alg": "xchacha20poly1305",
+      "kid": "k1",
+      "n": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "c": "AAAA"
+    }
+  }
+}

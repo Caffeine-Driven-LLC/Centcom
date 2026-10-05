@@ -1,0 +1,70 @@
+{
+  "id": "C021",
+  "title": "MCP server manager",
+  "plan": "client",
+  "phase": "P1 Agent runtime",
+  "size": "M",
+  "role": "runtime",
+  "depends_on": [
+    "C013"
+  ],
+  "goal": "Configure, start, supervise and stop MCP servers for agents, with explicit trust for project-defined servers, a minimal environment for child processes, and bounded timeouts and output sizes.",
+  "scope_in": [
+    "Config sources: user `<config dir>/mcp.json` and project `.centcom/mcp.json`: `{ servers: { <name>: { type: 'stdio', command: string, args?: string[], env?: Record<string,string>, cwd?: string } | { type: 'http'|'sse', url: string, headers?: Record<string,string> } } }`; server names `^[a-z][a-z0-9_-]{0,31}$`.",
+    "Trust gate: a project-defined server (or any server whose definition hash changed) is not started until `TrustStore.isTrusted('mcp', sha256(canonical JSON of definition))` (store from lane C013); a `needsTrust` list is exposed for the UI to prompt; user-config servers are trusted implicitly.",
+    "Lifecycle: lazy start on first use, handshake timeout 15 s, health ping every 30 s, restart with backoff 1 s, 2 s, 4 s ... cap 30 s, max 5 consecutive failures then `failed` until manual `restart`; stop with SIGTERM then SIGKILL after 3 s on agent/runner exit.",
+    "Child environment is an allow-list (PATH, HOME, LANG, TERM, TMPDIR) plus declared `env` after `${VAR}` expansion restricted to an allow-list of variable names the user config names in `env_passthrough`; `secret:<name>` values resolved by an injected `SecretResolver` (keychain), never stored in config files.",
+    "Tool exposure: tools named `mcp__<server>__<tool>` handed to the runner; call timeout default 60 000 ms, result size cap 256 KiB (truncated with a marker), concurrency cap 4 per server.",
+    "URL servers: https only except loopback; no redirects to other origins; headers never logged.",
+    "Status API for UI: `{ name, state: 'stopped'|'starting'|'ready'|'failed'|'untrusted', tools: number, lastError?: code }`."
+  ],
+  "scope_out": [
+    "Implementing the MCP protocol transport itself beyond using the SDK/official client library (justify the dependency).",
+    "Permission decisions for MCP tool calls: lane C015 (this lane only names the tools and marks read-only hints).",
+    "Keychain access: injected `SecretResolver` (net/auth lanes)."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-IDS",
+    "CT-ERR"
+  ],
+  "build_against": "A tiny stdio MCP fixture server (packages/agent/src/mcp/__fixtures__/echo-server.ts) that supports initialize, tools/list, a slow tool, a huge-output tool and a crash-on-call tool; fake clock for timeouts; in-memory TrustStore.",
+  "deliverables": [
+    "packages/agent/src/mcp/",
+    "docs/mcp.md"
+  ],
+  "interfaces": [
+    "`createMcpManager(deps: { fs: McpFs; spawn: SpawnFn; trust: TrustStore; secrets: SecretResolver; clock: Clock; bus: AgentBus; log: Logger; config: McpConfig }): McpManager`",
+    "`interface McpManager { load(projectRoot?: string): Promise<{ servers: McpServerStatus[]; needsTrust: PendingTrust[] }>; trust(name: string): Promise<void>; ensureStarted(name: string): Promise<void>; listTools(): Promise<McpToolInfo[]>; callTool(server: string, tool: string, input: unknown, o?: { timeoutMs?: number; signal?: AbortSignal }): Promise<McpToolResult>; restart(name: string): Promise<void>; stopAll(): Promise<void>; status(): McpServerStatus[] }`",
+    "`McpToolInfo = { name: 'mcp__<server>__<tool>'; description: string; readOnlyHint?: boolean }`."
+  ],
+  "acceptance": [
+    "A project `.centcom/mcp.json` server is reported `untrusted` and never spawned (spawn mock call count 0) until `trust(name)`; editing its `args` changes the hash and reverts it to `untrusted`.",
+    "Child env for a stdio server contains only the allow-listed variables + declared env: a poisoned parent env with `CENTCOM_REFRESH_TOKEN`, `AWS_SECRET_ACCESS_KEY`, `GITHUB_TOKEN` shows none of them in the spawned env.",
+    "Handshake that does not complete in 15 000 ms (fake clock) marks the server `failed` and kills the child; the crash-on-call fixture is restarted with delays 1 s, 2 s, 4 s and after 5 consecutive failures stays `failed`.",
+    "A tool returning 1 MiB is truncated to 256 KiB with a trailing marker, and the call result flags `truncated:true`; a slow tool call is aborted at 60 000 ms with `McpTimeout`.",
+    "`stopAll` terminates children: SIGTERM, then SIGKILL at 3 s if still alive, resolving in <= 4 s; no zombie child in the process list (test via pid check).",
+    "Tool names follow `mcp__<server>__<tool>`; a server named `a__b` or a tool name containing control characters is rejected.",
+    "An `http` URL server with scheme `http://example.com` is rejected; `https://` and `http://127.0.0.1:PORT` accepted; a 302 to another origin is not followed."
+  ],
+  "tests": [
+    "config.test.ts (schema, names), trust.test.ts.",
+    "env-allowlist.test.ts, lifecycle.test.ts (fake clock).",
+    "tool-call.test.ts (timeout, truncation, concurrency), shutdown.test.ts.",
+    "http-server.test.ts, fixture server integration."
+  ],
+  "guardrails": [
+    "MUST NOT start a project-defined MCP server (it runs an arbitrary command) without explicit local trust bound to the definition hash.",
+    "MUST NOT pass the parent environment, tokens or keychain data to servers; secrets only via `secret:` references resolved at spawn.",
+    "MUST NOT log commands, args, env, headers, URLs with credentials or tool inputs/outputs.",
+    "MUST bound everything: startup 15 s, call 60 s, output 256 KiB, 4 concurrent calls per server, 20 servers total.",
+    "MUST NOT shell-interpolate: `command` + `args` are spawned as argv without a shell."
+  ],
+  "failure_modes": [
+    "Server binary missing -> status `failed` with `lastError:'spawn_failed'`; other servers unaffected; agent continues without those tools.",
+    "Server writes non-protocol noise on stdout -> ignored up to 1 MiB then killed as `protocol_error`.",
+    "Trust store corrupted -> treated as empty (everything untrusted)."
+  ],
+  "unblocks_gate": "G6",
+  "notes": "Trust semantics reuse TrustStore from lane C013. Dependency choice for the MCP client (official SDK) must be justified in the PR (licence MIT, no install scripts)."
+}

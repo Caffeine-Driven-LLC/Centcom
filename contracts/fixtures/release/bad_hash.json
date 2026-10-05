@@ -1,0 +1,21 @@
+{
+  "schema": "release-manifest.schema.json",
+  "valid": false,
+  "note": "sha256 must be 64 hex chars",
+  "data": {
+    "channel": "stable",
+    "version": "1.0.0",
+    "released_at": "2026-10-05T18:07:41.123Z",
+    "min_supported": "1.0.0",
+    "artifacts": [
+      {
+        "platform": "linux",
+        "arch": "x64",
+        "url": "https://dl.centcom.dev/x",
+        "sha256": "xyz",
+        "size": 1,
+        "sig": "AAAA"
+      }
+    ]
+  }
+}

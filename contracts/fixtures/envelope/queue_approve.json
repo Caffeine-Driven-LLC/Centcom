@@ -1,0 +1,18 @@
+{
+  "schema": "envelope.schema.json",
+  "valid": true,
+  "note": "",
+  "data": {
+    "v": 1,
+    "t": "queue",
+    "id": "msg_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+    "sid": "ses_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+    "k": "queue.approve",
+    "seq": 7,
+    "ts": "2026-10-05T18:07:41.123Z",
+    "from": "mem_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+    "p": {
+      "item": "que_01JA3Z8K2M5N7P9Q0R1S2T3V4W"
+    }
+  }
+}

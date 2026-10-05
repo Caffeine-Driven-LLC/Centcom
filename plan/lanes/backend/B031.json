@@ -1,0 +1,66 @@
+{
+  "id": "B031",
+  "title": "Member slot assignment service",
+  "plan": "backend",
+  "phase": "P2 Workspaces",
+  "size": "S",
+  "role": "realtime",
+  "depends_on": [
+    "B028"
+  ],
+  "goal": "Assign and persist stable per-session member slots (integer >= 0): the lowest free slot at a member's first join, stable for the session's life, never reused by a different member.",
+  "scope_in": [
+    "`SlotService.assign(sessionId, memberId)` idempotent, race-safe, bounded by the hard cap of 50 members per session.",
+    "`SlotService.get(sessionId, memberId)` and `SlotService.list(sessionId)` for roster building.",
+    "Migration for `session_member_slots` with unique `(session_id, slot)` and `(session_id, member_id)`.",
+    "Purge helper `deleteForSession(sessionId)` for the retention job."
+  ],
+  "scope_out": [
+    "Slot to colour mapping - a client presentation rule per CT-WS-SESSION-EVENTS.",
+    "Join authorisation and room membership (B043), welcome frame construction (B038).",
+    "Roster frames `control.roster` and `control.member_joined` emission (B043/B044)."
+  ],
+  "implements": [
+    "CT-WS-SESSION-EVENTS"
+  ],
+  "consumes": [
+    "CT-IDS",
+    "CT-ENTITLEMENTS"
+  ],
+  "build_against": "Postgres via the B010 harness and the factories for sessions/memberships; no relay running - tests call the service directly and 50 parallel joins are simulated with Promise.all.",
+  "deliverables": [
+    "apps/relay/src/slots/",
+    "packages/db/migrations/0031_session_member_slots.sql"
+  ],
+  "interfaces": [
+    "TS: `interface SlotService { assign(sessionId: string, memberId: string): Promise<number>; get(sessionId: string, memberId: string): Promise<number | null>; list(sessionId: string): Promise<Array<{ memberId: string; slot: number }>>; deleteForSession(sessionId: string): Promise<void>; }`",
+    "DB: `session_member_slots(session_id text, member_id text, slot int check (slot between 0 and 49), assigned_at timestamptz, primary key(session_id, member_id), unique(session_id, slot))` and `sessions.next_slot int` (or equivalent counter row).",
+    "Error: `SlotsExhaustedError` (maps to the registry forbidden-class error) when 50 distinct members already hold slots."
+  ],
+  "acceptance": [
+    "The first member in a session gets slot 0, the next 1, then 2; calling `assign` again for an existing member returns the same slot.",
+    "50 concurrent `assign` calls for 50 distinct members return exactly the set {0..49} with no duplicates; a 51st distinct member throws `SlotsExhaustedError`.",
+    "A member who leaves and a new member who joins afterwards: the new member gets a higher slot; the old slot is not reassigned to anyone else, and the original member rejoining gets the original slot.",
+    "`assign` p95 < 10 ms on the Postgres test container.",
+    "Deleting the session's slots removes all rows and resets nothing for other sessions."
+  ],
+  "tests": [
+    "slots.assign.test.ts: sequential, idempotent, rejoin.",
+    "slots.concurrency.test.ts: 50 and 51 parallel joins (property test with random join orders).",
+    "slots.no-reuse.test.ts: leave/join interleavings never reuse a slot.",
+    "slots.migration.test.ts: constraints reject duplicate (session, slot)."
+  ],
+  "guardrails": [
+    "A slot MUST NEVER be reassigned to a different member within a session, even after the original leaves or is kicked (CT-WS-SESSION-EVENTS member slots rule).",
+    "Assignment MUST be atomic in the database (counter update or unique-constraint retry), not an in-process counter, so multiple relay nodes cannot collide.",
+    "MUST NOT store names, colours or any profile data in the slot table; ids only.",
+    "The server MUST NOT send colours; only integer slots leave this service."
+  ],
+  "failure_modes": [
+    "Unique violation on concurrent assign -> retry up to 3 times, then surface a retryable 503-class error; never return a slot that is not committed.",
+    "Session row missing -> `SessionNotFoundError`; relay closes 4404.",
+    "DB timeout (2 s) -> error to caller; no slot cached in memory."
+  ],
+  "unblocks_gate": "G3",
+  "notes": "Placed under apps/relay because the relay is its only caller (welcome frame and member_joined); the DB access goes through packages/db. CONTRACT GAP: the contract does not say how slots behave when the same user joins from two devices; this card keys slots by member id, so both devices share one slot."
+}

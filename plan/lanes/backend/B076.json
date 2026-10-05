@@ -1,0 +1,89 @@
+{
+  "id": "B076",
+  "title": "Quota signalling: warnings at 80 and 100 percent to sessions and owners",
+  "plan": "backend",
+  "phase": "P5 Billing",
+  "size": "M",
+  "role": "billing",
+  "depends_on": [
+    "B044",
+    "B075"
+  ],
+  "goal": "Turn metered usage into quota signals: a one-time 80 percent warning and a 100 percent quota_reached per workspace, limit and period, delivered as sys.notice to live hosted sessions, as notifications to owners, and as a queryable quota-state flag other services read.",
+  "scope_in": [
+    "Threshold evaluator `evaluateQuota(workspaceId)` that compares B075 usage aggregates with entitlement limits for the metered keys `agent_minutes_month`, `tokens_month`, `queue_items_month` (null limit = never evaluated).",
+    "BullMQ job `quota-signals.evaluate` (enqueued by usage-aggregate updates, debounced 10 s per workspace) plus a 60 s sweep job over workspaces with usage in the current period.",
+    "Persistent dedupe table `quota_signal_state` so each (workspace, limit, period_start, level) fires at most once; re-arms when the period rolls or the limit is raised so usage falls below the threshold.",
+    "Publish `sys.notice` bodies (`usage_warning {pct:80, resets_at}`, `quota_reached {resets_at}`) to Redis channel `relay:notice:{wsp}` for the fan-out engine (B044) to deliver to every live hosted session of the workspace.",
+    "Send CT-NOTIF-PAYLOAD notifications (categories `usage_warning`, `quota_reached`) to workspace owners through the notification dispatcher, and enqueue a `usage.threshold` webhook event.",
+    "Maintain Redis hash `quota:state:{wsp}` (`{limit_key: 'ok'|'warn'|'reached'}`, TTL until period end + 1 h) so API middleware and relay approval/agent-spawn checks can read the state without SQL; expose `warnings[]` data for the entitlements object."
+  ],
+  "scope_out": [
+    "Computing usage totals and period boundaries (B075) and ingesting usage events (B074).",
+    "Rejecting REST creates with 429 `quota_exceeded` (entitlement enforcement middleware, B080) and pausing queue approvals / agent spawn at the relay (queue and relay lanes read the `quota:state` flag).",
+    "Notification channel delivery, preferences and quiet hours (B063-B066); this lane only emits notification requests.",
+    "Webhook delivery, retries and signing (B081); this lane only enqueues the event.",
+    "`member_limit_near` notices (seat/member limits are not metered usage)."
+  ],
+  "implements": [
+    "CT-ENTITLEMENTS"
+  ],
+  "consumes": [
+    "CT-WS-SESSION-EVENTS",
+    "CT-NOTIF-PAYLOAD",
+    "CT-WEBHOOKS",
+    "CT-API-USAGE",
+    "CT-ERR",
+    "CT-IDS"
+  ],
+  "build_against": "Run against Postgres/Redis test containers (B010) with synthetic usage aggregates; capture the Redis `relay:notice:{wsp}` channel with a test subscriber and assert the notice bodies against the `sys.notice` catalogue in CT-WS-SESSION-EVENTS (Notices). Use the mock client simulator (B011) joined to a hosted session to prove a `sys.notice` frame reaches a live member once B044 routing is wired in the integration test.",
+  "deliverables": [
+    "apps/worker/src/jobs/quota-signals/",
+    "apps/api/src/modules/billing/quota/",
+    "packages/db/migrations/076_quota_signal_state.sql",
+    "docs/billing/quota-signals.md"
+  ],
+  "interfaces": [
+    "`evaluateQuota(workspaceId: string, now: Date): Promise<QuotaTransition[]>` where `QuotaTransition = {limit: MeteredKey; from: 'ok'|'warn'|'reached'; to: 'ok'|'warn'|'reached'; pct: number}`; idempotent.",
+    "`getQuotaState(workspaceId: string): Promise<Record<MeteredKey, 'ok'|'warn'|'reached'>>` reads Redis first, falls back to SQL; used by B080 and relay checks.",
+    "`getWarnings(workspaceId: string): Promise<{limit: MeteredKey; pct: 80|100}[]>` feeds `warnings[]` of CT-ENTITLEMENTS.",
+    "BullMQ queue `quota-signals` with jobs `evaluate {workspaceId}` and `sweep {}`; attempts 5, exponential backoff 2 s with jitter, DLQ queue `quota-signals:dead`.",
+    "Redis pub/sub channel `relay:notice:{wsp}` carrying `{code: 'usage_warning'|'quota_reached', level: 'warn'|'error', params: object}`; Redis hash `quota:state:{wsp}`.",
+    "Table `quota_signal_state(workspace_id, limit_key, period_start, level, fired_at, PRIMARY KEY(workspace_id, limit_key, period_start, level))`.",
+    "Config: `QUOTA_WARN_PCT=80` (fixed by contract, validated), `QUOTA_EVAL_DEBOUNCE_MS=10000`, `QUOTA_SWEEP_INTERVAL_S=60`."
+  ],
+  "acceptance": [
+    "Usage moving from 79.9 % to 80.0 % of `agent_minutes_month` publishes exactly one `usage_warning {pct:80, resets_at}` notice and creates exactly one owner notification, even when `evaluate` runs 10 times concurrently (unique-key dedupe).",
+    "Usage reaching 100 % publishes exactly one `quota_reached {resets_at}` notice and sets `quota:state:{wsp}` field to `reached`; `resets_at` equals the entitlement `period.end` in RFC 3339 UTC with milliseconds.",
+    "A jump from 50 % to 130 % in one aggregate update fires both the warning and the reached level (warning first), each once.",
+    "A limit of `null` (unlimited) never produces a signal; a limit of 0 on a count key produces no `usage_warning`.",
+    "When the period rolls over, or the limit is raised so usage is below 80 %, state returns to `ok` and a later crossing signals again; within the same period and level it never repeats.",
+    "Owners receive notifications only; a `member` or `billing` role user receives none, and the notification `params` contain only ids and enums (`{limit: 'agent_minutes_month', pct: 80}`), never text.",
+    "Signalling delay from the aggregate update to the Redis publish is <= 15 s p95 in the integration test (60 s sweep is only the backstop).",
+    "The 429 `quota_exceeded` rejection itself is not produced here; `getQuotaState` returns `reached` within 1 s of the transition so B080 can use it."
+  ],
+  "tests": [
+    "unit: threshold boundaries (79.99, 80.00, 99.99, 100.00, 100.01) for each metered key, integer arithmetic only.",
+    "integration: concurrent `evaluate` calls produce one row, one publish, one notification (Postgres + Redis containers).",
+    "integration: period rollover and limit-raise re-arm behaviour.",
+    "contract: published notice bodies validate against the `sys.notice` code/params table of CT-WS-SESSION-EVENTS.",
+    "failure-path: Redis down during publish -> job retries and eventually succeeds without duplicate notifications; DLQ after 5 failures.",
+    "privacy: notification and webhook payloads contain no usage numbers other than `pct`."
+  ],
+  "guardrails": [
+    "MUST persist the dedupe row in the same transaction as the decision to fire, and publish after commit via the job, so a crash can only cause a retry, never a missed or duplicated signal.",
+    "MUST NOT put display text in notices or notifications; only codes, ids and enums (CT-NOTIF-PAYLOAD, CT-WS-SESSION-EVENTS Notices).",
+    "MUST NOT block, throttle or emit quota signals for LAN or local use; only hosted workspaces are evaluated (CT-ENTITLEMENTS §5).",
+    "MUST compute percentages with integer or BigInt math; never floating point equality at the 80/100 boundary.",
+    "MUST NOT log workspace usage totals together with user identifiers; log workspace id, limit key and level only.",
+    "MUST treat Redis as a cache: SQL `quota_signal_state` is authoritative and `quota:state` is rebuildable."
+  ],
+  "failure_modes": [
+    "Usage aggregate is stale or missing -> skip evaluation, log at warn, rely on next sweep; never infer reached from absent data.",
+    "Redis pub/sub publish fails -> job fails and retries with backoff; the SQL row is marked `fired_at` only after publish succeeds, so signals are not lost.",
+    "Notification dispatcher unavailable -> retry independently of the relay notice (separate sub-step) so the live-session notice is not delayed.",
+    "Entitlement limit changes mid-evaluation -> re-read limits inside the evaluation transaction; stale rev causes one re-run."
+  ],
+  "unblocks_gate": "G4",
+  "notes": "Assumption: B075 exposes a post-commit hook or queue event when aggregates change; if it only offers polling, the 60 s sweep carries the load. The channel name `relay:notice:{wsp}` is defined here and must be agreed with the B044/B045 owners. The `usage.threshold` webhook is enqueued directly on the BullMQ queue `webhook.events` defined in B081. CONTRACT GAP: no `notice` level mapping is given for usage_warning/quota_reached; chosen `warn` and `error`."
+}

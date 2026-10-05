@@ -1,0 +1,78 @@
+{
+  "id": "B096",
+  "title": "Chaos and failure-mode tests",
+  "plan": "backend",
+  "phase": "P7 Ops",
+  "size": "M",
+  "role": "qa",
+  "depends_on": [
+    "B095"
+  ],
+  "goal": "Show, with repeatable experiments, that the backend degrades safely and recovers without data loss or ordering damage when dependencies and nodes fail.",
+  "scope_in": [
+    "Scenario files in `infra/chaos/scenarios/*.yaml` (hypothesis, steady-state check, injection, duration, abort conditions, expected outcome) and a runner `infra/chaos/runner/` executing them against the compose stack or stage.",
+    "Scenarios: kill a relay node under load (clients resume, no seq gap); Redis outage 60 s; Postgres primary failover; R2/S3 unavailable (snapshot commit and history reads fail retriably, live sessions continue); Stripe webhook duplicate and out-of-order storm; webhook receiver 500s/timeouts; email provider down; worker killed mid-job; network partition between relay nodes; clock skew +/- 60 s and +/- 5 min on one node; slow consumer flood; DNS failure for webhook targets.",
+    "Fault injection tooling: Toxiproxy in the compose stack for latency/loss/cut, Fly machine stop/restart for stage, `tc`-free (no root) so the suite runs in CI.",
+    "Steady-state probes reusing the simulator (B011): sequence continuity, ack latency, join-token success, REST success rate, `/readyz` state.",
+    "Defined degradation policy table in `docs/ops/failure-modes.md` (what fails open vs closed per dependency) and the runner asserts it.",
+    "Output `chaos-report.json` per run `{scenario, passed, steady_state_before, during, after, violations[]}`."
+  ],
+  "scope_out": [
+    "Load generation and capacity (B095).",
+    "Fixing the weaknesses found (filed as issues against the owning lanes).",
+    "Production chaos; game days are manual and out of scope.",
+    "Security penetration testing (B098)."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-WS-ENVELOPE",
+    "CT-RESUME",
+    "CT-ERR",
+    "CT-STATUS",
+    "CT-AUTH",
+    "CT-WEBHOOKS",
+    "CT-API-USAGE"
+  ],
+  "build_against": "Compose stack (B012) with Toxiproxy sidecars and the client simulator (B011); stage runs are an owner-executed extension of the same scenario files via the Fly CLI.",
+  "deliverables": [
+    "infra/chaos/",
+    "docs/ops/failure-modes.md"
+  ],
+  "interfaces": [
+    "Command `pnpm chaos --scenario <id|all> --env local|stage [--duration-s N]`; refuses `--env prod` (exit code 2).",
+    "Scenario schema `infra/chaos/scenario.schema.json`: `{id, hypothesis, target, steady_state: Check[], inject: Fault[], abort_if: Check[], expect: Check[]}`.",
+    "Report `chaos-report.json` as described; exit code 0 only if every scenario passed.",
+    "Failure-policy table keys: `redis`, `postgres`, `blob_store`, `stripe`, `email`, `webhook_receiver`, each with `fail_mode: 'open'|'closed'|'degrade'` and a user-visible effect."
+  ],
+  "acceptance": [
+    "Relay node kill under 500 simulated connections: all clients reconnect and resume within 60 s; for every session, the received `seq` sequence is gap-free and duplicate-free after dedupe; no `sys.error` other than expected close codes.",
+    "Redis down for 60 s: `/readyz` reports 503 on affected instances within 15 s; new join-tokens fail closed with 503 and `retry_after_s`; existing relay connections on the same node keep exchanging frames; after recovery all counters (rate limits, idempotency) work again within 30 s and no duplicate queue items exist.",
+    "Postgres failover: REST returns 503 (never 200 with stale writes) with `Retry-After` during the failover, service resumes within 120 s, and zero committed writes are lost (verified by a write ledger).",
+    "Blob store down for 5 min: live sessions are unaffected, snapshot commit returns 503 retriable, history GET returns 503, and after recovery the ledger shows no lost sequenced frame in the durable log.",
+    "Stripe webhook storm (1 000 events, 30 % duplicates, shuffled): final entitlement state equals the state from the ordered unique set; `rev` increments only on real changes.",
+    "Clock skew of +/- 2 minutes on one API node: tokens within +/- 60 s tolerance are accepted, beyond are rejected with `token_expired`/`token_invalid`; no crashes.",
+    "Worker killed mid-job for each queue: the job completes exactly once from the user's perspective (webhook delivered once per attempt id, email not duplicated beyond the documented at-least-once).",
+    "Every scenario ends with the report written and the environment restored to steady state (verified by the runner) even if the scenario failed."
+  ],
+  "tests": [
+    "scenario schema validation and runner unit tests with a fake injector.",
+    "smoke subset (relay kill, Redis outage, worker kill) runs in the nightly compose job and must pass.",
+    "invariant checkers (seq continuity, write ledger, idempotency) unit-tested with injected violations.",
+    "refusal test for prod env.",
+    "report schema validation."
+  ],
+  "guardrails": [
+    "MUST NOT be runnable against production: the runner checks the target hostname and the environment variable and exits 2.",
+    "MUST always restore injected faults (finally-block and a `pnpm chaos:heal` command) even on crash or Ctrl-C.",
+    "MUST use synthetic data and random-byte ciphertext only.",
+    "MUST have abort conditions that stop an experiment when steady state is violated beyond limits (error rate > 20 % for 30 s).",
+    "MUST record every violation as a finding with the owning area; a failed scenario is never auto-retried to green."
+  ],
+  "failure_modes": [
+    "Runner crashes mid-injection -> toxiproxy toxics expire after 10 min by default TTL and `chaos:heal` removes all.",
+    "Steady state never reached before injection -> scenario skipped and marked `invalid`, not `passed`.",
+    "Stage machine restart exceeds time -> scenario fails with a timeout finding."
+  ],
+  "unblocks_gate": "G6",
+  "notes": "The failure-policy table is both documentation and an executable assertion; the chosen policies (rate limiter fails open for <= 60 s, join-token fails closed) should be confirmed by the owners of B023 and B038. Prod game days are explicitly excluded in v1."
+}

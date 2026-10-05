@@ -1,0 +1,89 @@
+{
+  "id": "B021",
+  "title": "RBAC engine: roles, permission checks, policy tests",
+  "plan": "backend",
+  "phase": "P1 Identity",
+  "size": "M",
+  "role": "identity",
+  "depends_on": [
+    "B006",
+    "B008"
+  ],
+  "goal": "A single RBAC engine answers every authorisation question from the CT-RBAC matrix, and all REST and relay code calls it instead of re-implementing role checks.",
+  "scope_in": [
+    "Pure `can(actor, action, resource, ctx)` function plus Fastify helpers, with the full CT-RBAC workspace matrix (owner/admin/member/billing/guest x all rows) and session matrix (host/editor/viewer x all rows) encoded as data.",
+    "Action catalogue as a TypeScript union (e.g. `workspace.read`, `workspace.update`, `member.invite`, `member.role.change`, `workspace.transfer`, `billing.read`, `billing.manage`, `session.create`, `session.join.editor`, `session.join.viewer`, `audit.read`, `webhook.manage`, `apikey.manage.any`, `apikey.manage.own`, `workspace.delete`, `session.queue.submit`, `session.queue.decide`, `session.tool.approve`, `session.agent.run`, `session.agent.spawn_branch`, `session.control`, `session.history.read`).",
+    "Scope checks for machine and OAuth principals: `hasScope(principal, scope)` and endpoint-level `requireScope`; API keys never receive session actions.",
+    "Membership/role resolution through an injected `MembershipReader` (Postgres impl with <= 2 s cache invalidated via pub/sub channel `rbac:invalidate`).",
+    "Denial hook: every denied privileged action calls an injected `AuditSink.record({action:'rbac.denied', ...})` per CT-RBAC rule 6 and throws `forbidden`.",
+    "Exhaustive table-driven policy tests generated from the matrix, plus a coverage test failing if an action in the catalogue lacks a rule."
+  ],
+  "scope_out": [
+    "Authentication and tokens (B017).",
+    "Plan/seat limit enforcement (entitlements, billing lanes; CT-RBAC rule 5).",
+    "Relay frame-level enforcement (relay lanes call the same pure functions via @centcom/core).",
+    "Audit log storage and API (B036 and later)."
+  ],
+  "implements": [
+    "CT-RBAC"
+  ],
+  "consumes": [
+    "CT-AUTH",
+    "CT-ERR",
+    "CT-IDS",
+    "CT-WS-CONTROL",
+    "CT-ENTITLEMENTS"
+  ],
+  "build_against": "Pure unit tests with an in-memory MembershipReader; the DB-backed reader is tested on the B010 stack.",
+  "deliverables": [
+    "packages/core/src/rbac/actions.ts",
+    "packages/core/src/rbac/matrix.ts",
+    "packages/core/src/rbac/can.ts",
+    "packages/core/src/rbac/scopes.ts",
+    "packages/core/src/rbac/membership.ts",
+    "packages/core/src/rbac/index.ts",
+    "packages/core/test/rbac/",
+    "apps/api/src/plugins/rbac.ts",
+    "apps/api/test/rbac-plugin.test.ts",
+    "packages/db/src/repos/memberships.ts"
+  ],
+  "interfaces": [
+    "`type Actor = {kind:'user'; userId: string; scopes: string[]} | {kind:'api_key'; keyId: string; workspaceId: string; scopes: string[]}`.",
+    "`type Resource = {workspaceId?: string; sessionId?: string; ownerUserId?: string; targetRole?: WorkspaceRole}`.",
+    "`can(actor: Actor, action: Action, resource: Resource, ctx: {workspaceRole?: WorkspaceRole; sessionRole?: SessionRole}): Decision` where `Decision = {allow: true} | {allow: false; reason: string}`.",
+    "`authorize(actor, action, resource): Promise<void>` (loads roles via MembershipReader, throws AppError `forbidden`).",
+    "`requirePermission(action, resolveResource)` and `requireScope(scope)` Fastify preHandler factories.",
+    "`defaultSessionRole(workspaceRole: WorkspaceRole): 'editor'|'viewer'`."
+  ],
+  "acceptance": [
+    "The test suite enumerates every (role x action) pair of the workspace matrix and asserts the exact allow/deny from CT-RBAC (e.g. billing cannot create a session; admin cannot change an owner's role; member can manage only own keys).",
+    "Session matrix: viewer cannot send `message.user` or submit queue items; editor cannot approve queue items; only host can kick/mute/end/transfer; viewers may react and comment.",
+    "`defaultSessionRole('guest')` is `viewer`; owner/admin/member give `editor`.",
+    "An API-key actor is denied every `session.*` action, including joining as viewer.",
+    "A role change in the DB is visible to `authorize` within 2 s without invalidation, and immediately after an `rbac:invalidate` message.",
+    "An unknown role or action string is denied (default deny); 1 000 fuzzed combinations neither throw nor allow.",
+    "A denied privileged action writes exactly one audit record with actor, action and resource ids; allowed actions write none.",
+    "`authorize` on another workspace's resource yields `forbidden`; routes using `requirePermission` can opt into 404 for hidden resources."
+  ],
+  "tests": [
+    "matrix.test.ts: generated from the CT-RBAC workspace and session tables.",
+    "scopes.test.ts and can.fuzz.test.ts: scope subset rules, default deny, no throws on fuzzed input.",
+    "membership-cache.test.ts: 2 s TTL and rbac:invalidate.",
+    "plugin.test.ts: 403 problem+json and audit hook on denial.",
+    "coverage.test.ts: every catalogue action has a matrix rule."
+  ],
+  "guardrails": [
+    "MUST default to deny; every new action requires an explicit matrix rule or tests fail.",
+    "MUST derive roles only from server-side membership state; MUST NOT trust role claims from tokens or request bodies (the relay ticket `role` is a hint only).",
+    "MUST be the only place role/permission logic lives; route code MUST NOT compare role strings.",
+    "MUST NOT cache allow decisions longer than 2 s.",
+    "MUST NOT include other users' data in `reason` strings that reach clients."
+  ],
+  "failure_modes": [
+    "MembershipReader error -> deny with a 503 unavailable-class error, never allow.",
+    "Cache invalidation message lost -> worst-case staleness is the 2 s TTL.",
+    "Audit sink down -> denial still enforced; failure counted and logged."
+  ],
+  "unblocks_gate": "G1",
+  "notes": "Matrix rows map 1:1 to the action catalogue; the mapping table lives in packages/core/src/rbac/matrix.ts with comments citing each CT-RBAC row. CONTRACT GAP: the 'guest (limited)' read of workspace/members is not defined field by field; this lane returns a boolean and leaves field filtering to the workspace lanes."
+}

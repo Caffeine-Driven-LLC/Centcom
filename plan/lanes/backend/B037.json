@@ -1,0 +1,93 @@
+{
+  "id": "B037",
+  "title": "Relay service skeleton: ws server, health, graceful shutdown",
+  "plan": "backend",
+  "phase": "P3 Relay",
+  "size": "M",
+  "role": "realtime",
+  "depends_on": [
+    "B001",
+    "B005"
+  ],
+  "goal": "Create the relay service skeleton: a `ws` server on `wss /v1/ws` with the `centcom.v1` subprotocol, health endpoints, config, metrics, a module loader that other relay lanes plug into, and a graceful shutdown that tells clients to reconnect.",
+  "scope_in": [
+    "Node HTTP server + `ws` WebSocketServer at path `/v1/ws`, subprotocol negotiation (`centcom.v1` only), transport `maxPayload` guard of 1 MiB, optional origin allowlist.",
+    "`GET /healthz` (always `200 {\"status\":\"ok\"}`) and `GET /readyz` (200 only when Redis and DB reachable and migrations at expected version; else 503 `{\"status\":\"degraded\",\"checks\":{...}}`; also 503 while draining).",
+    "`RelayModule` loader: discovers `apps/relay/src/*/module.ts`, sorts by `order`, calls `register(ctx)`; frame pipeline skeleton (`FramePipeline.use(order, stage)`).",
+    "`ConnectionRegistry` (id, remote address hash, state, session id, created_at) and a connection cap (`RELAY_MAX_CONNECTIONS`, default 20000) with overload close 4503.",
+    "Close-code table `CloseCode` for all codes in CT-WS-ENVELOPE.",
+    "Graceful shutdown on SIGTERM/SIGINT: readyz 503, stop upgrades, send `sys.bye` then close 1001 spread over a 0-5 s jitter window, hard stop after `RELAY_SHUTDOWN_DRAIN_MS` (default 25000).",
+    "Build info (`version`, `contract_version` from contracts/index.json) and base metrics."
+  ],
+  "scope_out": [
+    "Authentication and hello handling (B038), frame validation (B039), heartbeats (B040), sequencing (B041), rooms (B043), fan-out (B044).",
+    "Cross-node pub/sub (B045).",
+    "Deployment manifests and Fly config (infra lanes)."
+  ],
+  "implements": [
+    "CT-STATUS",
+    "CT-VER"
+  ],
+  "consumes": [
+    "CT-WS-ENVELOPE",
+    "CT-ERR",
+    "CT-IDS"
+  ],
+  "build_against": "The mock client simulator from B011 (connect, send raw text frames, observe closes) and in-memory B009 Redis/KV; DB readiness is checked against the B010 Postgres container or a stub `ReadinessProbe`.",
+  "deliverables": [
+    "apps/relay/src/main.ts",
+    "apps/relay/src/server.ts",
+    "apps/relay/src/health.ts",
+    "apps/relay/src/shutdown.ts",
+    "apps/relay/src/config.ts",
+    "apps/relay/src/modules.ts",
+    "apps/relay/src/pipeline.ts",
+    "apps/relay/src/connection-registry.ts",
+    "apps/relay/src/close-codes.ts",
+    "apps/relay/src/metrics.ts",
+    "apps/relay/src/build-info.ts",
+    "apps/relay/README.md"
+  ],
+  "interfaces": [
+    "WS: `wss://<host>/v1/ws`, subprotocol `centcom.v1`; no token in URL (a request carrying `?ticket=` or `?token=` is refused 400).",
+    "HTTP: `GET /healthz`, `GET /readyz` per CT-STATUS.",
+    "TS: `interface RelayModule { name: string; order: number; register(ctx: RelayContext): void | Promise<void> }` and `interface RelayContext { config: RelayConfig; log: Logger; metrics: Metrics; clock: Clock; redis: RedisLike; db: Db; connections: ConnectionRegistry; pipeline: FramePipeline; onShutdown(fn: () => Promise<void>): void; onConnection(h: (c: RelayConnection) => void): void }`",
+    "TS: `type InboundStage = (fc: FrameContext, next: () => Promise<void>) => Promise<void>`; reserved stage orders: decode 10, handshake 15, authorise 20, privacy 30, sequence 40, fan-out 50.",
+    "TS: `const CloseCode = { Normal: 1000, GoingAway: 1001, ProtocolViolation: 4400, Unauthenticated: 4401, Forbidden: 4403, NotFound: 4404, HandshakeTimeout: 4408, Superseded: 4409, ClientTooOld: 4426, RateLimited: 4429, Overloaded: 4503 } as const`.",
+    "Env: `RELAY_PORT` (8080), `RELAY_REGION`, `RELAY_MAX_CONNECTIONS` (20000), `RELAY_SHUTDOWN_DRAIN_MS` (25000), `RELAY_MAX_TRANSPORT_BYTES` (1048576), `RELAY_ALLOWED_ORIGINS` (empty = any non-browser), `REDIS_URL`, `DATABASE_URL`."
+  ],
+  "acceptance": [
+    "`GET /healthz` returns 200 `{\"status\":\"ok\"}` in < 10 ms even when Redis and Postgres are down; `GET /readyz` returns 503 with `checks.redis.ok=false` within 2 s when Redis is unreachable and 200 when everything is up.",
+    "A WebSocket upgrade offering only subprotocol `foo` is refused (HTTP 400); offering `centcom.v1` succeeds and the response echoes `centcom.v1`; upgrade on any other path returns 404.",
+    "With `RELAY_MAX_CONNECTIONS=2`, the third connection is accepted, receives a `sys.error` (status 503, `retry_after_s` present) and is closed 4503 within 1 s.",
+    "On SIGTERM `readyz` flips to 503 within 100 ms, new upgrades get 503, each existing connection receives `sys.bye` with `p.reason = \"server_restart\"` and closes with 1001 spread across 0-5 s (all 200 test connections closed within 5.5 s), and the process exits 0 within `RELAY_SHUTDOWN_DRAIN_MS`.",
+    "A connection still open at the drain deadline is terminated and the process exits with code 0 after logging `shutdown.forced` with the count.",
+    "Two stub modules with orders 30 and 10 are registered in order 10 then 30; a module throwing in `register` aborts startup with a non-zero exit and a log line naming the module.",
+    "Metrics `relay_connections_active`, `relay_connections_total`, `relay_frames_in_total{t}`, `relay_closes_total{code}` exist and update during a 100-connection test; no metric label contains a session, member or user id.",
+    "Startup log line contains `version` and `contract_version` equal to contracts/index.json `contract_version`."
+  ],
+  "tests": [
+    "relay.health.test.ts: liveness independent of dependencies, readiness matrix (redis down, db down, migration behind, draining).",
+    "relay.upgrade.test.ts: subprotocol, path, query-token refusal, origin allowlist.",
+    "relay.shutdown.test.ts: jittered 1001 close, forced stop, exit code (fake timers).",
+    "relay.modules.test.ts: ordering and failure of module registration.",
+    "relay.capacity.test.ts: connection cap and 4503.",
+    "relay.metrics.test.ts: names and label cardinality."
+  ],
+  "guardrails": [
+    "`/healthz` MUST NOT touch any dependency (CT-STATUS); `/readyz` MUST fail while draining so the load balancer stops routing.",
+    "Tickets and tokens MUST NOT be accepted in the URL or query string and MUST NOT be logged; the logger redacts the `Authorization`, `Sec-WebSocket-Protocol` and query string.",
+    "The transport `maxPayload` guard MUST be set (1 MiB default) so a hostile client cannot force unbounded buffering; the 256 KiB frame rule itself is enforced in B039.",
+    "Shutdown close codes MUST be 1001 with jitter; a synchronized mass close is a thundering-herd bug.",
+    "Per-connection state MUST be bounded; the registry MUST remove an entry on every close path (error, timeout, shutdown).",
+    "No global mutable singletons: clock, logger, Redis, DB are injected through `RelayContext`."
+  ],
+  "failure_modes": [
+    "Redis down at boot -> process starts but `readyz` is 503; connections are refused with 4503 until healthy.",
+    "Unhandled exception in a connection handler -> that connection is closed 4400/1011-class with a generic `sys.error`, the process stays up, `relay_handler_errors_total` increments.",
+    "SIGTERM during startup -> exit 0 without accepting traffic.",
+    "Port already in use -> exit non-zero with a clear log line."
+  ],
+  "unblocks_gate": "G2",
+  "notes": "Module auto-discovery (`apps/relay/src/*/module.ts`) is the integration mechanism that keeps relay lanes' deliverables disjoint; downstream lanes B038-B050 export a default `RelayModule` from their own folder. CONTRACT GAP: CT-VER lists no version field on the relay's HTTP surface other than `/v1/status` (served by the API); this lane keeps version info in logs and in `sys.welcome` (B038). CONTRACT GAP: the `sys.error` code for overload (4503) is not named in a visible errors.json; use the registry's 503-class code."
+}

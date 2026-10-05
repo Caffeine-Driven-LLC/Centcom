@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://centcom.dev/contracts/webhook.schema.json",
+  "title": "Webhook delivery payload - CT-WEBHOOKS",
+  "type": "object",
+  "required": [
+    "id",
+    "type",
+    "created_at",
+    "workspace",
+    "api_version",
+    "data"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^dlv_[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "type": {
+      "enum": [
+        "workspace.member.joined",
+        "workspace.member.left",
+        "workspace.member.role_changed",
+        "workspace.invite.created",
+        "workspace.invite.accepted",
+        "workspace.invite.revoked",
+        "session.created",
+        "session.started",
+        "session.ended",
+        "session.member.joined",
+        "session.member.left",
+        "agent.completed",
+        "billing.subscription.updated",
+        "billing.invoice.paid",
+        "billing.invoice.payment_failed",
+        "usage.threshold",
+        "api_key.created",
+        "api_key.revoked"
+      ]
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "workspace": {
+      "type": "string",
+      "pattern": "^wsp_[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "api_version": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "data": {
+      "type": "object"
+    }
+  }
+}

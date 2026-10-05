@@ -1,0 +1,13 @@
+{
+  "schema": "notification.schema.json",
+  "valid": false,
+  "note": "title_key must be a key, not display text",
+  "data": {
+    "id": "ntf_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+    "created_at": "2026-10-05T18:07:41.123Z",
+    "category": "approval_needed",
+    "title_key": "Approval needed!",
+    "body_key": "notif.x",
+    "priority": "high"
+  }
+}

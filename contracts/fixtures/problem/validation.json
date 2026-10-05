@@ -1,0 +1,19 @@
+{
+  "schema": "problem.schema.json",
+  "valid": true,
+  "note": "",
+  "data": {
+    "type": "https://centcom.dev/errors/validation_failed",
+    "title": "Validation failed",
+    "status": 422,
+    "code": "validation_failed",
+    "request_id": "req_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+    "errors": [
+      {
+        "pointer": "/events/3/qty",
+        "code": "out_of_range",
+        "detail": "must be >= 0"
+      }
+    ]
+  }
+}

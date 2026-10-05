@@ -1,0 +1,90 @@
+{
+  "id": "C081",
+  "title": "Web app scaffold: Vite, React, router, theme",
+  "plan": "client",
+  "phase": "P5 Web",
+  "size": "M",
+  "role": "web",
+  "depends_on": [
+    "C003",
+    "C009"
+  ],
+  "goal": "A running web app shell (Vite, React 19, TanStack Router, Zustand) that applies the Cento theme in light and dark, ships the shared accessible UI primitives, a strict CSP and bundle budgets, and lets every later web lane plug in routes without touching shell files.",
+  "scope_in": [
+    "apps/web package: Vite config, tsconfig, index.html, `src/main.tsx`, TanStack Router tree in `src/app/` that auto-registers `src/<area>/routes.tsx` modules via `import.meta.glob`.",
+    "Theme wiring in `src/theme/`: import generated `theme.css` and the Tailwind preset from packages/theme (C009), `data-theme` dark/light/auto switch persisted in localStorage (try/catch), instant switch with no cross-fade (DESIGN.md 19.4).",
+    "Shared primitives in `src/ui/` implementing DESIGN.md 10.2: Button (primary/secondary/ghost/danger), Input, Card, Chip, Tabs, Banner, Toast, Modal, Table, Avatar+PresenceDot, Skeleton, Tooltip, EmptyState; each with keyboard behaviour and focus ring.",
+    "App frame per DESIGN.md 6.3: 48 px top bar, left rail 240 px (collapses under 1024), inspector 320 px (bottom sheet under 768); breakpoints sm 480, md 768, lg 1024, xl 1280, 2xl 1600.",
+    "Security headers: `public/_headers` with the CSP in notes, Referrer-Policy no-referrer, Permissions-Policy, plus an identical `<meta http-equiv>` CSP in index.html; no inline scripts or styles.",
+    "Shared `src/lib/` : api client instance from the HTTP client (C051), env parsing (`VITE_API_BASE`, `VITE_RELAY_BASE`) validated with zod, error boundary, and a `useConnectivity()` hook from GET /v1/status polling."
+  ],
+  "scope_out": [
+    "Authentication and token handling (C082).",
+    "Any feature screen: session view (C083), fleet (C084), roster (C085), workspaces (C087), billing (C089), settings (C090), integrations (C091).",
+    "Full i18n and a11y framework (C092); this lane ships only primitives with correct ARIA and a placeholder `t()` passthrough.",
+    "Playwright e2e (C093)."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-STATUS",
+    "CT-VER",
+    "CT-ERR",
+    "CT-STATE-MAP"
+  ],
+  "build_against": "`pnpm --filter @centcom/web dev` with VITE_API_BASE pointing at the mock backend (lane C007); no real API. Theme from assets/theme via packages/theme (C009).",
+  "deliverables": [
+    "apps/web/package.json",
+    "apps/web/vite.config.ts",
+    "apps/web/tsconfig.json",
+    "apps/web/index.html",
+    "apps/web/public/_headers",
+    "apps/web/src/main.tsx",
+    "apps/web/src/app/",
+    "apps/web/src/ui/",
+    "apps/web/src/theme/",
+    "apps/web/src/lib/",
+    "apps/web/test/shell/",
+    "apps/web/README.md"
+  ],
+  "interfaces": [
+    "export type RouteModule = {routes: AnyRoute[]; nav?: NavItem[]}  // each area exports this from src/<area>/routes.tsx",
+    "export type NavItem = {id: string; labelKey: string; to: string; icon: PixelIconName; requires?: {role?: WorkspaceRole[]; entitlement?: string}}",
+    "UI exports from `@/ui`: Button, Input, Card, Chip, Tabs, Banner, Toast + useToast(), Modal, Table, Avatar, PresenceDot, Skeleton, Tooltip, EmptyState, PixelIcon, VisuallyHidden, LiveRegion({politeness})",
+    "export function useTheme(): {theme: 'dark'|'light'|'auto'; set(t: 'dark'|'light'|'auto'): void}",
+    "Env: VITE_API_BASE (default https://api.centcom.dev), VITE_RELAY_BASE (default wss://relay.centcom.dev)"
+  ],
+  "acceptance": [
+    "`pnpm --filter @centcom/web build` succeeds; entry JS <= 150 KB gzip, any route chunk <= 100 KB gzip, CSS <= 30 KB gzip; CI fails on regression (size-limit).",
+    "First contentful paint of the shell < 1 s on the Lighthouse mobile-throttled profile and Lighthouse performance >= 90, accessibility >= 95, best-practices >= 95 on `/`.",
+    "axe-core reports 0 serious or critical violations on every primitive's story page in both themes.",
+    "Switching theme changes `data-theme` on <html> within one frame; contrast of text.primary on bg.base is >= 7:1 (dark 16.64, light 17.41) verified by a token test reading tokens.json.",
+    "Dropping a new file `src/x/routes.tsx` exporting a RouteModule makes `/x` resolve without editing anything in `src/app/` (test with a fixture area).",
+    "The built index.html contains no inline <script> and no `style=` attributes; a CSP-violation listener test fails on any `securitypolicyviolation` event across the e2e smoke path.",
+    "At 320 px width there is no horizontal page scroll (except code blocks) and at 200 % zoom layout holds; left rail collapses under 1024 px, inspector becomes bottom sheet under 768 px.",
+    "Modal traps focus, restores it on close, closes on Esc unless it has unsaved input; Tabs are operable with arrow keys and Enter; Button disabled state shows a tooltip with the reason.",
+    "Under `prefers-reduced-motion: reduce` every transition is 0 ms and skeleton pulse is static."
+  ],
+  "tests": [
+    "ui.primitives.test.tsx (Testing Library + jest-axe) per component, both themes.",
+    "theme.tokens.test.ts: generated CSS variables exist for every semantic token in tokens.json.",
+    "app.routes-glob.test.tsx: plug-in route registration.",
+    "build.budget.test.ts: parses dist stats against size limits.",
+    "csp.test.ts: built HTML has no inline script/style; _headers CSP equals the string in the README.",
+    "layout.responsive.test.tsx: 320/480/768/1024 widths."
+  ],
+  "guardrails": [
+    "CSP MUST be: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://api.centcom.dev wss://relay.centcom.dev wss://relay-eu.centcom.dev wss://relay-us.centcom.dev; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self'. MUST NOT add 'unsafe-inline' or 'unsafe-eval' (wasm-unsafe-eval only for the lazy crypto chunk).",
+    "MUST use semantic tokens only (var(--bg-surface) etc.); raw ramp hex values in components fail a lint rule (DESIGN.md 4.1).",
+    "MUST NOT use dangerouslySetInnerHTML anywhere; ESLint rule `react/no-danger` is an error.",
+    "MUST load fonts (Inter, JetBrains Mono, Silkscreen) self-hosted from /fonts with `font-display: swap`; no third-party origins; Silkscreen never below 12 px and never for body text (DESIGN.md 5.1).",
+    "Primary button: at most one per view, enforced by a dev-time warning in Button; hit targets >= 32x32 px (44 px on touch).",
+    "MUST NOT use localStorage for anything but theme/density preferences, wrapped in try/catch with a working default."
+  ],
+  "failure_modes": [
+    "Router chunk fails to load (offline/deploy skew) -> error boundary shows a calm retry banner and reloads once; never a blank page.",
+    "GET /v1/status unreachable -> show an info banner 'status unavailable', never block UI (CT-STATUS rule).",
+    "`localStorage` throws (private mode) -> fall back to OS theme in memory."
+  ],
+  "unblocks_gate": "G6",
+  "notes": "CSP string, one line: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://api.centcom.dev wss://relay.centcom.dev wss://relay-eu.centcom.dev wss://relay-us.centcom.dev; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self'. CONTRACT GAP: redirect and CORS origin list for `centcom.dev` web origin versus `api.centcom.dev` is not in the contracts; assumed CORS with credentials allowed for the web origin on /v1/auth/token. Assumes packages/net exports are browser-safe (no node: imports); if not, request a browser entry from the owning lanes. DESIGN.md says high-contrast `data-theme=\"hc\"` is planned; the theme switch reserves the value but ships dark/light/auto only."
+}

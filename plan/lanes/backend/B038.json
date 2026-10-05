@@ -1,0 +1,87 @@
+{
+  "id": "B038",
+  "title": "Relay handshake and authentication (relay tickets, protocol negotiation)",
+  "plan": "backend",
+  "phase": "P3 Relay",
+  "size": "L",
+  "role": "realtime",
+  "depends_on": [
+    "B003",
+    "B017",
+    "B037"
+  ],
+  "goal": "Authenticate and negotiate every relay connection: verify the single-use relay ticket in `sys.hello`, check live session membership and entitlements, negotiate protocol and capabilities, and answer with a correct `sys.welcome` or the right close code.",
+  "scope_in": [
+    "Handshake stage (order 15): waits for `sys.hello` for 5 s, rejects any other first frame, then verifies the relay ticket JWT (EdDSA, `aud` `centcom-relay`, `exp` with +-60 s skew, `sid`, `mid`, `role`, `dev`, `caps`).",
+    "JWKS cache: fetch `/.well-known/jwks.json` from the API, cache 10 min, refresh at most once per 30 s on unknown `kid`.",
+    "Single-use `jti` enforcement (Redis `SET NX EX 120`), live checks through the `SessionAccess` port: session exists and is not ended, membership active, device not revoked, `relay_access` entitlement true.",
+    "Protocol negotiation (`protocols` intersection, choose highest), capability intersection, minimum client version check from config.",
+    "`sys.welcome` builder with `member`, `slot`, `role`, `roster_v`, `heartbeat {ping_ms:20000, dead_ms:50000}`, `server_time`, `limits`, `resume` placeholder; supersede handling for the same `(member, device)` on the local node.",
+    "Correct `sys.error` + close mapping: 4401, 4403, 4404, 4408, 4426."
+  ],
+  "scope_out": [
+    "Minting tickets (`POST /v1/sessions/{id}/join-token`, B054).",
+    "Heartbeat after welcome (B040), resume replay (B042), room registration (B043), cross-node supersede (B045).",
+    "Frame schema validation beyond `sys.hello` (B039)."
+  ],
+  "implements": [
+    "CT-WS-ENVELOPE",
+    "CT-VER"
+  ],
+  "consumes": [
+    "CT-AUTH",
+    "CT-RBAC",
+    "CT-ENTITLEMENTS",
+    "CT-ERR",
+    "CT-IDS"
+  ],
+  "build_against": "The mock client simulator from B011 (scripted fake clients speaking the WS protocol), the in-memory B009 KV/pub-sub implementations, and the frame fixtures in contracts/fixtures/events/; no real client is needed. Tickets are minted in tests with a local Ed25519 test key served as a stub JWKS endpoint; `SessionAccess` is the in-memory test double.",
+  "deliverables": [
+    "apps/relay/src/handshake/",
+    "apps/relay/src/handshake/module.ts",
+    "apps/relay/src/handshake/README.md"
+  ],
+  "interfaces": [
+    "WS: first client frame `{v:1,t:'sys.hello',p:{protocols:[1],caps:[...],ticket:'<jwt>',client:{name,version,contract},last_seq:number|null}}`; response `sys.welcome` with fields listed in CT-WS-ENVELOPE handshake.",
+    "TS: `interface SessionAccess { resolve(sid: string, mid: string, dev: string): Promise<{ session: { state: 'live'|'paused'|'ended'|'expired'; maxMembers: number }; member: { id: string; name: string; slot: number; role: 'host'|'editor'|'viewer' }; deviceRevoked: boolean; relayAccess: boolean } | null> }` (production implementation provided by B043).",
+    "TS: `verifyRelayTicket(token: string, deps: TicketDeps): Promise<TicketClaims>` and `negotiate(hello: Hello, server: ServerCaps): { protocol: number; caps: string[] } | 'too_old'`.",
+    "TS: `export default relayModule: RelayModule` (order 15) registering the handshake stage.",
+    "Env: `RELAY_JWKS_URL`, `RELAY_MIN_CLIENT_VERSION` (semver), `RELAY_CAPS` (default `resume,cursor.coalesce`)."
+  ],
+  "acceptance": [
+    "No `sys.hello` within 5 s of upgrade -> `sys.error` then close 4408 at 5.0-5.5 s.",
+    "A first frame that is not `sys.hello` -> close 4400. Missing/garbled ticket, bad signature, wrong `aud`, expired (`exp` older than 60 s skew) -> `sys.error` + close 4401.",
+    "Replaying the same ticket (`jti`) a second time -> 4401 even if the first connection already closed (within 120 s).",
+    "Valid ticket but membership revoked, device revoked, or `relay_access` false -> close 4403; session ended or unknown -> close 4404.",
+    "`protocols:[2]` only -> close 4426 with `sys.error` code `client_too_old` and an upgrade hint in `p`; client `version` below `RELAY_MIN_CLIENT_VERSION` -> 4426.",
+    "A client advertising caps `[resume, compress.zstd, bogus]` gets `welcome.caps = [resume]` (only capabilities both sides support; unknown ones ignored).",
+    "A second connection for the same `(member, device)` gets welcome and the first receives `sys.bye` with `p.reason = \"superseded\"` then close 4409 within 200 ms.",
+    "The role in `welcome.member.role` equals the live membership role, even if the ticket's `role` claim differs.",
+    "Ticket verification completes in < 5 ms p95 with a warm JWKS cache (excluding Redis latency); unknown `kid` triggers at most one JWKS fetch per 30 s under 100 concurrent attempts."
+  ],
+  "tests": [
+    "handshake.ticket.test.ts: signature, aud, exp skew boundaries (+-60 s), alg=none and HS256 downgrade attempts, jti replay.",
+    "handshake.negotiation.test.ts: protocol/caps intersection, too-old client, unknown caps.",
+    "handshake.access.test.ts: membership/device/entitlement/session-state matrix to close codes.",
+    "handshake.timeout.test.ts: fake clock 5 s.",
+    "handshake.supersede.test.ts: same device twice.",
+    "handshake.jwks.test.ts: cache, rotation overlap, stampede protection.",
+    "Contract: sys.hello/sys.welcome fixtures validate against generated envelope validators."
+  ],
+  "guardrails": [
+    "Only EdDSA tickets are accepted; MUST reject `alg: none` and any algorithm not pinned in config. Never use the ticket's own `jwk`/`jku` headers.",
+    "The ticket MUST be consumed (jti stored) before the connection becomes active; the store call MUST be atomic `SET NX` so two concurrent hellos with one ticket cannot both pass.",
+    "The live membership record wins over ticket claims (CT-RBAC enforcement rule 3); authorisation MUST NOT rely on `role` from the ticket.",
+    "The ticket and `hello.p` MUST NOT be logged; failures log only the close code and a reason enum.",
+    "Error bodies on 4401 MUST be uniform (no distinction between bad signature, unknown kid, expired) to avoid an oracle.",
+    "MUST NOT send any session data (roster, frames) before `welcome`."
+  ],
+  "failure_modes": [
+    "API JWKS endpoint unreachable and cache stale > 1 h -> new handshakes fail with close 4503 (`retry_after_s`); existing connections continue.",
+    "Redis unavailable during `jti` check -> fail closed: `sys.error` 503-class + close 4503, never accept an unchecked ticket.",
+    "`SessionAccess` DB timeout (2 s) -> close 4503.",
+    "Malformed JSON hello -> `sys.error` `invalid_frame` + close 4400."
+  ],
+  "unblocks_gate": "G2",
+  "notes": "CONTRACT GAP: `welcome.limits` shape is not specified beyond 'server-advertised limits'; this card advertises keys `max_frame_bytes`, `seq_rate`, `seq_burst`, `presence_rate`, `outbound_buffer_bytes`. SPLIT? size L: ticket verification and negotiation/supersede could be two lanes."
+}

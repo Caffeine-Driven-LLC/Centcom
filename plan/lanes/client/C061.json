@@ -1,0 +1,86 @@
+{
+  "id": "C061",
+  "title": "Remote approval routing client",
+  "plan": "client",
+  "phase": "P3 Network",
+  "size": "M",
+  "role": "net",
+  "depends_on": [
+    "C015",
+    "C057"
+  ],
+  "goal": "Route tool-permission requests from agents to the people who can decide them, remotely and locally, using the hybrid approval frames, so a guest-run or branch-mode agent can ask the host (or the right approver) and continue on the answer.",
+  "scope_in": [
+    "Sender side (agent owner's machine): turn a permission-engine ask (lane C015) into `approval.request` (client-generated `apr_` id; cleartext `p {approval_id, agent_id, risk:'low'|'medium'|'high', expires_at, approver:'host'|'owner'|'any_editor'}`; encrypted `{summary, command?, cwd?}`) and await the matching `approval.decision`.",
+    "Approver side: surface incoming requests (decrypted) as events to the UI, sign and send `approval.decision {approval_id, decision:'approve'|'deny', scope:'once'|'session'|'always'}` with optional encrypted `reason`.",
+    "Authorisation of decisions: accept a decision only from an allowed approver (host, delegated approver per `p.approver`, never a viewer or the requester unless requester is the host); first valid decision wins, later ones are logged and ignored.",
+    "Expiry: auto-deny locally when `expires_at` passes (default ask window set by C015; transport clamps to 10 minutes max) and emit a deny with `reason` expired.",
+    "Mapping of decisions back to the permission engine (`once`, `session`, `always` scopes) via an injected `ApprovalSink`; `awaiting-approval` agent state signalling for the fleet panel via an event.",
+    "Dedupe by `approval_id` so resends and replays never prompt twice."
+  ],
+  "scope_out": [
+    "The policy engine that decides when to ask: lane C015. The permission prompt UI: lane C038.",
+    "Remote notifications (push/OS) triggered by approval frames: lanes C066 and the backend.",
+    "Session transport, keys: lanes C057, C056. Queue approvals (not tool approvals): lane C058."
+  ],
+  "implements": [
+    "CT-WS-SESSION-EVENTS"
+  ],
+  "consumes": [
+    "CT-RBAC",
+    "CT-WS-ENVELOPE",
+    "CT-CRYPTO",
+    "CT-IDS",
+    "CT-STATE-MAP",
+    "CT-ERR"
+  ],
+  "build_against": "the mock backend (lane C007): REST from OpenAPI plus the WebSocket relay simulator, started in-process with `startMockBackend()` from @centcom/testkit; no real backend is needed. Two in-process SessionClients (agent owner, approver) through the relay simulator; the permission engine is replaced by a fake that emits asks. Fixtures: contracts/fixtures/events/approval.request.json and approval.decision.json.",
+  "deliverables": [
+    "packages/net/src/approvals/router.ts",
+    "packages/net/src/approvals/requester.ts",
+    "packages/net/src/approvals/approver.ts",
+    "packages/net/src/approvals/authorize.ts",
+    "packages/net/src/approvals/index.ts",
+    "packages/net/src/approvals/README.md",
+    "packages/net/src/approvals/__tests__/"
+  ],
+  "interfaces": [
+    "`new ApprovalRouter(session: SessionHandle, o: { clock; ids; maxWaitMs?: number /*600000*/ })`",
+    "Requester: `request(r: { agentId: string; risk: 'low'|'medium'|'high'; approver: 'host'|'owner'|'any_editor'; summary: string; command?: string; cwd?: string; ttlMs?: number }): Promise<ApprovalOutcome>`; `ApprovalOutcome = { decision: 'approve'|'deny'|'expired'; scope: 'once'|'session'|'always'; by?: string; reason?: string }`; `cancel(approvalId)`",
+    "Approver: event `request({ approvalId, agentId, risk, expiresAt, approver, summary, command?, cwd? })`, `decide(approvalId, d: { decision: 'approve'|'deny'; scope: 'once'|'session'|'always'; reason?: string }): Promise<void>`, `pending(): PendingApproval[]`",
+    "`interface ApprovalSink { apply(o: { agentId: string; approvalId: string; outcome: ApprovalOutcome }): void }`",
+    "Event `awaiting-approval({ agentId, approvalId })` / `approval-resolved(...)` for the fleet panel"
+  ],
+  "acceptance": [
+    "`request()` sends exactly one `approval.request` event frame with `p` containing only approval_id, agent_id, risk, expires_at, approver and a `ct` that decrypts to `{summary, command, cwd}`; the relay simulator's captured frame has no command text.",
+    "The approver receives the decrypted request within one simulator round trip; `decide({decision:'approve', scope:'once'})` resolves the requester's promise with `{decision:'approve', scope:'once'}` and `by` set to the approver's member id.",
+    "A decision from a viewer, from a non-host when `approver:'host'`, or with an unknown `approval_id` is ignored (logged, no resolution); a second valid decision after the first leaves the first outcome untouched.",
+    "`approver:'any_editor'` accepts the first decision from an editor or the host; `approver:'owner'` accepts only the workspace owner's member as marked in the roster.",
+    "With no decision, the request resolves `expired` at `expires_at` (fake clock), a deny with reason `expired` is sent, and no later decision resolves it; ttl is clamped to 600 000 ms.",
+    "After a forced disconnect between request and decision, the request is not sent twice (same frame id resent) and the approver sees one prompt; replaying history from seq 1 shows no prompt for an already decided approval.",
+    "A `session` or `always` scope decision calls the sink with that scope; the router itself stores no always-rules (C015 owns them).",
+    "Approver UI can list `pending()` after reconnect: requests replayed from history that are not yet decided and not expired reappear exactly once.",
+    "Frames signed by an unknown device are dropped before reaching the router."
+  ],
+  "tests": [
+    "approvals/flow.test.ts: request/decision across two clients, every scope and approver type.",
+    "approvals/authorize.test.ts: viewer, requester-not-host, forged decision, duplicate decision matrix.",
+    "approvals/expiry.test.ts: expiry on fake clock, clamp to 10 minutes.",
+    "approvals/resume.test.ts: disconnect between request and decision; history replay idempotence.",
+    "approvals/privacy.test.ts: command/cwd/summary/reason only inside ct."
+  ],
+  "guardrails": [
+    "MUST keep `summary`, `command`, `cwd` and `reason` inside `ct` only; cleartext `p` carries just the five routing fields the relay needs.",
+    "MUST accept a decision only from an authorised approver as determined by the live roster (CT-RBAC); a forged or late decision MUST NOT unblock a tool call.",
+    "MUST default to deny on any ambiguity (expiry, disconnect-then-timeout, unverifiable signature); MUST NOT auto-approve because transport failed.",
+    "MUST use a client-generated `apr_` ULID and reuse it on resend so replays do not create a second prompt.",
+    "MUST NOT persist `always` rules itself; scope decisions are returned to the engine (lane C015) which owns policy storage."
+  ],
+  "failure_modes": [
+    "Approver offline -> requester waits until expiry then resolves `expired`; agent state moves out of `awaiting-approval` through the sink's deny path.",
+    "Decrypt failure on an incoming request -> shown to the approver as 'cannot read request' with approve disabled; never approve blind.",
+    "Host role changes mid-request -> authorisation re-evaluated against the roster at decision time (seq order)."
+  ],
+  "unblocks_gate": "G3",
+  "notes": "The `approval.*` kinds are the only part of CT-WS-SESSION-EVENTS this lane realises on the client; other kinds belong to C057 (decode), C062 (agents) and C080 (reactions/comments)."
+}

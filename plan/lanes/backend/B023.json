@@ -1,0 +1,84 @@
+{
+  "id": "B023",
+  "title": "Rate limiting and abuse protection middleware",
+  "plan": "backend",
+  "phase": "P1 Identity",
+  "size": "M",
+  "role": "platform",
+  "depends_on": [
+    "B006",
+    "B009"
+  ],
+  "goal": "Every API request is rate limited per the CT-PAGE buckets with correct headers, and the auth endpoints get the strict per-IP bucket.",
+  "scope_in": [
+    "Fastify plugin applying buckets: anonymous 30/min/IP, authenticated user 600/min, API key 1200/min, auth endpoints (`/v1/auth/*`) 20/min/IP, usage ingest 60/min/device (route-level), all configurable.",
+    "Headers on every response: `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` (seconds); `Retry-After` and problem body `retry_after_s` on 429.",
+    "Client IP extraction behind Fly proxies: `Fly-Client-IP`/`X-Forwarded-For` honoured only up to the configured trusted hop count; IPv6 bucketed by /64.",
+    "Route metadata `config: { rateLimit: { bucket: 'default' | 'auth' | 'usage', cost?: number } }` so other lanes declare their bucket.",
+    "Failure policy: when Redis is down, fall back to a per-process in-memory limiter at 2x limits for general routes and 1x for the `auth` bucket; never disable limiting silently.",
+    "Abuse hook: temporary block (15 min) for IPs exceeding the auth bucket 5 times in 10 minutes."
+  ],
+  "scope_out": [
+    "WebSocket frame rate limits (relay lanes; CT-WS-ENVELOPE limits).",
+    "Idempotency (B024), pagination (B025).",
+    "WAF/DDoS at the edge (infra lanes).",
+    "Redis primitives (B009)."
+  ],
+  "implements": [
+    "CT-PAGE"
+  ],
+  "consumes": [
+    "CT-ERR",
+    "CT-AUTH",
+    "CT-API-USAGE"
+  ],
+  "build_against": "B009 in-memory RateLimitStore with a fake clock and Fastify inject(); a Redis integration test runs when REDIS_URL is set.",
+  "deliverables": [
+    "apps/api/src/plugins/rate-limit.ts",
+    "packages/core/src/ratelimit/buckets.ts",
+    "packages/core/src/ratelimit/client-ip.ts",
+    "packages/core/src/ratelimit/policy.ts",
+    "packages/core/src/ratelimit/index.ts",
+    "packages/core/test/ratelimit/",
+    "apps/api/test/rate-limit.test.ts"
+  ],
+  "interfaces": [
+    "`rateLimitPlugin: FastifyPluginAsync<{store: RateLimitStore; config: RateLimitConfig; clock?: () => number}>`.",
+    "Route config: `{ config: { rateLimit: { bucket: 'default'|'auth'|'usage'; cost?: number } } }`.",
+    "`resolveClientIp(req, trustedHops: number): string`.",
+    "`defaultBuckets = { anonymous:{limit:30,windowS:60}, user:{limit:600,windowS:60}, apiKey:{limit:1200,windowS:60}, auth:{limit:20,windowS:60}, usage:{limit:60,windowS:60} }`.",
+    "Env: `RATELIMIT_*` overrides documented in docs/config via B004 conventions."
+  ],
+  "acceptance": [
+    "31 anonymous requests from one IP in 60 s: the first 30 return 200 with `RateLimit-Remaining` counting down from 29 to 0, the 31st returns 429 with `Retry-After` between 1 and 60 and body `retry_after_s` equal to it.",
+    "An authenticated user is limited at 600/min keyed by `usr_` id (not IP): two IPs share one user bucket; an API key is limited at 1200/min by key id.",
+    "21 requests in a minute to `POST /v1/auth/token` from one IP: the 21st is 429; requests from another IP are unaffected.",
+    "`POST /v1/usage/events` is limited at 60/min per `dev` claim; the 61st returns 429.",
+    "Every response (200, 404, 429) carries `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` as integers.",
+    "A spoofed `X-Forwarded-For` beyond the trusted hop count does not change the bucket key.",
+    "With the Redis store throwing, general routes still limit via the in-memory fallback and the auth bucket stays at 20/min; metric `ratelimit_store_errors_total` increments.",
+    "`/healthz` and `/readyz` are exempt; `/v1/status` uses the anonymous bucket.",
+    "After the window passes (fake clock +60 s) the counter resets."
+  ],
+  "tests": [
+    "plugin.test.ts: headers on 200/404/429 and 429 body shape.",
+    "buckets.test.ts: per-principal keys and the five default limits.",
+    "client-ip.test.ts: proxy chains, spoofed X-Forwarded-For, IPv6 /64.",
+    "fallback.test.ts: store errors, auth bucket stays strict.",
+    "abuse-block.test.ts and concurrency.test.ts: 15 min block, 100 parallel requests never exceed the limit."
+  ],
+  "guardrails": [
+    "MUST count before running handler logic; rejected requests MUST NOT reach DB work beyond principal resolution.",
+    "MUST NOT use user-controlled headers for the key unless within the trusted proxy hop count.",
+    "MUST return the same 429 body shape for all buckets and MUST NOT leak other users' counters.",
+    "MUST NOT fail open without a metric and warning log; the auth bucket MUST NOT fail open to unlimited.",
+    "MUST NOT key limits on the raw URL (use the route template) to avoid bypass via path variants."
+  ],
+  "failure_modes": [
+    "Redis outage -> degrade as described; recovery switches back automatically within one window.",
+    "Missing client IP -> use the socket address; if absent, use a shared `unknown` bucket at the anonymous limit.",
+    "Clock skew between instances -> windows computed by the store (Redis Lua/TIME) in production, not the app clock."
+  ],
+  "unblocks_gate": "G1",
+  "notes": ""
+}

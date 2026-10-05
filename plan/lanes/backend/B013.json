@@ -1,0 +1,72 @@
+{
+  "id": "B013",
+  "title": "User model and repository",
+  "plan": "backend",
+  "phase": "P1 Identity",
+  "size": "S",
+  "role": "identity",
+  "depends_on": [
+    "B006",
+    "B008"
+  ],
+  "goal": "All user reads and writes go through one repository and service, with normalised email, validated profile fields and soft-deletion states.",
+  "scope_in": [
+    "Kysely repository `UserRepo` over the B008 users table: create, findById, findByEmail (case-insensitive), updateProfile, markDeletionRequested, markDeleted, listByIds.",
+    "Domain service `UserService` applying CT-IDS text rules: email lower-cased, <=254 chars, NFC; display name 1-40 chars without control chars; locale a valid BCP 47 tag, default `en`.",
+    "Creation of a user's personal one-person workspace + owner membership in the same transaction on first sign-in (`getOrCreateByEmail`).",
+    "Default display name derived from the email local part (truncated to 40) when the login method provides none.",
+    "Typed errors (CT-ERR) for invalid profile fields."
+  ],
+  "scope_out": [
+    "Login methods (magic link B014, social B015), tokens (B017).",
+    "HTTP endpoints for the user (B022) and account deletion/export jobs (B026).",
+    "Workspace management beyond the personal workspace bootstrap (B027)."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-IDS",
+    "CT-ERR",
+    "CT-API-ACCOUNTS"
+  ],
+  "build_against": "B010 test stack (real Postgres) with the B008 schema; errors from B006.",
+  "deliverables": [
+    "packages/db/src/repos/users.ts",
+    "apps/api/src/modules/users/service.ts",
+    "apps/api/src/modules/users/validation.ts",
+    "apps/api/src/modules/users/index.ts",
+    "apps/api/test/modules/users/"
+  ],
+  "interfaces": [
+    "`interface UserRepo { create(u: NewUser): Promise<User>; findById(id: string): Promise<User|null>; findByEmail(email: string): Promise<User|null>; updateProfile(id: string, patch: ProfilePatch): Promise<User>; markDeletionRequested(id: string, at: Date): Promise<void>; }`.",
+    "`class UserService { constructor(deps:{repo: UserRepo; db: Kysely<Database>; newId: typeof newId; now: () => Date}); getOrCreateByEmail(email: string, hints?:{name?: string}): Promise<{user: User; created: boolean}>; updateProfile(id: string, patch: ProfilePatch): Promise<User>; }`.",
+    "`type ProfilePatch = { display_name?: string; locale?: string; avatar_slot?: number; telemetry_opt_in?: boolean }`."
+  ],
+  "acceptance": [
+    "`getOrCreateByEmail('A@Example.COM')` and later `('a@example.com')` return the same user; the second call has `created:false`.",
+    "50 concurrent first sign-ins for one email create exactly one user and one personal workspace.",
+    "First creation inserts a workspace (name = display name, 1-60 chars) and an `owner` membership atomically; a failure in either rolls back both.",
+    "`updateProfile({display_name:''})` and a 41-char name fail with a validation `AppError` pointing to `/display_name`; a name containing U+0000 fails; an NFD name is stored NFC.",
+    "Locale `en-GB` is accepted, `english` rejected; an unset locale is `en`.",
+    "Users with status `pending_deletion` or `deleted` are returned by findById with their status; findByEmail returns them too (callers decide).",
+    "The repo never returns more columns than the User type (no raw row leakage)."
+  ],
+  "tests": [
+    "user-repo.test.ts: CRUD against real Postgres, email case-insensitivity.",
+    "user-service.test.ts: normalisation and 50-way concurrent first sign-in.",
+    "validation.test.ts: table-driven display-name, locale, email edge cases.",
+    "personal-workspace.test.ts: atomic creation and rollback."
+  ],
+  "guardrails": [
+    "MUST lower-case and NFC-normalise email before every lookup and write; MUST NOT compare emails case-sensitively anywhere.",
+    "MUST NOT log email addresses; log `usr_` ids only.",
+    "MUST NOT expose another user's email to unrelated callers (authorisation is B021's job; this service returns the full User only to server code).",
+    "MUST create user and personal workspace in one transaction."
+  ],
+  "failure_modes": [
+    "Unique-violation race -> re-read and return the existing user.",
+    "Invalid email shape -> validation AppError (no DB call).",
+    "DB unavailable -> typed unavailable error, no partial user."
+  ],
+  "unblocks_gate": "G1",
+  "notes": "Email release semantics for deleted accounts are not specified by the contracts; B026 decides. CONTRACT GAP: avatar_slot range is not defined in CT-API-ACCOUNTS; accept integer 0..255 and tighten when the contract says. markDeleted is declared here but used by B026."
+}

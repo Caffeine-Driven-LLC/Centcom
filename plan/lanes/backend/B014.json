@@ -1,0 +1,83 @@
+{
+  "id": "B014",
+  "title": "Passwordless email login (magic link)",
+  "plan": "backend",
+  "phase": "P1 Identity",
+  "size": "M",
+  "role": "identity",
+  "depends_on": [
+    "B013",
+    "B032"
+  ],
+  "goal": "Users can sign in with an emailed one-time link that cannot be replayed, forwarded into another browser, or used to learn whether an account exists.",
+  "scope_in": [
+    "Browser-facing login routes (outside the /v1 contract, served by the API): `POST /login/email` (body `{email, return_to?}`) always answers the same 202/redirect page whether or not the email exists; `GET /login/email/verify?t=<token>` shows a confirm page; `POST /login/email/verify` consumes the token.",
+    "Token: 256-bit CSPRNG, stored only as sha256 hash in table `login_tokens` (email, hash, nonce_hash, return_to, expires_at 15 min, used_at); single use; a browser-bound nonce cookie set at request time must match at verify time (blocks forwarded/phished links).",
+    "Confirm step on GET (no state change) so mail-scanner prefetch cannot consume the token; consumption only on POST with CSRF token.",
+    "Email send through an injected `MagicLinkMailer { send(to: string, link: string, locale: string): Promise<void> }` that B032's email service satisfies (template `magic_link`).",
+    "On success: `UserService.getOrCreateByEmail` (B013), then injected `LoginCompleter.complete(reply, userId, returnTo)` (wired to the web login session / authorize flow by the PKCE lane).",
+    "Abuse limits: 5 link requests per hour per email, 20/min per IP (auth bucket), `return_to` restricted to the configured allow-list."
+  ],
+  "scope_out": [
+    "Email templates, provider abstraction and delivery (B032).",
+    "Login-session cookie and authorize/PKCE flow (B018); this lane only calls the injected `LoginCompleter`.",
+    "Social providers (B015).",
+    "Rate limit middleware implementation (B023)."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-AUTH",
+    "CT-ERR",
+    "CT-IDS",
+    "CT-DEEPLINK"
+  ],
+  "build_against": "Stub `MagicLinkMailer` capturing links in memory, stub `LoginCompleter`, B013 service and the B010 test stack; Mailpit from the dev stack for manual checks.",
+  "deliverables": [
+    "apps/api/src/modules/auth/magic-link/service.ts",
+    "apps/api/src/modules/auth/magic-link/store.ts",
+    "apps/api/src/modules/auth/magic-link/pages.ts",
+    "apps/api/src/modules/auth/magic-link/config.ts",
+    "apps/api/src/routes/login-email.ts",
+    "packages/db/migrations/20260102000300_login_tokens.sql",
+    "packages/db/src/schema/login-tokens.ts",
+    "apps/api/test/modules/auth/magic-link/"
+  ],
+  "interfaces": [
+    "`POST /login/email` form/JSON `{email, return_to?}` -> 202 identical body for any email.",
+    "`GET /login/email/verify?t=` -> 200 confirm page; `POST /login/email/verify` `{t, csrf}` -> 303 to `return_to` after `LoginCompleter.complete`.",
+    "`MagicLinkService { request(email: string, ctx:{ip: string; locale: string}): Promise<void>; consume(token: string, nonce: string): Promise<{userId: string; returnTo: string}> }`.",
+    "`interface LoginCompleter { complete(reply: FastifyReply, userId: string, returnTo: string): Promise<void> }`.",
+    "Config: `MAGIC_LINK_TTL_S` (900), `LOGIN_RETURN_TO_ALLOWLIST`, `MAGIC_LINK_BASE_URL`."
+  ],
+  "acceptance": [
+    "Requesting a link for an existing and a non-existing email returns byte-identical responses with response times within 50 ms of each other in tests; only the existing-or-new valid email causes a mail to be sent.",
+    "The link works once: a second POST with the same token fails with the same generic error as an unknown token.",
+    "A token older than 15 min (fake clock) fails; a token verified without the matching nonce cookie fails even if the token is valid.",
+    "A GET to the verify URL changes nothing in the database (token remains unused).",
+    "The 6th request for one email within an hour sends no mail but still returns the identical 202; the 21st request from one IP in a minute gets 429.",
+    "`return_to` outside the allow-list (including `//evil.example` and `javascript:` URLs) is replaced by the default and never redirected to.",
+    "Email addresses are lower-cased and NFC-normalised before lookup, so `A@x.com` and `a@x.com` share limits and account.",
+    "The database holds only token hashes; a log-capture test of a full flow finds no token, link or email address."
+  ],
+  "tests": [
+    "service.test.ts: single use, expiry, nonce binding, hash-only storage.",
+    "enumeration.test.ts: identical responses/timing for known vs unknown email.",
+    "limits.test.ts: per-email and per-IP caps.",
+    "redirect.test.ts: return_to allow-list matrix.",
+    "prefetch.test.ts: GET is side-effect free."
+  ],
+  "guardrails": [
+    "MUST NOT reveal whether an email has an account in body, status, headers or timing.",
+    "MUST store only sha256(token); MUST NOT log tokens, links or email addresses (log `usr_` ids and hashed-email prefixes only).",
+    "MUST bind the link to the requesting browser via the nonce cookie and consume it only on POST.",
+    "MUST validate `return_to` against an exact allow-list; no open redirects.",
+    "MUST send mail asynchronously from the response path to avoid timing differences."
+  ],
+  "failure_modes": [
+    "Mailer fails -> request still returns 202; failure is logged and counted, the token is invalidated, no retry storm (max 3 attempts with backoff).",
+    "Token store unavailable -> 503 with `retry_after_s`; no fallback.",
+    "User row in `pending_deletion` or `deleted` state -> treated as non-existent for sign-in (same generic response)."
+  ],
+  "unblocks_gate": "G1",
+  "notes": "CONTRACT GAP: login methods are explicitly outside the CT-AUTH wire contract, so these browser routes have no contract definition; paths are internal and may be renamed. Depends on B032 only through the `MagicLinkMailer` interface."
+}

@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://centcom.dev/contracts/release-manifest.schema.json",
+  "title": "Release manifest - CT-API-RELEASES",
+  "type": "object",
+  "required": [
+    "channel",
+    "version",
+    "released_at",
+    "min_supported",
+    "artifacts"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "channel": {
+      "enum": [
+        "stable",
+        "beta",
+        "nightly"
+      ]
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?$"
+    },
+    "released_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "min_supported": {
+      "type": "string"
+    },
+    "rollout_pct": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "notes_url": {
+      "type": "string",
+      "format": "uri"
+    },
+    "contract_version": {
+      "type": "string"
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "platform",
+          "arch",
+          "url",
+          "sha256",
+          "size",
+          "sig"
+        ],
+        "properties": {
+          "platform": {
+            "enum": [
+              "linux",
+              "darwin",
+              "win32"
+            ]
+          },
+          "arch": {
+            "enum": [
+              "x64",
+              "arm64"
+            ]
+          },
+          "kind": {
+            "enum": [
+              "binary",
+              "npm",
+              "archive"
+            ]
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sig": {
+            "type": "string",
+            "description": "Ed25519 signature (base64url) over the sha256 digest bytes"
+          },
+          "sig_kid": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

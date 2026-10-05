@@ -1,0 +1,90 @@
+{
+  "id": "C066",
+  "title": "Notifications client: inbox, OS notifications",
+  "plan": "client",
+  "phase": "P3 Network",
+  "size": "M",
+  "role": "net",
+  "depends_on": [
+    "C051"
+  ],
+  "goal": "Let users see their notifications in the terminal: an inbox with unread counts, read/read-all, preference management, and local OS notifications for the categories configured for the `os` channel, rendered from message keys in a local table.",
+  "scope_in": [
+    "Inbox client: GET /v1/notifications (`unread=true`, cursor pagination), POST /v1/notifications/{id}/read, POST /v1/notifications/read-all; polling every 60 s while a TUI is open (backoff to 5 min when idle/offline), immediate refresh after relevant WS notices.",
+    "Preferences: GET/PUT /v1/notification-preferences (channels x categories, quiet hours) with `If-Match`/ETag handling where provided; local-only `os` channel setting stored in client config.",
+    "OS notifications for the `os` channel: Linux `notify-send`, macOS `osascript`, Windows PowerShell toast, all spawned with argument arrays (no shell); dedupe by notification id (persisted last 200 ids); respects quiet hours (suppress `push`/`os`, but never `security_alert` or `billing_issue`) and the high-priority bypass for `approval_needed` only if the user opted in.",
+    "Rendering: look up `title_key`/`body_key` in a local message table (`messages.ts`) with `params` interpolation limited to ids and enums; unknown key/category falls back to a generic line; sanitises control characters/escape sequences.",
+    "Action routing: parse `action {type:'open_session', deeplink}` using the CT-DEEPLINK rules (`centcom://session/<ses_id>[?focus=approval|queue]`), validate, and expose `openAction()` to the CLI router; never executes anything itself.",
+    "Push-subscription calls (POST/DELETE /v1/push/subscriptions) exposed as thin methods for the web app lane; the CLI does not register push."
+  ],
+  "scope_out": [
+    "Notification content generation and delivery to push/email: the real backend.",
+    "Inbox UI components and toasts: TUI lanes (C044) and the web settings UI (lane C090).",
+    "Deep link dispatch/OS handler registration: lanes owning the CLI router and installer.",
+    "Telemetry about notifications: lane C010."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-API-NOTIFY",
+    "CT-NOTIF-PAYLOAD",
+    "CT-DEEPLINK",
+    "CT-PAGE",
+    "CT-ERR",
+    "CT-AUTH",
+    "CT-WS-SESSION-EVENTS"
+  ],
+  "build_against": "the mock backend (lane C007): REST from OpenAPI plus the WebSocket relay simulator, started in-process with `startMockBackend()` from @centcom/testkit; no real backend is needed. The mock serves inbox pages from contracts/fixtures/notifications/*.json (all 14 categories, priorities low/normal/high, read/unread), preferences with quiet hours, and accepts read/read-all. OS notifier is injected; tests use a recording fake.",
+  "deliverables": [
+    "packages/net/src/notify/inbox.ts",
+    "packages/net/src/notify/preferences.ts",
+    "packages/net/src/notify/os-notifier.ts",
+    "packages/net/src/notify/render.ts",
+    "packages/net/src/notify/messages.ts",
+    "packages/net/src/notify/actions.ts",
+    "packages/net/src/notify/index.ts",
+    "packages/net/src/notify/README.md",
+    "packages/net/src/notify/__tests__/"
+  ],
+  "interfaces": [
+    "`new NotificationsClient(o: { http: HttpClient; clock; os: OsNotifier; stateDir: string; pollMs?: number /*60000*/ })`; `start()`, `stop()`, `list(o?: { unread?: boolean }): AsyncIterable<Notification>`, `unreadCount(): number`, `markRead(id)`, `markAllRead()`, `on('new', (n: Notification) => void)`, `on('unread', (count: number) => void)`",
+    "`getPreferences(): Promise<NotificationPreferences>`, `setPreferences(p: NotificationPreferences, o?: { etag?: string }): Promise<NotificationPreferences>`",
+    "`render(n: Notification, locale?: string): { title: string; body: string; actionLabel?: string }`; `registerMessages(table: Record<string, string>)`",
+    "`parseAction(n: Notification): { kind: 'open_session'; sessionId: string; focus?: 'approval'|'queue' } | { kind: 'none' }`",
+    "`interface OsNotifier { show(o: { title: string; body: string; sound?: boolean }): Promise<boolean> }` with `createOsNotifier(platform): OsNotifier`"
+  ],
+  "acceptance": [
+    "Every one of the 14 categories in CT-NOTIF-PAYLOAD renders non-empty title and body from the local table; an unknown category or key renders the generic text and does not throw.",
+    "The inbox over a 3-page mock result via `list()` yields all items in order using opaque cursors and `limit` <= 200; `unread=true` sends the query flag.",
+    "`markRead(id)` sends one POST and updates `unreadCount()` locally before the response (optimistic) and rolls back with an error event on failure; `markAllRead()` sets count 0.",
+    "A new `approval_needed` high-priority notification with `os` enabled triggers exactly one OS notification with the rendered text; the same id arriving in the next poll triggers none (dedupe survives restart via stateDir).",
+    "During quiet hours: a `mention` produces no OS notification, a `security_alert` and a `billing_issue` still do, an `approval_needed` high bypasses only when the opt-in flag is set.",
+    "Polling uses the 60 s cadence (fake clock) and backs off 60 -> 120 -> 300 s on failures, returning to 60 s on success; no polling at all while logged out or offline (no network calls observed).",
+    "`parseAction` accepts `centcom://session/ses_<26>?focus=approval`, rejects other schemes, unknown hosts, malformed ids and unknown `focus` values returning `{kind:'none'}`; an unknown `action.type` returns none.",
+    "Title/body strings with ANSI escapes or control characters from `params` are stripped before display and before being passed to the OS notifier.",
+    "OS notifier invocations use argument arrays: a notification text containing quotes, backticks and `$(rm -rf)` is passed verbatim as one argument and executes nothing (spawn recorded by the fake).",
+    "`setPreferences` with a stale ETag surfaces `412 precondition_failed` as a typed error and does not overwrite."
+  ],
+  "tests": [
+    "notify/render.test.ts: all categories x locales fallback, params whitelist, sanitising.",
+    "notify/inbox.test.ts: pagination, optimistic read, polling cadence and backoff.",
+    "notify/os-notifier.test.ts: per-platform command construction, argument-array safety, dedupe persistence.",
+    "notify/quiet-hours.test.ts: matrix of category x priority x opt-in.",
+    "notify/actions.test.ts: deeplink parsing/rejection fixtures.",
+    "notify/preferences.test.ts: round trip, ETag conflict."
+  ],
+  "guardrails": [
+    "MUST NOT expect or display server-provided text: only `title_key`/`body_key` via the local table; MUST NOT put `params` values into the UI without whitelisting ids/enums and sanitising.",
+    "MUST spawn OS notifier commands with argument arrays and never via a shell; MUST strip control/escape characters from all displayed strings.",
+    "MUST validate deep links per CT-DEEPLINK (scheme `centcom://`, known hosts, id patterns) and MUST NOT perform actions from them; the router must confirm with the user.",
+    "MUST respect quiet hours for `push`/`os` but MUST NOT suppress `security_alert` or `billing_issue`.",
+    "MUST NOT poll when logged out, offline, or while no UI is attached (stop timers on `stop()`); MUST NOT block LAN/local features on notification failures.",
+    "MUST NOT log notification params or titles; log category and id only."
+  ],
+  "failure_modes": [
+    "OS notifier binary missing (no notify-send) -> `show` returns false once, feature disables itself for the session with a single hint; inbox still works.",
+    "Inbox request fails -> keep last known unread count, mark `stale`, retry on backoff.",
+    "Notification references a session the user cannot open -> action opens the session screen which shows the server's `forbidden`; no crash."
+  ],
+  "unblocks_gate": "G5",
+  "notes": "Web-push and email channels are server-side; the client only owns inbox and the client-local `os` channel."
+}

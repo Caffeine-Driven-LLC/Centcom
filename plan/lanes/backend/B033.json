@@ -1,0 +1,70 @@
+{
+  "id": "B033",
+  "title": "Deep link and join URL service",
+  "plan": "backend",
+  "phase": "P2 Workspaces",
+  "size": "S",
+  "role": "identity",
+  "depends_on": [
+    "B029"
+  ],
+  "goal": "Build and parse every Centcom deep link and join URL exactly as CT-DEEPLINK specifies, as one shared library plus the API wiring that makes invite and notification links consistent.",
+  "scope_in": [
+    "Pure functions to build and parse web and app URLs for join, open session, auth callback, billing, and workspace invite.",
+    "Token generator for single-purpose link tokens (160-bit, URL-safe base64url, 27 chars) with expiry constants (invites 7 days, share links <= 24 h).",
+    "Strict parser/validator returning a discriminated union; invalid input returns `{ ok: false }` with no detail echo.",
+    "`InviteUrlBuilder` implementation (port defined in B029) and notification `action.deeplink` builder.",
+    "Fragment safety helpers: `withKeyFragment(url, keyB64u)` for clients' use in tests only, and a guard asserting a server-side URL never contains `#k=`."
+  ],
+  "scope_out": [
+    "Handling `centcom://` in a client or the web pages at /j and /i (client).",
+    "Invite persistence and the preview endpoint (B029).",
+    "Share-link creation and tokens for guests (B068)."
+  ],
+  "implements": [
+    "CT-DEEPLINK"
+  ],
+  "consumes": [
+    "CT-IDS",
+    "CT-ERR"
+  ],
+  "build_against": "Pure unit tests with golden URLs derived from the table in CT-DEEPLINK; the invite service is exercised with the in-memory B029 test double of `InviteUrlBuilder`.",
+  "deliverables": [
+    "packages/core/src/deeplink/",
+    "apps/api/src/modules/deeplinks/"
+  ],
+  "interfaces": [
+    "TS: `buildJoinUrl(token: string, base?: string): { web: string; app: string }`, `buildInviteUrl(token): { web: string; app: string }`, `buildSessionUrl(sessionId: string, focus?: 'approval' | 'queue'): { web: string; app: string }`, `buildBillingUrl(): { web: string; app: string }`.",
+    "TS: `parseDeepLink(input: string): DeepLink | { ok: false }` where `DeepLink = { ok: true; kind: 'join' | 'invite' | 'session' | 'auth_callback' | 'billing'; ... }`.",
+    "TS: `generateLinkToken(rng?: RandomSource): string` and `LINK_TTL = { invite_s: 604800, share_link_max_s: 86400 }`.",
+    "Fastify plugin `deeplinksPlugin` that registers `InviteUrlBuilder` and `notificationDeeplink(session, focus)` on the app instance.",
+    "Config: `WEB_BASE_URL` default `https://centcom.dev`."
+  ],
+  "acceptance": [
+    "`buildJoinUrl('T')` returns `https://centcom.dev/j/T` and `centcom://join/T`; every row of the CT-DEEPLINK table is covered by a golden test.",
+    "`parseDeepLink` accepts both the web and app form of each kind, ignores unknown query parameters, and returns `{ ok: false }` for: wrong host, `http://` scheme, token with chars outside base64url, token length != 27, `ses_` id failing the CT-IDS pattern, `focus=other`.",
+    "`generateLinkToken` yields 27-char base64url strings with no collisions across 1 000 000 draws in a test and uses the platform CSPRNG (a lint test forbids `Math.random` in the package).",
+    "URLs built by the server never contain `#`; a builder given a token that contains `#` throws.",
+    "Parsing 10 000 random strings with a fuzzer never throws and never returns `ok: true` for strings that fail the table patterns."
+  ],
+  "tests": [
+    "deeplink.build.test.ts: golden URLs.",
+    "deeplink.parse.test.ts: accept/reject matrix.",
+    "deeplink.fuzz.test.ts: property/fuzz for parser.",
+    "deeplink.token.test.ts: length, alphabet, uniqueness.",
+    "deeplinks.plugin.test.ts: Fastify decoration and base-URL config."
+  ],
+  "guardrails": [
+    "The server MUST NOT construct, accept or log the `#k=` key fragment; E2E key material stays client-side (CT-DEEPLINK, CT-CRYPTO section 4).",
+    "Parser errors MUST be neutral: no echo of input, no reason strings in the result.",
+    "Only the hosts `centcom.dev` (configurable `WEB_BASE_URL`) and scheme `centcom://` are produced; no open redirect parameters are ever added.",
+    "Link tokens MUST come from the CSPRNG; they are never derived from ids or time."
+  ],
+  "failure_modes": [
+    "`WEB_BASE_URL` not https -> config validation fails at boot.",
+    "Unknown deep-link kind from a newer client -> `{ ok: false }`, not an exception.",
+    "Token generator entropy source failure -> throws; callers surface 500, never fall back to a weaker source."
+  ],
+  "unblocks_gate": "G5",
+  "notes": "B029 owns the `InviteUrlBuilder` port and a minimal fallback; this lane supplies the full implementation through the Fastify plugin. CONTRACT GAP: share-link URL form (`/v1/share-links/{token}/join`) has no entry in the CT-DEEPLINK table; B068 decides."
+}

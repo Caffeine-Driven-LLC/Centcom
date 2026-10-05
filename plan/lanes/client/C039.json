@@ -1,0 +1,76 @@
+{
+  "id": "C039",
+  "title": "Status line and footer",
+  "plan": "client",
+  "phase": "P2 TUI",
+  "size": "S",
+  "role": "tui",
+  "depends_on": [
+    "C034"
+  ],
+  "goal": "Render the one-line header and footer (status line) with mode, branch, agent count, online count, cost, quota and key hints, dropping fields in a defined order as the terminal narrows, plus a service-status banner.",
+  "scope_in": [
+    "Header line per DESIGN §6.4: `cento · <cwd short> · <branch>` left, `● N agents · ☻ N online · $0.42` right; footer line `⏵⏵ accept edits on · <branch> · ctrl+t tasks · ? help`; both in `text.muted`.",
+    "Field model `StatusFields` and a layout function `layoutStatus(fields, width, dropOrder)` that fits the line and drops fields in order; width computed with `stringWidth` (lane C034).",
+    "Quota chip from CT-ENTITLEMENTS data: `quota 82%` computed as `usage.agent_minutes_month / limits.agent_minutes_month` when the limit is not null, shown at >= 80 % (warning token) and 100 % (danger token) together with a word, never colour alone; also reflects `warnings[]` entries.",
+    "Role chip for sessions: `HOST`, `EDIT`, `VIEW` (DESIGN §12.4) and connectivity chip `offline` / `reconnecting` derived from the client-local states in CT-STATE-MAP.",
+    "Service-status banner row (only when needed) from the CT-STATUS `GET /v1/status` snapshot: shown when `status` is not `operational` and the user has a hosted session; text from a local message table, never blocks local or LAN use.",
+    "Plain-text rendering `statusText(fields): string` (one sentence, e.g. `3 agents, 2 online, cost 42 cents`) for screen-reader mode (lane C049)."
+  ],
+  "scope_out": [
+    "Fetching `/v1/status` or entitlements (net and billing client lanes); this lane receives snapshots as props.",
+    "Toasts for `sys.notice` such as `usage_warning` (lane C044).",
+    "Computing cost (lane C029) and agent counts (lane C042 supplies the numbers).",
+    "Mode switching with `shift+tab` (lane C045 binding, lane C015 mode state)."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-STATUS",
+    "CT-ENTITLEMENTS",
+    "CT-STATE-MAP",
+    "CT-RBAC"
+  ],
+  "build_against": "Pure component tests with prop fixtures and the pty/TUI snapshot tester from lane C008 (ink-testing-library plus pty harness, frames captured at 80x24 and 120x40). No backend is needed; any session data comes from contracts/fixtures/events/*.json or hand-built typed values from @centcom/protocol (lane C003). Status and entitlements objects are loaded from the JSON examples in contracts/fixtures/ (entitlements) or built by hand from the CT-STATUS example; the mock backend (lane C007) serves `/v1/status` for one integration test.",
+  "deliverables": [
+    "packages/tui/src/status/",
+    "packages/tui/src/status/README.md"
+  ],
+  "interfaces": [
+    "`<StatusHeader fields: StatusFields />`, `<StatusFooter fields: StatusFields />`, `<ServiceBanner status: ServiceStatus | null />`",
+    "`type StatusFields = {cwd: string; branch?: string; mode?: 'ask'|'accept-edits'|'plan'; agents?: number; online?: number; costMicroUsd?: number; quota?: {used: number; limit: number | null; warnPct?: number}; role?: 'host'|'editor'|'viewer'; connectivity?: 'online'|'offline'|'reconnecting'; hints?: string[]}`",
+    "`layoutStatus(fields: StatusFields, width: number, dropOrder?: StatusFieldName[]): StatusSegment[]`; `STATUS_DROP_ORDER: StatusFieldName[]`",
+    "`statusText(fields: StatusFields): string`; `type ServiceStatus = {status: 'operational'|'degraded'|'partial_outage'|'major_outage'; incidentTitle?: string}`"
+  ],
+  "acceptance": [
+    "At 120 columns all fields fit on the header; at 80 columns the example from DESIGN §6.4 fits; every produced line has display width <= terminal width (property test over widths 20-200).",
+    "Drop order is the exported constant `STATUS_DROP_ORDER` = hints, cost, online count, agent count, branch, mode (mode is last to drop); changing the constant changes behaviour in the tests with no other code edits.",
+    "Branch names longer than 24 characters are truncated with `…` in the middle-preserving suffix form (`agent/feature-r…`) and never push other fields off the line.",
+    "Quota chip: usage 1830 of 6000 minutes (30 %) shows nothing; 4900 of 6000 (82 %) shows `quota 82%` in the warning token; 6000 of 6000 shows `quota 100%` in the danger token; `limit: null` (unlimited) shows nothing.",
+    "Cost 420000 micro-USD renders `$0.42`; 0 renders `$0.00`; cost hidden when config `status.showCost=false`.",
+    "The banner appears for `status:'degraded'` with text from the message table (e.g. `Relay is degraded. Local and LAN sessions are not affected.`), disappears when `operational`, and never prevents input.",
+    "Under `NO_COLOR`, header and footer remain legible: separators `·` are kept and warnings are words (`quota 82%`, `offline`).",
+    "`statusText` for the DESIGN example returns a single sentence of fewer than 120 characters without glyphs."
+  ],
+  "tests": [
+    "status/layout.test.ts: width property test, drop order, truncation.",
+    "status/quota.test.ts: thresholds from entitlement fixtures.",
+    "status/render.test.ts: snapshots 80x24, 100x30, 120x40, NO_COLOR, light.",
+    "status/banner.test.ts: statuses and local-only behaviour.",
+    "status/text.test.ts: plain sentence."
+  ],
+  "guardrails": [
+    "MUST NOT block, disable or delay any local or LAN action because of `/v1/status` or entitlements; these only inform (CT-STATUS).",
+    "MUST treat local usage numbers as display data; the server is authoritative at enforcement time (CT-ENTITLEMENTS), so never hard-lock a feature from the chip logic.",
+    "MUST treat unknown `status` or unknown entitlement keys as non-fatal: unknown status is shown as `status unknown`, unknown keys are ignored.",
+    "MUST NOT show plan names or prices as the basis for any gating; use only entitlement `limits`/`usage` fields.",
+    "MUST keep header and footer exactly 1 row each; overflow is dropped, never wrapped.",
+    "MUST NOT put the mascot in the status line (DESIGN §10.1.9 limits it to the transcript area)."
+  ],
+  "failure_modes": [
+    "Entitlements fetch failed or absent (LAN/free) -> omit quota chip, no error shown.",
+    "`/v1/status` snapshot older than 60 s -> hide the banner rather than show stale outage text.",
+    "Width reported as < 20 -> render only the mode field truncated."
+  ],
+  "unblocks_gate": "G4",
+  "notes": "DESIGN conflict: §10.1.5 lists fields 'in drop priority (last to drop first)' (read here as most important first, so hints drop first) while §6.4 states drop order 'cost -> branch -> agent count -> hints'. This card follows §10.1.5 and keeps the order in one constant so design can flip it. Entitlement fixture directory contracts/fixtures/entitlements/ is referenced by CT-ENTITLEMENTS; if absent at build time, hand-build objects from the JSON in 07-billing-entitlements.md."
+}

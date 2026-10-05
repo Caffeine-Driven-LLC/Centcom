@@ -1,0 +1,12 @@
+{
+  "schema": "envelope.schema.json",
+  "valid": true,
+  "note": "",
+  "data": {
+    "v": 1,
+    "t": "sys.ping",
+    "p": {
+      "t": 1728151661123
+    }
+  }
+}

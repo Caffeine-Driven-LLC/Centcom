@@ -1,0 +1,79 @@
+{
+  "id": "B093",
+  "title": "Observability: metrics, traces, dashboards, SLOs",
+  "plan": "backend",
+  "phase": "P7 Ops",
+  "size": "M",
+  "role": "infra",
+  "depends_on": [
+    "B005",
+    "B037"
+  ],
+  "goal": "Make the services observable: OpenTelemetry metrics, traces and structured logs flowing to the Grafana stack with a fixed metric catalogue, privacy-safe attributes, dashboards as code and written SLOs.",
+  "scope_in": [
+    "Shared OTel bootstrap `initTelemetry(serviceName)` in `packages/core/src/otel/` for api, relay and worker: metrics (OTLP), traces (OTLP), log correlation (`trace_id`, `request_id`), and Fastify/ws/BullMQ/pg/ioredis instrumentation hooks.",
+    "Metric catalogue with `centcom_` prefix: HTTP (`http_requests_total{route,method,status_class}`, `http_request_duration_seconds`), relay (`relay_connections`, `relay_frames_total{t,direction}`, `relay_fanout_latency_seconds`, `relay_resume_total{result}`, `relay_close_total{code}`, `relay_outbound_buffer_bytes`), workers (`job_duration_seconds{queue}`, `job_failed_total{queue}`, `queue_depth{queue}`, `queue_oldest_age_seconds{queue}`), DB pool saturation, Redis latency, Stripe webhook lag, webhook delivery success.",
+    "Collector config (`infra/observability/collector/`) with attribute redaction, tail sampling (100 % errors and slow, 5 % rest), and export to Grafana Cloud/Tempo/Loki/Mimir via env-configured endpoints.",
+    "Dashboards as JSON in `infra/observability/dashboards/`: API overview, Relay overview, Workers/queues, Billing/Stripe, Database/Redis; each with variables for env and region.",
+    "SLO definitions in `infra/observability/slo/*.yaml` and Prometheus recording rules for multi-window burn rates (5 m, 1 h, 6 h, 3 d).",
+    "Cardinality guard test that rejects forbidden labels and caps label cardinality."
+  ],
+  "scope_out": [
+    "Alert rules, paging and runbooks (B094).",
+    "Log redaction library and request ids (B005); this lane reuses them.",
+    "Infrastructure provisioning of Grafana (B091 provides endpoints/secrets names).",
+    "Product analytics (telemetry, B085)."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-STATUS",
+    "CT-WS-ENVELOPE",
+    "CT-ERR",
+    "CT-WS-SESSION-EVENTS"
+  ],
+  "build_against": "Unit tests with an in-memory OTel exporter and a local collector container (OTel contrib) in the compose stack; dashboards linted with `jsonnet`/schema checks; relay metrics tested against the relay skeleton (B037) with simulator traffic.",
+  "deliverables": [
+    "packages/core/src/otel/",
+    "infra/observability/collector/",
+    "infra/observability/dashboards/",
+    "infra/observability/slo/",
+    "docs/ops/observability.md"
+  ],
+  "interfaces": [
+    "`initTelemetry(opts: {service: 'api'|'relay'|'worker'|'admin'; version: string; env: string}): {shutdown(): Promise<void>; meter: Meter; tracer: Tracer}`.",
+    "Metric catalogue file `packages/core/src/otel/catalogue.ts` exporting `METRICS` (name, type, unit, allowed labels).",
+    "SLO files, each `{name, objective, window, sli: {good, total}, owner}`; initial set: `api-availability` 99.9 % (non-5xx of non-health requests, 30 d), `api-latency` 95 % of requests < 300 ms, `relay-connect` 99.5 % of handshakes succeed within 2 s, `relay-fanout` 99 % of frames delivered in-region < 150 ms, `resume-success` 99 % resumes within 5 s, `stripe-webhook` 99 % processed within 30 s, `webhook-delivery` 95 % first attempts < 10 s.",
+    "Env: `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SAMPLE_RATIO` (default 0.05), `OTEL_ENABLED`."
+  ],
+  "acceptance": [
+    "Each service exposes the catalogue metrics it owns after traffic from the simulator; a test asserts presence of every metric name in the catalogue for its service and no uncatalogued `centcom_*` metric.",
+    "No metric label or span attribute contains `user`, `usr_`, `workspace`, `wsp_`, `session`, `ses_`, `email`, `ip`, `path`, `branch`, or the frame body; the cardinality guard fails on any label whose value set exceeds 100 distinct values in a load run.",
+    "Spans for HTTP and job executions carry `trace_id` that appears in the log line of the same request; relay frames are traced only at the connection and resume level (no per-frame spans, no payloads).",
+    "The collector redacts attributes named `authorization`, `cookie`, `ct`, `p`, `ticket`, `token` (unit-tested with a sample span) and drops the client IP.",
+    "All five dashboards import without error into a Grafana test container, and every panel query references an existing catalogue metric (script check).",
+    "SLO recording rules evaluate in `promtool test rules` with unit fixtures (burn rate of 14.4 over 1 h for a synthetic 1.44 % error rate).",
+    "Telemetry overhead: API p95 latency regression <= 5 % with tracing at 5 % sampling in the benchmark; process shutdown flushes within 5 s."
+  ],
+  "tests": [
+    "unit: catalogue completeness, label allow-list, redaction processor.",
+    "integration: compose stack with collector, assert OTLP metrics received.",
+    "`promtool test rules` for SLO rules.",
+    "dashboard JSON validity and query-to-catalogue check.",
+    "cardinality test with a simulated 2 000-session run.",
+    "failure-path: collector unreachable -> service continues, drops telemetry, `otel_export_failed_total` rises, no request latency impact."
+  ],
+  "guardrails": [
+    "MUST NOT attach user, workspace, session, member, device identifiers or any frame content to metrics, spans or logs; trace linkage uses request ids only.",
+    "MUST bound label cardinality (route templates, not raw URLs; `close_code` and `frame type` enums only).",
+    "MUST NOT block request handling on exporters; exports are async with bounded queues (2 048 spans, 5 s timeout).",
+    "MUST make telemetry opt-out via `OTEL_ENABLED=false` for local/dev and never send telemetry from tests.",
+    "MUST NOT log or trace `ct`, `p` of cleartext frames beyond kind (CT-WS-ENVELOPE security notes)."
+  ],
+  "failure_modes": [
+    "Collector or Grafana down -> services unaffected; buffered data dropped after cap; alert (B094) on missing metrics.",
+    "Label explosion detected in CI -> test fails with offending label names.",
+    "Clock skew between nodes -> traces may look out of order; no functional impact."
+  ],
+  "unblocks_gate": "G6",
+  "notes": "The SLO numbers are proposals for the owner to ratify; the launch gate (G6) reads whether SLO definitions exist and dashboards load, not the numbers themselves. Alert thresholds derived from these SLOs live in B094. `packages/core/src/otel/` is a new subfolder in core; B005 owns `packages/core/src/log*`."
+}

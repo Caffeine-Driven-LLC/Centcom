@@ -1,0 +1,25 @@
+{
+  "schema": "release-manifest.schema.json",
+  "valid": true,
+  "note": "",
+  "data": {
+    "channel": "stable",
+    "version": "1.0.0",
+    "released_at": "2026-10-05T18:07:41.123Z",
+    "min_supported": "1.0.0",
+    "rollout_pct": 100,
+    "contract_version": "1.0.0",
+    "artifacts": [
+      {
+        "platform": "linux",
+        "arch": "x64",
+        "kind": "binary",
+        "url": "https://dl.centcom.dev/1.0.0/centcom-linux-x64",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "size": 41234567,
+        "sig": "AAAA",
+        "sig_kid": "rel1"
+      }
+    ]
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "id": "B056",
+  "title": "Snapshot service: descriptors, pre-signed upload, commit, pruning",
+  "plan": "backend",
+  "phase": "P3 Relay",
+  "size": "M",
+  "role": "data",
+  "depends_on": [
+    "B055"
+  ],
+  "goal": "Snapshot service: begin upload via pre-signed PUT, commit with hash and size verification, serve the latest descriptor with a pre-signed GET, and keep only the latest 3 snapshots per session.",
+  "scope_in": [
+    "POST /v1/sessions/{id}/snapshot (begin): creates snp_ id, returns {snp, upload_url, expires_in} with a size-capped pre-signed PUT.",
+    "POST /v1/sessions/{id}/snapshot/{snp}/commit {seq, sha256, size, kid}: verifies object size and sha256 by reading the uploaded blob stream, then marks committed.",
+    "GET /v1/sessions/{id}/snapshot: latest committed descriptor {snp, seq, size, sha256, kid} plus pre-signed GET.",
+    "Pruning: after each commit delete committed snapshots beyond the newest 3 (blob first, then row); also expire uncommitted uploads after 15 min.",
+    "Idempotency-Key on begin and commit, audit events, 32 MiB upload cap."
+  ],
+  "scope_out": [
+    "Building, encrypting or decrypting snapshot payloads: client.",
+    "Frame history: B055.",
+    "Retention purge on expiry or workspace deletion: B090 (this lane exposes purgeSession).",
+    "Blob adapter implementation: reuse BlobStore from B055's ports through an import of its public interface only."
+  ],
+  "implements": [
+    "CT-RESUME",
+    "CT-API-SESSIONS"
+  ],
+  "consumes": [
+    "CT-CRYPTO",
+    "CT-PAGE",
+    "CT-RBAC",
+    "CT-ERR",
+    "CT-IDS"
+  ],
+  "build_against": "BlobStore memory fake with a presign() stub (B055 interface), Postgres container, fixture bytes of random 'ciphertext' with known sha256. Membership/host via fakes.",
+  "deliverables": [
+    "apps/api/src/modules/snapshots/service.ts",
+    "apps/api/src/modules/snapshots/presign.ts",
+    "apps/api/src/modules/snapshots/prune.ts",
+    "apps/api/src/modules/snapshots/ports.ts",
+    "apps/api/src/routes/snapshots/index.ts",
+    "apps/api/src/modules/snapshots/README.md",
+    "apps/api/test/snapshots/",
+    "packages/db/migrations/0056_snapshots.sql"
+  ],
+  "interfaces": [
+    "SnapshotService.begin(sid, byMember): Promise<{snp:'snp_…', uploadUrl:string, expiresIn:number}>",
+    "SnapshotService.commit(sid, snp, body:{seq:number, sha256:string, size:number, kid:string}): Promise<SnapshotDescriptor>",
+    "SnapshotService.latest(sid): Promise<{descriptor: SnapshotDescriptor, downloadUrl:string}|null>",
+    "SnapshotService.purgeSession(sid): Promise<void>",
+    "POST /v1/sessions/{id}/snapshot -> 201 {snp, upload_url, expires_in}; POST .../snapshot/{snp}/commit -> 200 descriptor; GET /v1/sessions/{id}/snapshot -> 200 {snp, seq, size, sha256, kid, url, expires_in}",
+    "Table snapshot(snp pk, session_id, seq, size, sha256, kid, blob_key, state 'pending'|'committed', created_at, committed_at)"
+  ],
+  "acceptance": [
+    "begin returns upload_url whose signed policy limits content-length to <= 33554432 (32 MiB) and expires in 600 s; uploading 32 MiB + 1 byte is rejected by the (fake) store policy and a commit with size > 33554432 returns 422.",
+    "commit with a sha256 that does not match the stored object returns 422 `validation`-class problem with errors[0].pointer '/sha256', the row stays pending, and the object is deleted.",
+    "commit with correct seq/sha256/size returns 200 and GET snapshot returns that descriptor with a pre-signed GET valid for 300 s; sha256 uses the '<alg>:<hex>' format of CT-IDS.",
+    "After committing 4 snapshots with seq 100, 200, 300, 400 only the three newest remain; the oldest blob and row are gone; a 5th commit repeats the prune.",
+    "Only the host may begin or commit (editor gets 403); host or any participant may GET; a non-participant gets 404.",
+    "Replaying commit with the same Idempotency-Key returns the same body and Idempotency-Replayed: true; committing a snapshot with a lower seq than the latest is accepted and stored but not returned by GET latest.",
+    "Pending uploads older than 15 min are deleted by prune(); an in-progress upload younger than 15 min is untouched.",
+    "When there is no committed snapshot GET returns 404 and the relay's snapshot_required path (B042) can tell by calling latest() -> null."
+  ],
+  "tests": [
+    "snapshots.begin-commit.test.ts: happy path, size and hash mismatch",
+    "snapshots.prune.test.ts: keep-3 rule and pending expiry, idempotent prune",
+    "snapshots.authz.test.ts: host/participant/non-participant",
+    "snapshots.idempotency.test.ts",
+    "snapshots.privacy.test.ts: the lane never reads bytes beyond hashing and never logs url or hash of content"
+  ],
+  "guardrails": [
+    "MUST verify size and hash only; MUST NOT attempt to parse, decrypt or inspect snapshot bytes.",
+    "Pre-signed URLs MUST be short-lived (PUT 600 s, GET 300 s), bound to the exact object key and content-length limit, and MUST NOT be logged.",
+    "MUST hash by streaming (constant memory); never load a 32 MiB object fully into memory per request beyond a 64 KiB buffer.",
+    "Prune MUST never delete the only committed snapshot and MUST delete blob before row.",
+    "Upload keys MUST be server-generated (snapshots/{sid}/{snp}.bin), never client supplied."
+  ],
+  "failure_modes": [
+    "Blob store unreachable during commit verification -> 503 with retry_after_s, state stays pending, client may retry commit.",
+    "Prune fails after blob delete -> row marked 'deleting', retried by next prune; GET never returns a descriptor whose blob is gone.",
+    "Duplicate begin storms (10 in 1 s) -> each creates a pending row but pending count per session is capped at 3, further begins return 429 with retry_after_s."
+  ],
+  "unblocks_gate": "G2",
+  "notes": "CONTRACT GAP: the commit failure code for a hash mismatch is not in the registry; use 422 with errors[] pointers until errors.json exists. The 15 min pending expiry and pending cap of 3 are this lane's conservative defaults."
+}

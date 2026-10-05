@@ -1,0 +1,94 @@
+{
+  "id": "B051",
+  "title": "Control commands: kick, mute, role, transfer host, end, policy",
+  "plan": "backend",
+  "phase": "P3 Relay",
+  "size": "L",
+  "role": "realtime",
+  "depends_on": [
+    "B021",
+    "B044"
+  ],
+  "goal": "The relay enforces host authority actions (kick, mute, unmute, role, transfer host, end, policy) as sequenced cleartext control frames, with live-role checks, atomic side effects and an audit event for every attempt.",
+  "scope_in": [
+    "Handler for client-sent control kinds: control.kick, control.mute, control.unmute, control.role, control.transfer_host, control.end, control.policy (payloads per generated p_control_* schemas).",
+    "Live-role authorisation at sequencing time via the B021 RBAC engine (host only); denied frames get a sys.error `forbidden` to the sender only and are not sequenced.",
+    "Kick: close target connection with 4403, mark member revoked so reconnects fail, then sequence control.member_left {code:'kicked'} and control.rotate_key {reason:'member_removed'} back-to-back with consecutive seq.",
+    "Mute state per session (with optional `until`), consulted by the frame pipeline to drop the target's `queue` and `event` frames while presence still passes.",
+    "Atomic transfer_host (new host set, old host becomes editor, control.host_changed {code:'transfer'}) and control.end (session -> ended, all sockets closed 1000).",
+    "Session policy store (auto_approve, share_history, queue_limit, locked) persisted on the session and exposed to the queue service (B052) through a read port.",
+    "Audit event for every control frame, accepted or rejected, through the B036 emitter."
+  ],
+  "scope_out": [
+    "Session lifecycle state machine and REST claim-host: B053/B054 (this lane calls a SessionStatePort).",
+    "Automatic host failover timer and host-loss pause: B053.",
+    "Choosing or holding session keys; the relay only increments the epoch number and emits rotate_key (key grants are routed by B049).",
+    "Queue state changes caused by policy (auto-approve decisions): B052.",
+    "Sequencing, ack and fan-out mechanics: B041 and B044 (used through their ports)."
+  ],
+  "implements": [
+    "CT-WS-CONTROL"
+  ],
+  "consumes": [
+    "CT-RBAC",
+    "CT-WS-ENVELOPE",
+    "CT-WS-SESSION-EVENTS",
+    "CT-CRYPTO",
+    "CT-ERR",
+    "CT-IDS"
+  ],
+  "build_against": "Unit and integration tests use in-memory fakes of SequencerPort, FanoutPort, ConnectionRegistryPort, MembershipPort and SessionStatePort defined in apps/relay/src/control/ports.ts, plus the mock client simulator from B011 to drive host and editor frames. Fixtures come from contracts/fixtures/events/control.*.json.",
+  "deliverables": [
+    "apps/relay/src/control/handler.ts",
+    "apps/relay/src/control/authority.ts",
+    "apps/relay/src/control/mute-registry.ts",
+    "apps/relay/src/control/policy-store.ts",
+    "apps/relay/src/control/ports.ts",
+    "apps/relay/src/control/index.ts",
+    "apps/relay/src/control/README.md",
+    "apps/relay/test/control/",
+    "packages/db/migrations/0051_session_policy_mute.sql"
+  ],
+  "interfaces": [
+    "handleControlFrame(ctx: ControlContext, frame: ControlFrameIn): Promise<ControlOutcome>  // ControlOutcome = {accepted: true, seqs: number[]} | {accepted: false, error: ProblemBody}",
+    "MuteRegistry: isMuted(sid: SessionId, mem: MemberId, now: Date): boolean; mute(...); unmute(...)",
+    "PolicyStore: get(sid: SessionId): Promise<SessionPolicy>; set(sid, policy: SessionPolicy, bySeq: number): Promise<void>  // SessionPolicy = {auto_approve:'ask'|'trusted'|'everyone', share_history:boolean, queue_limit:number, locked:boolean}",
+    "Tables: session_policy(session_id pk, auto_approve, share_history, queue_limit default 20, locked default false, updated_seq), session_mute(session_id, member_id, until nullable, pk(session_id, member_id)), session_epoch(session_id pk, epoch int default 1)",
+    "Metrics: relay_control_frames_total{kind,outcome}"
+  ],
+  "acceptance": [
+    "A control.kick from a viewer or editor returns sys.error code `forbidden` to that sender only, assigns no seq, and writes one audit event with outcome `denied`.",
+    "Host control.kick of member M: M's socket closes with code 4403 within 500 ms; the next two sequenced frames are control.member_left {member:M, code:'kicked'} then control.rotate_key {kid:'k2', reason:'member_removed'} with seq n and n+1 and no other frame between them (tested under 50 concurrent editor frames).",
+    "After kick, a reconnect by M with a fresh ticket is refused with close 4403; kick of an unknown or already-left member returns sys.error and changes no state.",
+    "While M is muted, M's `queue` and `event` frames are dropped (not sequenced, sender gets sys.error `forbidden`) but M's presence frames still pass; after `until` elapses (injected clock) frames pass again.",
+    "control.role with role 'viewer' makes the target's next sequenced event frame fail authorisation; the check re-reads live membership (role cache TTL <= 2 s, per CT-RBAC).",
+    "control.transfer_host to a connected editor yields exactly one control.host_changed {code:'transfer'}; afterwards old host's control.kick is rejected; transfer to a viewer, to self, or to an offline member is rejected and state is unchanged.",
+    "control.end sets session state ended through SessionStatePort, emits control.session_state {state:'ended'}, then closes every socket with 1000; later frames on that sid get close 4404.",
+    "control.policy with a payload failing the generated schema (e.g. queue_limit -1, unknown auto_approve) is rejected `invalid_frame`; a valid policy is stored and visible to PolicyStore.get before the next frame is processed.",
+    "Every control frame (50 accepted + 50 rejected in a test) produces exactly one audit event carrying actor, target, kind and outcome and no payload text."
+  ],
+  "tests": [
+    "control.authority.test.ts: role matrix, live-role recheck, concurrent role change vs control frame",
+    "control.kick-rotate.test.ts: consecutive seq, 4403 close, reconnect refusal, property test of interleaving with 100 random editor frames",
+    "control.mute.test.ts: drop rules, presence passthrough, expiry with fake clock",
+    "control.transfer-end.test.ts: atomicity, invalid targets, end closes sockets",
+    "control.contract.test.ts: runs contracts/fixtures/events control fixtures through handler and asserts output frames validate against generated schemas",
+    "control.audit.test.ts: one audit event per frame, no plaintext fields"
+  ],
+  "guardrails": [
+    "MUST authorise from the live membership record, never from the `role` claim in the ticket or from any client-sent field.",
+    "MUST set `from` to the server for member_left, rotate_key, host_changed and session_state; MUST ignore any client attempt to send those kinds (reply forbidden).",
+    "MUST NOT generate, store or see key material in the kick path; only the epoch counter is incremented and kid is formatted 'k'+epoch.",
+    "MUST NOT apply a control side effect (close, mute, role) before the frame has its seq; effects apply to frames with a higher seq only.",
+    "MUST NOT log payload fields other than kind, member ids and outcome; never log the `note`/`reason` style free text.",
+    "transfer_host and kick MUST be atomic with their server-emitted frames: if emitting the follow-up frame fails, roll the state change back and return sys.error."
+  ],
+  "failure_modes": [
+    "Sequencer unavailable during kick -> reject with 503-class sys.error (retry_after_s), leave the target connected, no partial state.",
+    "Target connection already gone when kick arrives -> still record revocation, emit member_left, rotate_key, return accepted.",
+    "Redis/DB write of policy fails -> reject the frame with sys.error, do not sequence it, keep the previous policy.",
+    "Duplicate control frame (same sid, from, id) -> idempotent: no second effect, original seq returned."
+  ],
+  "unblocks_gate": "G3",
+  "notes": "CONTRACT GAP: control.mute `until` has no stated maximum; this lane caps at 7 days as a conservative default. CONTRACT GAP: control.role schema allows only editor|viewer, so promoting to host is only via transfer_host. Migration numbering uses the lane number as prefix to avoid collisions; B007 conventions win if they differ. Size L is appropriate; SPLIT? kick/rotate atomicity could be its own PR."
+}

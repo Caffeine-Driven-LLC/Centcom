@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://centcom.dev/contracts/entitlements.schema.json",
+  "title": "Entitlements - CT-ENTITLEMENTS",
+  "type": "object",
+  "required": [
+    "workspace",
+    "rev",
+    "plan",
+    "status",
+    "limits"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "workspace": {
+      "type": "string",
+      "pattern": "^wsp_[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "rev": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "plan": {
+      "enum": [
+        "free",
+        "pro",
+        "team"
+      ]
+    },
+    "status": {
+      "enum": [
+        "active",
+        "trialing",
+        "past_due",
+        "canceled",
+        "none"
+      ]
+    },
+    "period": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "end": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "required": [
+        "relay_access",
+        "lan_multiplayer",
+        "max_seats",
+        "max_session_members",
+        "max_concurrent_sessions",
+        "max_parallel_agents",
+        "history_days",
+        "agent_minutes_month",
+        "audit_log_days",
+        "webhooks_max",
+        "api_keys_max"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "relay_access": {
+          "type": "boolean"
+        },
+        "lan_multiplayer": {
+          "const": true
+        },
+        "max_seats": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "max_session_members": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "max_concurrent_sessions": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "max_parallel_agents": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "history_days": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "agent_minutes_month": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "tokens_month": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "queue_items_month": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "audit_log_days": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "webhooks_max": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "api_keys_max": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    },
+    "usage": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "limit",
+          "pct"
+        ],
+        "properties": {
+          "limit": {
+            "type": "string"
+          },
+          "pct": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          }
+        }
+      }
+    },
+    "grace_until": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    }
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "id": "B050",
+  "title": "Relay privacy enforcement: no-plaintext tests, log scrubbing",
+  "plan": "backend",
+  "phase": "P3 Relay",
+  "size": "M",
+  "role": "security",
+  "depends_on": [
+    "B005",
+    "B049"
+  ],
+  "goal": "Prove and enforce that the relay never handles plaintext work content: a privacy gate on the frame path, log/metric scrubbing, an architectural guard against decryption code, and a canary test suite that fails the build if any plaintext canary appears outside ciphertext.",
+  "scope_in": [
+    "Privacy gate stage (order 30): for known kinds, rebuilds cleartext `p` from the allowed fields only (CT-WS-SESSION-EVENTS privacy budget table), drops any other property; rejects clear parts > 8 KiB; unknown kinds keep `p` opaque and are excluded from logging.",
+    "Relay log scrubber: serializer wrapper over the B005 logger that allows only an allowlist of fields (`request_id`, `sid`, `mid`, `dev`, `kind`, `t`, `seq`, `size`, `kid`, `code`, `state`) and drops everything else from relay log records; test that `ct`, `p`, `c`, `n`, `sig`, `ticket`, `text`, `path` keys never appear.",
+    "Metric label guard: refuse labels not in an allowlist (no ids with high cardinality, no content).",
+    "Architecture guard test: fails if any file under `apps/relay/src` imports a decrypting primitive (`crypto_aead_*_decrypt*`, `crypto_box_seal_open`, `crypto_secretbox_open*`, `sodium-native`, `libsodium-wrappers`, `tweetnacl`, node `createDecipheriv`) or reads key material env names.",
+    "Canary harness `privacyCanaryRun()`: drives the simulator through every event kind with a unique canary string inside every secret field and inside `ct.c`, then scans logs, metric output, Redis keys/values (outside the ciphertext fields), error bodies and the durable-append port arguments for the canary.",
+    "Run of `fixtures/crypto/vectors.json` known-answer checks for the sealed-box structure (relay-side: lengths only) when the fixture exists."
+  ],
+  "scope_out": [
+    "Client-side encryption (CT-CRYPTO is implemented on the client).",
+    "Database/at-rest encryption and storage privacy of history blobs (B055).",
+    "Telemetry ingestion scrubbing (separate lane).",
+    "Signature verification of frames."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-CRYPTO",
+    "CT-WS-SESSION-EVENTS",
+    "CT-WS-ENVELOPE",
+    "CT-ERR"
+  ],
+  "build_against": "The mock client simulator from B011 (scripted fake clients speaking the WS protocol), the in-memory B009 KV/pub-sub implementations, and the frame fixtures in contracts/fixtures/events/; no real client is needed. The simulator sends frames whose 'ciphertext' is random bytes with canary markers embedded in the secret schema fields; no libsodium decrypt is needed (or allowed).",
+  "deliverables": [
+    "apps/relay/src/privacy/",
+    "apps/relay/src/privacy/module.ts",
+    "apps/relay/src/privacy/README.md"
+  ],
+  "interfaces": [
+    "TS: `sanitizeClearPayload(kind: string, p: unknown): { ok: true; p: Record<string, unknown> } | { ok: false }`",
+    "TS: `createRelayLogger(base: Logger): Logger` (allowlist serializer) and `assertMetricLabels(name: string, labels: Record<string, string>): void`.",
+    "TS: `privacyCanaryRun(opts: { relay: RelayTestHarness; canary?: string }): Promise<{ leaks: Array<{ where: string; sample: string }> }>`.",
+    "TS: `export default relayModule: RelayModule` (order 30).",
+    "CI scripts: `pnpm --filter @centcom/relay test:privacy`."
+  ],
+  "acceptance": [
+    "For every kind in the CT-WS-SESSION-EVENTS catalogue (42 fixtures), `sanitizeClearPayload` output contains only the fields listed in the catalogue's cleartext column; an extra field `p.note: 'secret text'` is removed before sequencing.",
+    "A `message.user` frame whose `p` is present is already rejected by B039; the gate additionally drops any `p` on encrypted kinds if it ever reaches it, and logs nothing but the kind.",
+    "The canary run across all kinds produces 0 leaks in logs (including debug level), metric output, Redis contents outside `ct`, error frames and the `DurableAppend` arguments; a deliberately injected `log.info({ ct })` in a test branch makes the run report a leak (the suite proves it can fail).",
+    "The architecture guard fails (non-zero exit) when a file imports `libsodium-wrappers` or calls `crypto_box_seal_open`; it passes on the real tree.",
+    "The logger serializer drops `ticket`, `ct`, `p`, `c`, `sig`, `text`, `path` keys at any nesting depth (up to 5) and never throws on circular objects.",
+    "`assertMetricLabels` rejects a label named `sid` or `member`; the metrics endpoint output contains no `ses_` or `mem_` string in a full simulator run.",
+    "Clear `p` > 8 KiB (except server-built `queue.state` and `control.roster`) is rejected `invalid_frame`.",
+    "Gate overhead < 0.2 ms p95 per frame."
+  ],
+  "tests": [
+    "privacy.canary.test.ts: full-catalogue run, negative control with injected leak.",
+    "privacy.sanitize.test.ts: per-kind allowlist table generated from the catalogue; property test with random extra fields.",
+    "privacy.logger.test.ts: nested/circular objects, level debug.",
+    "privacy.architecture.test.ts: forbidden imports and env names (AST scan).",
+    "privacy.metrics.test.ts: label allowlist and output scan.",
+    "privacy.vectors.test.ts: crypto vector structure checks (skipped with explicit message until the fixture lands)."
+  ],
+  "guardrails": [
+    "The relay MUST NOT contain any code path able to decrypt `ct` or hold session keys, device private keys or invite fragments; the architecture guard is a required CI check.",
+    "The log allowlist is deny-by-default: new log fields require an explicit allowlist change reviewed by security.",
+    "Canary tests MUST run at debug log level and against every sequenced kind; adding a new kind to the catalogue MUST fail the suite until the allowlist table is updated.",
+    "No error `detail` may include frame content, ids of other members' devices, or ticket data.",
+    "Redis hot-buffer and durable-append values may contain `ct` (ciphertext) and the allowlisted clear fields only; anything else is a leak."
+  ],
+  "failure_modes": [
+    "Canary detected -> CI fails with the leak location (`where`); in production the gate counts `relay_privacy_violations_total` and drops the offending field rather than the frame.",
+    "Unknown kind with a large clear `p` -> forwarded opaque but never logged; size cap applies.",
+    "Allowlist out of sync with the catalogue -> the coverage test fails; no silent pass."
+  ],
+  "unblocks_gate": "G6",
+  "notes": ""
+}

@@ -1,0 +1,2342 @@
+{
+ "backend": [
+  {
+   "id": "B001",
+   "title": "Monorepo scaffold and toolchain",
+   "plan": "backend",
+   "phase": "P0 Foundations",
+   "size": "M",
+   "role": "platform",
+   "depends_on": []
+  },
+  {
+   "id": "B002",
+   "title": "CI pipeline (typecheck, lint, test, build, security scan, contract-lock check)",
+   "plan": "backend",
+   "phase": "P0 Foundations",
+   "size": "M",
+   "role": "platform",
+   "depends_on": [
+    "B001"
+   ]
+  },
+  {
+   "id": "B003",
+   "title": "Contract codegen package (types and validators from contracts/)",
+   "plan": "backend",
+   "phase": "P0 Foundations",
+   "size": "M",
+   "role": "platform",
+   "depends_on": [
+    "B001"
+   ]
+  },
+  {
+   "id": "B004",
+   "title": "Typed configuration and secrets loader",
+   "plan": "backend",
+   "phase": "P0 Foundations",
+   "size": "S",
+   "role": "platform",
+   "depends_on": [
+    "B001"
+   ]
+  },
+  {
+   "id": "B005",
+   "title": "Structured logging, request ids, redaction",
+   "plan": "backend",
+   "phase": "P0 Foundations",
+   "size": "S",
+   "role": "platform",
+   "depends_on": [
+    "B004"
+   ]
+  },
+  {
+   "id": "B006",
+   "title": "Error layer: problem+json, error registry, error handler",
+   "plan": "backend",
+   "phase": "P0 Foundations",
+   "size": "M",
+   "role": "platform",
+   "depends_on": [
+    "B003",
+    "B005"
+   ]
+  },
+  {
+   "id": "B007",
+   "title": "Database package: Postgres client, migration runner, conventions",
+   "plan": "backend",
+   "phase": "P0 Foundations",
+   "size": "M",
+   "role": "data",
+   "depends_on": [
+    "B004"
+   ]
+  },
+  {
+   "id": "B008",
+   "title": "Core schema v1 migration (users, devices, workspaces, memberships, sessions skeleton)",
+   "plan": "backend",
+   "phase": "P0 Foundations",
+   "size": "M",
+   "role": "data",
+   "depends_on": [
+    "B007"
+   ]
+  },
+  {
+   "id": "B009",
+   "title": "Redis abstraction: pub/sub, KV, rate-limit primitives (in-memory + Redis impls)",
+   "plan": "backend",
+   "phase": "P0 Foundations",
+   "size": "M",
+   "role": "platform",
+   "depends_on": [
+    "B004"
+   ]
+  },
+  {
+   "id": "B010",
+   "title": "Test harness: containers, factories, contract test runner",
+   "plan": "backend",
+   "phase": "P0 Foundations",
+   "size": "M",
+   "role": "qa",
+   "depends_on": [
+    "B002",
+    "B007"
+   ]
+  },
+  {
+   "id": "B011",
+   "title": "Mock client simulator (scripted fake clients speaking the WS protocol)",
+   "plan": "backend",
+   "phase": "P0 Foundations",
+   "size": "L",
+   "role": "qa",
+   "depends_on": [
+    "B003",
+    "B010"
+   ]
+  },
+  {
+   "id": "B012",
+   "title": "Local dev environment: compose stack, seed data, one-command up",
+   "plan": "backend",
+   "phase": "P0 Foundations",
+   "size": "S",
+   "role": "platform",
+   "depends_on": [
+    "B008",
+    "B009"
+   ]
+  },
+  {
+   "id": "B013",
+   "title": "User model and repository",
+   "plan": "backend",
+   "phase": "P1 Identity",
+   "size": "S",
+   "role": "identity",
+   "depends_on": [
+    "B006",
+    "B008"
+   ]
+  },
+  {
+   "id": "B014",
+   "title": "Passwordless email login (magic link)",
+   "plan": "backend",
+   "phase": "P1 Identity",
+   "size": "M",
+   "role": "identity",
+   "depends_on": [
+    "B013",
+    "B032"
+   ]
+  },
+  {
+   "id": "B015",
+   "title": "Social login providers (GitHub, Google)",
+   "plan": "backend",
+   "phase": "P1 Identity",
+   "size": "M",
+   "role": "identity",
+   "depends_on": [
+    "B013"
+   ]
+  },
+  {
+   "id": "B016",
+   "title": "Device authorization grant endpoints (RFC 8628)",
+   "plan": "backend",
+   "phase": "P1 Identity",
+   "size": "L",
+   "role": "identity",
+   "depends_on": [
+    "B013",
+    "B017"
+   ]
+  },
+  {
+   "id": "B017",
+   "title": "Token service: JWT issue, refresh rotation with reuse detection, JWKS, revocation",
+   "plan": "backend",
+   "phase": "P1 Identity",
+   "size": "L",
+   "role": "identity",
+   "depends_on": [
+    "B004",
+    "B013"
+   ]
+  },
+  {
+   "id": "B018",
+   "title": "Web session login: authorization code with PKCE, CSRF protection",
+   "plan": "backend",
+   "phase": "P1 Identity",
+   "size": "M",
+   "role": "identity",
+   "depends_on": [
+    "B017"
+   ]
+  },
+  {
+   "id": "B019",
+   "title": "API keys: create, scope, hash, rotate, revoke",
+   "plan": "backend",
+   "phase": "P1 Identity",
+   "size": "M",
+   "role": "identity",
+   "depends_on": [
+    "B017",
+    "B021"
+   ]
+  },
+  {
+   "id": "B020",
+   "title": "Device registry, key registration, revoke",
+   "plan": "backend",
+   "phase": "P1 Identity",
+   "size": "M",
+   "role": "identity",
+   "depends_on": [
+    "B017"
+   ]
+  },
+  {
+   "id": "B021",
+   "title": "RBAC engine: roles, permission checks, policy tests",
+   "plan": "backend",
+   "phase": "P1 Identity",
+   "size": "M",
+   "role": "identity",
+   "depends_on": [
+    "B006",
+    "B008"
+   ]
+  },
+  {
+   "id": "B022",
+   "title": "Accounts endpoints: /v1/me, preferences",
+   "plan": "backend",
+   "phase": "P1 Identity",
+   "size": "S",
+   "role": "identity",
+   "depends_on": [
+    "B013",
+    "B021"
+   ]
+  },
+  {
+   "id": "B023",
+   "title": "Rate limiting and abuse protection middleware",
+   "plan": "backend",
+   "phase": "P1 Identity",
+   "size": "M",
+   "role": "platform",
+   "depends_on": [
+    "B006",
+    "B009"
+   ]
+  },
+  {
+   "id": "B024",
+   "title": "Idempotency-Key middleware",
+   "plan": "backend",
+   "phase": "P1 Identity",
+   "size": "S",
+   "role": "platform",
+   "depends_on": [
+    "B006",
+    "B009"
+   ]
+  },
+  {
+   "id": "B025",
+   "title": "Pagination and filtering library",
+   "plan": "backend",
+   "phase": "P1 Identity",
+   "size": "S",
+   "role": "platform",
+   "depends_on": [
+    "B006"
+   ]
+  },
+  {
+   "id": "B026",
+   "title": "Account deletion and data export",
+   "plan": "backend",
+   "phase": "P1 Identity",
+   "size": "M",
+   "role": "identity",
+   "depends_on": [
+    "B013",
+    "B036"
+   ]
+  },
+  {
+   "id": "B027",
+   "title": "Workspace CRUD endpoints",
+   "plan": "backend",
+   "phase": "P2 Workspaces",
+   "size": "M",
+   "role": "identity",
+   "depends_on": [
+    "B008",
+    "B021",
+    "B036"
+   ]
+  },
+  {
+   "id": "B028",
+   "title": "Membership and workspace role management",
+   "plan": "backend",
+   "phase": "P2 Workspaces",
+   "size": "M",
+   "role": "identity",
+   "depends_on": [
+    "B027"
+   ]
+  },
+  {
+   "id": "B029",
+   "title": "Invites: create, accept, revoke, expiry, key-bundle storage",
+   "plan": "backend",
+   "phase": "P2 Workspaces",
+   "size": "L",
+   "role": "identity",
+   "depends_on": [
+    "B028",
+    "B032"
+   ]
+  },
+  {
+   "id": "B030",
+   "title": "Seat accounting and seat-limit enforcement",
+   "plan": "backend",
+   "phase": "P2 Workspaces",
+   "size": "S",
+   "role": "billing",
+   "depends_on": [
+    "B028",
+    "B069"
+   ]
+  },
+  {
+   "id": "B031",
+   "title": "Member slot assignment service",
+   "plan": "backend",
+   "phase": "P2 Workspaces",
+   "size": "S",
+   "role": "realtime",
+   "depends_on": [
+    "B028"
+   ]
+  },
+  {
+   "id": "B032",
+   "title": "Transactional email service with templates and provider abstraction",
+   "plan": "backend",
+   "phase": "P2 Workspaces",
+   "size": "M",
+   "role": "platform",
+   "depends_on": [
+    "B004",
+    "B006"
+   ]
+  },
+  {
+   "id": "B033",
+   "title": "Deep link and join URL service",
+   "plan": "backend",
+   "phase": "P2 Workspaces",
+   "size": "S",
+   "role": "identity",
+   "depends_on": [
+    "B029"
+   ]
+  },
+  {
+   "id": "B034",
+   "title": "Workspace settings and policies",
+   "plan": "backend",
+   "phase": "P2 Workspaces",
+   "size": "S",
+   "role": "identity",
+   "depends_on": [
+    "B027"
+   ]
+  },
+  {
+   "id": "B035",
+   "title": "Projects registry",
+   "plan": "backend",
+   "phase": "P2 Workspaces",
+   "size": "S",
+   "role": "identity",
+   "depends_on": [
+    "B027"
+   ]
+  },
+  {
+   "id": "B036",
+   "title": "Audit event emitter library",
+   "plan": "backend",
+   "phase": "P2 Workspaces",
+   "size": "S",
+   "role": "platform",
+   "depends_on": [
+    "B005",
+    "B008"
+   ]
+  },
+  {
+   "id": "B037",
+   "title": "Relay service skeleton: ws server, health, graceful shutdown",
+   "plan": "backend",
+   "phase": "P3 Relay",
+   "size": "M",
+   "role": "realtime",
+   "depends_on": [
+    "B001",
+    "B005"
+   ]
+  },
+  {
+   "id": "B038",
+   "title": "Relay handshake and authentication (relay tickets, protocol negotiation)",
+   "plan": "backend",
+   "phase": "P3 Relay",
+   "size": "L",
+   "role": "realtime",
+   "depends_on": [
+    "B003",
+    "B017",
+    "B037"
+   ]
+  },
+  {
+   "id": "B039",
+   "title": "Envelope codec and schema-enforced validation with size limits",
+   "plan": "backend",
+   "phase": "P3 Relay",
+   "size": "M",
+   "role": "realtime",
+   "depends_on": [
+    "B003",
+    "B037"
+   ]
+  },
+  {
+   "id": "B040",
+   "title": "Heartbeat, liveness and connection state machine",
+   "plan": "backend",
+   "phase": "P3 Relay",
+   "size": "M",
+   "role": "realtime",
+   "depends_on": [
+    "B038",
+    "B039"
+   ]
+  },
+  {
+   "id": "B041",
+   "title": "Sequencing, acks and at-least-once delivery per session",
+   "plan": "backend",
+   "phase": "P3 Relay",
+   "size": "L",
+   "role": "realtime",
+   "depends_on": [
+    "B040"
+   ]
+  },
+  {
+   "id": "B042",
+   "title": "Resume and replay from the hot buffer and durable log",
+   "plan": "backend",
+   "phase": "P3 Relay",
+   "size": "L",
+   "role": "realtime",
+   "depends_on": [
+    "B041",
+    "B055"
+   ]
+  },
+  {
+   "id": "B043",
+   "title": "Session room registry and membership authorisation",
+   "plan": "backend",
+   "phase": "P3 Relay",
+   "size": "M",
+   "role": "realtime",
+   "depends_on": [
+    "B028",
+    "B038"
+   ]
+  },
+  {
+   "id": "B044",
+   "title": "Fan-out engine for opaque ciphertext routing",
+   "plan": "backend",
+   "phase": "P3 Relay",
+   "size": "M",
+   "role": "realtime",
+   "depends_on": [
+    "B041",
+    "B043"
+   ]
+  },
+  {
+   "id": "B045",
+   "title": "Cross-node routing over pub/sub (multi-instance relay)",
+   "plan": "backend",
+   "phase": "P3 Relay",
+   "size": "L",
+   "role": "realtime",
+   "depends_on": [
+    "B009",
+    "B044"
+   ]
+  },
+  {
+   "id": "B046",
+   "title": "Backpressure and slow-consumer handling",
+   "plan": "backend",
+   "phase": "P3 Relay",
+   "size": "M",
+   "role": "realtime",
+   "depends_on": [
+    "B044"
+   ]
+  },
+  {
+   "id": "B047",
+   "title": "Presence service (ephemeral, TTL, coalescing)",
+   "plan": "backend",
+   "phase": "P3 Relay",
+   "size": "M",
+   "role": "realtime",
+   "depends_on": [
+    "B009",
+    "B043"
+   ]
+  },
+  {
+   "id": "B048",
+   "title": "Cursor and typing throttling",
+   "plan": "backend",
+   "phase": "P3 Relay",
+   "size": "S",
+   "role": "realtime",
+   "depends_on": [
+    "B047"
+   ]
+  },
+  {
+   "id": "B049",
+   "title": "Key-grant routing and epoch rotation signalling",
+   "plan": "backend",
+   "phase": "P3 Relay",
+   "size": "M",
+   "role": "realtime",
+   "depends_on": [
+    "B044"
+   ]
+  },
+  {
+   "id": "B050",
+   "title": "Relay privacy enforcement: no-plaintext tests, log scrubbing",
+   "plan": "backend",
+   "phase": "P3 Relay",
+   "size": "M",
+   "role": "security",
+   "depends_on": [
+    "B005",
+    "B049"
+   ]
+  },
+  {
+   "id": "B051",
+   "title": "Control commands: kick, mute, role, transfer host, end, policy",
+   "plan": "backend",
+   "phase": "P3 Relay",
+   "size": "L",
+   "role": "realtime",
+   "depends_on": [
+    "B021",
+    "B044"
+   ]
+  },
+  {
+   "id": "B052",
+   "title": "Queue service: ordering, dedupe, approve, reorder, caps, auto-approve policy",
+   "plan": "backend",
+   "phase": "P3 Relay",
+   "size": "L",
+   "role": "realtime",
+   "depends_on": [
+    "B009",
+    "B044"
+   ]
+  },
+  {
+   "id": "B053",
+   "title": "Session lifecycle service: create, live, paused, ended, expired, host-loss policy",
+   "plan": "backend",
+   "phase": "P3 Relay",
+   "size": "M",
+   "role": "realtime",
+   "depends_on": [
+    "B007",
+    "B043"
+   ]
+  },
+  {
+   "id": "B054",
+   "title": "Session REST endpoints: list, create, get, join-token, claim-host",
+   "plan": "backend",
+   "phase": "P3 Relay",
+   "size": "M",
+   "role": "realtime",
+   "depends_on": [
+    "B021",
+    "B025",
+    "B053",
+    "B017",
+    "B031"
+   ]
+  },
+  {
+   "id": "B055",
+   "title": "Encrypted history store (blob storage of ciphertext frames)",
+   "plan": "backend",
+   "phase": "P3 Relay",
+   "size": "M",
+   "role": "data",
+   "depends_on": [
+    "B007",
+    "B008",
+    "B039"
+   ]
+  },
+  {
+   "id": "B056",
+   "title": "Snapshot service: descriptors, pre-signed upload, commit, pruning",
+   "plan": "backend",
+   "phase": "P3 Relay",
+   "size": "M",
+   "role": "data",
+   "depends_on": [
+    "B055"
+   ]
+  },
+  {
+   "id": "B057",
+   "title": "Agent registry (ids, owners, modes, states)",
+   "plan": "backend",
+   "phase": "P4 Fleet",
+   "size": "M",
+   "role": "realtime",
+   "depends_on": [
+    "B008",
+    "B044"
+   ]
+  },
+  {
+   "id": "B058",
+   "title": "Agent state validation against the state-map contract",
+   "plan": "backend",
+   "phase": "P4 Fleet",
+   "size": "S",
+   "role": "realtime",
+   "depends_on": [
+    "B057"
+   ]
+  },
+  {
+   "id": "B059",
+   "title": "File-lock coordination service (advisory, TTL, fairness)",
+   "plan": "backend",
+   "phase": "P4 Fleet",
+   "size": "M",
+   "role": "realtime",
+   "depends_on": [
+    "B009",
+    "B044"
+   ]
+  },
+  {
+   "id": "B060",
+   "title": "Approval routing: tool approvals, delegates, timeouts",
+   "plan": "backend",
+   "phase": "P4 Fleet",
+   "size": "M",
+   "role": "realtime",
+   "depends_on": [
+    "B044",
+    "B051"
+   ]
+  },
+  {
+   "id": "B061",
+   "title": "Branch and conflict signalling",
+   "plan": "backend",
+   "phase": "P4 Fleet",
+   "size": "S",
+   "role": "realtime",
+   "depends_on": [
+    "B057"
+   ]
+  },
+  {
+   "id": "B062",
+   "title": "Reactions and comments persistence",
+   "plan": "backend",
+   "phase": "P4 Fleet",
+   "size": "S",
+   "role": "data",
+   "depends_on": [
+    "B007",
+    "B044"
+   ]
+  },
+  {
+   "id": "B063",
+   "title": "Notification dispatcher core: events to channels",
+   "plan": "backend",
+   "phase": "P4 Fleet",
+   "size": "M",
+   "role": "platform",
+   "depends_on": [
+    "B009",
+    "B036"
+   ]
+  },
+  {
+   "id": "B064",
+   "title": "Push delivery: web push, APNs, FCM abstraction",
+   "plan": "backend",
+   "phase": "P4 Fleet",
+   "size": "M",
+   "role": "platform",
+   "depends_on": [
+    "B063"
+   ]
+  },
+  {
+   "id": "B065",
+   "title": "In-app notification inbox API",
+   "plan": "backend",
+   "phase": "P4 Fleet",
+   "size": "S",
+   "role": "platform",
+   "depends_on": [
+    "B025",
+    "B063"
+   ]
+  },
+  {
+   "id": "B066",
+   "title": "Notification preferences and quiet hours",
+   "plan": "backend",
+   "phase": "P4 Fleet",
+   "size": "S",
+   "role": "platform",
+   "depends_on": [
+    "B065"
+   ]
+  },
+  {
+   "id": "B067",
+   "title": "Presence history and last-seen API",
+   "plan": "backend",
+   "phase": "P4 Fleet",
+   "size": "S",
+   "role": "realtime",
+   "depends_on": [
+    "B047"
+   ]
+  },
+  {
+   "id": "B068",
+   "title": "Share links and viewer-only guest tokens",
+   "plan": "backend",
+   "phase": "P4 Fleet",
+   "size": "M",
+   "role": "identity",
+   "depends_on": [
+    "B017",
+    "B054",
+    "B031"
+   ]
+  },
+  {
+   "id": "B069",
+   "title": "Plans and entitlements model",
+   "plan": "backend",
+   "phase": "P5 Billing",
+   "size": "M",
+   "role": "billing",
+   "depends_on": [
+    "B008"
+   ]
+  },
+  {
+   "id": "B070",
+   "title": "Stripe integration: customers and subscriptions",
+   "plan": "backend",
+   "phase": "P5 Billing",
+   "size": "L",
+   "role": "billing",
+   "depends_on": [
+    "B027",
+    "B069"
+   ]
+  },
+  {
+   "id": "B071",
+   "title": "Checkout and customer portal sessions",
+   "plan": "backend",
+   "phase": "P5 Billing",
+   "size": "M",
+   "role": "billing",
+   "depends_on": [
+    "B070"
+   ]
+  },
+  {
+   "id": "B072",
+   "title": "Stripe webhook ingestion: verified, idempotent, replay-safe",
+   "plan": "backend",
+   "phase": "P5 Billing",
+   "size": "M",
+   "role": "billing",
+   "depends_on": [
+    "B070"
+   ]
+  },
+  {
+   "id": "B073",
+   "title": "Seat quantity sync and proration preview",
+   "plan": "backend",
+   "phase": "P5 Billing",
+   "size": "M",
+   "role": "billing",
+   "depends_on": [
+    "B030",
+    "B072"
+   ]
+  },
+  {
+   "id": "B074",
+   "title": "Usage event ingestion API",
+   "plan": "backend",
+   "phase": "P5 Billing",
+   "size": "M",
+   "role": "billing",
+   "depends_on": [
+    "B008",
+    "B017",
+    "B024"
+   ]
+  },
+  {
+   "id": "B075",
+   "title": "Usage aggregation and quota computation",
+   "plan": "backend",
+   "phase": "P5 Billing",
+   "size": "M",
+   "role": "billing",
+   "depends_on": [
+    "B069",
+    "B074"
+   ]
+  },
+  {
+   "id": "B076",
+   "title": "Quota signalling: warnings at 80 and 100 percent to sessions and owners",
+   "plan": "backend",
+   "phase": "P5 Billing",
+   "size": "M",
+   "role": "billing",
+   "depends_on": [
+    "B044",
+    "B075"
+   ]
+  },
+  {
+   "id": "B077",
+   "title": "Invoices, receipts and tax endpoints",
+   "plan": "backend",
+   "phase": "P5 Billing",
+   "size": "S",
+   "role": "billing",
+   "depends_on": [
+    "B071"
+   ]
+  },
+  {
+   "id": "B078",
+   "title": "Dunning and grace-period state machine",
+   "plan": "backend",
+   "phase": "P5 Billing",
+   "size": "M",
+   "role": "billing",
+   "depends_on": [
+    "B072",
+    "B053"
+   ]
+  },
+  {
+   "id": "B079",
+   "title": "Trials, coupons and promotions",
+   "plan": "backend",
+   "phase": "P5 Billing",
+   "size": "S",
+   "role": "billing",
+   "depends_on": [
+    "B070"
+   ]
+  },
+  {
+   "id": "B080",
+   "title": "Entitlement cache and enforcement middleware",
+   "plan": "backend",
+   "phase": "P5 Billing",
+   "size": "M",
+   "role": "billing",
+   "depends_on": [
+    "B009",
+    "B069"
+   ]
+  },
+  {
+   "id": "B081",
+   "title": "Outgoing webhooks: endpoints, delivery, retries, signing",
+   "plan": "backend",
+   "phase": "P6 Platform",
+   "size": "L",
+   "role": "platform",
+   "depends_on": [
+    "B009",
+    "B036"
+   ]
+  },
+  {
+   "id": "B082",
+   "title": "Audit log API and export",
+   "plan": "backend",
+   "phase": "P6 Platform",
+   "size": "M",
+   "role": "platform",
+   "depends_on": [
+    "B025",
+    "B036"
+   ]
+  },
+  {
+   "id": "B083",
+   "title": "Feature flags and remote config service",
+   "plan": "backend",
+   "phase": "P6 Platform",
+   "size": "M",
+   "role": "platform",
+   "depends_on": [
+    "B008",
+    "B017"
+   ]
+  },
+  {
+   "id": "B084",
+   "title": "Release manifest and update channel service",
+   "plan": "backend",
+   "phase": "P6 Platform",
+   "size": "M",
+   "role": "platform",
+   "depends_on": [
+    "B008"
+   ]
+  },
+  {
+   "id": "B085",
+   "title": "Telemetry ingest: schema validation, PII scrub, retention",
+   "plan": "backend",
+   "phase": "P6 Platform",
+   "size": "M",
+   "role": "platform",
+   "depends_on": [
+    "B006",
+    "B008"
+   ]
+  },
+  {
+   "id": "B086",
+   "title": "Status endpoints and public status feed",
+   "plan": "backend",
+   "phase": "P6 Platform",
+   "size": "S",
+   "role": "platform",
+   "depends_on": [
+    "B037"
+   ]
+  },
+  {
+   "id": "B087",
+   "title": "Internal admin API and support tooling",
+   "plan": "backend",
+   "phase": "P6 Platform",
+   "size": "M",
+   "role": "platform",
+   "depends_on": [
+    "B021",
+    "B036"
+   ]
+  },
+  {
+   "id": "B088",
+   "title": "Internal admin console (minimal web UI)",
+   "plan": "backend",
+   "phase": "P6 Platform",
+   "size": "M",
+   "role": "platform",
+   "depends_on": [
+    "B087"
+   ]
+  },
+  {
+   "id": "B089",
+   "title": "Metadata search across sessions and members",
+   "plan": "backend",
+   "phase": "P6 Platform",
+   "size": "S",
+   "role": "data",
+   "depends_on": [
+    "B054"
+   ]
+  },
+  {
+   "id": "B090",
+   "title": "Data retention and purge jobs",
+   "plan": "backend",
+   "phase": "P6 Platform",
+   "size": "M",
+   "role": "data",
+   "depends_on": [
+    "B008",
+    "B055"
+   ]
+  },
+  {
+   "id": "B091",
+   "title": "Infrastructure as code: environments dev, stage, prod",
+   "plan": "backend",
+   "phase": "P7 Ops",
+   "size": "L",
+   "role": "infra",
+   "depends_on": [
+    "B001"
+   ]
+  },
+  {
+   "id": "B092",
+   "title": "Deployment pipeline: blue/green, safe migrations, rollback",
+   "plan": "backend",
+   "phase": "P7 Ops",
+   "size": "L",
+   "role": "infra",
+   "depends_on": [
+    "B002",
+    "B091"
+   ]
+  },
+  {
+   "id": "B093",
+   "title": "Observability: metrics, traces, dashboards, SLOs",
+   "plan": "backend",
+   "phase": "P7 Ops",
+   "size": "M",
+   "role": "infra",
+   "depends_on": [
+    "B005",
+    "B037"
+   ]
+  },
+  {
+   "id": "B094",
+   "title": "Alerting and on-call runbooks",
+   "plan": "backend",
+   "phase": "P7 Ops",
+   "size": "M",
+   "role": "infra",
+   "depends_on": [
+    "B093"
+   ]
+  },
+  {
+   "id": "B095",
+   "title": "Load testing and capacity model",
+   "plan": "backend",
+   "phase": "P7 Ops",
+   "size": "L",
+   "role": "qa",
+   "depends_on": [
+    "B045",
+    "B093"
+   ]
+  },
+  {
+   "id": "B096",
+   "title": "Chaos and failure-mode tests",
+   "plan": "backend",
+   "phase": "P7 Ops",
+   "size": "M",
+   "role": "qa",
+   "depends_on": [
+    "B095"
+   ]
+  },
+  {
+   "id": "B097",
+   "title": "Security hardening: headers, WAF rules, secret scanning, dependency policy",
+   "plan": "backend",
+   "phase": "P7 Ops",
+   "size": "M",
+   "role": "security",
+   "depends_on": [
+    "B002"
+   ]
+  },
+  {
+   "id": "B098",
+   "title": "Threat model and penetration-test preparation",
+   "plan": "backend",
+   "phase": "P7 Ops",
+   "size": "M",
+   "role": "security",
+   "depends_on": [
+    "B097"
+   ]
+  },
+  {
+   "id": "B099",
+   "title": "Backup, restore and disaster-recovery drills",
+   "plan": "backend",
+   "phase": "P7 Ops",
+   "size": "M",
+   "role": "infra",
+   "depends_on": [
+    "B007",
+    "B091"
+   ]
+  },
+  {
+   "id": "B100",
+   "title": "Provider conformance suite and release gate",
+   "plan": "backend",
+   "phase": "P7 Ops",
+   "size": "L",
+   "role": "qa",
+   "depends_on": [
+    "B011",
+    "B042",
+    "B047",
+    "B052",
+    "B054"
+   ]
+  }
+ ],
+ "client": [
+  {
+   "id": "C001",
+   "title": "Monorepo scaffold and toolchain",
+   "plan": "client",
+   "phase": "P0 Foundations",
+   "size": "M",
+   "role": "devx",
+   "depends_on": []
+  },
+  {
+   "id": "C002",
+   "title": "CI pipeline: typecheck, lint, test, build matrix, contract-lock check",
+   "plan": "client",
+   "phase": "P0 Foundations",
+   "size": "M",
+   "role": "devx",
+   "depends_on": [
+    "C001"
+   ]
+  },
+  {
+   "id": "C003",
+   "title": "Protocol package: types and validators generated from contracts/",
+   "plan": "client",
+   "phase": "P0 Foundations",
+   "size": "M",
+   "role": "devx",
+   "depends_on": [
+    "C001"
+   ]
+  },
+  {
+   "id": "C004",
+   "title": "Layered configuration system (defaults, user, project, env, flags)",
+   "plan": "client",
+   "phase": "P0 Foundations",
+   "size": "S",
+   "role": "runtime",
+   "depends_on": [
+    "C001"
+   ]
+  },
+  {
+   "id": "C005",
+   "title": "Logging and diagnostics with redaction",
+   "plan": "client",
+   "phase": "P0 Foundations",
+   "size": "S",
+   "role": "runtime",
+   "depends_on": [
+    "C004"
+   ]
+  },
+  {
+   "id": "C006",
+   "title": "Client error model: problem+json to typed errors and user messages",
+   "plan": "client",
+   "phase": "P0 Foundations",
+   "size": "S",
+   "role": "runtime",
+   "depends_on": [
+    "C003",
+    "C005"
+   ]
+  },
+  {
+   "id": "C007",
+   "title": "Mock backend: REST from OpenAPI plus WebSocket relay simulator",
+   "plan": "client",
+   "phase": "P0 Foundations",
+   "size": "L",
+   "role": "qa",
+   "depends_on": [
+    "C003"
+   ]
+  },
+  {
+   "id": "C008",
+   "title": "Test harness: vitest setup, pty and TUI snapshot tester, fixtures",
+   "plan": "client",
+   "phase": "P0 Foundations",
+   "size": "M",
+   "role": "qa",
+   "depends_on": [
+    "C002"
+   ]
+  },
+  {
+   "id": "C009",
+   "title": "Theme and mascot packages from the design system",
+   "plan": "client",
+   "phase": "P0 Foundations",
+   "size": "M",
+   "role": "tui",
+   "depends_on": [
+    "C001"
+   ]
+  },
+  {
+   "id": "C010",
+   "title": "Opt-in telemetry client",
+   "plan": "client",
+   "phase": "P0 Foundations",
+   "size": "S",
+   "role": "runtime",
+   "depends_on": [
+    "C003",
+    "C004"
+   ]
+  },
+  {
+   "id": "C011",
+   "title": "Local development environment and example fixtures",
+   "plan": "client",
+   "phase": "P0 Foundations",
+   "size": "S",
+   "role": "devx",
+   "depends_on": [
+    "C007"
+   ]
+  },
+  {
+   "id": "C012",
+   "title": "Release engineering skeleton: versioning, changesets, signing placeholders",
+   "plan": "client",
+   "phase": "P0 Foundations",
+   "size": "S",
+   "role": "release",
+   "depends_on": [
+    "C002"
+   ]
+  },
+  {
+   "id": "C013",
+   "title": "Agent runner daemon wrapping the Claude Agent SDK",
+   "plan": "client",
+   "phase": "P1 Agent runtime",
+   "size": "L",
+   "role": "runtime",
+   "depends_on": [
+    "C004",
+    "C005",
+    "C025"
+   ]
+  },
+  {
+   "id": "C014",
+   "title": "Agent session state machine emitting contract state names",
+   "plan": "client",
+   "phase": "P1 Agent runtime",
+   "size": "M",
+   "role": "runtime",
+   "depends_on": [
+    "C013",
+    "C025"
+   ]
+  },
+  {
+   "id": "C015",
+   "title": "Tool permission engine: policies, allow, deny, always-rules",
+   "plan": "client",
+   "phase": "P1 Agent runtime",
+   "size": "L",
+   "role": "runtime",
+   "depends_on": [
+    "C013"
+   ]
+  },
+  {
+   "id": "C016",
+   "title": "Command classification and execution sandbox policy",
+   "plan": "client",
+   "phase": "P1 Agent runtime",
+   "size": "M",
+   "role": "runtime",
+   "depends_on": [
+    "C015"
+   ]
+  },
+  {
+   "id": "C017",
+   "title": "Git worktree manager",
+   "plan": "client",
+   "phase": "P1 Agent runtime",
+   "size": "M",
+   "role": "runtime",
+   "depends_on": [
+    "C013"
+   ]
+  },
+  {
+   "id": "C018",
+   "title": "File lock client: local and remote advisory locks",
+   "plan": "client",
+   "phase": "P1 Agent runtime",
+   "size": "M",
+   "role": "runtime",
+   "depends_on": [
+    "C017"
+   ]
+  },
+  {
+   "id": "C019",
+   "title": "Context management: token counting and compaction triggers",
+   "plan": "client",
+   "phase": "P1 Agent runtime",
+   "size": "M",
+   "role": "runtime",
+   "depends_on": [
+    "C013"
+   ]
+  },
+  {
+   "id": "C020",
+   "title": "Skills loader and bundled skills pack",
+   "plan": "client",
+   "phase": "P1 Agent runtime",
+   "size": "M",
+   "role": "runtime",
+   "depends_on": [
+    "C013"
+   ]
+  },
+  {
+   "id": "C021",
+   "title": "MCP server manager",
+   "plan": "client",
+   "phase": "P1 Agent runtime",
+   "size": "M",
+   "role": "runtime",
+   "depends_on": [
+    "C013"
+   ]
+  },
+  {
+   "id": "C022",
+   "title": "Hooks engine",
+   "plan": "client",
+   "phase": "P1 Agent runtime",
+   "size": "M",
+   "role": "runtime",
+   "depends_on": [
+    "C015"
+   ]
+  },
+  {
+   "id": "C023",
+   "title": "Memory store (project and user memory)",
+   "plan": "client",
+   "phase": "P1 Agent runtime",
+   "size": "S",
+   "role": "runtime",
+   "depends_on": [
+    "C013"
+   ]
+  },
+  {
+   "id": "C024",
+   "title": "Sub-agent spawner with isolation",
+   "plan": "client",
+   "phase": "P1 Agent runtime",
+   "size": "L",
+   "role": "runtime",
+   "depends_on": [
+    "C013",
+    "C017"
+   ]
+  },
+  {
+   "id": "C025",
+   "title": "Internal typed event bus",
+   "plan": "client",
+   "phase": "P1 Agent runtime",
+   "size": "S",
+   "role": "runtime",
+   "depends_on": [
+    "C003"
+   ]
+  },
+  {
+   "id": "C026",
+   "title": "Local session persistence and resume",
+   "plan": "client",
+   "phase": "P1 Agent runtime",
+   "size": "M",
+   "role": "runtime",
+   "depends_on": [
+    "C013",
+    "C025"
+   ]
+  },
+  {
+   "id": "C027",
+   "title": "Checkpoints and rewind",
+   "plan": "client",
+   "phase": "P1 Agent runtime",
+   "size": "M",
+   "role": "runtime",
+   "depends_on": [
+    "C017",
+    "C026"
+   ]
+  },
+  {
+   "id": "C028",
+   "title": "Model selection and switching",
+   "plan": "client",
+   "phase": "P1 Agent runtime",
+   "size": "S",
+   "role": "runtime",
+   "depends_on": [
+    "C013"
+   ]
+  },
+  {
+   "id": "C029",
+   "title": "Local cost and token accounting",
+   "plan": "client",
+   "phase": "P1 Agent runtime",
+   "size": "S",
+   "role": "runtime",
+   "depends_on": [
+    "C019",
+    "C025"
+   ]
+  },
+  {
+   "id": "C030",
+   "title": "Interrupt and cancel semantics",
+   "plan": "client",
+   "phase": "P1 Agent runtime",
+   "size": "S",
+   "role": "runtime",
+   "depends_on": [
+    "C013"
+   ]
+  },
+  {
+   "id": "C031",
+   "title": "Terminal capability detection and colour tiers",
+   "plan": "client",
+   "phase": "P2 TUI",
+   "size": "S",
+   "role": "tui",
+   "depends_on": [
+    "C001"
+   ]
+  },
+  {
+   "id": "C032",
+   "title": "TUI theme engine: tokens to ANSI, light and dark, NO_COLOR",
+   "plan": "client",
+   "phase": "P2 TUI",
+   "size": "M",
+   "role": "tui",
+   "depends_on": [
+    "C009",
+    "C031"
+   ]
+  },
+  {
+   "id": "C033",
+   "title": "Half-block pixel renderer and Cento terminal component",
+   "plan": "client",
+   "phase": "P2 TUI",
+   "size": "M",
+   "role": "tui",
+   "depends_on": [
+    "C009",
+    "C032"
+   ]
+  },
+  {
+   "id": "C034",
+   "title": "TUI shell: Ink app skeleton, layout, resize",
+   "plan": "client",
+   "phase": "P2 TUI",
+   "size": "M",
+   "role": "tui",
+   "depends_on": [
+    "C025",
+    "C032"
+   ]
+  },
+  {
+   "id": "C035",
+   "title": "Prompt input: multiline, history, paste, slash commands",
+   "plan": "client",
+   "phase": "P2 TUI",
+   "size": "L",
+   "role": "tui",
+   "depends_on": [
+    "C034"
+   ]
+  },
+  {
+   "id": "C036",
+   "title": "Transcript view with virtualised scrollback",
+   "plan": "client",
+   "phase": "P2 TUI",
+   "size": "L",
+   "role": "tui",
+   "depends_on": [
+    "C025",
+    "C034"
+   ]
+  },
+  {
+   "id": "C037",
+   "title": "Diff view",
+   "plan": "client",
+   "phase": "P2 TUI",
+   "size": "M",
+   "role": "tui",
+   "depends_on": [
+    "C036"
+   ]
+  },
+  {
+   "id": "C038",
+   "title": "Permission prompt UI",
+   "plan": "client",
+   "phase": "P2 TUI",
+   "size": "M",
+   "role": "tui",
+   "depends_on": [
+    "C015",
+    "C034"
+   ]
+  },
+  {
+   "id": "C039",
+   "title": "Status line and footer",
+   "plan": "client",
+   "phase": "P2 TUI",
+   "size": "S",
+   "role": "tui",
+   "depends_on": [
+    "C034"
+   ]
+  },
+  {
+   "id": "C040",
+   "title": "Spinner and verb rotation",
+   "plan": "client",
+   "phase": "P2 TUI",
+   "size": "S",
+   "role": "tui",
+   "depends_on": [
+    "C034"
+   ]
+  },
+  {
+   "id": "C041",
+   "title": "Command palette",
+   "plan": "client",
+   "phase": "P2 TUI",
+   "size": "M",
+   "role": "tui",
+   "depends_on": [
+    "C035"
+   ]
+  },
+  {
+   "id": "C042",
+   "title": "Fleet panel: agent list, states, needs-you ordering",
+   "plan": "client",
+   "phase": "P2 TUI",
+   "size": "M",
+   "role": "tui",
+   "depends_on": [
+    "C014",
+    "C034"
+   ]
+  },
+  {
+   "id": "C043",
+   "title": "Task list and progress components",
+   "plan": "client",
+   "phase": "P2 TUI",
+   "size": "S",
+   "role": "tui",
+   "depends_on": [
+    "C034"
+   ]
+  },
+  {
+   "id": "C044",
+   "title": "Toast and notice system",
+   "plan": "client",
+   "phase": "P2 TUI",
+   "size": "S",
+   "role": "tui",
+   "depends_on": [
+    "C034"
+   ]
+  },
+  {
+   "id": "C045",
+   "title": "Keybinding system and help screen",
+   "plan": "client",
+   "phase": "P2 TUI",
+   "size": "M",
+   "role": "tui",
+   "depends_on": [
+    "C035"
+   ]
+  },
+  {
+   "id": "C046",
+   "title": "Mascot state driver: state map to animations, caps, dwell rules",
+   "plan": "client",
+   "phase": "P2 TUI",
+   "size": "M",
+   "role": "tui",
+   "depends_on": [
+    "C014",
+    "C033"
+   ]
+  },
+  {
+   "id": "C047",
+   "title": "Settings commands: theme, mascot, spinner, motion, density",
+   "plan": "client",
+   "phase": "P2 TUI",
+   "size": "S",
+   "role": "tui",
+   "depends_on": [
+    "C032",
+    "C045"
+   ]
+  },
+  {
+   "id": "C048",
+   "title": "First-run onboarding and init",
+   "plan": "client",
+   "phase": "P2 TUI",
+   "size": "M",
+   "role": "tui",
+   "depends_on": [
+    "C004",
+    "C047"
+   ]
+  },
+  {
+   "id": "C049",
+   "title": "TUI accessibility: reduced motion, NO_COLOR, screen-reader mode",
+   "plan": "client",
+   "phase": "P2 TUI",
+   "size": "M",
+   "role": "tui",
+   "depends_on": [
+    "C032",
+    "C046"
+   ]
+  },
+  {
+   "id": "C050",
+   "title": "Non-interactive mode: print, JSON output, pipes",
+   "plan": "client",
+   "phase": "P2 TUI",
+   "size": "M",
+   "role": "runtime",
+   "depends_on": [
+    "C013",
+    "C025"
+   ]
+  },
+  {
+   "id": "C051",
+   "title": "HTTP API client generated from OpenAPI",
+   "plan": "client",
+   "phase": "P3 Network",
+   "size": "L",
+   "role": "net",
+   "depends_on": [
+    "C003",
+    "C006",
+    "C007"
+   ]
+  },
+  {
+   "id": "C052",
+   "title": "Auth client: device flow login, keychain token store, refresh",
+   "plan": "client",
+   "phase": "P3 Network",
+   "size": "L",
+   "role": "net",
+   "depends_on": [
+    "C004",
+    "C051",
+    "C056"
+   ]
+  },
+  {
+   "id": "C053",
+   "title": "Account and device commands (login, logout, whoami, devices)",
+   "plan": "client",
+   "phase": "P3 Network",
+   "size": "S",
+   "role": "net",
+   "depends_on": [
+    "C052"
+   ]
+  },
+  {
+   "id": "C054",
+   "title": "Relay WebSocket client: handshake, envelope, heartbeat",
+   "plan": "client",
+   "phase": "P3 Network",
+   "size": "L",
+   "role": "net",
+   "depends_on": [
+    "C003",
+    "C006",
+    "C007"
+   ]
+  },
+  {
+   "id": "C055",
+   "title": "Reliable delivery: sequence, ack, resume, replay, dedupe",
+   "plan": "client",
+   "phase": "P3 Network",
+   "size": "L",
+   "role": "net",
+   "depends_on": [
+    "C054"
+   ]
+  },
+  {
+   "id": "C056",
+   "title": "End-to-end crypto module: keys, frames, grants, rotation",
+   "plan": "client",
+   "phase": "P3 Network",
+   "size": "L",
+   "role": "net",
+   "depends_on": [
+    "C003"
+   ]
+  },
+  {
+   "id": "C057",
+   "title": "Session client: create, join, leave, host mode",
+   "plan": "client",
+   "phase": "P3 Network",
+   "size": "M",
+   "role": "net",
+   "depends_on": [
+    "C051",
+    "C054",
+    "C056"
+   ]
+  },
+  {
+   "id": "C058",
+   "title": "Queue client: submit, track, cancel, host controls",
+   "plan": "client",
+   "phase": "P3 Network",
+   "size": "M",
+   "role": "net",
+   "depends_on": [
+    "C055",
+    "C057"
+   ]
+  },
+  {
+   "id": "C059",
+   "title": "Presence and cursor client",
+   "plan": "client",
+   "phase": "P3 Network",
+   "size": "S",
+   "role": "net",
+   "depends_on": [
+    "C057"
+   ]
+  },
+  {
+   "id": "C060",
+   "title": "Control commands client",
+   "plan": "client",
+   "phase": "P3 Network",
+   "size": "S",
+   "role": "net",
+   "depends_on": [
+    "C057"
+   ]
+  },
+  {
+   "id": "C061",
+   "title": "Remote approval routing client",
+   "plan": "client",
+   "phase": "P3 Network",
+   "size": "M",
+   "role": "net",
+   "depends_on": [
+    "C015",
+    "C057"
+   ]
+  },
+  {
+   "id": "C062",
+   "title": "Branch-mode fleet sync: agents, branches, locks",
+   "plan": "client",
+   "phase": "P3 Network",
+   "size": "M",
+   "role": "net",
+   "depends_on": [
+    "C017",
+    "C018",
+    "C057"
+   ]
+  },
+  {
+   "id": "C063",
+   "title": "Offline mode and reconnection behaviour",
+   "plan": "client",
+   "phase": "P3 Network",
+   "size": "M",
+   "role": "net",
+   "depends_on": [
+    "C026",
+    "C055"
+   ]
+  },
+  {
+   "id": "C064",
+   "title": "Billing and entitlement client: fetch, cache, gate, upgrade links",
+   "plan": "client",
+   "phase": "P3 Network",
+   "size": "M",
+   "role": "net",
+   "depends_on": [
+    "C051"
+   ]
+  },
+  {
+   "id": "C065",
+   "title": "Usage reporting: batched events and quota handling",
+   "plan": "client",
+   "phase": "P3 Network",
+   "size": "M",
+   "role": "net",
+   "depends_on": [
+    "C029",
+    "C051"
+   ]
+  },
+  {
+   "id": "C066",
+   "title": "Notifications client: inbox, OS notifications",
+   "plan": "client",
+   "phase": "P3 Network",
+   "size": "M",
+   "role": "net",
+   "depends_on": [
+    "C051"
+   ]
+  },
+  {
+   "id": "C067",
+   "title": "Feature flags client",
+   "plan": "client",
+   "phase": "P3 Network",
+   "size": "S",
+   "role": "net",
+   "depends_on": [
+    "C051"
+   ]
+  },
+  {
+   "id": "C068",
+   "title": "Update client: check, download, verify, apply",
+   "plan": "client",
+   "phase": "P3 Network",
+   "size": "L",
+   "role": "release",
+   "depends_on": [
+    "C012",
+    "C051"
+   ]
+  },
+  {
+   "id": "C069",
+   "title": "Webhook management commands",
+   "plan": "client",
+   "phase": "P3 Network",
+   "size": "S",
+   "role": "net",
+   "depends_on": [
+    "C051"
+   ]
+  },
+  {
+   "id": "C070",
+   "title": "Audit log viewer commands",
+   "plan": "client",
+   "phase": "P3 Network",
+   "size": "S",
+   "role": "net",
+   "depends_on": [
+    "C051"
+   ]
+  },
+  {
+   "id": "C071",
+   "title": "LAN discovery over mDNS",
+   "plan": "client",
+   "phase": "P4 LAN",
+   "size": "M",
+   "role": "net",
+   "depends_on": [
+    "C003"
+   ]
+  },
+  {
+   "id": "C072",
+   "title": "LAN host server speaking the session protocol",
+   "plan": "client",
+   "phase": "P4 LAN",
+   "size": "L",
+   "role": "net",
+   "depends_on": [
+    "C054",
+    "C056",
+    "C071"
+   ]
+  },
+  {
+   "id": "C073",
+   "title": "LAN pairing with PAKE and device trust",
+   "plan": "client",
+   "phase": "P4 LAN",
+   "size": "L",
+   "role": "net",
+   "depends_on": [
+    "C056",
+    "C071"
+   ]
+  },
+  {
+   "id": "C074",
+   "title": "Transport abstraction: LAN, relay, local behind one interface",
+   "plan": "client",
+   "phase": "P4 LAN",
+   "size": "M",
+   "role": "net",
+   "depends_on": [
+    "C054",
+    "C072"
+   ]
+  },
+  {
+   "id": "C075",
+   "title": "Host session engine: queue, approvals, broadcast, history",
+   "plan": "client",
+   "phase": "P4 LAN",
+   "size": "L",
+   "role": "net",
+   "depends_on": [
+    "C025",
+    "C026",
+    "C074"
+   ]
+  },
+  {
+   "id": "C076",
+   "title": "Guest session engine: join, send, render remote transcript",
+   "plan": "client",
+   "phase": "P4 LAN",
+   "size": "M",
+   "role": "net",
+   "depends_on": [
+    "C074",
+    "C075"
+   ]
+  },
+  {
+   "id": "C077",
+   "title": "Shared cursors and selections in the TUI",
+   "plan": "client",
+   "phase": "P4 LAN",
+   "size": "S",
+   "role": "tui",
+   "depends_on": [
+    "C034",
+    "C059"
+   ]
+  },
+  {
+   "id": "C078",
+   "title": "Conflict handling UX: locks and merge conflicts",
+   "plan": "client",
+   "phase": "P4 LAN",
+   "size": "M",
+   "role": "tui",
+   "depends_on": [
+    "C038",
+    "C062"
+   ]
+  },
+  {
+   "id": "C079",
+   "title": "Handoff and pair mode",
+   "plan": "client",
+   "phase": "P4 LAN",
+   "size": "M",
+   "role": "net",
+   "depends_on": [
+    "C075",
+    "C076"
+   ]
+  },
+  {
+   "id": "C080",
+   "title": "Reactions and comments UI",
+   "plan": "client",
+   "phase": "P4 LAN",
+   "size": "S",
+   "role": "tui",
+   "depends_on": [
+    "C034",
+    "C075"
+   ]
+  },
+  {
+   "id": "C081",
+   "title": "Web app scaffold: Vite, React, router, theme",
+   "plan": "client",
+   "phase": "P5 Web",
+   "size": "M",
+   "role": "web",
+   "depends_on": [
+    "C003",
+    "C009"
+   ]
+  },
+  {
+   "id": "C082",
+   "title": "Web authentication with PKCE",
+   "plan": "client",
+   "phase": "P5 Web",
+   "size": "M",
+   "role": "web",
+   "depends_on": [
+    "C051",
+    "C081"
+   ]
+  },
+  {
+   "id": "C083",
+   "title": "Web transcript and command-post view",
+   "plan": "client",
+   "phase": "P5 Web",
+   "size": "L",
+   "role": "web",
+   "depends_on": [
+    "C055",
+    "C056",
+    "C081"
+   ]
+  },
+  {
+   "id": "C084",
+   "title": "Web fleet board",
+   "plan": "client",
+   "phase": "P5 Web",
+   "size": "M",
+   "role": "web",
+   "depends_on": [
+    "C062",
+    "C081"
+   ]
+  },
+  {
+   "id": "C085",
+   "title": "Web roster, presence and cursors",
+   "plan": "client",
+   "phase": "P5 Web",
+   "size": "M",
+   "role": "web",
+   "depends_on": [
+    "C059",
+    "C081"
+   ]
+  },
+  {
+   "id": "C086",
+   "title": "Web mascot canvas player",
+   "plan": "client",
+   "phase": "P5 Web",
+   "size": "S",
+   "role": "web",
+   "depends_on": [
+    "C009",
+    "C081"
+   ]
+  },
+  {
+   "id": "C087",
+   "title": "Web workspace and members management",
+   "plan": "client",
+   "phase": "P5 Web",
+   "size": "M",
+   "role": "web",
+   "depends_on": [
+    "C051",
+    "C081"
+   ]
+  },
+  {
+   "id": "C088",
+   "title": "Web invites and join flow with deep links",
+   "plan": "client",
+   "phase": "P5 Web",
+   "size": "M",
+   "role": "web",
+   "depends_on": [
+    "C087"
+   ]
+  },
+  {
+   "id": "C089",
+   "title": "Web billing UI",
+   "plan": "client",
+   "phase": "P5 Web",
+   "size": "M",
+   "role": "web",
+   "depends_on": [
+    "C064",
+    "C081"
+   ]
+  },
+  {
+   "id": "C090",
+   "title": "Web settings and notifications UI",
+   "plan": "client",
+   "phase": "P5 Web",
+   "size": "S",
+   "role": "web",
+   "depends_on": [
+    "C066",
+    "C081"
+   ]
+  },
+  {
+   "id": "C091",
+   "title": "Web webhooks and audit UI",
+   "plan": "client",
+   "phase": "P5 Web",
+   "size": "S",
+   "role": "web",
+   "depends_on": [
+    "C069",
+    "C070",
+    "C081"
+   ]
+  },
+  {
+   "id": "C092",
+   "title": "Web accessibility and i18n framework",
+   "plan": "client",
+   "phase": "P5 Web",
+   "size": "M",
+   "role": "web",
+   "depends_on": [
+    "C081"
+   ]
+  },
+  {
+   "id": "C093",
+   "title": "Web end-to-end tests with Playwright against the mock backend",
+   "plan": "client",
+   "phase": "P5 Web",
+   "size": "M",
+   "role": "qa",
+   "depends_on": [
+    "C007",
+    "C083"
+   ]
+  },
+  {
+   "id": "C094",
+   "title": "Installer and packaging: npm, Homebrew, standalone binaries",
+   "plan": "client",
+   "phase": "P6 Distribution",
+   "size": "L",
+   "role": "release",
+   "depends_on": [
+    "C002",
+    "C012"
+   ]
+  },
+  {
+   "id": "C095",
+   "title": "Auto-update integration and release channels",
+   "plan": "client",
+   "phase": "P6 Distribution",
+   "size": "M",
+   "role": "release",
+   "depends_on": [
+    "C068",
+    "C094"
+   ]
+  },
+  {
+   "id": "C096",
+   "title": "Documentation site, README, man pages, built-in help",
+   "plan": "client",
+   "phase": "P6 Distribution",
+   "size": "M",
+   "role": "devx",
+   "depends_on": [
+    "C048"
+   ]
+  },
+  {
+   "id": "C097",
+   "title": "Opt-in crash reporting and the doctor command",
+   "plan": "client",
+   "phase": "P6 Distribution",
+   "size": "S",
+   "role": "runtime",
+   "depends_on": [
+    "C005",
+    "C010"
+   ]
+  },
+  {
+   "id": "C098",
+   "title": "Performance budgets and benchmarks",
+   "plan": "client",
+   "phase": "P6 Distribution",
+   "size": "M",
+   "role": "qa",
+   "depends_on": [
+    "C033",
+    "C036"
+   ]
+  },
+  {
+   "id": "C099",
+   "title": "Client security review: secrets, sandbox, supply chain, SBOM",
+   "plan": "client",
+   "phase": "P6 Distribution",
+   "size": "M",
+   "role": "security",
+   "depends_on": [
+    "C002"
+   ]
+  },
+  {
+   "id": "C100",
+   "title": "Consumer conformance suite and release gate",
+   "plan": "client",
+   "phase": "P6 Distribution",
+   "size": "L",
+   "role": "qa",
+   "depends_on": [
+    "C007",
+    "C055",
+    "C056",
+    "C057",
+    "C058",
+    "C059",
+    "C075",
+    "C076"
+   ]
+  }
+ ]
+}

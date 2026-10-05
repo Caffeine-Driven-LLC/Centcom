@@ -1,0 +1,9 @@
+{
+  "schema": "lan-pair.schema.json",
+  "valid": false,
+  "note": "fingerprint format",
+  "data": {
+    "t": "lan.pair.1",
+    "fp": "abcd"
+  }
+}

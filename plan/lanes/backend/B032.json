@@ -1,0 +1,75 @@
+{
+  "id": "B032",
+  "title": "Transactional email service with templates and provider abstraction",
+  "plan": "backend",
+  "phase": "P2 Workspaces",
+  "size": "M",
+  "role": "platform",
+  "depends_on": [
+    "B004",
+    "B006"
+  ],
+  "goal": "Provide a transactional email service with a provider abstraction (Postmark first), typed templates and safe rendering, so other lanes can send invite and account emails without knowing the provider.",
+  "scope_in": [
+    "`EmailService.send(templateId, to, params, opts)` that renders HTML + text, validates inputs and hands a `RenderedEmail` to an `EmailProvider`.",
+    "Providers: `PostmarkProvider` (HTTPS via global `fetch`, no SDK), `MemoryEmailProvider` (tests/dev capture), `ConsoleEmailProvider` (local dev, logs template name only).",
+    "Template registry with typed params for `workspace_invite`, `account_deletion_scheduled`, `export_ready`; plain-text part mandatory.",
+    "Per-recipient send limit via the B009 rate-limit primitives; BullMQ job `email-send` for asynchronous delivery with retries.",
+    "Config (via B004): `EMAIL_PROVIDER`, `EMAIL_FROM`, `POSTMARK_SERVER_TOKEN`, `EMAIL_TIMEOUT_MS` (default 10000)."
+  ],
+  "scope_out": [
+    "Invite business logic (B029), magic-link login emails (B014), notification digests (B063).",
+    "Inbound bounce/complaint webhooks and a suppression list (future lane).",
+    "Marketing email, localisation beyond `en`."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-IDS",
+    "CT-ERR",
+    "CT-DEEPLINK"
+  ],
+  "build_against": "`MemoryEmailProvider` and a local HTTP stub standing in for the Postmark API (started in tests); B009 in-memory rate limiter; nothing external.",
+  "deliverables": [
+    "packages/core/src/email/",
+    "apps/worker/src/jobs/email-send.ts"
+  ],
+  "interfaces": [
+    "TS: `interface EmailProvider { name: string; send(msg: RenderedEmail, signal: AbortSignal): Promise<{ providerMessageId: string }> }`",
+    "TS: `interface RenderedEmail { to: string; from: string; subject: string; html: string; text: string; tag: string }`",
+    "TS: `interface EmailService { send<T extends TemplateId>(id: T, to: string, params: TemplateParams[T], opts?: { idempotencyKey?: string }): Promise<{ queued: true; jobId: string }>; render<T extends TemplateId>(id: T, params: TemplateParams[T], locale?: string): RenderedEmail }`",
+    "TS: `type TemplateId = 'workspace_invite' | 'account_deletion_scheduled' | 'export_ready'` with a `registerTemplate` extension point for later lanes.",
+    "BullMQ queue `email-send` (attempts 5, backoff exponential 30 s base with jitter)."
+  ],
+  "acceptance": [
+    "Rendering `workspace_invite` with `inviterName` `<script>x</script>` yields HTML where the string is escaped (`&lt;script&gt;`) and the text part contains the raw characters without markup.",
+    "Any `to`, `subject` or name containing CR or LF is rejected with a validation error before reaching the provider (header injection).",
+    "`to` is lower-cased and rejected when > 254 chars or not a valid address; subject is <= 150 chars.",
+    "The 6th email of the same template to the same address inside one hour is rejected with 429-class error carrying `retry_after_s`.",
+    "A provider timeout after 10 s aborts the request and the job is retried up to 5 times; the 5th failure moves the job to the dead-letter set and increments `email_failed_total`.",
+    "Sending twice with the same `idempotencyKey` within 24 h results in exactly one provider call.",
+    "Logs for a send contain template id, job id and provider message id, and do not contain the recipient address, params or URLs (log-capture test).",
+    "With `EMAIL_PROVIDER=memory` the sent message is retrievable from `MemoryEmailProvider.sent` for test assertions."
+  ],
+  "tests": [
+    "email.render.test.ts: golden HTML/text for each template, escaping property test with random strings.",
+    "email.validation.test.ts: CRLF injection, address limits.",
+    "email.postmark.test.ts: against the HTTP stub (200, 422 permanent error, 500, timeout).",
+    "email.ratelimit.test.ts and email.idempotency.test.ts.",
+    "email.logging.test.ts: no recipient or URL in logs."
+  ],
+  "guardrails": [
+    "Template params MUST be HTML-escaped by the renderer; callers MUST NOT pass pre-built HTML.",
+    "MUST NOT log recipient addresses, tokens, URLs from params or the email body.",
+    "Links that contain secrets (invite tokens) MUST be built by the caller and passed as one `url` param; the renderer MUST NOT add tracking parameters or redirectors.",
+    "Permanent provider rejections (4xx other than 429) MUST NOT be retried.",
+    "The Postmark token MUST come from the secrets loader and MUST NOT appear in error messages."
+  ],
+  "failure_modes": [
+    "Provider 429/5xx -> retry with backoff and jitter, honour `Retry-After`.",
+    "Provider 4xx permanent (invalid recipient) -> job fails without retry, metric `email_rejected_total`.",
+    "Redis unavailable at enqueue -> `send` throws a retryable 503-class error; no email is sent inline as a fallback.",
+    "Unknown template id at runtime -> throws at enqueue time, never at delivery."
+  ],
+  "unblocks_gate": "G5",
+  "notes": "Only three templates are in this lane; other lanes add theirs through `registerTemplate` in their own files. Email copy is server-side here, unlike notifications (CT-NOTIF-PAYLOAD uses keys); this is intentional because email has no client message table. CONTRACT GAP: none for the contracts consumed."
+}

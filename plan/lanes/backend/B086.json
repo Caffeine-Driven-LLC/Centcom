@@ -1,0 +1,82 @@
+{
+  "id": "B086",
+  "title": "Status endpoints and public status feed",
+  "plan": "backend",
+  "phase": "P6 Platform",
+  "size": "S",
+  "role": "platform",
+  "depends_on": [
+    "B037"
+  ],
+  "goal": "Serve the health and status endpoints of the API app: `/healthz`, `/readyz` and the cached public `/v1/status` feed with components, incidents, minimum client version, contract version and deprecations.",
+  "scope_in": [
+    "`GET /healthz` (always `200 {\"status\":\"ok\"}`, touches no dependency) and `GET /readyz` (DB, Redis and migration-version checks, `503 {\"status\":\"degraded\",\"checks\":{...}}` on failure).",
+    "`GET /v1/status` per CT-STATUS: overall `status` (worst-of components), `updated_at`, `components[]`, `incidents[]`, `min_client_version`, `contract_version`, `deprecations[]`.",
+    "Component registry from config `STATUS_COMPONENTS` (id, name, probe URL or Redis heartbeat key) and a prober with 2 s timeout, results memoised 15 s in Redis so all instances agree.",
+    "Tables `status_incidents` and `status_incident_updates` plus a service API for B087 to create/update incidents; table `status_deprecations`.",
+    "`min_client_version` read from Redis key `status:min_client_version` (written by the release service) with fallback to config `MIN_CLIENT_VERSION`; `contract_version` read from the bundled `contracts/index.json` at build time.",
+    "Response caching headers: `Cache-Control: public, max-age=15`, `ETag`."
+  ],
+  "scope_out": [
+    "`GET /.well-known/jwks.json` (token service, B017).",
+    "Relay process health and graceful shutdown (B037).",
+    "Admin endpoints and UI to manage incidents (B087, B088).",
+    "Alerting, dashboards and SLOs (B093, B094).",
+    "Sending client-version enforcement responses (`client_too_old`)."
+  ],
+  "implements": [
+    "CT-STATUS"
+  ],
+  "consumes": [
+    "CT-ERR",
+    "CT-VER",
+    "CT-PAGE",
+    "CT-IDS"
+  ],
+  "build_against": "Postgres/Redis containers from B010; component probes are pointed at a scripted local HTTP server (up/slow/down); contract version is read from the repo's `contracts/index.json`.",
+  "deliverables": [
+    "apps/api/src/routes/status.ts",
+    "apps/api/src/modules/status/",
+    "packages/db/migrations/086_status.sql",
+    "docs/platform/status.md"
+  ],
+  "interfaces": [
+    "`GET /healthz`, `GET /readyz`, `GET /v1/status` with bodies exactly as CT-STATUS.",
+    "`statusService.createIncident({title, component_ids, status}): Promise<Incident>`, `addIncidentUpdate(id, text, status?)`, `resolveIncident(id)`, `setDeprecation({what, sunset})`.",
+    "`type ComponentStatus = 'operational'|'degraded'|'partial_outage'|'major_outage'`; incident id format `inc_<ULID>` (provisional).",
+    "Redis key `status:min_client_version`; cache keys `status:probe:{component}` TTL 15 s.",
+    "Config: `STATUS_COMPONENTS` (JSON), `MIN_CLIENT_VERSION`, `READYZ_TIMEOUT_MS=1000`, `EXPECTED_MIGRATION_VERSION` (from B007 runner)."
+  ],
+  "acceptance": [
+    "`/healthz` returns 200 `{\"status\":\"ok\"}` in < 5 ms p99 and still returns 200 when Postgres and Redis are stopped.",
+    "`/readyz` returns 200 only if a `SELECT 1` (<= 1 s), a Redis `PING` (<= 1 s) and the migration table version equals the expected version all succeed; otherwise 503 with `checks` naming each failed check as `{ok:false}` and no error strings, hostnames or stack traces.",
+    "`/v1/status` validates against the CT-STATUS shape; with one component `major_outage` the overall status is `major_outage`; with one `degraded` and the rest `operational` it is `degraded`; a component probe failing 3 consecutive times becomes `major_outage`, one failure `degraded`.",
+    "Repeated calls within 15 s trigger at most one probe round per component cluster-wide (verified with two app instances and a probe counter).",
+    "`Cache-Control: public, max-age=15` and `ETag` are present; `If-None-Match` yields 304; response size <= 32 KiB with 50 components and 20 incidents.",
+    "An open incident appears in `incidents[]` with its ordered `updates[]`; a resolved incident older than 7 days is omitted.",
+    "`min_client_version` reflects the Redis key within 15 s; if absent the config value is used; `contract_version` equals `contract_version` in `contracts/index.json`.",
+    "`/v1/status` is available without authentication and, under a DB outage, still responds 200 from the last cached snapshot (up to 5 min) flagged by `updated_at`."
+  ],
+  "tests": [
+    "unit: worst-of aggregation; probe failure counting; incident ordering and expiry filter.",
+    "integration: readiness with each dependency down, and with a pending migration.",
+    "contract: `/v1/status` body vs CT-STATUS example; headers.",
+    "multi-instance probe de-duplication test.",
+    "failure-path: probe target hangs for 10 s -> request still returns in < 3 s.",
+    "security test: error responses contain no connection strings or internal hostnames."
+  ],
+  "guardrails": [
+    "MUST NOT touch any dependency in `/healthz`.",
+    "MUST NOT expose internal hostnames, IPs, version numbers of dependencies or error messages in `/readyz` or `/v1/status`.",
+    "MUST bound every probe with a timeout (2 s) and the readiness checks with 1 s each; no unbounded waits.",
+    "MUST NOT let status failures block local or LAN use; the feed is informational (clients must not gate on it).",
+    "MUST keep incident text free of customer data; the service validates length (<= 500 chars per update)."
+  ],
+  "failure_modes": [
+    "Redis unavailable -> `/readyz` 503, `/v1/status` serves in-process last snapshot (<= 5 min) then reports components as `degraded` with a synthetic marker, never 500.",
+    "Probe flapping -> hysteresis of 3 failures before `major_outage` and 2 successes before recovery.",
+    "Migration table missing -> `/readyz` 503, `/healthz` unaffected."
+  ],
+  "unblocks_gate": "G1",
+  "notes": "CONTRACT GAP: incident `status` values other than `investigating` (e.g. identified, monitoring, resolved) and the `inc_` id prefix are not defined; this lane uses `investigating|identified|monitoring|resolved` provisionally and consumers must tolerate unknown values (CT-VER robustness rule). This lane covers the API app; the relay's own liveness endpoints belong to B037."
+}

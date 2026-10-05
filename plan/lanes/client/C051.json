@@ -1,0 +1,110 @@
+{
+  "id": "C051",
+  "title": "HTTP API client generated from OpenAPI",
+  "plan": "client",
+  "phase": "P3 Network",
+  "size": "L",
+  "role": "net",
+  "depends_on": [
+    "C003",
+    "C006",
+    "C007"
+  ],
+  "goal": "Give every other lane one typed, retrying, idempotent HTTP client for the REST API, generated from contracts/openapi.yaml, so no lane hand-writes fetch calls, headers, pagination or retry logic.",
+  "scope_in": [
+    "Generator script packages/net/scripts/gen-http.ts that reads contracts/openapi.yaml and emits packages/net/src/http/generated/operations.ts (operationId, method, path template, required scope, idempotency R/A/none, request/response type names imported from @centcom/protocol). Output is committed; CI fails on drift.",
+    "Runtime `HttpClient` over global fetch (Node 22 undici): base URL, bearer auth via injected token provider, User-Agent `centcom-cli/<ver> (contract/<contract_version>; <platform>-<arch>; node/<ver>)`, `X-Request-Id` (fresh `req_` ULID per logical request, reused across retries), per-request timeout 15 s, AbortSignal.",
+    "Retry policy exactly per the CT-ERR table: 408/425/429 always retried; 500/502/503/504 retried only for GET/PUT/DELETE or POST that carries an Idempotency-Key; full-jitter exponential backoff base 500 ms, cap 30 s, max 5 attempts; honour `Retry-After`/`retry_after_s` up to the 30 s cap.",
+    "Idempotency: every POST marked R or A in the OpenAPI gets an auto-generated `Idempotency-Key` (monotonic ULID, <= 64 chars) that is stable across retries; caller may supply one; `Idempotency-Replayed: true` is surfaced on the result.",
+    "Cursor pagination helper `paginate()` (async iterator) and `listPage()` per CT-PAGE (limit 1..200, default 50, opaque `cursor`, `next_cursor`/`has_more`), ETag capture on GET and `If-Match` on PATCH/PUT/DELETE, `If-None-Match` revalidation helper (used by flags), RateLimit-* header parsing.",
+    "Error mapping: any non-2xx application/problem+json becomes a typed error through the C006 error model (switch on `code`, keep `request_id`, `retry_after_s`, `errors[]`); non-JSON or network failures become typed transport errors; 401 `token_expired` triggers exactly one call to the injected `onUnauthorized()` refresh hook and one replay.",
+    "Status helpers for CT-STATUS: `getStatus()` (GET /v1/status), `getJwks()`; exposes `min_client_version` and `contract_version` to callers without acting on them.",
+    "Client-side body size guard: JSON bodies > 256 KiB rejected before sending, except POST /v1/usage/events (1 MiB)."
+  ],
+  "scope_out": [
+    "Token storage, device flow and refresh rotation: lane C052 (this client only calls the injected `getAccessToken`/`onUnauthorized`).",
+    "Domain wrappers (billing, usage batching, notifications, flags, updates, webhooks, audit, sessions): lanes C064-C070 and C057 build on this client.",
+    "WebSocket traffic and join-token minting policy: lane C054/C057.",
+    "The mock server itself: lane C007. The error class hierarchy and user messages: lane C006."
+  ],
+  "implements": [
+    "CT-PAGE"
+  ],
+  "consumes": [
+    "CT-ERR",
+    "CT-IDS",
+    "CT-VER",
+    "CT-STATUS",
+    "CT-AUTH",
+    "CT-API-ACCOUNTS",
+    "CT-API-WORKSPACES",
+    "CT-API-SESSIONS",
+    "CT-API-BILLING",
+    "CT-API-USAGE",
+    "CT-API-AUDIT",
+    "CT-API-NOTIFY",
+    "CT-API-WEBHOOKS",
+    "CT-API-RELEASES",
+    "CT-API-FLAGS"
+  ],
+  "build_against": "the mock backend (lane C007): REST from OpenAPI plus the WebSocket relay simulator, started in-process with `startMockBackend()` from @centcom/testkit; no real backend is needed. The mock serves every path in openapi.yaml with scripted failures (`mock.failNext({status:503})`, `mock.rateLimit({retryAfterS:2})`) so retry, idempotency replay and 401 refresh are tested offline. Types come from @centcom/protocol (lane C003).",
+  "deliverables": [
+    "packages/net/scripts/gen-http.ts",
+    "packages/net/src/http/generated/operations.ts",
+    "packages/net/src/http/client.ts",
+    "packages/net/src/http/retry.ts",
+    "packages/net/src/http/pagination.ts",
+    "packages/net/src/http/idempotency.ts",
+    "packages/net/src/http/rate-limit.ts",
+    "packages/net/src/http/index.ts",
+    "packages/net/src/http/README.md",
+    "packages/net/src/http/__tests__/"
+  ],
+  "interfaces": [
+    "`createHttpClient(opts: HttpClientOptions): HttpClient`; `HttpClientOptions = { baseUrl?: string /* default https://api.centcom.dev */; getAccessToken(): Promise<string | undefined>; onUnauthorized?(code: 'token_expired'): Promise<boolean>; fetch?: typeof fetch; clock?: Clock; rng?: () => number; ids?: IdGenerator; logger?: Logger; userAgent: string; timeoutMs?: number /*15000*/; maxAttempts?: number /*5*/ }`",
+    "`HttpClient.call<K extends OperationId>(op: K, args: OperationArgs<K>, o?: { signal?: AbortSignal; idempotencyKey?: string; ifMatch?: string }): Promise<HttpResult<OperationResponse<K>>>` where `HttpResult = { data; status; headers; etag?: string; replayed: boolean; requestId: string; rateLimit?: { limit: number; remaining: number; resetS: number } }`",
+    "`paginate<K>(op: K, args, o?: { limit?: number; signal?: AbortSignal }): AsyncIterable<Item>`; `listPage<K>(op, args & { cursor?: string; limit?: number }): Promise<{ data: Item[]; nextCursor: string | null; hasMore: boolean }>`",
+    "`HttpClient.getStatus(): Promise<StatusDoc>`, `HttpClient.getJwks()`, `HttpClient.withAuthProvider(p): HttpClient`",
+    "CLI/dev script: `pnpm --filter @centcom/net gen:http` (writes generated/operations.ts) and `pnpm --filter @centcom/net gen:http --check` (exit 1 on drift)",
+    "Errors thrown: C006 `ApiError` (wire problem+json), `TransportError` (DNS/TLS/timeout/abort), `RequestTooLargeError` (local)"
+  ],
+  "acceptance": [
+    "Against the mock, a GET that answers 503 twice then 200 succeeds on attempt 3; recorded sleeps are each <= 30 s and follow full-jitter bounds (attempt n sleeps in [0, min(30000, 500*2^n)] ms) with a seeded rng.",
+    "A POST /v1/usage/events that gets 502 then 200 is retried with the identical Idempotency-Key and identical body; the mock records one logical ingest and the second response carries `Idempotency-Replayed: true`, which the caller sees as `replayed === true`.",
+    "A POST with no Idempotency-Key defined in OpenAPI (e.g. POST /v1/auth/revoke) that gets 503 is NOT retried and the typed error is thrown after 1 attempt.",
+    "A 400, 403, 404, 409, 410 or 422 problem+json is thrown immediately with attempts == 1, preserving `code`, `request_id` and `errors[].pointer`.",
+    "A 401 `token_expired` invokes `onUnauthorized` exactly once, replays the request once with the new token and succeeds; a 401 `token_revoked`, `token_invalid` or `device_revoked` never calls the refresh hook and throws.",
+    "429 with `Retry-After: 2` waits 2 s (fake clock) before retry; a 429 with `retry_after_s: 3600` (quota_exceeded) is not slept inline and throws an ApiError with `retryAfterS === 3600`.",
+    "`paginate('listSessions', {})` over a 3-page mock result yields all items in order, passes the opaque cursor back unchanged, sends `limit=50` by default, rejects `limit` 0 or 201 locally, and never sends an offset parameter.",
+    "PATCH with a stored ETag sends `If-Match`; a 412 `precondition_failed` is surfaced as a typed error without retry.",
+    "A request body of 256 KiB + 1 byte is rejected with `RequestTooLargeError` before any network I/O; a 1 MiB body to POST /v1/usage/events is accepted and 1 MiB + 1 byte is rejected.",
+    "Every outgoing request carries `X-Request-Id` matching `^req_[0-9A-HJKMNP-TV-Z]{26}$` and a User-Agent matching the CT-VER format; the same X-Request-Id is reused across retries of one logical request.",
+    "`pnpm --filter @centcom/net gen:http --check` exits 0 on a clean tree and 1 after editing one operation in a copy of openapi.yaml."
+  ],
+  "tests": [
+    "http/retry.test.ts: table-driven over every status in the CT-ERR retry table x (idempotent, POST with key, POST without key).",
+    "http/idempotency.test.ts: key stable across retries, conflict (409 idempotency_conflict) not retried, replay header surfaced.",
+    "http/pagination.test.ts: property test over random page sizes and cursor expiry error; asserts order and no offset param.",
+    "http/auth-refresh.test.ts: single refresh per burst of 10 concurrent 401 token_expired calls (single-flight in the hook contract), other 401 codes never refresh.",
+    "http/contract.test.ts: every operation in generated/operations.ts is callable against the mock and its response validates with the C003 validators.",
+    "http/errors.test.ts: malformed JSON, HTML 502 from a proxy, TLS failure and abort map to TransportError with no response body leaked into the message."
+  ],
+  "guardrails": [
+    "MUST NOT log Authorization headers, request/response bodies, refresh tokens, API keys or join tickets; log only method, path template, status, attempt, duration ms and request_id.",
+    "MUST retry a POST only when it carries an Idempotency-Key (CT-ERR table); a retried POST must reuse the same key and byte-identical body.",
+    "MUST NOT put tokens or any secret in a URL or query string; Authorization header only.",
+    "MUST NOT hand-write response types that C003 generates; import them. MUST ignore unknown response fields and tolerate unknown enum values (CT-VER).",
+    "MUST NOT use offset pagination or the unsupported `fields=` parameter; MUST NOT auto-follow `next_cursor` without the caller iterating (no unbounded prefetch).",
+    "MUST NOT make any call at import time or from createHttpClient(); the client is inert until a method is called so LAN/offline use never touches the network.",
+    "MUST bound every wait: per-request timeout 15 s, max 5 attempts, total retry sleep per logical request <= 60 s."
+  ],
+  "failure_modes": [
+    "Network unreachable / DNS failure -> after the retry budget throw TransportError(kind='offline'); never hang; callers (C063, C064) treat it as offline and continue locally.",
+    "Server returns an unknown error `code` -> handle by HTTP status class (CT-ERR rule 7) and keep the raw code on the error object.",
+    "Refresh hook itself fails (network) -> original 401 is thrown as `AuthExpiredError`, no loop, no second refresh in the same request.",
+    "Response is 2xx but fails C003 validation -> throw `ContractViolationError` (status, operationId, request_id, JSON pointer only; never the body) and do not retry.",
+    "Cursor expired (24 h) or bound to other filters -> surface the typed error; `paginate` stops and the caller restarts from the first page."
+  ],
+  "unblocks_gate": "G1",
+  "notes": "SPLIT? Generator plus runtime is a full L; if it overruns, ship the runtime first with a hand-maintained operations table and land the generator as a follow-up PR. CONTRACT GAP: the error code for an expired/invalid pagination cursor is not named in CT-PAGE; handled as a generic 4xx until errors.json says otherwise."
+}

@@ -1,0 +1,80 @@
+{
+  "id": "B079",
+  "title": "Trials, coupons and promotions",
+  "plan": "backend",
+  "phase": "P5 Billing",
+  "size": "S",
+  "role": "billing",
+  "depends_on": [
+    "B070"
+  ],
+  "goal": "Support free trials and coupon/promotion codes: eligibility rules, trial status handling, and `POST /v1/workspaces/{id}/coupons/redeem` backed by Stripe promotion codes.",
+  "scope_in": [
+    "`POST /v1/workspaces/{id}/coupons/redeem` (scope `billing:write`, roles owner/billing, `Idempotency-Key` accepted) with body `{code: string}`.",
+    "Validation of promotion codes against Stripe (active, not expired, redemption limits, applicable plan, first-time-only restrictions) and application to the workspace's subscription or customer.",
+    "Trial eligibility service `trialEligibility(workspaceId, userId)`: one trial per workspace and per owner user, configurable length `TRIAL_DAYS` (default 14), trial applies to a plan from the default plans table.",
+    "Handling of Stripe `customer.subscription.trial_will_end` (3 days before) to send an email via B032 and a webhook `billing.subscription.updated` event.",
+    "Redemption ledger table for audit, abuse detection and idempotent replay."
+  ],
+  "scope_out": [
+    "Creating the Stripe subscription or checkout (B070, B071); this lane exposes `trialEligibility` and a coupon-application function they call.",
+    "Entitlement values per plan (B069) and status behaviour of `trialing` (B080 reads it).",
+    "Admin tooling to issue coupons (B087 may call `grantPromotion`).",
+    "Dunning (B078)."
+  ],
+  "implements": [
+    "CT-API-BILLING",
+    "CT-ENTITLEMENTS"
+  ],
+  "consumes": [
+    "CT-RBAC",
+    "CT-PAGE",
+    "CT-ERR",
+    "CT-API-AUDIT",
+    "CT-WEBHOOKS"
+  ],
+  "build_against": "Stripe provider abstraction from B070 with a fake that supports promotion-code lookup and subscription update; fixtures for valid, expired, exhausted, wrong-plan and already-used codes.",
+  "deliverables": [
+    "apps/api/src/modules/billing/promotions/",
+    "apps/api/src/routes/billing-coupons.ts",
+    "packages/db/migrations/079_coupon_redemptions.sql",
+    "docs/billing/trials-and-coupons.md"
+  ],
+  "interfaces": [
+    "HTTP `POST /v1/workspaces/{id}/coupons/redeem` body `{code}` -> 200 with the updated subscription summary (same shape as `GET /v1/workspaces/{id}/subscription`) and `Idempotency-Replayed` on replay.",
+    "`trialEligibility(workspaceId: string, userId: string): Promise<{eligible: boolean; reason?: 'already_used'|'workspace_paid'; days: number}>`.",
+    "`grantPromotion(workspaceId: string, promotionCodeId: string, actor: Actor): Promise<Subscription>` for internal callers.",
+    "Table `coupon_redemptions(id, workspace_id, user_id, code_hash, stripe_promotion_id, redeemed_at, request_fingerprint)`; `UNIQUE(workspace_id, stripe_promotion_id)`.",
+    "Config: `TRIAL_DAYS=14`, `COUPON_REDEEM_RATE_PER_WORKSPACE_PER_HOUR=10`."
+  ],
+  "acceptance": [
+    "Redeeming a valid code as owner returns 200, the subscription reflects the discount, one audit event `billing.coupon.redeemed` is written, and a `rev` bump occurs only if entitlements changed.",
+    "Replaying the same `Idempotency-Key` and body returns the stored 200 with `Idempotency-Replayed: true` and applies the coupon once; same key with a different code returns 409 `idempotency_conflict`.",
+    "An invalid, expired, exhausted or already-redeemed code returns 422 problem+json with a `errors[0].pointer` of `/code`; the response never reveals which condition failed beyond a generic detail.",
+    "A `member` or `guest` caller gets 403 `forbidden`; caller of a different workspace gets 404/403.",
+    "More than 10 redeem attempts per workspace per hour (valid or not) returns 429 with `Retry-After`; the counter is per workspace and per IP.",
+    "A second trial for the same workspace or the same owner user is refused by `trialEligibility` (`already_used`); a workspace with a paid subscription is refused (`workspace_paid`).",
+    "The raw code is never stored or logged; only `sha256` of the normalised (trim, upper-case) code is persisted."
+  ],
+  "tests": [
+    "unit: code normalisation and hashing; eligibility truth table.",
+    "integration: redeem happy path and replay with the Stripe fake.",
+    "authz matrix across workspace roles.",
+    "abuse test: brute-force 11 attempts in an hour -> 429 on the 11th.",
+    "failure-path: Stripe timeout -> 503 with `retry_after_s`, no ledger row, safe to retry with the same key.",
+    "contract: error bodies conform to CT-ERR; `Idempotency-Key` behaviour conforms to CT-PAGE."
+  ],
+  "guardrails": [
+    "MUST NOT reveal whether a code exists; failures return the same status and detail text.",
+    "MUST NOT store plaintext coupon codes anywhere (DB, logs, audit events).",
+    "MUST apply a coupon at most once per workspace per promotion even under concurrent requests (DB unique constraint plus Stripe idempotency key).",
+    "MUST NOT grant trial status without Stripe confirming the trial subscription state."
+  ],
+  "failure_modes": [
+    "Stripe error after ledger insert -> roll back the ledger row in the same transaction, return 503, client may retry with the same key.",
+    "Trial ends without payment method -> Stripe moves the subscription; this lane relies on B072/B078 for the resulting status, no special handling.",
+    "Concurrent redeem of one single-use code by two workspaces -> exactly one succeeds, other gets the generic 422."
+  ],
+  "unblocks_gate": "G4",
+  "notes": "CONTRACT GAP: the error registry has no coupon-specific codes; use the registry's generic validation error for 422 and add specific codes via a Contract PR if product wants them. CONTRACT GAP: the success response body of coupon redeem is not specified; the subscription summary is assumed. CONTRACT GAP: no notification category for 'trial ending'; this lane sends email only."
+}

@@ -1,0 +1,93 @@
+{
+  "id": "B068",
+  "title": "Share links and viewer-only guest tokens",
+  "plan": "backend",
+  "phase": "P4 Fleet",
+  "size": "M",
+  "role": "identity",
+  "depends_on": [
+    "B017",
+    "B054",
+    "B031"
+  ],
+  "goal": "Viewer-only share links: hosts create and revoke short-lived links, and anonymous visitors exchange a link token for a limited guest relay ticket, with strong abuse controls and no write capability.",
+  "scope_in": [
+    "POST /v1/sessions/{id}/share-links (host, sessions:host, Idempotency-Key accepted): create link with expiry <= 24 h (default 1 h) and max uses (default 10, max 50).",
+    "DELETE /v1/sessions/{id}/share-links/{token}: revoke; new joins fail immediately and guests already joined with that link are removed (closed with 4403 via relay notifier).",
+    "POST /v1/share-links/{token}/join (public, rate-limited): validate token, create an ephemeral guest member (role viewer) and mint a 60 s single-use relay ticket with role `viewer`.",
+    "Token handling: 160-bit URL-safe random token, only sha256 stored, constant-time lookup by hash, never logged.",
+    "Entitlement check (relay_access, max_session_members) and session-state check (live or paused only).",
+    "Guest records and audit events for create, revoke and each join."
+  ],
+  "scope_out": [
+    "Session lifecycle and the other session routes: B053/B054.",
+    "Key distribution to guests: the E2E key travels in the URL fragment built by the client; the server never sees or stores it (CT-DEEPLINK, CT-CRYPTO).",
+    "Rate-limit middleware internals: B023 (this lane configures buckets).",
+    "Workspace invites for named people: B029."
+  ],
+  "implements": [
+    "CT-API-SESSIONS"
+  ],
+  "consumes": [
+    "CT-AUTH",
+    "CT-RBAC",
+    "CT-DEEPLINK",
+    "CT-CRYPTO",
+    "CT-ENTITLEMENTS",
+    "CT-PAGE",
+    "CT-ERR",
+    "CT-IDS"
+  ],
+  "build_against": "Fastify inject with fake SessionService (B053/B054 interface), fake ticket signer (Ed25519 test key), in-memory rate limiter from B009, entitlement fixtures. Relay notifier recorded by a fake.",
+  "deliverables": [
+    "apps/api/src/modules/share-links/service.ts",
+    "apps/api/src/modules/share-links/repository.ts",
+    "apps/api/src/modules/share-links/guest-ticket.ts",
+    "apps/api/src/routes/share-links/index.ts",
+    "apps/api/src/modules/share-links/README.md",
+    "apps/api/test/share-links/",
+    "packages/db/migrations/0068_share_links.sql"
+  ],
+  "interfaces": [
+    "POST /v1/sessions/{id}/share-links {expires_in_s?: 60..86400, max_uses?: 1..50} -> 201 {token, url:'https://centcom.dev/j/<token>', expires_at, max_uses}  (token returned once)",
+    "DELETE /v1/sessions/{id}/share-links/{token} -> 204",
+    "POST /v1/share-links/{token}/join {name?: string 1..40} -> 200 {ticket, region, member:{id, slot, role:'viewer'}, session:{id}} ; errors 404 (unknown/expired/revoked, uniform), 429",
+    "ShareLinkService.create / revoke / join(tokenPlain, guestInfo, ip)",
+    "Tables share_link(id, session_id, token_hash bytea unique, expires_at, max_uses, uses, revoked_at, created_by_member), guest_member(member_id pk 'mem_…', session_id, share_link_id, name, created_at)",
+    "Rate buckets: join 10/min/IP and 30/min/token; create 20/min/user"
+  ],
+  "acceptance": [
+    "create by a non-host (editor) returns 403; by the host returns 201 with a token of 43 chars base64url (>=160 bits), expires_at <= now+24 h; expires_in_s=86401 returns 422.",
+    "The database row holds sha256(token) only; a dump grep for the plain token finds nothing, and the token does not appear in captured logs.",
+    "join with a valid token returns a ticket with claims role='viewer', aud='centcom-relay', exp-iat=60 s and a fresh jti; the guest can never obtain role editor or host (property test over random inputs).",
+    "join with an unknown, expired, revoked or exhausted (uses == max_uses) token returns the same 404 problem body and similar latency (timing difference < 5 ms median in test) so tokens cannot be probed.",
+    "Concurrent 50 joins on a link with max_uses=10 succeed exactly 10 times (atomic increment), the rest get 404.",
+    "revoke makes the next join fail and notifies the relay to close existing guests of that link with 4403 within the same request; revoke by a non-host is 403.",
+    "join is refused (409/404) when the session is ended/expired, when relay_access is false for the workspace, or when max_session_members would be exceeded (guests count as members).",
+    "11th join attempt from one IP within a minute returns 429 with Retry-After; guest `name` containing control characters is rejected 422.",
+    "Guest tickets do not include a `dev` claim and cannot be used to call any REST API (the ticket audience is relay only)."
+  ],
+  "tests": [
+    "share-links.create-revoke.test.ts: authz, expiry bounds, revocation effects",
+    "share-links.join.test.ts: ticket claims, single-use, role invariants",
+    "share-links.concurrency.test.ts: max_uses atomicity",
+    "share-links.probing.test.ts: uniform errors and timing",
+    "share-links.limits.test.ts: entitlements, member cap, rate limits",
+    "share-links.privacy.test.ts: token never stored or logged in plain"
+  ],
+  "guardrails": [
+    "MUST issue only role 'viewer' tickets for guests; any write-capable role from a share link is a critical defect.",
+    "MUST store and compare token hashes only; MUST use constant-time comparison and uniform error responses.",
+    "MUST NOT accept or store the E2E key fragment; the join endpoint ignores/rejects any `k` field.",
+    "MUST cap link lifetime at 24 h server-side regardless of client input (CT-DEEPLINK).",
+    "MUST honour policy.share_history=false by telling the relay the guest may not receive earlier epochs (flag carried as session policy, not as a new claim).",
+    "Guest members MUST be deleted when their link expires or the session ends."
+  ],
+  "failure_modes": [
+    "Relay notifier down on revoke -> revoke committed; closing of live guests retried via outbox, relay re-checks revoked guests at the next privileged frame (<= 2 s cache).",
+    "Ticket signer unavailable -> 503 with retry_after_s and no use consumed (increment rolled back).",
+    "Redis rate-limit store unavailable -> fail closed for the public join endpoint (503), open for authenticated create."
+  ],
+  "unblocks_gate": "G5",
+  "notes": "CONTRACT GAP: the request/response bodies of share-link endpoints, the guest display name field and the guest device-key story are not in the contracts: a guest without a registered device has no X25519 key to receive key.grant. This lane returns a ticket without `dev` and leaves key delivery to the fragment-carried key; a Contract PR should define how guests prove a key. Defaults (1 h, 10 uses, max 50) are lane choices. B068 depends on B017 (token service) for signing and B054 for session routes."
+}

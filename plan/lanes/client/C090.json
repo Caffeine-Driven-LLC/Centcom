@@ -1,0 +1,80 @@
+{
+  "id": "C090",
+  "title": "Web settings and notifications UI",
+  "plan": "client",
+  "phase": "P5 Web",
+  "size": "S",
+  "role": "web",
+  "depends_on": [
+    "C066",
+    "C081"
+  ],
+  "goal": "Users can read and manage their notifications inbox, per-category channel preferences, quiet hours, push registration and account settings in the web app, with copy coming only from a client message table.",
+  "scope_in": [
+    "Routes in apps/web/src/settings/: `/notifications` (inbox), `/settings/notifications`, `/settings/account`, `/settings/appearance`, `/settings/devices`.",
+    "Inbox: GET /v1/notifications (paginated, `unread=true` filter), POST /v1/notifications/{id}/read, POST /v1/notifications/read-all; unread badge in the top bar with `aria-label`.",
+    "Render by `title_key`/`body_key` + `params` from a local message table (en); unknown keys fall back to a generic line; `action.deeplink` is parsed and followed via the deep-link parser (C088) after validation.",
+    "Preferences: GET/PUT /v1/notification-preferences (channels `inbox|push|email|os` x 14 categories, quiet hours); `os` is client-local (stored via Notification API permission, not the API).",
+    "Web push: register `POST /v1/push/subscriptions` (A) and unregister `DELETE /v1/push/subscriptions/{id}` using the Push API and a service worker in `public/sw.js` (notification display only).",
+    "Account: PATCH /v1/me (display name 1-40 chars, locale BCP 47, telemetry opt-in), devices list/revoke via GET /v1/devices and DELETE /v1/devices/{id}; appearance (theme, density comfortable/compact)."
+  ],
+  "scope_out": [
+    "Notification client library and OS notifications in the CLI (C066).",
+    "Server-side delivery, email digests and web-push sending.",
+    "Telemetry client (C010) beyond showing the opt-in toggle value.",
+    "Billing and workspace settings."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-API-NOTIFY",
+    "CT-NOTIF-PAYLOAD",
+    "CT-API-ACCOUNTS",
+    "CT-DEEPLINK",
+    "CT-TELEMETRY",
+    "CT-PAGE",
+    "CT-ERR"
+  ],
+  "build_against": "Mock backend (lane C007) serving notification fixtures for all 14 categories and the preference endpoints; push subscription endpoint stubbed.",
+  "deliverables": [
+    "apps/web/src/settings/",
+    "apps/web/public/sw.js",
+    "apps/web/test/settings/"
+  ],
+  "interfaces": [
+    "Routes: /notifications, /settings/notifications, /settings/account, /settings/appearance, /settings/devices",
+    "export function renderNotification(n: Notification, t: MessageTable): {title: string; body: string; href?: string}",
+    "export const CATEGORIES: readonly ['approval_needed','queue_turn','mention','member_joined','member_left','agent_done','ci_failed','pr_merged','usage_warning','quota_reached','billing_issue','invite_received','update_available','security_alert']",
+    "public/sw.js handles `push` and `notificationclick` only; no fetch interception."
+  ],
+  "acceptance": [
+    "All 14 categories render title and body from message keys with `params` substituted as text; a notification with an unknown `title_key` renders 'Update from Centcom' and logs at debug.",
+    "Mark read updates the badge optimistically and rolls back on error within 300 ms; read-all clears the badge and sends exactly one request.",
+    "Inbox paginates (`limit=50`, cursor) with infinite scroll that also offers a keyboard 'Load more' button.",
+    "`security_alert` and `billing_issue` channel toggles cannot disable `inbox`; the quiet-hours control states they are never suppressed (CT-NOTIF-PAYLOAD).",
+    "An `action.deeplink` with an invalid scheme or unknown host is not rendered as a link (test with `javascript:` and `data:` values).",
+    "Push permission request occurs only from an explicit button click, never on page load; revoke removes the subscription via DELETE.",
+    "Telemetry toggle sends `PATCH /v1/me {telemetry}` and the UI states what is collected, linking CT-TELEMETRY categories in plain words; default off.",
+    "Service worker file is <= 4 KB, same-origin, and shows no content other than `title_key`-resolved text received in the push payload."
+  ],
+  "tests": [
+    "notif.render.test.ts for all categories and unknown keys.",
+    "notif.deeplink.safety.test.ts.",
+    "prefs.matrix.test.tsx and quiet-hours rules.",
+    "push.permission.test.ts.",
+    "account.validation.test.ts (name length, locale).",
+    "settings.a11y.test.tsx."
+  ],
+  "guardrails": [
+    "MUST NOT render server-provided HTML or display text; only keys looked up in the local table (no display text on the wire).",
+    "MUST validate `action.deeplink` through parseDeepLink and allow only the CT-DEEPLINK forms.",
+    "MUST NOT request notification permission without a user gesture or show more than one prompt per session.",
+    "MUST NOT store notification contents in localStorage; unread count only in memory."
+  ],
+  "failure_modes": [
+    "PUT preferences 412/409 -> reload current server value and re-apply the user's change with a notice.",
+    "Browser lacks Push API -> hide push toggle with explanatory text.",
+    "Notification refers to missing session (404 on follow) -> neutral 'This is no longer available'."
+  ],
+  "unblocks_gate": "G5",
+  "notes": "The `os` channel is client-local; the web build maps it to the Notification API only while the tab is open. Whether web-push payloads are encrypted with keys is a backend detail not in the contract."
+}

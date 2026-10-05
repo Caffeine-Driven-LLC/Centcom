@@ -1,0 +1,87 @@
+{
+  "id": "B080",
+  "title": "Entitlement cache and enforcement middleware",
+  "plan": "backend",
+  "phase": "P5 Billing",
+  "size": "M",
+  "role": "billing",
+  "depends_on": [
+    "B009",
+    "B069"
+  ],
+  "goal": "Provide the single place that reads, caches and enforces entitlements for the API and relay, and serve `GET /v1/workspaces/{id}/entitlements`.",
+  "scope_in": [
+    "`EntitlementService` with a <= 30 s in-process cache per workspace, invalidated through Redis pub/sub channel `ent:inv` on change, with SQL as source of truth (reads the plans/entitlements model of B069).",
+    "Effective-status resolution: `active`, `trialing`, `past_due` (full entitlements until `grace_until`, then `none`), `canceled` (until `period.end`, then `none`), `none` (free defaults).",
+    "Fastify plugin and route-level helpers `requireEntitlement(key, predicate)` and `requireQuota(limitKey)` for boolean, count and metered keys, mapped to documented error responses.",
+    "`GET /v1/workspaces/{id}/entitlements` (scope `workspaces:read`, role member+) returning the CT-ENTITLEMENTS object with `rev`, `usage`, `warnings`, `grace_until`, with strong `ETag` derived from `rev` and `If-None-Match` support (304).",
+    "Shared client package surface for the relay: `@centcom/core/entitlements` (read-only cache client) so the relay and API share one implementation.",
+    "Entitlement `rev` accessor used for the `ent` access-token claim."
+  ],
+  "scope_out": [
+    "Plan catalogue, entitlement values and the `rev` write path (B069).",
+    "Quota threshold detection and the `quota:state` flag (B076); this lane reads it.",
+    "Status transitions caused by payment events (B078) and trials (B079).",
+    "Seat counting rules (B030) and relay-side queue/agent pause logic (relay lanes); they call this lane's API.",
+    "Token issuance (B017)."
+  ],
+  "implements": [
+    "CT-ENTITLEMENTS",
+    "CT-API-BILLING"
+  ],
+  "consumes": [
+    "CT-RBAC",
+    "CT-AUTH",
+    "CT-ERR",
+    "CT-PAGE",
+    "CT-API-USAGE"
+  ],
+  "build_against": "Redis in-memory implementation from B009 for pub/sub and an in-memory fake of the B069 repository; fixtures `contracts/fixtures/entitlements/*.json` (when present) are loaded as expected GET bodies.",
+  "deliverables": [
+    "apps/api/src/modules/entitlements/",
+    "apps/api/src/plugins/entitlements.ts",
+    "apps/api/src/routes/entitlements.ts",
+    "packages/core/src/entitlements/",
+    "docs/billing/entitlements-enforcement.md"
+  ],
+  "interfaces": [
+    "HTTP `GET /v1/workspaces/{id}/entitlements` -> CT-ENTITLEMENTS object, headers `ETag: \"ent-<rev>\"`, `Cache-Control: private, max-age=0, must-revalidate`.",
+    "`interface EntitlementService { get(workspaceId: string): Promise<Entitlements>; getRev(workspaceId: string): Promise<number>; invalidate(workspaceId: string): Promise<void>; check(workspaceId: string, key: LimitKey, current?: number): Promise<CheckResult> }` with `CheckResult = {allowed: true} | {allowed: false; reason: 'flag_off'|'count_reached'|'quota_reached'; retry_after_s?: number}`.",
+    "Fastify preHandlers `requireEntitlement('relay_access')`, `requireQuota('agent_minutes_month')`.",
+    "Redis channel `ent:inv` with message `{workspace: string, rev: number}`.",
+    "Config: `ENT_CACHE_TTL_MS=30000` (max accepted value 30000, validated), `ENT_STALE_ON_ERROR_MS=0`."
+  ],
+  "acceptance": [
+    "After the entitlement of a workspace changes (`rev` 41 -> 42) and `invalidate` publishes, every API instance returns the new value within 1 s; without a message the cache never serves data older than 30 s.",
+    "Cache hit latency of `get` is < 1 ms p99 in a microbenchmark; `GET /entitlements` p95 is <= 50 ms with a warm cache.",
+    "`GET` with `If-None-Match` equal to the current ETag returns 304 with no body; a member of another workspace gets 403/404; unauthenticated gets 401.",
+    "Status resolution: `past_due` before `grace_until` returns the plan's limits; one millisecond after `grace_until` returns free defaults and `status:'none'`, even if the nightly transition job has not run yet; `canceled` after `period.end` returns `none`.",
+    "`requireEntitlement('relay_access')` on a workspace with `relay_access:false` returns 403 with an `entitlement_*` code from the registry; `requireQuota('agent_minutes_month')` at `reached` returns 429 `quota_exceeded` with `retry_after_s` equal to seconds until `period.end` and a matching `Retry-After` header.",
+    "A `null` limit never denies; a count limit of 0 always denies (e.g. `webhooks_max: 0`).",
+    "`lan_multiplayer` is always reported true and no check function ever denies LAN features.",
+    "If both Postgres and the cache are unavailable, hosted-action checks fail closed with 503 `retry_after_s` (never allow)."
+  ],
+  "tests": [
+    "unit: status resolution table with a fake clock around `grace_until` and `period.end`.",
+    "integration: two API instances (two services in the test process) and invalidation via Redis pub/sub.",
+    "contract: GET body validates against `schemas/entitlements.schema.json` and fixtures in `contracts/fixtures/entitlements/`.",
+    "benchmark test (non-flaky threshold 5x headroom) for cache-hit latency.",
+    "authz test matrix for GET across roles.",
+    "failure-path: Redis down -> falls back to 30 s TTL cache then SQL; SQL down -> 503."
+  ],
+  "guardrails": [
+    "MUST fail closed for hosted features whenever the entitlement state cannot be determined; MUST NOT cache a failure result.",
+    "MUST NOT cache longer than 30 s (CT-ENTITLEMENTS §6) and MUST bound the cache (max 10 000 workspaces, LRU).",
+    "MUST NOT trust client-sent plan, role or `ent` claims for decisions; read server state.",
+    "MUST NOT let any check block LAN or local use; those never reach the backend.",
+    "MUST NOT expose other workspaces' entitlement data or internal fields such as Stripe ids.",
+    "MUST compute `usage` as best-effort data only (<= 60 s old) and never use it for enforcement; enforcement reads authoritative counters."
+  ],
+  "failure_modes": [
+    "Pub/sub message lost -> TTL (<= 30 s) bounds staleness; metric `ent_cache_stale_served_total` stays 0 beyond TTL.",
+    "Unknown limit key encountered in data -> ignored for enforcement, preserved on read (additive-keys rule).",
+    "Concurrent revision during read -> response is internally consistent (single SQL snapshot), `rev` matches the body."
+  ],
+  "unblocks_gate": "G4",
+  "notes": ""
+}

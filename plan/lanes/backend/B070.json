@@ -1,0 +1,89 @@
+{
+  "id": "B070",
+  "title": "Stripe integration: customers and subscriptions",
+  "plan": "backend",
+  "phase": "P5 Billing",
+  "size": "L",
+  "role": "billing",
+  "depends_on": [
+    "B027",
+    "B069"
+  ],
+  "goal": "Stripe integration for customers and subscriptions: a typed gateway, workspace-to-customer mapping, subscription persistence and the GET subscription endpoint, with Stripe states mapped to contract statuses.",
+  "scope_in": [
+    "StripeGateway interface and real implementation (pinned Stripe API version, timeouts 10 s, retries on network errors with idempotency keys).",
+    "ensureCustomer(workspace): create Stripe customer once per workspace (metadata workspace id, email of owner/billing contact, locale), store stripe_customer_id.",
+    "Subscription repository (stripe_subscription_id, plan, status, interval, currency, current_period_start/end, cancel_at_period_end, seats, past_due_since) and mapping Stripe status -> contract status (active, trialing, past_due, canceled, none).",
+    "GET /v1/workspaces/{id}/subscription (billing:read; owner, billing, admin) returning plan, status, period, seats, cancel_at_period_end, currency and no card data.",
+    "Stripe Tax enabled via automatic_tax on subscriptions; customer tax-id and address pass-through only through the Stripe portal (no storage).",
+    "Price catalogue config mapping contract plans (pro, team, seat add-on) x interval x currency to Stripe price ids from env/config."
+  ],
+  "scope_out": [
+    "Hosted checkout and portal session creation: B071. Webhook ingestion and state updates from Stripe events: B072.",
+    "Seat quantity changes and proration preview: B073.",
+    "Entitlement derivation: B069. Invoices endpoint: B077. Trials/coupons: B079.",
+    "Storing card numbers or bank details (never; Stripe holds them)."
+  ],
+  "implements": [
+    "CT-API-BILLING"
+  ],
+  "consumes": [
+    "CT-ENTITLEMENTS",
+    "CT-RBAC",
+    "CT-AUTH",
+    "CT-IDS",
+    "CT-ERR"
+  ],
+  "build_against": "StripeGateway fake with scripted responses and the official stripe-mock container for HTTP-level tests; no live Stripe keys in tests. Entitlement service via fake port from B069 interface.",
+  "deliverables": [
+    "apps/api/src/modules/billing/stripe/gateway.ts",
+    "apps/api/src/modules/billing/stripe/stripe-client.ts",
+    "apps/api/src/modules/billing/stripe/status-map.ts",
+    "apps/api/src/modules/billing/stripe/price-catalog.ts",
+    "apps/api/src/modules/billing/subscriptions/repository.ts",
+    "apps/api/src/modules/billing/subscriptions/service.ts",
+    "apps/api/src/routes/subscription/index.ts",
+    "apps/api/src/modules/billing/README.md",
+    "apps/api/test/billing/subscriptions/",
+    "packages/db/migrations/0070_billing_customers_subscriptions.sql"
+  ],
+  "interfaces": [
+    "interface StripeGateway { createCustomer(i, idemKey): Promise<{id}>; retrieveSubscription(id): Promise<StripeSub>; createCheckoutSession(i, idemKey): Promise<{url}>; createPortalSession(i): Promise<{url}>; updateSubscriptionItems(i, idemKey): Promise<StripeSub>; previewInvoice(i): Promise<StripeInvoicePreview>; constructEvent(rawBody, sigHeader): StripeEvent }",
+    "BillingService.ensureCustomer(workspaceId): Promise<{customerId}>; getSubscription(workspaceId): Promise<SubscriptionView>; upsertFromStripe(sub: StripeSub): Promise<SubscriptionView>",
+    "mapStripeStatus(s: string): 'active'|'trialing'|'past_due'|'canceled'|'none'  // active->active, trialing->trialing, past_due|unpaid->past_due, canceled->canceled, incomplete|incomplete_expired|paused|other->none",
+    "GET /v1/workspaces/{id}/subscription -> {workspace, plan, status, interval, currency, period:{start,end}|null, seats:number, cancel_at_period_end:boolean}",
+    "Tables billing_customer(workspace_id pk, stripe_customer_id unique, created_at), billing_subscription(workspace_id pk, stripe_subscription_id unique, plan, status, interval, currency, period_start, period_end, seats, cancel_at_period_end, past_due_since, updated_at, stripe_event_created bigint)",
+    "Env: STRIPE_SECRET_KEY, STRIPE_API_VERSION, STRIPE_PRICE_* (catalogue)"
+  ],
+  "acceptance": [
+    "ensureCustomer called 20 times concurrently for one workspace creates exactly one Stripe customer (idempotency key + unique constraint) and returns the same id.",
+    "mapStripeStatus covers every Stripe subscription status value and returns only contract statuses; an unknown future status maps to 'none' with a warning log.",
+    "GET subscription by owner, billing and admin returns 200; by member/guest returns 403; by a non-member returns 404; a workspace with no subscription returns {plan:'free', status:'none', period:null}.",
+    "The response contains no Stripe ids, card brand/last4, or customer email (key allow-list test).",
+    "A Stripe 5xx or timeout on createCustomer is retried up to 3 times with backoff and idempotency key and then returns 503 with retry_after_s; the DB has no half-created row.",
+    "Price catalogue lookup for (team, month, EUR) returns the configured price id; a missing combination fails startup config validation in production mode.",
+    "upsertFromStripe ignores an update whose Stripe event timestamp is older than the stored stripe_event_created (stale-event guard) and applies a newer one."
+  ],
+  "tests": [
+    "billing.customer.test.ts: concurrency and idempotency",
+    "billing.status-map.test.ts: exhaustive mapping",
+    "billing.subscription-route.test.ts: authz, shape, privacy",
+    "billing.gateway.stripe-mock.test.ts: HTTP-level calls incl. retry",
+    "billing.catalog.test.ts: config validation",
+    "billing.stale-guard.test.ts"
+  ],
+  "guardrails": [
+    "MUST NOT store or log card data, Stripe secret keys, full Stripe payloads or customer emails beyond the Stripe customer record itself.",
+    "MUST send an idempotency key on every Stripe write and derive it deterministically from workspace id + operation.",
+    "MUST authorise by workspace role from the DB (owner, billing, admin for read) and never trust a role claim.",
+    "MUST pin the Stripe API version in code/config; upgrades are explicit.",
+    "Entitlements MUST come from B069, not from Stripe status in route handlers."
+  ],
+  "failure_modes": [
+    "Stripe unavailable -> 503 with retry_after_s on write paths; GET subscription serves from the DB and keeps working.",
+    "Stripe returns a different currency than recorded -> stored as returned, plan unchanged, warning logged; entitlements unaffected.",
+    "Customer exists in Stripe but DB insert failed -> next ensureCustomer finds it by metadata search (workspace id) and links it instead of creating a duplicate."
+  ],
+  "unblocks_gate": "G4",
+  "notes": "Size L is fair (gateway + persistence + route). SPLIT? gateway/catalogue vs persistence/route if it overruns. CONTRACT GAP: the subscription response shape is not specified beyond 'Subscription state (active|trialing|past_due|canceled)'; the 'free/none' view for unsubscribed workspaces is this lane's proposal."
+}

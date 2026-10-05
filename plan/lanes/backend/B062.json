@@ -1,0 +1,80 @@
+{
+  "id": "B062",
+  "title": "Reactions and comments persistence",
+  "plan": "backend",
+  "phase": "P4 Fleet",
+  "size": "S",
+  "role": "data",
+  "depends_on": [
+    "B007",
+    "B044"
+  ],
+  "goal": "Persist reactions (cleartext) and comments (ciphertext) as queryable per-target records so late joiners and the history API can show them, without the server reading comment text.",
+  "scope_in": [
+    "Sequenced-frame hook storing reaction {target msg_, code, op add|remove, member} and comment.add {target, ciphertext ref seq} after sequencing.",
+    "Reaction aggregate: current set of (target, code, member) with add/remove idempotent semantics; counts per target and code.",
+    "Tables reaction and comment_ref (comment text is NOT stored; only seq, id, member, target, size, kid pointing to the history blob).",
+    "Limits: reaction codes limited to thumbs, heart, party, laugh, eyes, check; at most 200 reaction ops per member per minute; comment ct <= 192 KiB; 100 comments per target.",
+    "Authorisation: host, editor and viewer may react and comment, muted members may not.",
+    "Read API used by relay join flow: reactionsFor(sid, targets[]): aggregates (internal function, not a new endpoint)."
+  ],
+  "scope_out": [
+    "History retrieval of comment ciphertext: B055.",
+    "Mention notifications (category mention needs plaintext; clients send explicit mention signals in a future contract).",
+    "Rendering or moderation of comment text (client, encrypted)."
+  ],
+  "implements": [
+    "CT-WS-SESSION-EVENTS"
+  ],
+  "consumes": [
+    "CT-WS-ENVELOPE",
+    "CT-RBAC",
+    "CT-IDS",
+    "CT-ERR"
+  ],
+  "build_against": "Postgres container, FakeSequencer, MuteReader fake; fixtures contracts/fixtures/events/reaction.json and comment.add.json.",
+  "deliverables": [
+    "apps/relay/src/reactions/store.ts",
+    "apps/relay/src/reactions/handler.ts",
+    "apps/relay/src/reactions/ports.ts",
+    "apps/relay/src/reactions/index.ts",
+    "apps/relay/src/reactions/README.md",
+    "apps/relay/test/reactions/",
+    "packages/db/migrations/0062_reactions_comments.sql"
+  ],
+  "interfaces": [
+    "ReactionStore.apply(sid, frame:{seq, from, target, code, op}): Promise<{changed:boolean}>",
+    "ReactionStore.aggregate(sid, targets: string[]): Promise<Record<string, Record<string, number>>>",
+    "CommentIndex.record(sid, c:{seq:number, id:string, from:string, target:string, size:number, kid:string}): Promise<void>",
+    "Tables reaction(session_id, target, code, member_id, seq, pk(session_id,target,code,member_id)); comment_ref(session_id, seq, msg_id, member_id, target, size, kid, pk(session_id,seq))"
+  ],
+  "acceptance": [
+    "reaction add then add again by the same member for the same (target, code) leaves one row; remove deletes it; remove of a missing reaction is a no-op that is still sequenced.",
+    "aggregate for 50 targets with 6 codes and 20 members returns correct counts in under 50 ms on the Postgres container.",
+    "A reaction with code 'skull' is rejected `invalid_frame`; target not matching ^msg_ pattern is rejected.",
+    "Muted member reaction and comment frames are dropped with `forbidden`; viewers' frames succeed.",
+    "comment.add stores no text: the comment_ref table has no text column (schema test) and a 100-comment-per-target cap rejects the 101st with `forbidden`.",
+    "Replaying the same frame id (sid, from, id) produces one row.",
+    "Deleting a session's history (B055 purge) can call ReactionStore.purge(sid) and CommentIndex.purge(sid), both removing all rows."
+  ],
+  "tests": [
+    "reactions.apply.test.ts: idempotency and toggling",
+    "reactions.aggregate.test.ts: counts and performance bound",
+    "reactions.authz.test.ts: viewer allowed, muted blocked",
+    "comments.index.test.ts: no plaintext, cap",
+    "reactions.purge.test.ts",
+    "reactions.contract.test.ts"
+  ],
+  "guardrails": [
+    "MUST NOT store or log comment text or ct; only pointers (seq, size, kid).",
+    "MUST validate reaction `code` against the contract enum; unknown codes are rejected, not stored.",
+    "MUST apply reaction state from sequenced frames only (so replay reproduces state).",
+    "MUST NOT let a client delete another member's reaction."
+  ],
+  "failure_modes": [
+    "DB write fails after sequencing -> frame stays in the log; a repair job rebuilds the reaction table from the durable log on restart (idempotent).",
+    "Target msg_ id not present in history -> still stored (late joiners may not have it); no error."
+  ],
+  "unblocks_gate": "G5",
+  "notes": "CONTRACT GAP: whether reaction targets must exist and the per-target comment cap are not specified; caps here are lane defaults. The reaction code set is taken from p_reaction in events.schema.json (the prose says 'codes map to pixel animations'). Migration prefix 0062 = lane number."
+}

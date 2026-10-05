@@ -1,0 +1,73 @@
+{
+  "id": "C080",
+  "title": "Reactions and comments UI",
+  "plan": "client",
+  "phase": "P4 LAN",
+  "size": "S",
+  "role": "tui",
+  "depends_on": [
+    "C034",
+    "C075"
+  ],
+  "goal": "Members can react to and comment on any transcript message or agent card in the TUI, with pixel reactions at 24 px equivalents, per-person limits and comments that stay end-to-end encrypted.",
+  "scope_in": [
+    "Reaction bar and thread components in packages/tui/src/reactions/: picker (thumbs, heart, party, laugh plus eyes and check), reaction summary row per target, count per code, own reactions highlighted.",
+    "Send/remove logic: `reaction {target, code, op: add|remove}` as a clear event; enforce max 3 reactions per person per message client-side and de-dupe by (member,target,code).",
+    "Comments: `comment.add {target, text}` as an encrypted event, thread view under a message, composer limited to 64 KiB text (schema maxLength 65536 chars; UI cap 2 000 chars).",
+    "Viewer-role support: viewers may react and comment (CT-RBAC); other actions stay hidden.",
+    "Mascot mapping reaction codes -> animations reaction_thumbs, reaction_heart, reaction_party, reaction_laugh through the state driver; eyes/check render a glyph only."
+  ],
+  "scope_out": [
+    "Transcript virtualised view (C036) and the widget that hosts the reaction bar's anchor.",
+    "Web reactions/comments UI (C083 renders them from the same reducer).",
+    "Reducer for incoming frames into GuestState (C076) and host broadcast (C075).",
+    "Notifications for mentions (C066)."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-WS-SESSION-EVENTS",
+    "CT-RBAC",
+    "CT-CRYPTO",
+    "CT-STATE-MAP"
+  ],
+  "build_against": "Fixtures contracts/fixtures/events/reaction.json and comment.add.json, a fake session handle exposing send(), and the TUI snapshot tester (C008).",
+  "deliverables": [
+    "packages/tui/src/reactions/",
+    "packages/tui/test/reactions/"
+  ],
+  "interfaces": [
+    "export function ReactionBar(props: {target: MsgId; reactions: ReactionSummary[]; selfMember: MemberId; canReact: boolean; onToggle(code: ReactionCode): void}): JSX.Element",
+    "export function CommentThread(props: {target: MsgId; comments: CommentView[]; canComment: boolean; onAdd(text: string): Promise<void>}): JSX.Element",
+    "type ReactionCode = 'thumbs'|'heart'|'party'|'laugh'|'eyes'|'check'",
+    "export function reduceReactions(state: ReactionState, frame: DecodedFrame): ReactionState  // handles reaction add/remove idempotently by frame id"
+  ],
+  "acceptance": [
+    "Toggling a code sends exactly one `reaction` frame with op add (or remove if already set) and `t:\"event\"`; optimistic UI reverts if the echo does not arrive within 5 s.",
+    "A fourth distinct reaction by the same member on one target is blocked locally with a toast; no frame sent.",
+    "Two clients adding the same reaction concurrently show count 2 on both after convergence; replaying a frame with the same id does not double count.",
+    "A viewer sees the picker and comment composer; a muted member sees them disabled with the reason text 'Muted by host'.",
+    "Comment text is sent only inside `ct`; the outgoing `p` for comment.add is empty or absent (asserted by test); a 2 001-character input is rejected inline with a helper message.",
+    "Unknown reaction code from a newer client is shown as a generic glyph with the count, not dropped.",
+    "Reaction animation plays at most once per received reaction and at most 3 concurrently; under CENTO_REDUCE_MOTION it is a static glyph."
+  ],
+  "tests": [
+    "reactions.reduce.test.ts: add/remove/dup/unknown code with property test for commutativity.",
+    "reactions.limits.test.ts: 3-per-message cap.",
+    "comments.thread.test.tsx: render, permissions, muted.",
+    "reactions.privacy.test.ts: comment plaintext never in `p`.",
+    "reactions.snap.test.tsx: bar at 80 cols, NO_COLOR."
+  ],
+  "guardrails": [
+    "MUST put comment text only in `ct`; MUST NOT log it.",
+    "MUST NOT use emoji as the display (emoji are picker icons only); display is pixel glyph/animation per DESIGN.md 12.7, always paired with a text count for screen readers.",
+    "MUST NOT show read receipts or reaction notifications to people who did not opt in (DESIGN.md 12.8).",
+    "Reaction and comment sends MUST respect the 30 sequenced frames/s per-member limit; client token bucket drops UI spam, never queues unboundedly (cap 20)."
+  ],
+  "failure_modes": [
+    "sys.error `forbidden` on send (role changed) -> revert optimistic state and disable controls.",
+    "Target message not yet loaded -> hold reaction in a pending map up to 60 s, drop afterwards.",
+    "Frame rate limit sys.slow_down -> pause sending for `for_ms`, keep the latest toggle only."
+  ],
+  "unblocks_gate": "G5",
+  "notes": "DESIGN.md lists 4 reaction animations; the schema also allows eyes and check, which have no mascot animation (glyph only)."
+}

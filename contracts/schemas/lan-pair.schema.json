@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://centcom.dev/contracts/lan-pair.schema.json",
+  "title": "LAN pairing frames - CT-LAN",
+  "type": "object",
+  "required": [
+    "t"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "t": {
+      "enum": [
+        "lan.pair.1",
+        "lan.pair.2",
+        "lan.pair.3",
+        "lan.pair.4",
+        "lan.pair.err"
+      ]
+    },
+    "cpace_msg": {
+      "type": "string"
+    },
+    "fp": {
+      "type": "string",
+      "pattern": "^[A-Z2-7]{4}(-[A-Z2-7]{4}){2}$"
+    },
+    "device": {
+      "type": "object",
+      "required": [
+        "id",
+        "x25519",
+        "ed25519",
+        "name"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^dev_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "x25519": {
+          "type": "string"
+        },
+        "ed25519": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      }
+    },
+    "confirm": {
+      "type": "string"
+    },
+    "ok": {
+      "type": "boolean"
+    },
+    "reconnect_token": {
+      "type": "string"
+    },
+    "code": {
+      "enum": [
+        "bad_code",
+        "locked_out",
+        "version",
+        "busy"
+      ]
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "schema": "notification.schema.json",
+  "valid": true,
+  "note": "",
+  "data": {
+    "id": "ntf_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+    "created_at": "2026-10-05T18:07:41.123Z",
+    "read_at": null,
+    "category": "approval_needed",
+    "title_key": "notif.approval_needed.title",
+    "body_key": "notif.approval_needed.body",
+    "params": {
+      "agent": "agt_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+      "risk": "medium"
+    },
+    "action": {
+      "type": "open_session",
+      "deeplink": "centcom://session/ses_01JA3Z8K2M5N7P9Q0R1S2T3V4W?focus=approval"
+    },
+    "priority": "high"
+  }
+}

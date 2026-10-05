@@ -1,0 +1,102 @@
+{
+  "id": "C054",
+  "title": "Relay WebSocket client: handshake, envelope, heartbeat",
+  "plan": "client",
+  "phase": "P3 Network",
+  "size": "L",
+  "role": "net",
+  "depends_on": [
+    "C003",
+    "C006",
+    "C007"
+  ],
+  "goal": "Provide one WebSocket client that connects to a Centcom endpoint (the hosted relay or a LAN host), completes the version-negotiated handshake, keeps the connection alive, and reconnects on the contract's schedule, without any knowledge of what the frames mean.",
+  "scope_in": [
+    "`RelayClient` over the `ws` library with subprotocol `centcom.v1`, maxPayload 256 KiB, User-Agent header, TLS required for the relay (`wss://relay.centcom.dev/v1/ws` or the `region` host from the join-token response).",
+    "Handshake: send `sys.hello` (in `p`: `protocols:[1]`, `caps`, `ticket`, `client:{name,version,contract}`, `last_seq`) as the first frame, wait up to 10 s for `sys.welcome`, validate it, record chosen `protocol`, negotiated caps (intersection), `member`, `slot`, `role`, `roster_v`, `heartbeat`, `limits`, `resume`.",
+    "Heartbeat: answer every `sys.ping` with `sys.pong` echoing `p.t`; dead-connection detector closes after `dead_ms` (default 50 000) with no inbound frame and triggers reconnect.",
+    "Reconnect state machine: backoff 250 ms x 2^n, full jitter, cap 15 s; a fresh ticket from the injected `getTicket()` for every attempt; close-code policy table (4401 refresh-then-retry once, 4403/4404/4426 stop, 4409 stop, 4503 honour `retry_after_s`, 1001 jittered immediate reconnect, others backoff).",
+    "Inbound validation of every frame with the C003 envelope validator; invalid frames are dropped and counted, `sys.error` bodies are parsed into C006 typed errors, unknown frame types and unknown fields are ignored.",
+    "Send-side shaping: reject frames > 256 KiB locally, token buckets from `welcome.limits` (sequenced 30/s sustained, burst 100; presence 10/s), obey `sys.slow_down` by pausing sends for `p.for_ms`, 2 MiB outbound buffer cap.",
+    "Connection-state events mapped to the client-local states `online`, `reconnecting`, `offline` for the status line; plain `ws://` allowed only when `allowPlainWs` is set and the host is loopback, link-local or private-range (LAN use)."
+  ],
+  "scope_out": [
+    "Sequence tracking, ack cadence, resend of unacked frames and dedupe: lane C055.",
+    "Encryption, signatures and key grants: lane C056; the client treats `ct` and `sig` as opaque.",
+    "Minting join tickets and session create/join REST calls: lane C057 (this lane only calls the injected `getTicket`).",
+    "The LAN host-side server: lane C072. The transport abstraction over relay/LAN/local: lane C074.",
+    "Presence coalescing and queue/control semantics: lanes C059, C058, C060."
+  ],
+  "implements": [
+    "CT-WS-ENVELOPE",
+    "CT-VER"
+  ],
+  "consumes": [
+    "CT-AUTH",
+    "CT-ERR",
+    "CT-IDS"
+  ],
+  "build_against": "the mock backend (lane C007): REST from OpenAPI plus the WebSocket relay simulator, started in-process with `startMockBackend()` from @centcom/testkit; no real backend is needed. The relay simulator speaks sys.hello/welcome/ping/pong/error/slow_down/bye and can be told to close with any code in the table, delay welcome, withhold pings or send malformed frames (`relay.closeWith(4503)`, `relay.stallWelcome()`). Envelope fixtures live in contracts/fixtures/envelope/.",
+  "deliverables": [
+    "packages/net/src/relay/client.ts",
+    "packages/net/src/relay/handshake.ts",
+    "packages/net/src/relay/heartbeat.ts",
+    "packages/net/src/relay/reconnect.ts",
+    "packages/net/src/relay/close-codes.ts",
+    "packages/net/src/relay/send-limiter.ts",
+    "packages/net/src/relay/index.ts",
+    "packages/net/src/relay/README.md",
+    "packages/net/src/relay/__tests__/"
+  ],
+  "interfaces": [
+    "`new RelayClient(opts: RelayClientOptions)`; `RelayClientOptions = { url: string; sessionId: string; getTicket(): Promise<{ ticket: string; url?: string }>; getLastSeq(): number | null; clientInfo: { name: string; version: string; contract: string }; caps?: string[] /* default ['resume'] */; protocols?: number[] /* [1] */; allowPlainWs?: boolean; onAuthFailure?(): Promise<boolean>; helloTimeoutMs?: number /*10000*/; clock; rng; wsFactory?; logger }`",
+    "Methods: `connect(): Promise<Welcome>` (resolves on first welcome), `send(frame: OutboundFrame): Promise<void>` (resolves when written to the socket), `close(code?: number /*1000*/, reason?: string): Promise<void>`, getters `state: 'idle'|'connecting'|'handshaking'|'ready'|'backoff'|'closed'`, `welcome: Welcome | null`, `negotiatedCaps: ReadonlySet<string>`, `limits`",
+    "Events (typed emitter): `welcome(w: Welcome)`, `frame(f: Frame)` (all inbound frames after validation, including sys.*), `notice(n: Notice)`, `error(e: ApiError)`, `slow_down(forMs: number)`, `link(state: 'online'|'reconnecting'|'offline')`, `closed(info: { code: number; reason: string; willReconnect: boolean })`, `protocol_warning(w: { reason: string })`",
+    "`CLOSE_POLICY: Record<number, { reconnect: 'no'|'backoff'|'immediate'|'after_retry_after'|'refresh_once'; userFacing?: string }>` exported for tests and C074",
+    "`backoffDelayMs(attempt: number, rng: () => number): number` = floor(rng() * min(15000, 250 * 2 ** attempt))",
+    "`export interface FrameLink { send(f: OutboundFrame): Promise<void>; on(ev: 'welcome'|'frame'|'link'|'closed', fn: (...a: unknown[]) => void): () => void; readonly welcome: Welcome | null; readonly state: string }` implemented by RelayClient and consumed by lanes C055, C072 and C074",
+    "`export interface FrameLink { send(f: OutboundFrame): Promise<void>; on(ev: 'welcome'|'frame'|'link'|'closed', fn: (...a: unknown[]) => void): () => void; readonly welcome: Welcome | null; readonly state: string }` implemented by RelayClient and consumed by lanes C055, C072 and C074"
+  ],
+  "acceptance": [
+    "The first bytes on a new connection after the upgrade are one `sys.hello` text frame whose `p.protocols` is [1], `p.ticket` is the string from getTicket and `p.last_seq` equals getLastSeq(); the URL and upgrade headers contain no ticket (assert on the captured request).",
+    "Upgrade request offers `Sec-WebSocket-Protocol: centcom.v1`; a server that selects another or no subprotocol makes `connect()` reject with a protocol error and no hello is sent.",
+    "If `sys.welcome` carries `protocol: 2` (not in our list) the client closes with 4400 and emits `error` with local code `protocol_mismatch`; it does not reconnect-loop.",
+    "Capabilities used = intersection of ours and welcome.caps: with welcome.caps = [] the client's `negotiatedCaps` is empty and sends no frame that needs `resume`; unknown caps in welcome are ignored.",
+    "With the simulator pinging every 20 s, each `sys.ping` is answered by a `sys.pong` with identical `p.t` within 100 ms; with pings withheld, the socket is closed after 50 s (+/- 1 s on the fake clock) and a reconnect starts.",
+    "Forced server close with 1006 produces reconnect attempts after delays bounded by [0, 250], [0, 500], [0, 1000] ... capped at [0, 15000] ms; each attempt calls getTicket() once (n tickets for n attempts) and never reuses a ticket.",
+    "Close policy: 4403, 4404, 4426 and 4409 end in state `closed` with `willReconnect:false` and exactly one `closed` event; 4401 calls onAuthFailure once, reconnects once if it returns true and stops if a second consecutive 4401 occurs; 4503 preceded by `sys.error` with `retry_after_s: 20` delays the next attempt by >= 20 s; 1001 reconnects within 500 ms.",
+    "A welcome not received within 10 s of hello closes the socket and counts as a failed attempt (backoff continues); the server-side 5 s hello rule is not weakened (client sends hello within 1 s of open).",
+    "`sys.slow_down {for_ms: 2000}` pauses `send()` for 2000 ms (fake clock) and queues up to the 2 MiB cap; exceeding the cap rejects `send` with OutboundBufferFull rather than growing.",
+    "A 256 KiB + 1 byte frame passed to `send()` rejects with FrameTooLargeError and nothing is written; an inbound invalid frame (missing `v`) is dropped, emits `protocol_warning`, and the connection stays up.",
+    "`ws://203.0.113.5:7070` is refused even with allowPlainWs (public IP); `ws://192.168.1.20:7070` and `ws://localhost:7070` are accepted only when allowPlainWs is true; `ws://` to the relay host is always refused.",
+    "Attempt counter resets after the connection has stayed `ready` for 10 s, so a flapping server does not pin the delay at the cap forever."
+  ],
+  "tests": [
+    "relay/handshake.test.ts: hello shape, subprotocol, welcome timeout, protocol mismatch, caps intersection, fixtures from contracts/fixtures/envelope/.",
+    "relay/heartbeat.test.ts: ping/pong echo, dead_ms detection, activity resets on any frame.",
+    "relay/reconnect.test.ts: table-driven over every close code in CT-WS-ENVELOPE with expected policy; property test that delays never exceed 15 s and fresh ticket per attempt.",
+    "relay/send-limiter.test.ts: 30/s sustained + burst 100, presence 10/s, slow_down pause, buffer cap.",
+    "relay/validation.test.ts: fuzz inbound frames (random JSON, oversize, binary frame) never throw out of the client and never leak payload into logs.",
+    "relay/plain-ws.test.ts: private-range/loopback matrix for allowPlainWs.",
+    "relay/logging.test.ts: log capture never contains the ticket, `p` bodies or `ct`."
+  ],
+  "guardrails": [
+    "MUST send the ticket only inside `sys.hello` and MUST NOT put it in the URL, headers or logs; a ticket is single-use so MUST fetch a new one for every connection attempt.",
+    "MUST NOT set `from`, `ts` or `seq` on outbound frames (server-stamped); strip them if a caller supplies them.",
+    "MUST NOT use any capability the server did not advertise in `welcome.caps` (CT-VER), and MUST NOT negotiate down silently: an unsupported protocol closes with 4400.",
+    "MUST drop invalid or oversized inbound frames and keep running (never crash, never close the socket for an unknown frame type or field).",
+    "MUST NOT log frame `p`, `ct`, `sig`, tickets or member names; log kind, size, seq, close code and state only.",
+    "MUST NOT use permessage-deflate (ciphertext does not compress; CT-WS-ENVELOPE) and MUST NOT open more than one connection per session per (member, device): a second `connect()` while connected is a no-op.",
+    "MUST NOT auto-reconnect after 4409, otherwise two processes of the same device supersede each other forever.",
+    "MUST bound every wait (hello 10 s, welcome 10 s, dead 50 s, close handshake 3 s then terminate) and every buffer (2 MiB)."
+  ],
+  "failure_modes": [
+    "Relay restart (1001) -> reconnect within 500 ms with a new ticket; the owner sees `link: reconnecting` then `online` and no duplicate welcome handling.",
+    "Ticket fetch fails (network or 403) -> treated as a failed attempt with backoff for network errors, stop with `closed(willReconnect:false)` for 403 membership revoked.",
+    "Server overload 4503 -> wait at least `retry_after_s`, then backoff; the message to the user comes from the local message table.",
+    "TLS/DNS error -> emit `link: offline` after the first failed attempt and keep retrying on the backoff schedule; LAN and local features are unaffected.",
+    "Client too old (4426 / HTTP 426) -> stop, emit `closed` with the upgrade hint so the update lane can prompt; never retry automatically."
+  ],
+  "unblocks_gate": "G2",
+  "notes": "CONTRACT GAP: close code 4409 (superseded) is not in the contract's 'reconnect except' list but reconnecting would create a supersede loop; this card stops on 4409. CONTRACT GAP: for 4400 repeated reconnects the contract is silent; this card stops after 3 consecutive 4400 closes within 60 s (client defence)."
+}

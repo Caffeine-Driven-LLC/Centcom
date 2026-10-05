@@ -1,0 +1,74 @@
+{
+  "id": "C079",
+  "title": "Handoff and pair mode",
+  "plan": "client",
+  "phase": "P4 LAN",
+  "size": "M",
+  "role": "net",
+  "depends_on": [
+    "C075",
+    "C076"
+  ],
+  "goal": "A host can hand the command post (or a task) to a teammate and two people can pair on one agent, with both flows visible in the roster and safe against races.",
+  "scope_in": [
+    "Handoff flow in packages/session/src/handoff/: host sends `control.transfer_host {to}` to an editor, waits for server `control.host_changed {code: 'transfer'}`, then switches local engine from host (C075) to guest (C076) role and vice-versa on the receiving side.",
+    "Handoff of a running task: before transfer, host drains or marks running queue items; new host sees `approved` items per host-loss rules and resumes them; a progress model with states `requested`, `accepted`, `done`, `failed`.",
+    "Pair mode: two members flagged as pairing on one agent share a combined selection (merged presence.cursor) and see `pair-working` in the roster; entering/leaving is a local UI agreement carried by existing presence/agent.state frames.",
+    "Failover observation: when host_changed has `code: 'failover'` the engine rebinds to the new host and replays state without user action.",
+    "Mascot state hooks: `handoff` (sender), `welcome-teammate` / animation `welcome` (receiver), `pair-working`, per DESIGN.md 12.5."
+  ],
+  "scope_out": [
+    "Server-side role changes and failover election (the relay or LAN host enforce them).",
+    "Roster and cursor widgets (C059, C077, C085).",
+    "Key rotation internals (C056); this lane only reacts to control.rotate_key.",
+    "Mid-session LAN to relay upgrade (cap `lan.upgrade`)."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-WS-SESSION-EVENTS",
+    "CT-WS-CONTROL",
+    "CT-WS-QUEUE",
+    "CT-CRYPTO",
+    "CT-RBAC",
+    "CT-STATE-MAP"
+  ],
+  "build_against": "Two engines (C075 host, C076 guest) over the loopback Transport (C074), and the mock backend (lane C007) emitting host_changed; deterministic clock.",
+  "deliverables": [
+    "packages/session/src/handoff/",
+    "packages/session/test/handoff/"
+  ],
+  "interfaces": [
+    "export function requestHandoff(host: HostSession, to: MemberId, opts?: {timeoutMs?: number}): Promise<HandoffResult>  // HandoffResult = {ok: true; newHost: MemberId} | {ok: false; code: 'forbidden'|'not_editor'|'timeout'|'superseded'}",
+    "export function onHostChanged(session: SessionHandle, cb: (e: {host: MemberId; code: 'transfer'|'failover'}) => void): Unsubscribe",
+    "export function startPair(session: SessionHandle, agent: AgentId, partner: MemberId): PairHandle  // PairHandle {stop(): void; sharedSelection$: Observable<Selection>}"
+  ],
+  "acceptance": [
+    "Transfer host to an editor: exactly one control.transfer_host frame is sent; after host_changed the old host's engine is guest-role with role `editor` and the new host's engine accepts queue.approve frames; both complete within 2 s on loopback.",
+    "A non-host calling requestHandoff gets `forbidden` locally and sends nothing; transfer to a viewer is refused locally with `not_editor`.",
+    "Running items: after transfer the new host sees previously `running` items as `approved` (per CT-WS-QUEUE host-loss rule) and no item runs twice (test with duplicate claim).",
+    "host_changed {code: failover} while a user is typing keeps the draft and rebinds without reconnect when the transport stays up.",
+    "Pair mode: both participants see one merged selection, `pair-working` appears in the roster for both, and stop() restores independent cursors within one presence tick (<= 500 ms).",
+    "Concurrent transfer requests from two clients: only the one sequenced first takes effect; the other resolves `superseded`.",
+    "control.rotate_key arriving during a handoff causes new frames to use the new kid; no frame is encrypted with a stale epoch after the rotate_key seq."
+  ],
+  "tests": [
+    "handoff.transfer.test.ts: happy path, forbidden, not_editor, timeout (no host_changed in 10 s).",
+    "handoff.race.test.ts: concurrent transfer and kick, concurrent double transfer.",
+    "handoff.queue-continuity.test.ts: approved/running items across transfer and failover.",
+    "pair.mode.test.ts: merged selection and teardown.",
+    "handoff.rotate.test.ts: rotate_key mid-handoff."
+  ],
+  "guardrails": [
+    "MUST NOT assume the transfer happened until the server-stamped control.host_changed arrives; the UI shows 'handing over…' until then.",
+    "MUST NOT let two engines act as host at once: the local host engine stops approving/claiming at the transfer frame's seq, not at the user's click.",
+    "MUST NOT move session keys implicitly; the new host must hold all epochs (key.grant) before the transfer is offered in the UI.",
+    "MUST NOT trigger handoff or high-five animations on timers; only on explicit gestures or completed events (DESIGN.md 12.6)."
+  ],
+  "failure_modes": [
+    "Target disconnects before host_changed -> after 10 s resolve `timeout`, old host stays host; show a calm notice.",
+    "Target lacks keys for earlier epochs -> disable the action with the reason; offer 'share keys first'.",
+    "Old host connection drops right after sending transfer -> on reconnect re-derive role from control.roster; do not resend the transfer."
+  ],
+  "unblocks_gate": "G5",
+  "notes": ""
+}

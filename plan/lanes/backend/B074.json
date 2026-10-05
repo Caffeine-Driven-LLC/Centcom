@@ -1,0 +1,88 @@
+{
+  "id": "B074",
+  "title": "Usage event ingestion API",
+  "plan": "backend",
+  "phase": "P5 Billing",
+  "size": "M",
+  "role": "billing",
+  "depends_on": [
+    "B008",
+    "B017",
+    "B024"
+  ],
+  "goal": "The usage event ingestion API: authenticated devices post batches of metered usage events that are validated, deduplicated by event id, attributed to the right workspace and stored for aggregation.",
+  "scope_in": [
+    "POST /v1/usage/events (scope usage:write, device principal, Idempotency-Key required): body {events:[{id,type,qty,at,session_id?,agent_id?}]} up to 500 events and 1 MiB.",
+    "Validation: type in agent_minutes|tokens_in|tokens_out|queue_items|relay_bytes, qty non-negative integer within per-type caps, `at` within the last 31 days and at most 60 s in the future, id format and uniqueness.",
+    "Dedup by (workspace, event id): ON CONFLICT DO NOTHING; response reports accepted and duplicate counts.",
+    "Workspace attribution: session_id -> the session's workspace (caller must be a participant); else token `wsp` claim; else the user's personal workspace.",
+    "Per-device rate limit 60 requests/min (bucket from CT-PAGE) and per-workspace daily event cap.",
+    "Raw usage_event table (append-only) and a Redis stream hint for B075."
+  ],
+  "scope_out": [
+    "Aggregation, quota percentages and warnings: B075/B076.",
+    "Relay-side counters (relay_bytes, queue_items recorded by the relay): B075 reads them; this lane only takes client reports.",
+    "Idempotency and rate-limit middleware implementations: B024/B023 (used here).",
+    "Telemetry (opt-in analytics): B085."
+  ],
+  "implements": [
+    "CT-API-USAGE"
+  ],
+  "consumes": [
+    "CT-IDS",
+    "CT-PAGE",
+    "CT-AUTH",
+    "CT-ERR",
+    "CT-ENTITLEMENTS"
+  ],
+  "build_against": "Fastify inject with test device tokens, in-memory idempotency store and rate limiter (B024/B023 test doubles), Postgres container for usage_event; fixtures of 500-event batches generated in the test.",
+  "deliverables": [
+    "apps/api/src/routes/usage/index.ts",
+    "apps/api/src/modules/usage/ingest.ts",
+    "apps/api/src/modules/usage/validate.ts",
+    "apps/api/src/modules/usage/attribution.ts",
+    "apps/api/src/modules/usage/repository.ts",
+    "apps/api/src/modules/usage/README.md",
+    "apps/api/test/usage/ingest/",
+    "packages/db/migrations/0074_usage_events.sql"
+  ],
+  "interfaces": [
+    "POST /v1/usage/events {events: UsageEvent[]} -> 200 {accepted:number, duplicates:number}  | 422 problem+json with errors[] pointers like /events/3/qty",
+    "UsageEvent = {id:string, type:'agent_minutes'|'tokens_in'|'tokens_out'|'queue_items'|'relay_bytes', qty:number, at:string, session_id?:'ses_…', agent_id?:'agt_…'}",
+    "UsageIngest.ingest(principal: DevicePrincipal, events: UsageEvent[]): Promise<{accepted:number, duplicates:number}>",
+    "Table usage_event(workspace_id, event_id, type, qty bigint, at, session_id null, agent_id null, device_id, received_at, pk(workspace_id, event_id)); index (workspace_id, type, at)",
+    "Per-type qty caps: agent_minutes <= 1440, tokens_in/out <= 2_000_000_000, queue_items <= 10_000, relay_bytes <= 2^40"
+  ],
+  "acceptance": [
+    "POST without Idempotency-Key returns `idempotency_key_required`; replay with the same key and body returns the stored response with Idempotency-Replayed: true and inserts nothing new.",
+    "A batch of 500 valid events returns 200 {accepted:500, duplicates:0} in < 500 ms on the Postgres container; 501 events returns 422; body > 1 MiB returns 413.",
+    "Re-sending 100 already-ingested event ids (new Idempotency-Key) returns {accepted:0, duplicates:100} and totals do not change.",
+    "An event with qty -1, fractional qty, unknown type, or `at` 2 minutes in the future makes the whole batch return 422 with errors[].pointer '/events/<i>/qty' (or /type, /at), `out_of_range` style code, and stores nothing from the batch.",
+    "A token with scope usage:write only for another user's session_id (caller not a participant) returns 403; an API key principal returns 403 (usage is device-reported).",
+    "Events for session_id are attributed to that session's workspace even when the token wsp claim differs; without session_id the token wsp claim is used, else the personal workspace.",
+    "The 61st request within a minute from one device returns 429 with Retry-After and RateLimit-* headers.",
+    "Two concurrent requests carrying the same event ids insert each id exactly once (unique key), both return 200."
+  ],
+  "tests": [
+    "usage.validate.test.ts: field rules, caps, time window",
+    "usage.ingest.test.ts: dedupe, batch limits, concurrency",
+    "usage.attribution.test.ts",
+    "usage.authz.test.ts: scope, principal types, participant check",
+    "usage.idempotency-rate.test.ts",
+    "usage.contract.test.ts: schema validation and error shape (CT-ERR)"
+  ],
+  "guardrails": [
+    "MUST reject the whole batch on any invalid event; partial acceptance would corrupt client retry logic.",
+    "MUST scope dedupe by workspace so a client cannot probe other workspaces' event ids.",
+    "MUST NOT store anything beyond the contract fields plus device id and receive time; no message or path data.",
+    "MUST NOT block ingestion when the workspace is over quota; usage is a fact and still recorded (quota is enforced elsewhere).",
+    "qty and `at` MUST be validated server-side; client clock is not trusted beyond the stated window."
+  ],
+  "failure_modes": [
+    "DB unavailable -> 503 with retry_after_s; client retries with the same Idempotency-Key and event ids.",
+    "Redis stream hint fails -> ingestion still succeeds; B075's periodic sweep finds new rows by received_at.",
+    "Idempotency store down -> fail closed with 503 for this required-key endpoint."
+  ],
+  "unblocks_gate": "G4",
+  "notes": "CONTRACT GAP: the response body for POST /v1/usage/events and the event id format are not specified; {accepted, duplicates} and a 8..40 char [A-Za-z0-9_-] id are proposals (CT-IDS defines no usage event prefix). Per-type qty caps and the 31-day window are lane choices. Contract text says Role 'device', so API-key principals are rejected."
+}

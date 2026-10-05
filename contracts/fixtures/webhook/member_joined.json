@@ -1,0 +1,16 @@
+{
+  "schema": "webhook.schema.json",
+  "valid": true,
+  "note": "",
+  "data": {
+    "id": "dlv_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+    "type": "workspace.member.joined",
+    "created_at": "2026-10-05T18:07:41.123Z",
+    "workspace": "wsp_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+    "api_version": "2026-10-01",
+    "data": {
+      "member": "mem_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+      "role": "member"
+    }
+  }
+}

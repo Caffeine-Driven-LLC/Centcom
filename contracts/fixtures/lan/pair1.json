@@ -1,0 +1,16 @@
+{
+  "schema": "lan-pair.schema.json",
+  "valid": true,
+  "note": "",
+  "data": {
+    "t": "lan.pair.1",
+    "cpace_msg": "AAAA",
+    "fp": "ABCD-EFGH-IJKL",
+    "device": {
+      "id": "dev_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+      "x25519": "AAAA",
+      "ed25519": "AAAA",
+      "name": "maya-laptop"
+    }
+  }
+}

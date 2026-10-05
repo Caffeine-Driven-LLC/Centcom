@@ -1,0 +1,81 @@
+{
+  "id": "B024",
+  "title": "Idempotency-Key middleware",
+  "plan": "backend",
+  "phase": "P1 Identity",
+  "size": "S",
+  "role": "platform",
+  "depends_on": [
+    "B006",
+    "B009"
+  ],
+  "goal": "POST endpoints accept an Idempotency-Key and replay stored responses for 24 hours, with required-key enforcement on the endpoints the contract names.",
+  "scope_in": [
+    "Fastify plugin handling `Idempotency-Key` (ULID or UUID, <= 64 chars) on POST; per-route config `idempotency: 'accepted' | 'required'`.",
+    "Store (B009 KeyValue) key -> {fingerprint, status, headers subset, body, created_at} with 24 h TTL, scope = (principal id, method, route template, key).",
+    "Request fingerprint = sha256 over method + route template + path params + canonicalised JSON body (sorted keys).",
+    "Replay: same key + same fingerprint -> stored status/body with header `Idempotency-Replayed: true`; same key + different fingerprint -> 409 `idempotency_conflict`; in-flight duplicate (lock key TTL 30 s) -> 409 `idempotency_conflict` with `Retry-After: 1`.",
+    "Missing key on `required` routes -> `idempotency_key_required`. Required set (route config set by the owning lanes): checkout creation, invite creation, usage event ingest, webhook endpoint creation.",
+    "Optional response encryption (AES-256-GCM, key from `IDEMPOTENCY_ENCRYPTION_KEY`) for routes flagged `sensitiveResponse` (e.g. API key creation) so secrets do not rest in Redis in plaintext."
+  ],
+  "scope_out": [
+    "Rate limiting (B023) and pagination (B025).",
+    "Declaring `required` on specific endpoints (each endpoint's lane sets route config).",
+    "Message-level dedup on WebSocket frames (relay lanes; `(sid, from, id)` for 24 h)."
+  ],
+  "implements": [
+    "CT-PAGE"
+  ],
+  "consumes": [
+    "CT-ERR",
+    "CT-IDS"
+  ],
+  "build_against": "B009 in-memory KeyValue with a fake clock and Fastify inject() with test routes that count handler invocations.",
+  "deliverables": [
+    "apps/api/src/plugins/idempotency.ts",
+    "packages/core/src/idempotency/store.ts",
+    "packages/core/src/idempotency/fingerprint.ts",
+    "packages/core/src/idempotency/crypto.ts",
+    "packages/core/src/idempotency/index.ts",
+    "packages/core/test/idempotency/",
+    "apps/api/test/idempotency.test.ts"
+  ],
+  "interfaces": [
+    "Route config: `{ config: { idempotency: 'required' | 'accepted', sensitiveResponse?: boolean, maxStoredBytes?: number } }`.",
+    "`idempotencyPlugin: FastifyPluginAsync<{kv: KeyValue; clock?: () => number; encryptionKey?: Secret<Uint8Array>}>`.",
+    "`fingerprintRequest(method: string, route: string, params: object, body: unknown): string` (`sha256:<hex>`).",
+    "Response header: `Idempotency-Replayed: true` on replays."
+  ],
+  "acceptance": [
+    "Calling a `required` route without the header returns a 400-class problem `idempotency_key_required` and runs no handler code.",
+    "Two POSTs with the same key and body invoke the handler once; the second returns identical status and body plus `Idempotency-Replayed: true`.",
+    "The same key with a body differing by one field returns 409 `idempotency_conflict`; the handler is not invoked.",
+    "Keys longer than 64 chars or not ULID/UUID-shaped are rejected with a validation problem pointing at the header.",
+    "20 concurrent identical requests produce exactly one handler invocation and one stored 2xx; the others get 409 (in-flight) or a replay.",
+    "Stored entries expire after 24 h (fake clock +24 h: the same key is treated as new); replay at +23 h 59 m still works.",
+    "Responses with status >= 500 are not stored (a retry re-executes); 2xx and 4xx are stored.",
+    "Different principals using the same key string do not collide.",
+    "With `sensitiveResponse`, the Redis value does not contain the response secret in plaintext (grep test), and replay still returns the original body."
+  ],
+  "tests": [
+    "plugin.test.ts: required, accepted, replay, conflict, in-flight.",
+    "fingerprint.test.ts: key-order independence.",
+    "concurrency.test.ts: 20 parallel identical requests, one handler run.",
+    "expiry.test.ts: 24 h TTL with fake clock.",
+    "crypto.test.ts and principal-isolation.test.ts: encrypted replay round-trip, tamper detection, no cross-principal replay."
+  ],
+  "guardrails": [
+    "MUST scope keys by principal so one user's key can never replay another user's response.",
+    "MUST NOT store `Set-Cookie`, `Authorization` or other secret-bearing headers; MUST encrypt bodies of routes flagged `sensitiveResponse`.",
+    "MUST NOT store 5xx responses or responses larger than 256 KiB (1 MiB for usage ingest); oversized responses are served normally but not stored, with a metric.",
+    "MUST acquire the in-flight lock atomically (`setIfAbsent`) before running the handler.",
+    "MUST compare fingerprints in constant time."
+  ],
+  "failure_modes": [
+    "KeyValue store down -> `required` routes fail with 503 and `retry_after_s` (never run unprotected); `accepted` routes run without protection and increment a warning metric.",
+    "Handler throws -> in-flight lock released; nothing stored for 5xx; 4xx AppErrors are stored.",
+    "Process crash mid-request -> the lock expires after 30 s and the client retry re-executes."
+  ],
+  "unblocks_gate": "G1",
+  "notes": "CONTRACT GAP: HTTP statuses for `idempotency_key_required` (400 assumed) and the exact in-flight duplicate behaviour are not specified in CT-PAGE; the conservative reading above is used. `idempotency_conflict` is stated as 409."
+}

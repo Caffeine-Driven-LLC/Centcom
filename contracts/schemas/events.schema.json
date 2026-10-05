@@ -1,0 +1,2620 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://centcom.dev/contracts/events.schema.json",
+  "title": "Centcom session events (frame-level rules per kind)",
+  "description": "Apply AFTER envelope.schema.json. `$defs.p_*` validate cleartext payloads; `$defs.s_*` validate the decrypted secret payload of encrypted/hybrid kinds.",
+  "$defs": {
+    "s_message_user": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "text": {
+          "type": "string",
+          "maxLength": 65536
+        },
+        "agent_id": {
+          "type": "string",
+          "pattern": "^agt_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "queue_item": {
+          "type": "string",
+          "pattern": "^que_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "attachments": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "maxItems": 200
+        },
+        "reply_to": {
+          "type": "string",
+          "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$"
+        }
+      },
+      "required": [
+        "text"
+      ]
+    },
+    "s_message_assistant_delta": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "agent_id": {
+          "type": "string",
+          "pattern": "^agt_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "message_id": {
+          "type": "string",
+          "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "delta": {
+          "type": "string",
+          "maxLength": 65536
+        }
+      },
+      "required": [
+        "agent_id",
+        "message_id",
+        "index",
+        "delta"
+      ]
+    },
+    "s_message_assistant_done": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "agent_id": {
+          "type": "string",
+          "pattern": "^agt_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "message_id": {
+          "type": "string",
+          "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "input_tokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "output_tokens": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "agent_id",
+        "message_id"
+      ]
+    },
+    "s_message_system": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": [
+            "info",
+            "warn",
+            "error"
+          ]
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 65536
+        }
+      },
+      "required": [
+        "level",
+        "text"
+      ]
+    },
+    "s_tool_request": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "agent_id": {
+          "type": "string",
+          "pattern": "^agt_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "tool_id": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "input_summary": {
+          "type": "string",
+          "maxLength": 65536
+        },
+        "risk": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      },
+      "required": [
+        "agent_id",
+        "tool_id",
+        "name",
+        "input_summary",
+        "risk"
+      ]
+    },
+    "p_approval_request": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "approval_id": {
+          "type": "string",
+          "pattern": "^apr_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "agent_id": {
+          "type": "string",
+          "pattern": "^agt_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "risk": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ]
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "approver": {
+          "type": "string",
+          "enum": [
+            "host",
+            "owner",
+            "any_editor"
+          ]
+        }
+      },
+      "required": [
+        "approval_id",
+        "agent_id",
+        "risk",
+        "expires_at",
+        "approver"
+      ]
+    },
+    "s_approval_request": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "summary": {
+          "type": "string",
+          "maxLength": 65536
+        },
+        "command": {
+          "type": "string",
+          "maxLength": 65536
+        },
+        "cwd": {
+          "type": "string",
+          "maxLength": 65536
+        }
+      },
+      "required": [
+        "summary"
+      ]
+    },
+    "p_approval_decision": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "approval_id": {
+          "type": "string",
+          "pattern": "^apr_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "decision": {
+          "type": "string",
+          "enum": [
+            "approve",
+            "deny"
+          ]
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "once",
+            "session",
+            "always"
+          ]
+        }
+      },
+      "required": [
+        "approval_id",
+        "decision",
+        "scope"
+      ]
+    },
+    "s_approval_decision": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "reason": {
+          "type": "string",
+          "maxLength": 65536
+        }
+      },
+      "required": []
+    },
+    "s_tool_result": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "agent_id": {
+          "type": "string",
+          "pattern": "^agt_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "tool_id": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "error",
+            "denied",
+            "canceled"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "maxLength": 65536
+        }
+      },
+      "required": [
+        "agent_id",
+        "tool_id",
+        "status",
+        "summary"
+      ]
+    },
+    "p_agent_spawn": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "agent_id": {
+          "type": "string",
+          "pattern": "^agt_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "owner": {
+          "type": "string",
+          "pattern": "^mem_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "command_post",
+            "branch"
+          ]
+        }
+      },
+      "required": [
+        "agent_id",
+        "owner",
+        "mode"
+      ]
+    },
+    "s_agent_spawn": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "label": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "branch": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "worktree": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "model": {
+          "type": "string",
+          "maxLength": 200
+        }
+      },
+      "required": []
+    },
+    "p_agent_state": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "agent_id": {
+          "type": "string",
+          "pattern": "^agt_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "approved",
+            "asking-question",
+            "auth-required",
+            "awaiting-approval",
+            "away",
+            "background-task",
+            "celebrate",
+            "ci-fail",
+            "ci-pass",
+            "ci-running",
+            "compacting",
+            "context-full",
+            "cost-alert",
+            "crash",
+            "creating-file",
+            "deleting-file",
+            "denied",
+            "deploying",
+            "editing-file",
+            "empty",
+            "error",
+            "first-run",
+            "handoff",
+            "high-five",
+            "host-session",
+            "idle",
+            "listening",
+            "merge-conflict",
+            "message-queued",
+            "no-results",
+            "offline",
+            "online",
+            "pair-working",
+            "planning",
+            "pr-merged",
+            "pr-open",
+            "prompt-received",
+            "quota-reached",
+            "rate-limited",
+            "reading-file",
+            "ready",
+            "reconnecting",
+            "running-command",
+            "saving",
+            "searching",
+            "session-expired",
+            "sleeping",
+            "streaming",
+            "sub-agent",
+            "success",
+            "teammate-joins",
+            "teammate-leaves",
+            "teammate-typing",
+            "tests-fail",
+            "tests-pass",
+            "thinking",
+            "thinking-hard",
+            "tool-running",
+            "update-available",
+            "warning",
+            "welcome-teammate"
+          ]
+        },
+        "since": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "agent_id",
+        "state",
+        "since"
+      ]
+    },
+    "p_agent_exit": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "agent_id": {
+          "type": "string",
+          "pattern": "^agt_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "error",
+            "canceled"
+          ]
+        },
+        "error_code": {
+          "type": "string",
+          "maxLength": 200
+        }
+      },
+      "required": [
+        "agent_id",
+        "outcome"
+      ]
+    },
+    "s_agent_exit": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "detail": {
+          "type": "string",
+          "maxLength": 65536
+        }
+      },
+      "required": []
+    },
+    "s_branch_update": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "agent_id": {
+          "type": "string",
+          "pattern": "^agt_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "branch": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "head": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "ahead": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "behind": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "dirty": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "agent_id",
+        "branch",
+        "head",
+        "ahead",
+        "behind",
+        "dirty"
+      ]
+    },
+    "p_file_lock": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "acquire",
+            "release",
+            "deny",
+            "expire"
+          ]
+        },
+        "path_hmac": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "agent_id": {
+          "type": "string",
+          "pattern": "^agt_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "ttl_ms": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "action",
+        "path_hmac",
+        "agent_id"
+      ]
+    },
+    "s_file_lock": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "path": {
+          "type": "string",
+          "maxLength": 65536
+        }
+      },
+      "required": []
+    },
+    "p_agent_handoff": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "handoff": {
+          "type": "string",
+          "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "agent_id": {
+          "type": "string",
+          "pattern": "^agt_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "to": {
+          "type": "string",
+          "pattern": "^mem_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "op": {
+          "type": "string",
+          "enum": [
+            "offer",
+            "accept",
+            "decline"
+          ]
+        }
+      },
+      "required": [
+        "handoff",
+        "agent_id",
+        "to",
+        "op"
+      ]
+    },
+    "s_agent_handoff": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "note": {
+          "type": "string",
+          "maxLength": 65536
+        }
+      },
+      "required": []
+    },
+    "p_conflict_detected": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "agent_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^agt_[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "maxItems": 200
+        },
+        "path_hmacs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "maxItems": 200
+        }
+      },
+      "required": [
+        "agent_ids",
+        "path_hmacs"
+      ]
+    },
+    "s_conflict_detected": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "maxItems": 200
+        }
+      },
+      "required": []
+    },
+    "s_diff_share": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "agent_id": {
+          "type": "string",
+          "pattern": "^agt_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "maxItems": 200
+        },
+        "blob": {
+          "type": "string",
+          "pattern": "^blb_[0-9A-HJKMNP-TV-Z]{26}$"
+        }
+      },
+      "required": [
+        "agent_id",
+        "files"
+      ]
+    },
+    "p_reaction": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "target": {
+          "type": "string",
+          "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "code": {
+          "type": "string",
+          "enum": [
+            "thumbs",
+            "heart",
+            "party",
+            "laugh",
+            "eyes",
+            "check"
+          ]
+        },
+        "op": {
+          "type": "string",
+          "enum": [
+            "add",
+            "remove"
+          ]
+        }
+      },
+      "required": [
+        "target",
+        "code",
+        "op"
+      ]
+    },
+    "s_comment_add": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "target": {
+          "type": "string",
+          "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 65536
+        }
+      },
+      "required": [
+        "target",
+        "text"
+      ]
+    },
+    "p_key_grant": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "to_device": {
+          "type": "string",
+          "pattern": "^dev_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "kids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "maxItems": 200
+        }
+      },
+      "required": [
+        "to_device",
+        "kids"
+      ]
+    },
+    "s_key_grant": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "grants": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "maxItems": 200
+        }
+      },
+      "required": [
+        "grants"
+      ]
+    },
+    "p_queue_submit": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "item": {
+          "type": "string",
+          "pattern": "^que_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "message",
+            "command"
+          ]
+        }
+      },
+      "required": [
+        "item",
+        "size",
+        "kind"
+      ]
+    },
+    "s_queue_submit": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "body": {
+          "type": "string",
+          "maxLength": 65536
+        },
+        "attachments": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "maxItems": 200
+        }
+      },
+      "required": [
+        "body"
+      ]
+    },
+    "p_queue_cancel": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "item": {
+          "type": "string",
+          "pattern": "^que_[0-9A-HJKMNP-TV-Z]{26}$"
+        }
+      },
+      "required": [
+        "item"
+      ]
+    },
+    "p_queue_approve": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "item": {
+          "type": "string",
+          "pattern": "^que_[0-9A-HJKMNP-TV-Z]{26}$"
+        }
+      },
+      "required": [
+        "item"
+      ]
+    },
+    "p_queue_reject": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "item": {
+          "type": "string",
+          "pattern": "^que_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "code": {
+          "type": "string",
+          "enum": [
+            "not_now",
+            "off_topic",
+            "unsafe",
+            "duplicate",
+            "other"
+          ]
+        }
+      },
+      "required": [
+        "item",
+        "code"
+      ]
+    },
+    "s_queue_reject": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "note": {
+          "type": "string",
+          "maxLength": 65536
+        }
+      },
+      "required": []
+    },
+    "p_queue_reorder": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "order": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^que_[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "maxItems": 200
+        }
+      },
+      "required": [
+        "order"
+      ]
+    },
+    "p_queue_drop": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "item": {
+          "type": "string",
+          "pattern": "^que_[0-9A-HJKMNP-TV-Z]{26}$"
+        }
+      },
+      "required": [
+        "item"
+      ]
+    },
+    "p_queue_claim": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "item": {
+          "type": "string",
+          "pattern": "^que_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "agent_id": {
+          "type": "string",
+          "pattern": "^agt_[0-9A-HJKMNP-TV-Z]{26}$"
+        }
+      },
+      "required": [
+        "item",
+        "agent_id"
+      ]
+    },
+    "p_queue_done": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "item": {
+          "type": "string",
+          "pattern": "^que_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "error",
+            "canceled"
+          ]
+        }
+      },
+      "required": [
+        "item",
+        "outcome"
+      ]
+    },
+    "p_queue_state": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "maxItems": 200
+        }
+      },
+      "required": [
+        "version",
+        "items"
+      ]
+    },
+    "p_control_kick": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "member": {
+          "type": "string",
+          "pattern": "^mem_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "code": {
+          "type": "string",
+          "enum": [
+            "abuse",
+            "inactive",
+            "request",
+            "other"
+          ]
+        }
+      },
+      "required": [
+        "member",
+        "code"
+      ]
+    },
+    "p_control_mute": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "member": {
+          "type": "string",
+          "pattern": "^mem_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "until": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "member"
+      ]
+    },
+    "p_control_unmute": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "member": {
+          "type": "string",
+          "pattern": "^mem_[0-9A-HJKMNP-TV-Z]{26}$"
+        }
+      },
+      "required": [
+        "member"
+      ]
+    },
+    "p_control_role": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "member": {
+          "type": "string",
+          "pattern": "^mem_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "editor",
+            "viewer"
+          ]
+        }
+      },
+      "required": [
+        "member",
+        "role"
+      ]
+    },
+    "p_control_transfer_host": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "to": {
+          "type": "string",
+          "pattern": "^mem_[0-9A-HJKMNP-TV-Z]{26}$"
+        }
+      },
+      "required": [
+        "to"
+      ]
+    },
+    "p_control_end": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "done",
+            "abandoned",
+            "error"
+          ]
+        }
+      },
+      "required": [
+        "code"
+      ]
+    },
+    "p_control_policy": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "auto_approve": {
+          "type": "string",
+          "enum": [
+            "ask",
+            "trusted",
+            "everyone"
+          ]
+        },
+        "share_history": {
+          "type": "boolean"
+        },
+        "queue_limit": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "locked": {
+          "type": "boolean"
+        },
+        "auto_failover": {
+          "type": "boolean"
+        },
+        "trusted": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^mem_[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "maxItems": 200
+        }
+      },
+      "required": [
+        "auto_approve",
+        "share_history",
+        "queue_limit"
+      ]
+    },
+    "p_control_member_joined": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "member": {
+          "type": "string",
+          "pattern": "^mem_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "slot": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "host",
+            "editor",
+            "viewer"
+          ]
+        },
+        "device": {
+          "type": "string",
+          "pattern": "^dev_[0-9A-HJKMNP-TV-Z]{26}$"
+        }
+      },
+      "required": [
+        "member",
+        "name",
+        "slot",
+        "role",
+        "device"
+      ]
+    },
+    "p_control_member_left": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "member": {
+          "type": "string",
+          "pattern": "^mem_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "code": {
+          "type": "string",
+          "enum": [
+            "left",
+            "kicked",
+            "timeout",
+            "revoked"
+          ]
+        }
+      },
+      "required": [
+        "member",
+        "code"
+      ]
+    },
+    "p_control_roster": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "maxItems": 200
+        }
+      },
+      "required": [
+        "version",
+        "members"
+      ]
+    },
+    "p_control_host_changed": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "host": {
+          "type": "string",
+          "pattern": "^mem_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "code": {
+          "type": "string",
+          "enum": [
+            "transfer",
+            "failover"
+          ]
+        }
+      },
+      "required": [
+        "host",
+        "code"
+      ]
+    },
+    "p_control_session_state": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "live",
+            "paused",
+            "ended",
+            "expired"
+          ]
+        }
+      },
+      "required": [
+        "state"
+      ]
+    },
+    "p_control_rotate_request": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "reason": {
+          "type": "string",
+          "enum": [
+            "scheduled",
+            "requested"
+          ]
+        }
+      },
+      "required": [
+        "reason"
+      ]
+    },
+    "p_control_rotate_key": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "kid": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "member_removed",
+            "scheduled",
+            "requested"
+          ]
+        }
+      },
+      "required": [
+        "kid",
+        "reason"
+      ]
+    },
+    "p_presence_update": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "online",
+            "away",
+            "busy"
+          ]
+        },
+        "activity": {
+          "type": "string",
+          "enum": [
+            "idle",
+            "typing",
+            "reviewing",
+            "running"
+          ]
+        },
+        "agent_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "status",
+        "activity"
+      ]
+    },
+    "p_presence_nudge": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "to": {
+          "type": "string",
+          "pattern": "^mem_[0-9A-HJKMNP-TV-Z]{26}$"
+        }
+      },
+      "required": [
+        "to"
+      ]
+    },
+    "s_presence_cursor": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "path": {
+          "type": "string",
+          "maxLength": 65536
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "col": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sel_end_line": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sel_end_col": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": []
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "message.user"
+          },
+          "t": {
+            "const": "event"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "ct"
+        ],
+        "not": {
+          "required": [
+            "p"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "message.assistant.delta"
+          },
+          "t": {
+            "const": "event"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "ct"
+        ],
+        "not": {
+          "required": [
+            "p"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "message.assistant.done"
+          },
+          "t": {
+            "const": "event"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "ct"
+        ],
+        "not": {
+          "required": [
+            "p"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "message.system"
+          },
+          "t": {
+            "const": "event"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "ct"
+        ],
+        "not": {
+          "required": [
+            "p"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "tool.request"
+          },
+          "t": {
+            "const": "event"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "ct"
+        ],
+        "not": {
+          "required": [
+            "p"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "approval.request"
+          },
+          "t": {
+            "const": "event"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p",
+          "ct"
+        ],
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_approval_request"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "approval.decision"
+          },
+          "t": {
+            "const": "event"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p",
+          "ct"
+        ],
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_approval_decision"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "tool.result"
+          },
+          "t": {
+            "const": "event"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "ct"
+        ],
+        "not": {
+          "required": [
+            "p"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "agent.spawn"
+          },
+          "t": {
+            "const": "event"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p",
+          "ct"
+        ],
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_agent_spawn"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "agent.state"
+          },
+          "t": {
+            "const": "event"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p"
+        ],
+        "not": {
+          "required": [
+            "ct"
+          ]
+        },
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_agent_state"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "agent.exit"
+          },
+          "t": {
+            "const": "event"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p",
+          "ct"
+        ],
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_agent_exit"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "branch.update"
+          },
+          "t": {
+            "const": "event"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "ct"
+        ],
+        "not": {
+          "required": [
+            "p"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "file.lock"
+          },
+          "t": {
+            "const": "event"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p",
+          "ct"
+        ],
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_file_lock"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "agent.handoff"
+          },
+          "t": {
+            "const": "event"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p",
+          "ct"
+        ],
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_agent_handoff"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "conflict.detected"
+          },
+          "t": {
+            "const": "event"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p",
+          "ct"
+        ],
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_conflict_detected"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "diff.share"
+          },
+          "t": {
+            "const": "event"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "ct"
+        ],
+        "not": {
+          "required": [
+            "p"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "reaction"
+          },
+          "t": {
+            "const": "event"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p"
+        ],
+        "not": {
+          "required": [
+            "ct"
+          ]
+        },
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_reaction"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "comment.add"
+          },
+          "t": {
+            "const": "event"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "ct"
+        ],
+        "not": {
+          "required": [
+            "p"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "key.grant"
+          },
+          "t": {
+            "const": "event"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p",
+          "ct"
+        ],
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_key_grant"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "queue.submit"
+          },
+          "t": {
+            "const": "queue"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p",
+          "ct"
+        ],
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_queue_submit"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "queue.cancel"
+          },
+          "t": {
+            "const": "queue"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p"
+        ],
+        "not": {
+          "required": [
+            "ct"
+          ]
+        },
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_queue_cancel"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "queue.approve"
+          },
+          "t": {
+            "const": "queue"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p"
+        ],
+        "not": {
+          "required": [
+            "ct"
+          ]
+        },
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_queue_approve"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "queue.reject"
+          },
+          "t": {
+            "const": "queue"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p"
+        ],
+        "not": {
+          "required": [
+            "ct"
+          ]
+        },
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_queue_reject"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "queue.reorder"
+          },
+          "t": {
+            "const": "queue"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p"
+        ],
+        "not": {
+          "required": [
+            "ct"
+          ]
+        },
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_queue_reorder"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "queue.drop"
+          },
+          "t": {
+            "const": "queue"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p"
+        ],
+        "not": {
+          "required": [
+            "ct"
+          ]
+        },
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_queue_drop"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "queue.claim"
+          },
+          "t": {
+            "const": "queue"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p"
+        ],
+        "not": {
+          "required": [
+            "ct"
+          ]
+        },
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_queue_claim"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "queue.done"
+          },
+          "t": {
+            "const": "queue"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p"
+        ],
+        "not": {
+          "required": [
+            "ct"
+          ]
+        },
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_queue_done"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "queue.state"
+          },
+          "t": {
+            "const": "queue"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p"
+        ],
+        "not": {
+          "required": [
+            "ct"
+          ]
+        },
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_queue_state"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "control.kick"
+          },
+          "t": {
+            "const": "control"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p"
+        ],
+        "not": {
+          "required": [
+            "ct"
+          ]
+        },
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_control_kick"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "control.mute"
+          },
+          "t": {
+            "const": "control"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p"
+        ],
+        "not": {
+          "required": [
+            "ct"
+          ]
+        },
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_control_mute"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "control.unmute"
+          },
+          "t": {
+            "const": "control"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p"
+        ],
+        "not": {
+          "required": [
+            "ct"
+          ]
+        },
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_control_unmute"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "control.role"
+          },
+          "t": {
+            "const": "control"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p"
+        ],
+        "not": {
+          "required": [
+            "ct"
+          ]
+        },
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_control_role"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "control.transfer_host"
+          },
+          "t": {
+            "const": "control"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p"
+        ],
+        "not": {
+          "required": [
+            "ct"
+          ]
+        },
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_control_transfer_host"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "control.end"
+          },
+          "t": {
+            "const": "control"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p"
+        ],
+        "not": {
+          "required": [
+            "ct"
+          ]
+        },
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_control_end"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "control.policy"
+          },
+          "t": {
+            "const": "control"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p"
+        ],
+        "not": {
+          "required": [
+            "ct"
+          ]
+        },
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_control_policy"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "control.member_joined"
+          },
+          "t": {
+            "const": "control"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p"
+        ],
+        "not": {
+          "required": [
+            "ct"
+          ]
+        },
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_control_member_joined"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "control.member_left"
+          },
+          "t": {
+            "const": "control"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p"
+        ],
+        "not": {
+          "required": [
+            "ct"
+          ]
+        },
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_control_member_left"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "control.roster"
+          },
+          "t": {
+            "const": "control"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p"
+        ],
+        "not": {
+          "required": [
+            "ct"
+          ]
+        },
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_control_roster"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "control.host_changed"
+          },
+          "t": {
+            "const": "control"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p"
+        ],
+        "not": {
+          "required": [
+            "ct"
+          ]
+        },
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_control_host_changed"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "control.session_state"
+          },
+          "t": {
+            "const": "control"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p"
+        ],
+        "not": {
+          "required": [
+            "ct"
+          ]
+        },
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_control_session_state"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "control.rotate_request"
+          },
+          "t": {
+            "const": "control"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p"
+        ],
+        "not": {
+          "required": [
+            "ct"
+          ]
+        },
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_control_rotate_request"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "control.rotate_key"
+          },
+          "t": {
+            "const": "control"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p"
+        ],
+        "not": {
+          "required": [
+            "ct"
+          ]
+        },
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_control_rotate_key"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "presence.update"
+          },
+          "t": {
+            "const": "presence"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p"
+        ],
+        "not": {
+          "required": [
+            "ct"
+          ]
+        },
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_presence_update"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "presence.nudge"
+          },
+          "t": {
+            "const": "presence"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p"
+        ],
+        "not": {
+          "required": [
+            "ct"
+          ]
+        },
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_presence_nudge"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "presence.cursor"
+          },
+          "t": {
+            "const": "presence"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "ct"
+        ],
+        "not": {
+          "required": [
+            "p"
+          ]
+        }
+      }
+    }
+  ]
+}

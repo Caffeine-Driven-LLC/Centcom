@@ -1,0 +1,102 @@
+{
+  "id": "B002",
+  "title": "CI pipeline (typecheck, lint, test, build, security scan, contract-lock check)",
+  "plan": "backend",
+  "phase": "P0 Foundations",
+  "size": "M",
+  "role": "platform",
+  "depends_on": [
+    "B001"
+  ],
+  "goal": "Every pull request runs typecheck, lint, tests, build, dependency/secret scanning and the contract-lock check, and cannot merge if any fails.",
+  "scope_in": [
+    "GitHub Actions workflow ci.yml: install (frozen lockfile, pnpm cache), typecheck, lint, unit tests with coverage, build, with Node 22; a service-container job (postgres:16, redis:7) for integration tests.",
+    "security.yml: `pnpm audit --prod` (fail on high/critical), gitleaks secret scan, CodeQL for JavaScript/TypeScript, licence allow-list check (MIT, Apache-2.0, BSD, ISC).",
+    "Contract-lock job: runs `python3 tools/plan/lock.py --check` and fails on any diff to contracts/ or contracts/CONTRACTS.lock.",
+    "Lane-ID PR title check (`^B\\d{3}: `) and PR template per plan/PR_TEMPLATE.md; CODEOWNERS file.",
+    "Dependabot config limited to security updates; required status check names documented."
+  ],
+  "scope_out": [
+    "Deployment pipelines and Terraform checks (later infra lanes).",
+    "Writing the lock tool itself (shared tooling in tools/plan/); this lane only calls it.",
+    "Load/chaos pipelines (later lanes)."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-IDS",
+    "CT-ERR",
+    "CT-VER",
+    "CT-PAGE",
+    "CT-STATUS",
+    "CT-AUTH",
+    "CT-RBAC",
+    "CT-API-ACCOUNTS",
+    "CT-API-WORKSPACES",
+    "CT-API-SESSIONS",
+    "CT-API-BILLING",
+    "CT-API-USAGE",
+    "CT-API-AUDIT",
+    "CT-API-NOTIFY",
+    "CT-API-WEBHOOKS",
+    "CT-API-RELEASES",
+    "CT-API-FLAGS",
+    "CT-WS-ENVELOPE",
+    "CT-RESUME",
+    "CT-WS-SESSION-EVENTS",
+    "CT-WS-PRESENCE",
+    "CT-WS-QUEUE",
+    "CT-WS-CONTROL",
+    "CT-CRYPTO",
+    "CT-LAN",
+    "CT-ENTITLEMENTS",
+    "CT-WEBHOOKS",
+    "CT-NOTIF-PAYLOAD",
+    "CT-TELEMETRY",
+    "CT-DEEPLINK",
+    "CT-STATE-MAP"
+  ],
+  "build_against": "Test the workflows locally with `act` or by pushing to a scratch branch; to test the lock job, edit any contracts/ file on a throwaway branch and confirm the job fails.",
+  "deliverables": [
+    ".github/workflows/ci.yml",
+    ".github/workflows/security.yml",
+    ".github/workflows/pr-title.yml",
+    ".github/CODEOWNERS",
+    ".github/dependabot.yml",
+    ".github/pull_request_template.md",
+    "tools/ci/check-licences.mjs",
+    "tools/ci/check-lane-title.mjs",
+    "docs/ci.md"
+  ],
+  "interfaces": [
+    "Required status checks: `ci / typecheck`, `ci / lint`, `ci / test`, `ci / build`, `ci / contract-lock`, `security / audit`, `security / secrets`, `security / codeql`, `pr-title`.",
+    "`node tools/ci/check-licences.mjs` exits 1 listing any production dependency whose licence is not on the allow-list.",
+    "`node tools/ci/check-lane-title.mjs \"<title>\"` exits 0 only for titles like `B037: relay service skeleton`."
+  ],
+  "acceptance": [
+    "A PR that modifies any byte of contracts/ fails the `ci / contract-lock` check within 2 minutes.",
+    "A PR whose title does not match `^B\\d{3}: ` fails `pr-title`.",
+    "A PR adding a production dependency licensed GPL-3.0 fails the licence step of `security / audit`; an MIT one passes.",
+    "A commit containing a string shaped like an AWS secret key fails `security / secrets`.",
+    "The full ci workflow completes in under 10 minutes on the empty workspace, with the pnpm store cached on the second run.",
+    "The integration job exposes `DATABASE_URL` and `REDIS_URL` to tests and the postgres service passes its health check before tests start.",
+    "Workflow permissions are `contents: read` by default; no workflow uses `pull_request_target`."
+  ],
+  "tests": [
+    "check-licences.test.mjs: allow-list pass/fail fixtures.",
+    "check-lane-title.test.mjs: valid and invalid titles.",
+    "Dry-run: scratch-branch PR with a contracts/ edit proves the lock job fails (recorded in docs/ci.md)."
+  ],
+  "guardrails": [
+    "MUST NOT use `pull_request_target` or expose secrets to workflows triggered from forks.",
+    "MUST pin every third-party action to a full commit SHA and set minimal `permissions:` per job.",
+    "MUST NOT let the contract-lock job be skipped or marked continue-on-error.",
+    "MUST NOT cache anything containing secrets or .env files."
+  ],
+  "failure_modes": [
+    "Flaky service container start -> job waits on health checks (max 60 s) then fails with the container log attached, never silently skips integration tests.",
+    "Audit service unreachable -> job fails closed (red) with a documented manual re-run, not green.",
+    "Lock tool missing from the repo -> job fails with a message naming tools/plan/lock.py."
+  ],
+  "unblocks_gate": "G0",
+  "notes": "Consumes every contract only through the lock check. Planning tooling (tools/plan/lock.py, contracts/CONTRACTS.lock) is shared; this lane assumes both ship in the backend repo."
+}

@@ -1,0 +1,90 @@
+{
+  "id": "B019",
+  "title": "API keys: create, scope, hash, rotate, revoke",
+  "plan": "backend",
+  "phase": "P1 Identity",
+  "size": "M",
+  "role": "identity",
+  "depends_on": [
+    "B017",
+    "B021"
+  ],
+  "goal": "Admins and members can create scoped API keys for automation, shown once and stored only as peppered hashes, and the API authenticates them as machine principals.",
+  "scope_in": [
+    "Endpoints `GET /v1/api-keys`, `POST /v1/api-keys`, `DELETE /v1/api-keys/{id}` (scope `workspaces:write`; admin may manage all workspace keys, member only own); POST accepts `Idempotency-Key`.",
+    "Key format `cen_live_<32 base62>` / `cen_test_<32 base62>` generated from the CSPRNG without modulo bias; server stores `sha256(pepper||key)` and the first 8 characters as display prefix, plus id (`key_`), workspace, creator, name, scopes, created_at, last_used_at, revoked_at, expires_at (optional).",
+    "Scope validation: requested scopes must be a subset of the CT-AUTH scope list, never `admin`, and never exceed the creator's own permissions; keys cannot create relay tickets or join sessions.",
+    "`ApiKeyAuthenticator` registered with B017's principal-resolver registry for `cen_live_`/`cen_test_` bearers: constant-time hash match, revoked/expired checks, principal `{kind:'api_key', keyId, workspaceId, scopes}`; `last_used_at` updated at most once per minute asynchronously.",
+    "Entitlement limit `api_keys_max` enforced at creation via an injected `EntitlementsLookup` (default free: 1) returning `quota_exceeded` when reached.",
+    "Internal service function `rotateApiKey(keyId, actor)` (create replacement, revoke old atomically) for the admin console; no new public route.",
+    "Migration for table `api_keys`; audit events emitted through an injected `AuditSink` (no-op default until B036)."
+  ],
+  "scope_out": [
+    "Token service and principal plugin (B017).",
+    "RBAC engine internals (B021); this lane calls `can()`.",
+    "Entitlement computation (billing lanes).",
+    "Webhook management (webhook lanes)."
+  ],
+  "implements": [
+    "CT-AUTH",
+    "CT-API-ACCOUNTS"
+  ],
+  "consumes": [
+    "CT-RBAC",
+    "CT-ENTITLEMENTS",
+    "CT-PAGE",
+    "CT-ERR",
+    "CT-IDS"
+  ],
+  "build_against": "B017 test principal helpers, B021 RBAC, B010 stack; entitlement values supplied by a stub `EntitlementsLookup` returning the CT-ENTITLEMENTS free/pro/team `api_keys_max` defaults (1/5/50).",
+  "deliverables": [
+    "apps/api/src/modules/apikeys/service.ts",
+    "apps/api/src/modules/apikeys/generate.ts",
+    "apps/api/src/modules/apikeys/authenticator.ts",
+    "apps/api/src/modules/apikeys/repo.ts",
+    "apps/api/src/modules/apikeys/config.ts",
+    "apps/api/src/routes/api-keys.ts",
+    "packages/db/migrations/20260102000200_api_keys.sql",
+    "packages/db/src/schema/api-keys.ts",
+    "apps/api/test/modules/apikeys/"
+  ],
+  "interfaces": [
+    "`POST /v1/api-keys` body `{workspace: string, name: string, scopes: string[], mode?: 'live'|'test', expires_at?: string}` -> 201 `{id, key, prefix, name, scopes, created_at}` (`key` present only in this response).",
+    "`GET /v1/api-keys?workspace=&limit=&cursor=` -> `{data:[{id, prefix, name, scopes, created_at, last_used_at, revoked_at}], next_cursor, has_more}`; never returns hashes or full keys.",
+    "`DELETE /v1/api-keys/{id}` -> 204; idempotent.",
+    "`generateApiKey(mode: 'live'|'test', rng?): {key: string; prefix: string}`; `hashApiKey(key: string, pepper: Secret): string`.",
+    "Config: `API_KEY_PEPPER` (secret, >= 32 bytes)."
+  ],
+  "acceptance": [
+    "A created key matches `^cen_(live|test)_[0-9A-Za-z]{32}$`, appears in exactly one response, and the database row contains neither the key nor an unpeppered hash (the stored hash changes when the pepper changes).",
+    "Using the key as `Authorization: Bearer` against `GET /v1/api-keys` authenticates with only its scopes; a key lacking `workspaces:write` gets 403 `forbidden`.",
+    "After DELETE, the next request with that key returns 401 `token_revoked` within 1 s.",
+    "Requesting scope `admin` or an unknown scope returns a 400-class problem; calling `POST /v1/sessions/{id}/join-token` with an API key returns 403.",
+    "Creating the 6th key on a workspace with `api_keys_max=5` returns 429 `quota_exceeded` and creates nothing; a `null` limit means unlimited.",
+    "A member sees and can revoke only their own keys; an admin sees all keys of the workspace; a member of another workspace gets 404 for the key id.",
+    "Replaying a POST with the same `Idempotency-Key` does not create a second key (B024 encrypted replay keeps the secret out of plaintext storage).",
+    "`last_used_at` updates at most once per 60 s per key under 1 000 rapid calls.",
+    "Key generation over 1 000 000 samples shows a uniform base62 distribution (chi-square p > 0.001) and no repeats."
+  ],
+  "tests": [
+    "generate.test.ts: format, entropy, distribution.",
+    "service.test.ts: scope subset rules, limit enforcement, ownership matrix, rotation atomicity.",
+    "authenticator.test.ts: hash match, revoked, expired, wrong prefix, equal response for unknown vs wrong key.",
+    "routes.test.ts: CT-API-ACCOUNTS table rows, pagination, idempotency.",
+    "leak.test.ts: log capture and DB dump contain no key material."
+  ],
+  "guardrails": [
+    "MUST show the secret once and MUST NOT be able to retrieve it later; the DB stores only the peppered hash and the 8-char prefix.",
+    "MUST hash with the server pepper from config (`sha256(pepper||key)`) and compare in constant time; MUST NOT log keys.",
+    "MUST NOT allow `admin` scope, scope escalation beyond the creator's rights, or relay-ticket/session-join capability for keys.",
+    "MUST authorise through B021 `can()`; ownership checks live there, not inline.",
+    "MUST write an audit event for create, revoke and rotate."
+  ],
+  "failure_modes": [
+    "Pepper missing/short -> API refuses to start.",
+    "Concurrent create at the limit -> limit enforced under a row lock/serialisable transaction so the cap is never exceeded.",
+    "Last-used update fails -> ignored with a metric; authentication still succeeds."
+  ],
+  "unblocks_gate": "G4",
+  "notes": "CONTRACT GAP: the POST /v1/api-keys request body and response fields live in openapi.yaml; the shape above is provisional. The contract's 8-char display prefix of `cen_live_...` is just `cen_live`; implemented as specified, flag for a contract clarification. The title mentions 'rotate' but no rotate endpoint exists in CT-API-ACCOUNTS; implemented as an internal service function only."
+}

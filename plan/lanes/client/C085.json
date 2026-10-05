@@ -1,0 +1,75 @@
+{
+  "id": "C085",
+  "title": "Web roster, presence and cursors",
+  "plan": "client",
+  "phase": "P5 Web",
+  "size": "M",
+  "role": "web",
+  "depends_on": [
+    "C059",
+    "C081"
+  ],
+  "goal": "Web users see who is in the session, what they are doing and where their cursors are, with identity never carried by colour alone and presence treated strictly as best-effort.",
+  "scope_in": [
+    "Roster in apps/web/src/presence/: presence stack in the header (<= 5 avatars then `+N`, 32 px square, -8 px overlap), roster popover with avatar, name, role chip (HOST/EDIT/VIEW), colour name, activity ('typing', 'reviewing diff', 'away 4m'), nudge button.",
+    "Presence publisher: `presence.update {status, activity, agent_count?}` on change at most once per second; `away` after 5 min without input; typing debounce 400 ms; `busy` user-chosen.",
+    "Cursor layer: render remote `presence.cursor` (encrypted) as 4x6 pixel arrows with name tags over code/diff views, tags fade to 40 % after 3 s idle and vanish after 10 s; own cursor unlabelled.",
+    "Slot to colour mapping and join/leave toasts ('Maya joined'), avatar enter `base` 160 ms/`enter` and leave `slow` 280 ms/`exit`.",
+    "Roster state from `control.roster`, `control.member_joined`, `control.member_left`, `control.role`, `control.host_changed`."
+  ],
+  "scope_out": [
+    "TUI cursors (C077) and presence client in packages/net (C059).",
+    "Transcript, fleet board (C083, C084).",
+    "Role changes/kick UI actions beyond showing the chips (handled with C083 host controls).",
+    "Read receipts (off by default, not built)."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-WS-PRESENCE",
+    "CT-WS-SESSION-EVENTS",
+    "CT-WS-CONTROL",
+    "CT-CRYPTO",
+    "CT-RBAC"
+  ],
+  "build_against": "Mock backend (lane C007) emitting roster, member_joined/left, presence.update and presence.cursor at 10 Hz for 8 members.",
+  "deliverables": [
+    "apps/web/src/presence/",
+    "apps/web/test/presence/"
+  ],
+  "interfaces": [
+    "export function PresenceStack(props: {members: RosterEntry[]; max?: number}): JSX.Element",
+    "export function RosterPopover(props: {members: RosterEntry[]; self: MemberId; onNudge?(m: MemberId): void}): JSX.Element",
+    "export function CursorLayer(props: {cursors: ReadonlyMap<MemberId, CursorState>; roster: RosterEntry[]; container: RefObject<HTMLElement>}): JSX.Element",
+    "export function usePresencePublisher(): {setActivity(a: 'idle'|'typing'|'reviewing'|'running'): void; setStatus(s: 'online'|'away'|'busy'): void}",
+    "slotToColour(slot: number, selfSlot: number): CentoColour  // same rule as C077, local copy"
+  ],
+  "acceptance": [
+    "Presence dot colours: online `status.success`, away `status.warning`, offline `border.strong`, busy `status.danger`, each with a distinct glyph shape (check, clock, dash, minus) and an accessible name ('Maya, online').",
+    "Initial text is white on violet and brown, ink-900 on red, yellow, green (DESIGN.md 4.6); brown avatars have the 1 px abyss-300 ring; contrast test passes >= 3:1 on every pair.",
+    "Publisher never exceeds 1 presence.update/s and 10 presence.cursor/s under a synthetic 100 events/s input; typing indicator clears 5 s after the last keystroke.",
+    "A remote cursor idle 3 s drops to 40 % opacity and is removed at 10 s; on member_left it is removed immediately.",
+    "Sixth participant renders violet with an outline and a distinct initial; roster text reads 'M · Maya · green'.",
+    "Roster popover is a focus-trapped dialog with Esc to close and returns focus to the trigger; stack has `aria-label=\"Participants, N online\"`.",
+    "Join and leave announce via aria-live polite ('Maya joined'); toasts with no action auto-dismiss at 4 s; no solo-session typing indicators."
+  ],
+  "tests": [
+    "presence.slots.test.ts: colours for slots 0-7 and self offset.",
+    "presence.publisher.test.ts: fake timers for throttles/debounce.",
+    "presence.cursors.test.tsx: dim/expiry.",
+    "presence.a11y.test.tsx: axe + keyboard.",
+    "presence.contrast.test.ts: token contrast."
+  ],
+  "guardrails": [
+    "MUST NOT make any feature depend on a presence frame being delivered (best-effort).",
+    "MUST NOT send cursor path or text in `p`; cursor payload is encrypted only.",
+    "Nudges: rate limit one per person per minute client-side, always dismissible, and sent with existing frames only (see notes).",
+    "MUST NOT identify people by colour alone; name + initial always present (DESIGN.md 16.3)."
+  ],
+  "failure_modes": [
+    "Presence frame for unknown member -> hold up to 10 s for roster, then drop.",
+    "Roster version gap (control.roster.version jumps) -> trust the newest full roster; discard partials.",
+    "Clock skew -> use local receive time for fade/expiry, never frame `ts`."
+  ],
+  "unblocks_gate": "G5",
+  "notes": ""
+}

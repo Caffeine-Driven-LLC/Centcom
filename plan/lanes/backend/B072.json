@@ -1,0 +1,90 @@
+{
+  "id": "B072",
+  "title": "Stripe webhook ingestion: verified, idempotent, replay-safe",
+  "plan": "backend",
+  "phase": "P5 Billing",
+  "size": "M",
+  "role": "billing",
+  "depends_on": [
+    "B070"
+  ],
+  "goal": "Ingest Stripe webhooks safely: verify the signature on the raw body, persist each event once, process asynchronously and idempotently in any order, and apply resulting plan changes to entitlements.",
+  "scope_in": [
+    "POST /internal/stripe/webhook (not part of the public contract) with raw-body access, signature verification (Stripe-Signature, 300 s tolerance) and a 2xx only after the event is durably stored.",
+    "stripe_event table unique on Stripe event id, with status received|processing|processed|failed|ignored and attempts; duplicate events return 200 without reprocessing.",
+    "BullMQ job `stripe.event.process` handling customer.subscription.created|updated|deleted, checkout.session.completed, invoice.paid, invoice.payment_failed and ignoring others.",
+    "Out-of-order safety: on processing, re-fetch the current subscription from Stripe and apply it through B070 upsertFromStripe (stale guard) and B069 applySubscriptionState.",
+    "Emit domain events for outgoing webhooks (billing.subscription.updated, billing.invoice.paid, billing.invoice.payment_failed) via an outbox table, and publish a billing_issue notification request on payment failure through NotifyPort.",
+    "Replay tooling: an internal function replayEvent(eventId) that reprocesses a stored event."
+  ],
+  "scope_out": [
+    "Delivering outgoing webhooks to customers: B081. Notification delivery: B063.",
+    "Dunning/grace state machine rules: B078 (this lane records past_due_since only).",
+    "Seat sync and invoices listing: B073, B077.",
+    "Public contract: Stripe webhooks are explicitly internal."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-API-BILLING",
+    "CT-ENTITLEMENTS",
+    "CT-WEBHOOKS",
+    "CT-NOTIF-PAYLOAD",
+    "CT-ERR"
+  ],
+  "build_against": "Stripe CLI-style signed fixtures generated in tests with the test webhook secret, StripeGateway fake (B070) returning scripted subscription objects, in-memory BullMQ, fake NotifyPort and EntitlementService.",
+  "deliverables": [
+    "apps/api/src/routes/stripe-webhook/index.ts",
+    "apps/api/src/plugins/raw-body.ts",
+    "apps/api/src/modules/billing/webhooks/ingest.ts",
+    "apps/api/src/modules/billing/webhooks/processor.ts",
+    "apps/api/src/modules/billing/webhooks/handlers.ts",
+    "apps/api/src/modules/billing/webhooks/outbox.ts",
+    "apps/worker/src/jobs/stripe-event-process.ts",
+    "apps/api/src/modules/billing/webhooks/README.md",
+    "apps/api/test/billing/webhooks/",
+    "packages/db/migrations/0072_stripe_events.sql"
+  ],
+  "interfaces": [
+    "POST /internal/stripe/webhook -> 200 {received:true} | 400 (bad signature/payload)",
+    "WebhookIngest.handle(rawBody: Buffer, sigHeader: string, now: Date): Promise<{status:'stored'|'duplicate'}>",
+    "EventProcessor.process(eventId: string): Promise<'processed'|'ignored'>",
+    "replayEvent(eventId: string): Promise<void>",
+    "Tables stripe_event(event_id pk, type, created_at_stripe, payload jsonb, status, attempts, last_error, received_at, processed_at), billing_outbox(id, type, workspace_id, payload, created_at, published_at)",
+    "BullMQ queue stripe.event.process; DLQ stripe.event.dlq",
+    "Env: STRIPE_WEBHOOK_SECRET (supports two values for rotation)"
+  ],
+  "acceptance": [
+    "A body with a wrong signature, a timestamp older than 300 s, or a modified body returns 400 and stores nothing; a valid one returns 200 in < 200 ms (median) after one DB insert.",
+    "Delivering the same event id 5 times yields one stripe_event row, one processing run and 200 for each delivery.",
+    "Events arriving out of order (subscription.updated with created=T2 before created=T1) end with the subscription state equal to what Stripe's current object says, and entitlements rev increments once per real change.",
+    "invoice.payment_failed sets past_due_since once (second failure does not move it), calls NotifyPort billing_issue exactly once per invoice id, and enqueues a billing.invoice.payment_failed outbox row.",
+    "customer.subscription.deleted moves the workspace to status canceled/none per mapping and applies entitlements through B069; subscription.updated with seat/plan change updates plan and seats.",
+    "A handler failure retries 8 times with exponential backoff and jitter, then marks the event failed and moves it to the DLQ; replayEvent on it reprocesses it successfully after a fix.",
+    "Unknown event types are stored with status ignored and return 200; an event for an unknown customer is marked failed with reason `unknown_customer` without crashing.",
+    "With two webhook secrets configured, signatures from either verify (rotation test).",
+    "No log line or stored column contains card data, the signature header or the webhook secret."
+  ],
+  "tests": [
+    "webhook.signature.test.ts: valid, tampered, stale, rotated secret",
+    "webhook.idempotency.test.ts: duplicates and concurrent deliveries",
+    "webhook.ordering.test.ts: out-of-order and stale events (property test)",
+    "webhook.handlers.test.ts: each event type",
+    "webhook.retry-dlq.test.ts",
+    "webhook.privacy.test.ts: logs and columns"
+  ],
+  "guardrails": [
+    "MUST verify the signature against the exact raw bytes before parsing JSON; MUST use Stripe's constant-time verification.",
+    "MUST NOT return 2xx before the event row is committed; MUST return 2xx quickly and do work in the job.",
+    "MUST NOT trust event payload ordering; always reconcile against the current Stripe object.",
+    "MUST exempt this route from user auth but NOT from size limits (max body 1 MiB) and request logging redaction.",
+    "MUST NOT change entitlements except through B069 applySubscriptionState.",
+    "Handlers MUST be idempotent: replaying any event any number of times yields the same final state."
+  ],
+  "failure_modes": [
+    "DB down at ingest -> 500 so Stripe retries; nothing is acknowledged that is not stored.",
+    "Stripe API down during processing -> job retries with backoff; events remain `received`/`processing`; alert if oldest unprocessed > 10 min.",
+    "Entitlement service error -> event marked failed for retry, subscription row already updated is safe because upsert is idempotent."
+  ],
+  "unblocks_gate": "G4",
+  "notes": "No contract implemented (internal), per CT-API-BILLING: 'Stripe webhooks are not part of this contract'. The path /internal/stripe/webhook must be excluded from public docs and protected only by signature; WAF allow-list by Stripe IPs is a B097 option."
+}

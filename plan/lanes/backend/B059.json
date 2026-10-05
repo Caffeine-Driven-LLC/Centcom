@@ -1,0 +1,84 @@
+{
+  "id": "B059",
+  "title": "File-lock coordination service (advisory, TTL, fairness)",
+  "plan": "backend",
+  "phase": "P4 Fleet",
+  "size": "M",
+  "role": "realtime",
+  "depends_on": [
+    "B009",
+    "B044"
+  ],
+  "goal": "An advisory file-lock service that arbitrates acquire/release/expire of locks by path_hmac with TTLs and first-come fairness, without ever seeing a path.",
+  "scope_in": [
+    "Handler for file.lock frames (action acquire|release from clients; deny|expire emitted by the server) keyed by (sid, path_hmac).",
+    "TTL locks: default ttl_ms 60 000, min 1 000, max 600 000; renewal by re-acquire from the same agent extends the TTL.",
+    "Fairness: FIFO wait queue per path_hmac (max 10 waiters); on release or expiry the next waiter is granted and a server file.lock acquire is sequenced for it.",
+    "Lock table in Redis with atomic Lua/SET-NX semantics and expiry sweep emitting file.lock {action:'expire'}; locks released automatically when the owning agent exits or its member leaves/is kicked.",
+    "Per-session cap (500 locks) and per-agent cap (100 locks).",
+    "conflict hints: when a deny occurs, offer holder agent id to the conflict signaller (B061) through a port."
+  ],
+  "scope_out": [
+    "Computing path_hmac (client; BLAKE2b-MAC with the epoch path key).",
+    "Conflict.detected and branch signalling: B061.",
+    "Enforcing locks on the file system (locks are advisory).",
+    "Agent registry: B057."
+  ],
+  "implements": [
+    "CT-WS-SESSION-EVENTS"
+  ],
+  "consumes": [
+    "CT-CRYPTO",
+    "CT-WS-ENVELOPE",
+    "CT-IDS",
+    "CT-ERR"
+  ],
+  "build_against": "Redis abstraction in-memory implementation from B009, FakeSequencer/Fanout, injected clock; fixtures contracts/fixtures/events/file.lock*.json.",
+  "deliverables": [
+    "apps/relay/src/locks/service.ts",
+    "apps/relay/src/locks/store.ts",
+    "apps/relay/src/locks/waiters.ts",
+    "apps/relay/src/locks/ports.ts",
+    "apps/relay/src/locks/index.ts",
+    "apps/relay/src/locks/README.md",
+    "apps/relay/test/locks/"
+  ],
+  "interfaces": [
+    "LockService.handle(ctx, frame: FileLockFrameIn): Promise<LockOutcome>  // outcome: granted | denied{holder: agt_} | queued{position} | released | ignored",
+    "LockService.releaseAllForAgent(sid, agentId) / releaseAllForMember(sid, memberId)",
+    "LockService.sweep(now: Date): Promise<number>  // expired count",
+    "Redis keys: lock:{sid}:{path_hmac} -> {agent, member, expires_at}; lockq:{sid}:{path_hmac} list; TTL = ttl_ms",
+    "Metric: relay_locks_held, relay_lock_denials_total, relay_lock_wait_ms"
+  ],
+  "acceptance": [
+    "Two agents acquire the same path_hmac concurrently (100 trials, interleaved): exactly one gets acquire, the other gets a sequenced deny with the holder's agent_id in no field beyond agent_id.",
+    "A lock with ttl_ms 5 000 expires at 5 000 ms (fake clock): sweep emits exactly one file.lock expire frame and the path is free; ttl_ms 999 or 600 001 is clamped to 1 000 / 600 000.",
+    "Release by a non-owner is ignored and does not free the lock; release by owner frees it and grants the first waiter within the same sequencing step.",
+    "Waiters are granted FIFO; the 11th waiter for a path receives deny; the 501st lock in a session is denied.",
+    "When agent.exit arrives for an agent holding 3 locks, all 3 are released and 3 expire/release frames are sequenced; same on member kick.",
+    "Re-acquire by the holder extends the expiry and emits no deny; re-acquire by the holder of an already-held lock is idempotent for the same frame id.",
+    "Only path_hmac matching ^[A-Za-z0-9_-]+$ and length <= 64 is accepted; the service never receives or stores p.path (inside ct), verified by a test that scans Redis keys and values."
+  ],
+  "tests": [
+    "locks.arbitration.test.ts: race and fairness, property test with random interleavings",
+    "locks.ttl.test.ts: expiry and clamping",
+    "locks.cleanup.test.ts: agent exit, kick, disconnect",
+    "locks.caps.test.ts",
+    "locks.privacy.test.ts: stored keys/values allow-list",
+    "locks.contract.test.ts"
+  ],
+  "guardrails": [
+    "MUST arbitrate on the hash only; MUST NOT read, derive or log `ct.path`.",
+    "MUST make acquire atomic (single Redis script or SET NX PX) so no two holders can exist.",
+    "MUST NOT block any frame processing waiting for a lock; denial is immediate.",
+    "Locks are advisory: MUST NOT reject non-lock frames because of lock state.",
+    "A lock MUST be released when its owner can no longer act (agent exit, member left, session ended)."
+  ],
+  "failure_modes": [
+    "Redis down -> acquire returns deny-by-unavailable (503-class sys.error) rather than granting unsynchronised locks.",
+    "Sweep missed (process pause) -> lock TTL in Redis still expires keys; next sweep reconciles by emitting expire for locks it can still see in the index.",
+    "Duplicate file.lock frame (same sid, from, id) -> same outcome replayed, no double waiter entry."
+  ],
+  "unblocks_gate": "G5",
+  "notes": "CONTRACT GAP: the clear p for file.lock has `ttl_ms` optional with no default or bounds; defaults and clamps here are this lane's choices. Waiter queue behaviour (queued position) has no wire representation; waiters are told only via the eventual server grant, so clients see a 'deny' then a later 'acquire'."
+}

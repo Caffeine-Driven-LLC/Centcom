@@ -1,0 +1,30 @@
+{
+  "schema": "entitlements.schema.json",
+  "valid": true,
+  "note": "",
+  "data": {
+    "workspace": "wsp_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+    "rev": 42,
+    "status": "active",
+    "period": {
+      "start": "2026-10-01T00:00:00.000Z",
+      "end": "2026-11-01T00:00:00.000Z"
+    },
+    "plan": "free",
+    "limits": {
+      "relay_access": false,
+      "lan_multiplayer": true,
+      "max_seats": 1,
+      "max_session_members": 8,
+      "max_concurrent_sessions": 0,
+      "max_parallel_agents": 4,
+      "history_days": 0,
+      "agent_minutes_month": 0,
+      "tokens_month": null,
+      "queue_items_month": null,
+      "audit_log_days": 0,
+      "webhooks_max": 0,
+      "api_keys_max": 1
+    }
+  }
+}

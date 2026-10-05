@@ -1,0 +1,75 @@
+{
+  "id": "C009",
+  "title": "Theme and mascot packages from the design system",
+  "plan": "client",
+  "phase": "P0 Foundations",
+  "size": "M",
+  "role": "tui",
+  "depends_on": [
+    "C001"
+  ],
+  "goal": "Ship the design system as code: `@centcom/theme` (tokens, CSS variables, terminal colour-tier mapping, member colours) and `@centcom/mascot` (all Cento animations, state-to-animation lookup, half-block terminal renderer, recolouring). assets/ stays the source of truth; the packages hold byte-checked copies.",
+  "scope_in": [
+    "Sync script `packages/theme/scripts/sync-assets.ts` (flags `--check`, default writes): copies assets/theme/{tokens.json,theme.css,tailwind.preset.js,state-map.json,terminal/ansi.json} and assets/spinner_verbs.json into packages/theme/src/generated/; `--check` exits 1 on any byte difference. Same for packages/mascot/scripts/sync-assets.ts with assets/mascot/animations.json.",
+    "Theme API: typed tokens, `resolveColorTier(env, isTTY)` implementing the DESIGN.md section 19.3 detection (COLORTERM truecolor/24bit -> truecolor; TERM contains `256color` -> 256; otherwise 16; `NO_COLOR` set or not a TTY -> none), `tokenColor(token, tier, mode)` using the truecolor/256/ANSI-16 tables, `themeMode(env)` ('dark' Abyss | 'light' Shallows, `ui.theme` override).",
+    "`memberColor(slot, selfSlot)` per DESIGN.md section 3.2/12: self is violet; others take red, yellow, green, brown in slot order skipping self; the 6th and later participants reuse violet with `outlined: true` and a distinct initial. Returns `{ color: 'violet'|'red'|'yellow'|'green'|'brown'; outlined: boolean }`.",
+    "Mascot API: `animationFor(state: string): AnimationName` (state-map copy; unknown state -> the `thinking` animation), `getAnimation(name)`, `recolor(anim, color)` (palmap swap as in assets/mascot/play.py `recolor`), `frameAt(anim, elapsedMs, { reducedMotion })` (reduced motion -> first frame only), `renderHalfBlock(rows, recolorFn, tier): string[]` (port of play.py `render`: upper-half block with 24-bit fg/bg; 256/16-colour and no-colour fallbacks), `frameCount`, `durationMs`.",
+    "Static data tests: state-map keys equal contracts/state-map.json keys exactly (CT-STATE-MAP); every value names an existing animation in animations.json (319 animations at time of writing).",
+    "Package README with usage for both Ink (terminal) and web canvas rendering; no React dependency inside these packages (renderers return strings / pixel grids)."
+  ],
+  "scope_out": [
+    "Ink components (`<Mascot/>`, status line, panels): TUI lanes.",
+    "Web components and Tailwind wiring: web lanes.",
+    "Regenerating assets (Python build scripts stay in assets/): not touched.",
+    "Sound/haptics, spinner copy selection logic: later UI lanes."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-STATE-MAP",
+    "CT-WS-PRESENCE"
+  ],
+  "build_against": "Reads only files in assets/ and contracts/state-map.json; no network or mock required.",
+  "deliverables": [
+    "packages/theme/src/",
+    "packages/theme/scripts/",
+    "packages/theme/README.md",
+    "packages/mascot/src/",
+    "packages/mascot/scripts/",
+    "packages/mascot/README.md"
+  ],
+  "interfaces": [
+    "`@centcom/theme`: `tokens`, `resolveColorTier(env: Env, isTTY: boolean): ColorTier`, `tokenColor(token: TokenName, tier: ColorTier, mode: 'dark'|'light'): string | null`, `memberColor(slot: number, selfSlot: number): { color: MemberColor; outlined: boolean }`, `themeMode(env, pref): 'dark'|'light'`, `ansiTheme`, `spinnerVerbs: readonly string[]`.",
+    "`@centcom/mascot`: `animationFor(state: string): string`, `getAnimation(name: string): Animation | undefined`, `listAnimations(cat?: string): Animation[]`, `recolor(a: Animation, c: MemberColor): Animation`, `frameAt(a: Animation, elapsedMs: number, o?: { reducedMotion?: boolean }): Frame`, `renderHalfBlock(rows: string[], tier: ColorTier): string[]`.",
+    "`type Animation = { name: string; cat: string; desc: string; w: number; h: number; social: boolean; frames: { d: number; rows: string[] }[] }` (from animations.json; `d` = frame duration in ms).",
+    "CLI: `pnpm --filter @centcom/theme sync [--check]`, `pnpm --filter @centcom/mascot sync [--check]`."
+  ],
+  "acceptance": [
+    "`sync --check` exits 0 on a clean tree and exits 1 after editing one byte of a generated copy; running `sync` restores it.",
+    "Set of keys in packages/theme/src/generated/state-map.json equals the set in contracts/state-map.json (58 keys at time of writing), and assets/theme/state-map.json is byte-identical to contracts/state-map.json (test fails otherwise).",
+    "For all 58 states `animationFor(state)` returns an animation that exists in `listAnimations()`; `animationFor('totally-new-state')` returns the `thinking` animation.",
+    "`resolveColorTier` table test: `{COLORTERM:'truecolor'}` -> truecolor; `{TERM:'xterm-256color'}` -> 256; `{TERM:'xterm'}` -> 16; `{NO_COLOR:'1', COLORTERM:'truecolor'}` -> none; isTTY false -> none.",
+    "`memberColor` for selfSlot=2: slot 2 -> violet; slots 0,1,3,4 -> red,yellow,green,brown in that order; slot 6 -> violet with `outlined:true`; stable for repeated calls.",
+    "`renderHalfBlock` of the `idle_breathe` first frame at truecolor produces `ceil(15/2)=8` rows, each 14 cells wide, containing `38;2;` escapes; at tier `none` it contains zero ESC characters.",
+    "`frameAt(a, t)` loops: for total duration D, `frameAt(a, t)` equals `frameAt(a, t + D)` for 1000 random t; with `reducedMotion:true` always returns frame 0.",
+    "`recolor(idle_breathe,'red')` changes body pixels (B/D/H/S palette chars) to the red palmap and leaves eye/pupil chars unchanged; input object is not mutated."
+  ],
+  "tests": [
+    "sync.test.ts (check/write), state-map.test.ts (contract parity), tier.test.ts, member-color.test.ts.",
+    "render.test.ts (golden strings for 3 animations x 4 tiers), frame.test.ts (property), recolor.test.ts.",
+    "contrast.test.ts (a handful of token pairs against assets/theme/CONTRAST.md thresholds)."
+  ],
+  "guardrails": [
+    "MUST treat assets/ as the source of truth: generated copies are never edited by hand and `sync --check` is part of CI.",
+    "MUST keep `animationFor` total: unknown state names map to `thinking`, never throw (receivers tolerate unknown states, CT-STATE-MAP).",
+    "MUST honour `NO_COLOR` and non-TTY output by returning glyph-only/no-ESC output; the mascot MUST be skippable via `reducedMotion`.",
+    "MUST NOT put user-facing copy in state names; text mapping goes through the message table (CT-STATE-MAP rule 3).",
+    "MUST NOT add runtime dependencies (pure data + string functions)."
+  ],
+  "failure_modes": [
+    "animations.json missing a frame row of inconsistent width -> `getAnimation` throws at build time in the sync script, never at render time.",
+    "Terminal narrower than the sprite (w+2 columns) -> `renderHalfBlock` returns an empty array and the caller shows text only.",
+    "State map value pointing at a missing animation -> test failure at CI; at runtime falls back to `thinking`."
+  ],
+  "unblocks_gate": "G3",
+  "notes": "The map values (animations) may change without a contract change; only the key set is contractual. assets/DESIGN.md section 12.4 sixth-participant treatment is currently 'outlined violet' and flagged in the design doc as improvable."
+}

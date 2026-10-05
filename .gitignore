@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+node_modules/
+.env
+.env.*
+!.env.example
+.DS_Store
+# large generated mascot crowds: regenerate with `python3 assets/mascot/build.py`
+assets/mascot/gif/duo/
+assets/mascot/gif/trio/
+assets/mascot/gif/squad/
+assets/mascot/gif/group/

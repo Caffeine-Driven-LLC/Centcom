@@ -1,0 +1,81 @@
+{
+  "id": "B042",
+  "title": "Resume and replay from the hot buffer and durable log",
+  "plan": "backend",
+  "phase": "P3 Relay",
+  "size": "L",
+  "role": "realtime",
+  "depends_on": [
+    "B041",
+    "B055"
+  ],
+  "goal": "Let a reconnecting client resume: replay missed sequenced frames from the hot buffer (or the durable log after a snapshot), report the window with `sys.resumed`, or tell the client a snapshot is required.",
+  "scope_in": [
+    "Resume handling for `sys.hello.last_seq` and the standalone `sys.resume {last_seq}` frame.",
+    "Replay from the hot buffer in `seq` order in batches of 100 frames with a send-queue limit, then `sys.resumed {from_seq, to_seq, count}`; `sys.resumed {snapshot_required:true, snapshot_seq}` when `last_seq` is older than the buffer.",
+    "Replay after snapshot: `sys.resume {last_seq: snapshot_seq}` served from the durable log (via a `DurableLogReader` port implemented on top of B055) when the hot buffer no longer has those frames.",
+    "Hot-buffer rehydration from the durable log after a relay/Redis restart so `head` and recent frames are available.",
+    "Live-frame handoff: while a connection is replaying, new live frames are held in a bounded per-connection queue and released after the replay in order, with no gap and no duplicate.",
+    "Wiring of the `DurableAppend` port from B041 to the B055 store."
+  ],
+  "scope_out": [
+    "Sequencing/hot buffer itself (B041), durable history storage and REST history endpoint (B055), snapshots (B056).",
+    "Fan-out of live frames (B044).",
+    "Client-side decrypt and snapshot application."
+  ],
+  "implements": [
+    "CT-RESUME",
+    "CT-WS-ENVELOPE"
+  ],
+  "consumes": [
+    "CT-AUTH",
+    "CT-CRYPTO",
+    "CT-RBAC",
+    "CT-ERR"
+  ],
+  "build_against": "The mock client simulator from B011 (scripted fake clients speaking the WS protocol), the in-memory B009 KV/pub-sub implementations, and the frame fixtures in contracts/fixtures/events/; no real client is needed. `DurableLogReader` is an in-memory fake holding generated ciphertext frames; the simulator disconnects at a chosen `seq` and reconnects with `last_seq`.",
+  "deliverables": [
+    "apps/relay/src/resume/",
+    "apps/relay/src/resume/module.ts",
+    "apps/relay/src/resume/README.md"
+  ],
+  "interfaces": [
+    "WS: `sys.hello.p.last_seq`, `sys.resume {p:{last_seq}}` (C->S); `sys.resumed {p:{from_seq,to_seq,count}}` or `{p:{snapshot_required:true,snapshot_seq}}` (S->C); replayed frames carry their original `seq`.",
+    "TS: `interface DurableLogReader { range(sid: string, afterSeq: number, limit: number): Promise<StoredFrame[]>; maxSeq(sid: string): Promise<number> }` and `interface SnapshotLookup { latestSeq(sid: string): Promise<number | null> }` (ports; production adapters in this lane over B055/B056 services when they exist).",
+    "TS: `resumeConnection(conn: RelayConnection, lastSeq: number | null): Promise<ResumeResult>` where `ResumeResult = { mode: 'none' | 'replayed' | 'snapshot_required'; fromSeq?: number; toSeq?: number; count?: number }`.",
+    "TS: `export default relayModule: RelayModule` (order 45).",
+    "Env: `RELAY_REPLAY_BATCH` (100), `RELAY_REPLAY_MAX_FRAMES` (50000), `RELAY_HYDRATE_FRAMES` (5000)."
+  ],
+  "acceptance": [
+    "Client disconnects at seq 1040 while head moves to 1100; reconnecting with `last_seq: 1040` receives welcome, then frames 1041..1100 exactly once in order, then `sys.resumed {from_seq:1041,to_seq:1100,count:60}`; frames 1101+ arrive after, with no duplicate or gap (checked over 20 runs with traffic during replay).",
+    "`last_seq` equal to head -> `sys.resumed {count:0}` and no frames; `last_seq: null` -> no replay and `welcome.resume = null`.",
+    "`last_seq` older than the oldest buffered frame -> `sys.resumed {snapshot_required:true, snapshot_seq}` and no replay frames; `last_seq` greater than head -> same snapshot_required answer.",
+    "After snapshot_required, `sys.resume {last_seq: S}` replays S+1..head from the durable log in order and ends with a correct `sys.resumed`.",
+    "Replay of 5 000 frames completes within 2 s on the test container and never lets the connection's outbound buffer exceed 2 MiB (batching waits for drain).",
+    "A replay request spanning more than `RELAY_REPLAY_MAX_FRAMES` (50 000) is answered with snapshot_required.",
+    "A member whose membership was revoked between disconnect and reconnect gets 4403 from the handshake and receives no replay.",
+    "After a simulated Redis flush, the first connection triggers hydration; `head` equals the durable log's max seq and the next sequenced frame is head+1, not 1."
+  ],
+  "tests": [
+    "resume.replay.test.ts: window, exact counts, ordering, empty replay.",
+    "resume.handoff.test.ts: live traffic during replay (property test with random interleavings).",
+    "resume.snapshot-required.test.ts: old, future, and null `last_seq`; follow-up `sys.resume`.",
+    "resume.hydrate.test.ts: Redis flush recovery.",
+    "resume.backpressure.test.ts: slow reader during replay.",
+    "Contract: sys.resume/sys.resumed fixtures; flow of CT-RESUME 'Flow' steps 1-3."
+  ],
+  "guardrails": [
+    "Replayed frames MUST be byte-identical to the originals (including `seq`, `ts`, `ct`, `sig`); the relay MUST NOT re-encrypt, decrypt or reformat content.",
+    "Replay MUST be authorised by the live membership check at resume time and MUST NOT cross sessions (`sid` of the ticket only).",
+    "Replay MUST be ordered and gapless relative to live frames; a gap or duplicate after resume is a correctness bug, not a tolerated race.",
+    "Replay MUST honour outbound buffer limits (B046); never push an unbounded burst.",
+    "After a data loss the relay MUST NOT restart `seq` from 1 for an existing session; `head` is recovered from the durable log or the session is paused."
+  ],
+  "failure_modes": [
+    "Durable log unavailable during snapshot-based resume -> `sys.error` 503-class with `retry_after_s`, connection kept; client retries.",
+    "Hydration fails -> session sequencing paused (503-class) and alert metric `relay_hydrate_failed_total`; not silently reset.",
+    "Client sends `sys.resume` twice concurrently -> second is ignored with `sys.error` `invalid_frame`."
+  ],
+  "unblocks_gate": "G2",
+  "notes": "CONTRACT GAP: behaviour for `last_seq: null` is implied by the handshake example only. SPLIT? size L: hydration could be separate."
+}

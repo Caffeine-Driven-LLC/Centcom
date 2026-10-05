@@ -1,0 +1,79 @@
+{
+  "id": "B047",
+  "title": "Presence service (ephemeral, TTL, coalescing)",
+  "plan": "backend",
+  "phase": "P3 Relay",
+  "size": "M",
+  "role": "realtime",
+  "depends_on": [
+    "B009",
+    "B043"
+  ],
+  "goal": "Provide ephemeral presence: track each member's `presence.update`, coalesce to the latest per member, fan out at most once per 500 ms, give joiners a snapshot right after `welcome`, and derive online/offline from the socket with a 10 s grace.",
+  "scope_in": [
+    "Presence stage for `t:'presence'`, `k:'presence.update'` (clear `p`: `status` online|away|busy, `activity` idle|typing|reviewing|running, `agent_count?`).",
+    "Inbound limit: at most 1 update/s per member (extra ones overwrite the pending value, no error); server coalesces to the latest and fans out at most once per 500 ms per member.",
+    "Redis hash `presence:{sid}` with per-member field and key TTL (60 s, refreshed on any activity) for multi-node reads; in-memory implementation for tests.",
+    "Presence snapshot: one coalesced frame per member sent to a connection right after `welcome`.",
+    "Connection-derived online/offline: `isOnline(mid)`; 10 s grace after the last socket of a member closes before the member is considered offline.",
+    "Never sequenced, never replayed, never written to the durable log; sent via ephemeral channel (droppable)."
+  ],
+  "scope_out": [
+    "Cursor and typing throttling/expiry (B048).",
+    "`control.member_left` and `control.member_joined` emission (control lanes).",
+    "Presence history / last-seen API (B067)."
+  ],
+  "implements": [
+    "CT-WS-PRESENCE"
+  ],
+  "consumes": [
+    "CT-WS-ENVELOPE",
+    "CT-WS-SESSION-EVENTS",
+    "CT-ERR"
+  ],
+  "build_against": "The mock client simulator from B011 (scripted fake clients speaking the WS protocol), the in-memory B009 KV/pub-sub implementations, and the frame fixtures in contracts/fixtures/events/; no real client is needed. Fake clock for the 500 ms, 1 s and 10 s timers; in-memory presence store; cluster tests use the in-memory pub/sub only.",
+  "deliverables": [
+    "apps/relay/src/presence/",
+    "apps/relay/src/presence/module.ts",
+    "apps/relay/src/presence/README.md"
+  ],
+  "interfaces": [
+    "TS: `interface PresenceService { update(sid: string, mid: string, p: PresenceUpdate, nowMs: number): void; snapshot(sid: string): Array<{ member: string; p: PresenceUpdate }>; isOnline(sid: string, mid: string): boolean; onConnect(sid: string, mid: string): void; onDisconnect(sid: string, mid: string): void }`",
+    "TS: `type PresenceUpdate = { status: 'online' | 'away' | 'busy'; activity: 'idle' | 'typing' | 'reviewing' | 'running'; agent_count?: number }`",
+    "TS: `export default relayModule: RelayModule` (order 35) registering the presence stage and the post-welcome snapshot hook.",
+    "Redis: `presence:{sid}` hash, TTL 60 s.",
+    "Env: `RELAY_PRESENCE_IN_MS` (1000), `RELAY_PRESENCE_OUT_MS` (500), `RELAY_OFFLINE_GRACE_MS` (10000)."
+  ],
+  "acceptance": [
+    "A member sending 10 `presence.update` frames in 1 s results in at most 2 fan-out frames for that member in that second, the last carrying the final value.",
+    "After `welcome`, a joiner receives exactly one presence frame per member that has published one, before any live presence updates.",
+    "Presence frames have no `seq`, are absent from the hot buffer and from replay, and do not change `head` (assert on SeqStore).",
+    "A member whose only socket closes stays online for 10 s (+-0.5 s); a reconnect inside the grace never marks them offline; after the grace `isOnline` is false.",
+    "Invalid payload (`status: 'busy2'`) yields `sys.error` `invalid_frame` and does not alter stored state; unknown extra fields in `p` are dropped.",
+    "A viewer may send `presence.update` (allowed for every role); a client-supplied `from` is ignored and the member id is stamped.",
+    "Presence entries expire from Redis after 60 s without activity, so a crashed node leaves no permanent ghost.",
+    "1 000 members' updates across 20 sessions cost < 10 % CPU of one core in the benchmark."
+  ],
+  "tests": [
+    "presence.coalesce.test.ts: in/out rates with fake clock (property test).",
+    "presence.snapshot.test.ts: ordering after welcome.",
+    "presence.not-sequenced.test.ts: seq, buffer and durable log untouched.",
+    "presence.offline-grace.test.ts: reconnect inside/outside grace.",
+    "presence.ttl.test.ts: Redis expiry.",
+    "presence.validation.test.ts: enums, unknown fields."
+  ],
+  "guardrails": [
+    "Presence MUST NOT be sequenced, buffered, replayed or stored durably (CT-WS-PRESENCE); no feature may depend on its delivery.",
+    "Presence frames MUST be the lowest-priority traffic: droppable under backpressure (B046).",
+    "The relay MUST derive online/offline from the connection, never from a client-claimed value.",
+    "Only `status`, `activity` and `agent_count` are read; no other field is stored or logged.",
+    "Per-member state MUST be bounded (one entry per member, max 50 per session)."
+  ],
+  "failure_modes": [
+    "Redis unavailable -> presence falls back to node-local memory and logs once; sequenced traffic unaffected.",
+    "Member state for an ended session -> removed at session end and by TTL.",
+    "Flood of updates -> overwritten in place, never queued."
+  ],
+  "unblocks_gate": "G5",
+  "notes": ""
+}

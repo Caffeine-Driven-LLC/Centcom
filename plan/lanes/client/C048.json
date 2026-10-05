@@ -1,0 +1,71 @@
+{
+  "id": "C048",
+  "title": "First-run onboarding and init",
+  "plan": "client",
+  "phase": "P2 TUI",
+  "size": "M",
+  "role": "tui",
+  "depends_on": [
+    "C004",
+    "C047"
+  ],
+  "goal": "Greet a new user once with a minimal first-run screen and provide `centcom init` to set up a project, both safe to run repeatedly and usable without a TTY.",
+  "scope_in": [
+    "First-run detection via a state file in the user config dir (`state.json` with `firstRunCompletedAt`, path from lane C004); shown at most once, skippable with any key, never shown in non-interactive mode.",
+    "`<FirstRun>` screen per DESIGN §10.1.11 and §13.3: Cento waving (`first_run_welcome`) when `mascotAllowed`, otherwise ASCII `(•_•)` with `¡`; one sentence (under 20 words), one command to try (`centcom init`, or just typing a prompt), one line saying where to read more (`https://centcom.dev/docs`); no multi-step tour.",
+    "`centcom init [--yes] [--force] [--dry-run]` in `apps/cli/src/commands/init.ts`: detects the git root, creates the project config file in the location defined by lane C004, asks lane C023 to create the project memory file, adds the local state directory to `.git/info/exclude` (never edits tracked files like `.gitignore` without `--yes`), prints what was created.",
+    "Reusable empty-state components `<EmptyState kind='no-sessions'|'no-results'|'no-team'>` with DESIGN §13.3 copy (`No missions yet. Start one and Cento will keep the log.`, `Nothing matches \"<q>\". Try fewer words or check the spelling.`, `It's just you in here. Invite someone and Cento will make room.`) and mascot states `empty` / `no-results` where allowed.",
+    "Idempotency: running `init` twice changes nothing and reports `Already set up.`; `--dry-run` prints actions only.",
+    "Plain output path when stdout is not a TTY or `--yes`: line-oriented messages, no prompts, exit codes 0 (done or already done) and 2 (bad usage) or 1 (failure)."
+  ],
+  "scope_out": [
+    "Login, account creation and device flow (lane C053).",
+    "Telemetry consent prompt (lane C010 can hook into the first-run state later).",
+    "Theme/mascot preference questions (commands from lane C047 are mentioned in the hint only).",
+    "Installing the CLI, shell completions or auto-update (release lanes)."
+  ],
+  "implements": [],
+  "consumes": [],
+  "build_against": "Temp-directory git repos from lane C008 fixtures; config and memory stubs behind the interfaces of lanes C004 and C023. No backend.",
+  "deliverables": [
+    "packages/tui/src/onboarding/",
+    "packages/tui/src/onboarding/README.md",
+    "apps/cli/src/commands/init.ts"
+  ],
+  "interfaces": [
+    "`<FirstRun onDone: () => void />`, `<EmptyState kind: EmptyKind; query?: string />`",
+    "`isFirstRun(deps: {stateFile: string}): Promise<boolean>`; `markFirstRunDone(deps): Promise<void>`",
+    "`runInit(deps: {cwd: string; config: ConfigStore; memory: MemoryStore; io: CliIo}, opts: {yes?: boolean; force?: boolean; dryRun?: boolean}): Promise<InitResult>`",
+    "CLI: `centcom init [--yes] [--force] [--dry-run]`; `type InitResult = {created: string[]; skipped: string[]; alreadySetUp: boolean}`"
+  ],
+  "acceptance": [
+    "On a machine with no state file, interactive launch shows the first-run screen once; the second launch does not; deleting the state file shows it again.",
+    "The first-run text has at most 20 words in its sentence and exactly one command line; snapshot at 80x24 shows the ASCII Cento (24 rows < 30) and at 100x40 the half-block Cento.",
+    "`centcom init` in a git repo creates the project config and memory file, appends the state dir to `.git/info/exclude` once, and prints each created path; second run prints `Already set up.` and modifies no file (mtime check).",
+    "`centcom init --dry-run` writes nothing (filesystem diff empty) and lists the planned changes.",
+    "`centcom init` outside a git repo still sets up the project config in the cwd, with the message `Not a git repository. Checkpoints and worktrees need git.`.",
+    "With stdout not a TTY, `init --yes` prints plain lines, never prompts, and exits 0; without `--yes` in a non-TTY it exits 2 with `Run with --yes to proceed without a prompt.`.",
+    "`<EmptyState kind='no-results' query='relay timeout'>` renders exactly `Nothing matches \"relay timeout\". Try fewer words or check the spelling.`; the mascot appears only when allowed and never under `NO_COLOR` (ASCII form).",
+    "Existing project config is never overwritten without `--force`; with `--force` a `.bak` copy is written first."
+  ],
+  "tests": [
+    "onboarding/first-run.test.ts: state file lifecycle and snapshots (80x24, 100x40, NO_COLOR).",
+    "onboarding/empty-state.test.ts: copy and mascot gating.",
+    "cli/init.test.ts: git repo, non-git, idempotency, dry-run, force with backup, non-TTY paths.",
+    "onboarding/exclude.test.ts: `.git/info/exclude` edits are append-once and preserve existing content."
+  ],
+  "guardrails": [
+    "MUST NOT modify tracked files, global git config or the user's home dotfiles; the only writes are the project config, memory file and `.git/info/exclude` (plus the user state file).",
+    "MUST NOT show the first-run screen when stdin or stdout is not a TTY or in screen-reader mode with animation (use plain text).",
+    "MUST NOT make any network call or ask for an account during first run; Free LAN use works fully offline (ARCHITECTURE §5.5).",
+    "MUST keep every first-run screen to one idea and under 20 words (DESIGN §13.3 onboarding rule).",
+    "MUST mark the mascot-free surface for any consent-style text if one is added later (DESIGN §11.5)."
+  ],
+  "failure_modes": [
+    "Config dir not writable -> show the screen anyway, skip persistence, and print `Couldn't save setup state. You may see this screen again.` once.",
+    "`.git/info/exclude` unwritable -> report and continue; init still succeeds with a warning and exit 0.",
+    "Memory store creation fails -> init reports which step failed and exits 1 after completing the other steps."
+  ],
+  "unblocks_gate": null,
+  "notes": "Documentation URL `https://centcom.dev/docs` follows the `centcom.dev` domain used in CT-ERR examples; confirm with product. Project config path and memory file name are owned by lanes C004 and C023."
+}

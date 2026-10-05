@@ -1,0 +1,79 @@
+{
+  "id": "C026",
+  "title": "Local session persistence and resume",
+  "plan": "client",
+  "phase": "P1 Agent runtime",
+  "size": "M",
+  "role": "runtime",
+  "depends_on": [
+    "C013",
+    "C025"
+  ],
+  "goal": "Every agent session is written to disk as it happens, so a crash, quit or reboot loses at most the last 250 ms of work, and `centcom --resume` restores the transcript and continues the same agent conversation.",
+  "scope_in": [
+    "Append-only JSONL session log per session under the data dir resolved by lane C004 (default `<data>/sessions/<ses_id>/log.jsonl`), fed by subscribing to the typed event bus (lane C025); dirs 0700, files 0600.",
+    "Session index `<data>/sessions/index.json` (id, cwd, git branch, title from first user message truncated to 80 chars, created_at, updated_at, message_count, sdk_session_id, model) rewritten atomically (write temp + rename) and rebuildable by scanning logs.",
+    "Resume API: `loadSession(id)` replays the log into transcript items plus the runner resume handle for lane C013, and `listSessions({cwd?, limit})` for pickers.",
+    "CLI surface: `centcom --resume [id]` (no id = interactive picker, last 20 sessions, newest first), `centcom --continue` / `-c` (most recent session whose cwd equals the current directory), slash command `/resume [id]` registered through the lane C035 registry.",
+    "Crash safety: single-writer lock file `lock` containing pid + start time, torn-last-line recovery, size-bounded segments, and retention pruning.",
+    "Versioned on-disk format: first line is a header `{\"fmt\":\"centcom.localsession\",\"v\":1}`; unknown fmt/v is refused with a clear message (same rule as the CT-RESUME snapshot header)."
+  ],
+  "scope_out": [
+    "Checkpoint blobs and rewind of file state (lane C027); this lane only exposes `truncateTo`/`markRewind` for it.",
+    "Hosted-session history, replay buffer and snapshot upload/download (net/session lanes); the local format is intentionally separate from `centcom.snapshot`.",
+    "Rendering a resumed transcript (lane C036) and the resume picker UI beyond a plain list (lane C041 palette can reuse `listSessions`).",
+    "Sub-agent isolation of logs (lane C024 decides whether a sub-agent gets its own log; this lane supports any number of agent_ids in one log)."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-IDS",
+    "CT-RESUME"
+  ],
+  "build_against": "No counterpart needed. Use a temp dir as data dir, an in-memory bus from lane C025 and a scripted fake runner stub exposing the C013 resume handle shape. Fixture logs live in packages/agent/test/fixtures/sessions/.",
+  "deliverables": [
+    "packages/agent/src/persistence/",
+    "packages/agent/src/persistence/README.md",
+    "apps/cli/src/commands/resume.ts",
+    "packages/agent/test/fixtures/sessions/"
+  ],
+  "interfaces": [
+    "`interface SessionStore { create(init: {cwd: string; branch?: string; model?: string}): Promise<SessionHandle>; open(id: string): Promise<LoadedSession>; list(q?: {cwd?: string; limit?: number}): Promise<SessionSummary[]>; remove(id: string): Promise<void>; prune(now: Date): Promise<{removed: number}> }`",
+    "`interface SessionHandle { id: string /* ses_<ULID> */; append(rec: LogRecord): void; markRewind(toSeq: number): Promise<void>; flush(): Promise<void>; close(): Promise<void> }`",
+    "`type LogRecord = { n: number; at: string /*RFC3339 ms*/; agent_id?: string; type: string; data: unknown }`; `n` is a per-log counter starting at 1, not the relay `seq`.",
+    "`createSessionStore(deps: {dataDir: string; clock: Clock; bus: EventBus; log: Logger}): SessionStore`",
+    "CLI flags: `--resume [id]`, `--continue`/`-c`; slash: `/resume [id]`; config keys `session.retentionDays` (default 30), `session.persist` (default true)."
+  ],
+  "acceptance": [
+    "Records are buffered and flushed to disk every 250 ms or 50 records, whichever comes first; `kill -9` of the process during a 1,000-record burst leaves a log whose valid prefix loads and loses at most the last 250 ms of records.",
+    "A log whose last line is truncated JSON loads, the torn line is dropped, a `{type:\"recovered\"}` record is appended and the original bytes are not rewritten.",
+    "A second process opening a session with a live lock (pid alive) fails with a typed error and exit hint `session in use`; a stale lock (pid dead) is taken over.",
+    "Created session ids match `^ses_[0-9A-HJKMNP-TV-Z]{26}$` and sort lexicographically in creation order within one process.",
+    "A log exceeding 64 MiB rolls to `log.1.jsonl`, `log.2.jsonl`, ...; `open()` reads all segments in order and a single line over 1 MiB is stored as a truncated record with `data.truncated=true`.",
+    "`centcom --continue` in a directory with two stored sessions picks the one with the newest `updated_at` whose `cwd` matches; with none it exits 1 with message `No session to continue in this directory.`",
+    "A header with `fmt` other than `centcom.localsession` or `v` other than 1 makes `open()` throw `UnsupportedSessionFormat` and the CLI prints a one-line message without a stack.",
+    "`prune()` removes sessions whose `updated_at` is older than `session.retentionDays` and never removes a session with a live lock; deleting a session removes its whole directory.",
+    "Deleting `index.json` and calling `list()` rebuilds it from logs in under 2 s for 500 sessions of 1,000 records each."
+  ],
+  "tests": [
+    "persistence/log-writer.test.ts: flush cadence with fake clock, segment roll at 64 MiB (sparse test hook lowers the limit), oversized line handling.",
+    "persistence/recovery.test.ts: property test truncating a valid log at every byte offset must always load the longest valid prefix and never throw.",
+    "persistence/lock.test.ts: live lock, stale lock, lock released on close and on SIGTERM.",
+    "persistence/resume-cli.test.ts: `--continue`, `--resume <id>`, unknown id, unsupported fmt via the pty harness.",
+    "persistence/index-rebuild.test.ts and persistence/retention.test.ts with a fake clock."
+  ],
+  "guardrails": [
+    "MUST create dirs 0700 and files 0600 and refuse to follow a symlinked session directory; transcripts contain source code and prompts.",
+    "MUST NOT write any API token, key, OS-keychain secret or environment dump into the log; records come only from bus events and are passed through the redaction helper of lane C005 first.",
+    "MUST NOT put message bodies, paths or branch names in the structured application log (GUIDELINES §3.5); the session file itself is the only place they live.",
+    "MUST keep the file append-only: rewinding appends a `rewind` record, it never rewrites or truncates earlier lines.",
+    "MUST bound memory: the writer buffer holds at most 1,000 records or 8 MiB; beyond that `append` applies backpressure by flushing synchronously instead of dropping.",
+    "MUST NOT import anything from packages/net or packages/session; this lane is usable with no network."
+  ],
+  "failure_modes": [
+    "Disk full or EACCES while flushing -> keep records in the buffer up to the cap, emit one bus event `session.persist_failed`, show a single warning toast, continue the live session without persistence; never crash the agent.",
+    "Index and logs disagree (index lists a deleted dir) -> drop the stale index row on `list()` and log at debug.",
+    "Resume handle rejected by the runner (SDK session expired) -> load transcript read-only, offer to continue as a fresh agent with the transcript summary as context, and tell the user plainly."
+  ],
+  "unblocks_gate": null,
+  "notes": "Local session ids reuse the `ses_` prefix from CT-IDS so a later LAN/relay adoption can keep the id shape, but a local id is never sent to a server. CONTRACT GAP: none; the local log format is client-private. SPLIT? Not needed if the picker UI stays out of scope."
+}

@@ -1,0 +1,78 @@
+{
+  "id": "B077",
+  "title": "Invoices, receipts and tax endpoints",
+  "plan": "backend",
+  "phase": "P5 Billing",
+  "size": "S",
+  "role": "billing",
+  "depends_on": [
+    "B071"
+  ],
+  "goal": "Let owners, admins and billing members list a workspace's invoices and get receipt/tax information, from a local mirror of Stripe invoices that is cheap to page and safe to expose.",
+  "scope_in": [
+    "`GET /v1/workspaces/{id}/invoices` with CT-PAGE cursor pagination (`limit` 1..200 default 50, newest first), scope `billing:read`.",
+    "Local `invoices` mirror table with money as integer minor units + ISO-4217 (USD/EUR), tax amount, tax rate summary, status, period, and links to the Stripe-hosted invoice and PDF.",
+    "`applyInvoiceEvent(stripeInvoice)` entry point for the Stripe webhook handler (B072) plus lazy refresh `syncInvoices(workspaceId)` when the mirror is older than 5 min.",
+    "Mapping layer from Stripe invoice objects to the public invoice shape; unknown statuses map to `other`.",
+    "Authorization via the RBAC engine permission for viewing invoices; audit of reads is NOT required, audit of nothing is written (read-only endpoint)."
+  ],
+  "scope_out": [
+    "Creating checkout or portal sessions (B071); tax-ID and billing-address editing happens in the Stripe customer portal.",
+    "Verifying and ingesting Stripe webhooks (B072); this lane only provides the function it calls.",
+    "Dunning emails and payment-failure state (B078).",
+    "Generating PDFs; Stripe-hosted documents are linked, never proxied or stored."
+  ],
+  "implements": [
+    "CT-API-BILLING"
+  ],
+  "consumes": [
+    "CT-RBAC",
+    "CT-PAGE",
+    "CT-ERR",
+    "CT-IDS",
+    "CT-AUTH"
+  ],
+  "build_against": "Use recorded Stripe invoice JSON fixtures (test mode) stored under the lane's test directory and a Stripe API stub (`nock`-style HTTP interception through the provider abstraction from B070). No live Stripe account is needed.",
+  "deliverables": [
+    "apps/api/src/modules/billing/invoices/",
+    "apps/api/src/routes/billing-invoices.ts",
+    "packages/db/migrations/077_invoices.sql",
+    "docs/billing/invoices.md"
+  ],
+  "interfaces": [
+    "HTTP `GET /v1/workspaces/{id}/invoices?limit&cursor` -> `{data: Invoice[], next_cursor, has_more}`.",
+    "`type Invoice = {id: string; number: string|null; status: 'draft'|'open'|'paid'|'void'|'uncollectible'|'other'; amount: {amount:number; currency:'USD'|'EUR'}; tax: {amount:number; currency:'USD'|'EUR'}|null; period_start: string; period_end: string; created_at: string; paid_at: string|null; hosted_url: string|null; pdf_url: string|null}` (provisional, see notes).",
+    "`applyInvoiceEvent(inv: StripeInvoiceLike): Promise<void>` and `syncInvoices(workspaceId: string): Promise<{upserted: number}>`.",
+    "Table `invoices(id, workspace_id, stripe_invoice_id UNIQUE, status, amount_minor, tax_minor, currency, period_start, period_end, created_at, paid_at, hosted_url, pdf_url, updated_at)`."
+  ],
+  "acceptance": [
+    "A caller with role owner, admin or billing receives 200 with a page of invoices ordered by `created_at` desc, then id desc; a `member` or `guest` receives 403 `forbidden`.",
+    "`limit=2` over 5 invoices returns 2 items, `has_more:true` and a `next_cursor` that, followed, returns the next 2 and finally 1 with `has_more:false`; a cursor reused with a different filter or older than 24 h returns 400-class problem+json.",
+    "Amounts are integers in minor units and currency is `USD` or `EUR`; an invoice in another currency is excluded and counted in metric `invoices_unsupported_currency_total`.",
+    "Calling `applyInvoiceEvent` twice with the same invoice (or out of order, older `updated`) leaves the row unchanged on the second call and never regresses `paid` to `open`.",
+    "A user from workspace A requesting workspace B's invoices gets 404/403 and no row data; response never contains card details, Stripe customer ids or payment-intent ids.",
+    "p95 latency of the list endpoint is <= 80 ms with 1 000 invoices in the workspace (mirror hit, no Stripe call).",
+    "When the mirror is older than 5 min, one lazy sync runs (single-flight per workspace) and Stripe is called at most once per workspace per 5 min under 20 concurrent requests."
+  ],
+  "tests": [
+    "unit: Stripe-to-public mapping for all invoice statuses incl. unknown, tax present/absent, EUR and USD, zero-total invoices.",
+    "integration: pagination with cursor stability under concurrent inserts.",
+    "authz matrix test over all five workspace roles and cross-workspace access.",
+    "idempotency/out-of-order tests for `applyInvoiceEvent`.",
+    "failure-path: Stripe 429/5xx during lazy sync returns the stale mirror with 200 and logs a warning.",
+    "contract: response headers include `RateLimit-*` and `X-Request-Id`; errors are problem+json."
+  ],
+  "guardrails": [
+    "MUST NOT return or log Stripe customer ids, payment method details, or raw Stripe objects.",
+    "MUST enforce workspace scoping in the SQL `WHERE workspace_id = $1` of every query, in addition to the RBAC check.",
+    "MUST use `hosted_url`/`pdf_url` only as opaque links; never fetch them server-side (no SSRF surface).",
+    "MUST NOT block the response on Stripe availability; stale-but-correct mirror data is served when Stripe fails."
+  ],
+  "failure_modes": [
+    "Stripe unreachable during lazy sync -> serve mirror, add no error to the response, record metric `invoice_sync_failed_total`.",
+    "Invoice references an unknown workspace (customer mapping missing) -> drop with error log and DLQ for B072, never create a row.",
+    "Cursor invalid or expired -> 400 problem+json per CT-PAGE."
+  ],
+  "unblocks_gate": "G4",
+  "notes": "CONTRACT GAP: no Invoice response schema and no invoice id prefix exist in CT-IDS or schemas; the shape above is provisional and the id is the opaque Stripe invoice id until a Contract PR defines both. CONTRACT GAP: the REST table lists the role for invoices as owner/billing while CT-RBAC lists owner, admin and billing for 'View billing, invoices'; this lane follows the CT-RBAC matrix through the B021 engine. There are no separate tax endpoints in the contract; tax information is carried inside the invoice object."
+}

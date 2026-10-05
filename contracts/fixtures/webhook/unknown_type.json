@@ -1,0 +1,13 @@
+{
+  "schema": "webhook.schema.json",
+  "valid": false,
+  "note": "content events do not exist",
+  "data": {
+    "id": "dlv_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+    "type": "message.sent",
+    "created_at": "2026-10-05T18:07:41.123Z",
+    "workspace": "wsp_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+    "api_version": "2026-10-01",
+    "data": {}
+  }
+}

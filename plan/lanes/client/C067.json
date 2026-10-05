@@ -1,0 +1,80 @@
+{
+  "id": "C067",
+  "title": "Feature flags client",
+  "plan": "client",
+  "phase": "P3 Network",
+  "size": "S",
+  "role": "net",
+  "depends_on": [
+    "C051"
+  ],
+  "goal": "Fetch and cache remote feature flags so dark-launched client behaviour can be switched on or off safely, with instant, non-blocking startup and sane offline defaults.",
+  "scope_in": [
+    "GET /v1/flags (anonymous allowed; authenticated when logged in) returning `{flags:{key:value}, rev, ttl_s}`; ETag / `If-None-Match` revalidation (304 keeps the cache).",
+    "In-memory plus on-disk cache (`<state dir>/flags.json`, no secrets); refresh after `ttl_s` clamped to [30 s, 3600 s]; refresh on login/logout and when the `ent` or plan claim changes.",
+    "Typed flag registry in `registry.ts` listing each known flag key with its type and a safe default; `flag<T>(key)` returns the registry default when the flag is missing, mistyped or the backend was never reachable.",
+    "Startup contract: the first `flag()` call never waits for the network; the initial refresh runs in the background with a 2 s timeout.",
+    "Local developer overrides through config key `flags.overrides` and env `CENTCOM_FLAGS=key=value,...` (ignored in release channel `stable` builds unless `CENTCOM_DEV=1`).",
+    "Change events (`flags-changed` with added/removed/changed keys) for UI and for lanes that react to flags."
+  ],
+  "scope_out": [
+    "Defining which flags exist (product decision per feature lane); this lane only ships the registry mechanism and the registry file other lanes append to through their own PRs.",
+    "Evaluation logic for targeting/percentages (server-side).",
+    "Entitlement gating (lane C064) and release channel selection (lane C068)."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-API-FLAGS",
+    "CT-ERR",
+    "CT-PAGE",
+    "CT-AUTH"
+  ],
+  "build_against": "the mock backend (lane C007): REST from OpenAPI plus the WebSocket relay simulator, started in-process with `startMockBackend()` from @centcom/testkit; no real backend is needed. The mock serves /v1/flags with configurable flags, `rev`, `ttl_s`, ETag and 304 handling, and can be made slow or down.",
+  "deliverables": [
+    "packages/net/src/flags/client.ts",
+    "packages/net/src/flags/registry.ts",
+    "packages/net/src/flags/cache.ts",
+    "packages/net/src/flags/overrides.ts",
+    "packages/net/src/flags/index.ts",
+    "packages/net/src/flags/README.md",
+    "packages/net/src/flags/__tests__/"
+  ],
+  "interfaces": [
+    "`new FlagsClient(o: { http: HttpClient; cacheDir: string; clock; config: Pick<Config, 'get'>; env: NodeJS.ProcessEnv; isDevBuild: boolean })`; `start(): void`, `stop(): void`, `refresh(): Promise<void>`",
+    "`flag<K extends keyof FlagRegistry>(key: K): FlagRegistry[K]`; `snapshot(): { flags: Record<string, unknown>; rev: number | null; fetchedAt: string | null; source: 'defaults'|'cache'|'network' }`",
+    "`on('flags-changed', (d: { added: string[]; removed: string[]; changed: string[] }) => void)`",
+    "`FlagRegistry` type (extensible interface) and `defineFlag<K>(key, def: { type: 'boolean'|'string'|'number'; default: ... })`"
+  ],
+  "acceptance": [
+    "`flag('x')` returns the registry default within 1 ms on a cold start with the mock down, and `start()` returns before any network I/O completes.",
+    "With the mock up, the first background refresh populates the cache within 2 s; `flags-changed` fires once with the added keys.",
+    "Second refresh sends `If-None-Match` with the stored ETag; a 304 leaves flags untouched and does not emit `flags-changed`.",
+    "A response `ttl_s: 5` is clamped to 30 s; `ttl_s: 86400` to 3600 s; refresh timers follow the clamped values (fake clock).",
+    "A flag value of the wrong type (string for a boolean flag) is ignored with a debug log and the default is used; unknown flag keys are stored but never returned by typed `flag()`.",
+    "After a restart with the mock down, the on-disk cache is used (`source:'cache'`) for up to 7 days; older caches are ignored in favour of defaults.",
+    "Login and logout each trigger a refresh within 1 s; anonymous requests carry no Authorization header.",
+    "Env `CENTCOM_FLAGS=beta_ui=true` overrides only when `isDevBuild` or `CENTCOM_DEV=1`; in a stable release build it is ignored and a warning is logged once.",
+    "Concurrent `refresh()` calls issue one request (single-flight)."
+  ],
+  "tests": [
+    "flags/client.test.ts: ETag/304, ttl clamp, single-flight, login/logout triggers.",
+    "flags/registry.test.ts: defaults, type guard, unknown keys, extensibility.",
+    "flags/cache.test.ts: disk cache age limit, corrupt file recovery.",
+    "flags/overrides.test.ts: precedence config < env < dev guard.",
+    "flags/startup.test.ts: no network before first flag() returns; offline cold start."
+  ],
+  "guardrails": [
+    "MUST NOT block startup or any command on flag fetches; all waits bounded at 2 s and off the critical path.",
+    "MUST NOT use flags to make security decisions (sandbox, permission, crypto defaults); flags may only gate user-visible features (GUIDELINES §6.5).",
+    "MUST ignore unknown fields, keys and enum values (CT-VER robustness rule) and fall back to registry defaults.",
+    "MUST NOT send any identifying data in the flags request beyond the bearer token (if logged in) and the standard headers.",
+    "MUST NOT honour local overrides in stable release builds without the explicit dev switch."
+  ],
+  "failure_modes": [
+    "Backend down or 5xx -> keep cache/defaults, retry on backoff (max once per minute), no user-visible error.",
+    "Malformed body -> ignored with a debug log, previous values kept.",
+    "Cache file from an older client version with different shape -> discarded."
+  ],
+  "unblocks_gate": "G1",
+  "notes": "Flags are the mechanism GUIDELINES §6.5 requires for dark launches; each feature lane adds its own key to registry.ts in its PR (registry.ts is owned here, additions need this lane's review)."
+}

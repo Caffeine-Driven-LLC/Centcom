@@ -1,0 +1,69 @@
+{
+  "id": "C047",
+  "title": "Settings commands: theme, mascot, spinner, motion, density",
+  "plan": "client",
+  "phase": "P2 TUI",
+  "size": "S",
+  "role": "tui",
+  "depends_on": [
+    "C032",
+    "C045"
+  ],
+  "goal": "Let users change theme, mascot, spinner style, motion and density at runtime with slash commands that apply instantly and persist, while respecting environment overrides.",
+  "scope_in": [
+    "Slash commands registered in the lane C035 registry: `/theme [dark|light|auto|hc]`, `/mascot [on|off|violet|red|yellow|green|brown]`, `/spinner [fun|plain]`, `/motion [full|reduced]`, `/density [comfortable|compact]` (DESIGN §22.3).",
+    "With no argument each prints the current value, its source (`default`, `user config`, `project config`, `env CENTO_THEME`) and the options on one line (<= 80 columns).",
+    "Persistence to the user config layer through the lane C004 writer using keys `theme`, `mascot`, `mascotColor`, `spinner`, `motion`, `density`; applied immediately via `theme.setMode`, driver `settings()` and a `SettingsStore` observable that other lanes read.",
+    "Environment precedence: `CENTO_THEME`, `CENTO_MASCOT`, `CENTO_SPINNER`, `CENTO_REDUCE_MOTION` override stored values; when a command is issued while an env override is active the command changes the stored value but tells the user `Overridden by CENTO_THEME for this session.`.",
+    "Density effect in the terminal: `comfortable` keeps one blank row between transcript blocks, `compact` removes them (zero rows) and tightens list rows; exposed as `useDensity()`.",
+    "Argument validation with the DESIGN copy style: `Unknown theme \"x\". Try dark, light, auto or hc.`"
+  ],
+  "scope_out": [
+    "Implementing the theme engine (C032), mascot driver (C046), spinner (C040) and motion handling (C049); this lane only sets their inputs.",
+    "A full settings screen or editor.",
+    "Sound settings and notification settings.",
+    "Config file schema ownership (lane C004)."
+  ],
+  "implements": [],
+  "consumes": [],
+  "build_against": "Config layer stub implementing the C004 reader/writer interface over a temp dir, a fake theme and driver; slash invocation through the registry from lane C035. No backend.",
+  "deliverables": [
+    "packages/tui/src/settings/",
+    "packages/tui/src/settings/README.md"
+  ],
+  "interfaces": [
+    "`registerSettingsCommands(deps: {registry: SlashCommandRegistry; config: ConfigStore; theme: Theme; env: NodeJS.ProcessEnv; toast: ToastController}): () => void`",
+    "`interface SettingsStore { get(): UiSettings; subscribe(fn: (s: UiSettings) => void): () => void; set<K extends keyof UiSettings>(k: K, v: UiSettings[K]): Promise<void> }`; `type UiSettings = {theme: 'dark'|'light'|'auto'|'hc'; mascot: 'on'|'off'; mascotColor: CentoColor; spinner: 'fun'|'plain'; motion: 'full'|'reduced'; density: 'comfortable'|'compact'}`",
+    "`useSettings(): UiSettings`, `useDensity(): 'comfortable'|'compact'`",
+    "Slash commands as listed; config keys `theme`, `mascot`, `mascotColor`, `spinner`, `motion`, `density`."
+  ],
+  "acceptance": [
+    "`/theme light` changes the next rendered frame to Shallows colours, writes `theme: light` to the user config file, and a restart starts in light.",
+    "`/theme` with no argument prints e.g. `Theme: dark (user config). Options: dark, light, auto, hc.` in <= 80 columns.",
+    "`/theme purple` prints `Unknown theme \"purple\". Try dark, light, auto or hc.`, changes nothing and does not write the config.",
+    "With `CENTO_THEME=dark` set, `/theme light` stores `light`, prints `Overridden by CENTO_THEME for this session.`, and the displayed theme stays dark.",
+    "`/mascot off` hides the mascot immediately (driver reports `visible:false`, reason `off`) and persists `mascot: off`; `/mascot red` stores `mascotColor: red`.",
+    "`/motion reduced` sets the motion context to reduced within one frame; `/spinner plain` makes the next verb `Working…`.",
+    "`/density compact` removes the blank rows between transcript blocks in the very next render (snapshot diff of 2 rows for a 3-block transcript).",
+    "Config write failure (read-only file) leaves the in-memory setting applied for the session and shows `Couldn't save this setting. It applies until you quit.`."
+  ],
+  "tests": [
+    "settings/commands.test.ts: every command: no-arg, valid, invalid, env override.",
+    "settings/persistence.test.ts: round-trip through config stub, write failure.",
+    "settings/live-apply.test.ts: snapshots before/after for theme, density, motion, mascot.",
+    "settings/store.test.ts: subscription and precedence."
+  ],
+  "guardrails": [
+    "MUST NOT write to project config; these are user preferences and go to the user layer only.",
+    "MUST apply changes without restart and without a transition animation (DESIGN §19.4).",
+    "MUST NOT let `/mascot <colour>` change which colour represents the user in sessions: the signed-in user is always violet in presence UI (DESIGN §3.2); the setting affects only the solo mascot preview colour.",
+    "MUST validate every argument against the closed option list; no free-form values reach the config file.",
+    "MUST show feedback as a one-line notice or toast, not a modal."
+  ],
+  "failure_modes": [
+    "Config layer unavailable -> commands still work in memory and say so once.",
+    "Terminal lacks truecolor when `/theme hc` is chosen -> apply with the 256/16 mapping and note `High contrast uses fewer colours in this terminal.`."
+  ],
+  "unblocks_gate": null,
+  "notes": "DESIGN conflict: §3.2 says the signed-in user's Cento is always violet on their screen, while §22.3 offers `/mascot <colour>`. This card limits the colour option to the solo mascot display; design should confirm. `hc` is 'planned' in DESIGN §19.5; if lane C032 omits it, the command rejects `hc`."
+}

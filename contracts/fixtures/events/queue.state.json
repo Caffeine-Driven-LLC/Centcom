@@ -1,0 +1,20 @@
+{
+  "kind": "queue.state",
+  "frame": {
+    "v": 1,
+    "t": "queue",
+    "id": "msg_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+    "sid": "ses_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+    "from": "mem_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+    "ts": "2026-10-05T18:07:41.123Z",
+    "k": "queue.state",
+    "seq": 1042,
+    "p": {
+      "version": 3,
+      "items": [
+        {}
+      ]
+    }
+  },
+  "secret_payload": null
+}

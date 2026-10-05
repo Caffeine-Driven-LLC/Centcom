@@ -1,0 +1,77 @@
+{
+  "id": "C034",
+  "title": "TUI shell: Ink app skeleton, layout, resize",
+  "plan": "client",
+  "phase": "P2 TUI",
+  "size": "M",
+  "role": "tui",
+  "depends_on": [
+    "C025",
+    "C032"
+  ],
+  "goal": "Provide the Ink application shell: a stable layout of header, scrollback region, toast row, prompt region and footer with resize handling, focus management, an action registry and shared text utilities, so every other TUI lane plugs in without touching layout code.",
+  "scope_in": [
+    "`renderApp(opts)` that mounts the Ink root with providers (theme from C032, capabilities from C031, event bus from C025, action/focus registries) and returns `{unmount, waitUntilExit}`.",
+    "Layout per DESIGN §6.4: header 1 row, flexible scrollback region, optional toast row (1), prompt region (3-12 rows), footer 1 row; optional right rail slot of 28 columns shown at >= 100 columns; overlay slot centred above everything.",
+    "Alternate screen buffer (`ESC[?1049h`) on by default with restore on exit, SIGINT, SIGTERM and uncaught exception; config `tui.altScreen=false` and flag `--no-alt-screen` disable it.",
+    "Resize handling via `watchSize` (C031): relayout within one frame, no stale rows, graceful `tiny` state that shows one line `Terminal too small. Need 80x24.` below 40 columns or 10 rows.",
+    "Focus stack (`prompt` | `overlay` | `transcript` | `rail`) with `pushFocus/popFocus`, and `registerActions([{id, group, description, defaultKey, when, run}])` plus a single central key dispatcher built on Ink `useInput`; lane C045 later adds remapping, chords and help on top of this registry.",
+    "Text utilities used by all TUI lanes in `packages/tui/src/text/`: `stringWidth` (wide chars, combining marks, emoji via Intl.Segmenter), `wrapText(text, width)`, `truncate(text, width, ellipsis='…')`, `sanitizeForTerminal(text)` stripping ESC/C1/other control characters (keep `\\n`, tab -> 4 spaces)."
+  ],
+  "scope_out": [
+    "The contents of each region: prompt (lane C035), transcript (C036), status line (C039), toasts (C044), fleet rail (C042).",
+    "Key remapping, chords and the help screen (lane C045).",
+    "Theme and colour logic (lane C032) and capability detection (lane C031).",
+    "The `centcom` binary entry point and argument parsing (apps/cli, owned by the scaffold lane)."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-STATE-MAP"
+  ],
+  "build_against": "Ink with ink-testing-library and the pty snapshot harness from lane C008; a scripted in-memory event bus from lane C025; no backend.",
+  "deliverables": [
+    "packages/tui/src/shell/",
+    "packages/tui/src/text/",
+    "packages/tui/src/shell/README.md",
+    "packages/tui/src/index.ts"
+  ],
+  "interfaces": [
+    "`renderApp(opts: {caps: TermCaps; theme: Theme; bus: EventBus; slots: ShellSlots; altScreen?: boolean; stdout?: NodeJS.WriteStream; stdin?: NodeJS.ReadStream}): AppHandle`",
+    "`interface ShellSlots { header: ReactNode; transcript: ReactNode; toast?: ReactNode; prompt: ReactNode; footer: ReactNode; rail?: ReactNode; overlay?: ReactNode }`",
+    "`useLayout(): {cols: number; rows: number; cls: 'ok'|'narrow'|'short'|'tiny'; railVisible: boolean; transcriptRows: number}`",
+    "`registerAction(a: ActionDef): () => void`; `type ActionDef = {id: string; group: string; description: string; defaultKey?: string; context?: FocusContext; run: () => void | Promise<void>}`; `useFocus(): {current: FocusContext; push(c): void; pop(): void}`",
+    "`stringWidth(s: string): number`, `wrapText(s: string, width: number): string[]`, `truncate(s: string, width: number, ellipsis?: string): string`, `sanitizeForTerminal(s: string): string`"
+  ],
+  "acceptance": [
+    "At 80x24 the frame has exactly: 1 header row, 1 footer row, a prompt region of 3 rows, and the scrollback region fills the remaining rows; verified by a snapshot with filler content.",
+    "Resizing from 120x40 to 80x24 to 60x20 triggers one relayout each within a single Ink frame (<= 50 ms debounce), and the final frame has no leftover characters from the previous size (snapshot compare).",
+    "Below 40 columns or 10 rows only `Terminal too small. Need 80x24.` is shown, input still works, and returning to a valid size restores the full layout.",
+    "Alt screen is entered on start and left on normal exit, SIGINT, SIGTERM and a thrown error in a child component; after each, the pty shows the cursor visible and the main buffer restored.",
+    "The right rail slot appears only at >= 100 columns, is 28 columns wide, and the scrollback width shrinks by 28 + 1 separator column.",
+    "`registerAction` with a duplicate id throws `DuplicateActionError` in dev and the disposer removes the action; dispatcher routes a key to the action whose `context` matches the focus top, overlay beating prompt.",
+    "`stringWidth('a')=1`, `stringWidth('漢')=2`, `stringWidth('e\\u0301')=1`, `stringWidth('👩‍💻')=2`; `truncate('hello world',8)` = `hello w…`.",
+    "`sanitizeForTerminal('a\\x1b[31mb\\x07c')` returns `a[31mbc` with the ESC and BEL removed and tab expanded to 4 spaces; the function is applied by every text-bearing component (checked by an ESLint rule or test that greps for raw `<Text>{props.text}`)."
+  ],
+  "tests": [
+    "shell/layout.test.ts: region heights at 80x24, 100x30, 120x40 snapshots.",
+    "shell/resize.test.ts: pty resize sequence, tiny state.",
+    "shell/altscreen.test.ts: enter/leave on exit paths.",
+    "shell/actions.test.ts: registry, focus routing, duplicates.",
+    "text/width-wrap-sanitize.test.ts: unit and fuzz tests (random unicode never yields a line wider than the limit)."
+  ],
+  "guardrails": [
+    "MUST restore terminal state (raw mode off, cursor shown, alt screen left, bracketed paste disabled) on every exit path; a crash must never leave the user's terminal broken.",
+    "MUST NOT write to stdout outside Ink once mounted (console is patched to go through Ink); library code stays free of `console.log`.",
+    "MUST route all untrusted text (model output, file names, command lines, remote member names) through `sanitizeForTerminal` before rendering, to block terminal escape injection.",
+    "MUST NOT let a component throw take down the app: wrap each slot in an error boundary showing `※ <slot> failed. Press ctrl+c to exit.` plus a log line.",
+    "MUST cap Ink render rate at 30 fps (`maxFps`) and never re-render the whole tree for a timer tick in one region.",
+    "MUST NOT use mouse reporting in v1 (copy/paste and selection must keep working)."
+  ],
+  "failure_modes": [
+    "stdout is not a TTY -> `renderApp` throws `NotATtyError` and the entrypoint falls back to non-interactive mode (lane C050).",
+    "A slot throws during render -> only that slot shows the error boundary; layout and other slots continue.",
+    "Terminal reports 0 columns or rows -> treat as 80x24 and log at debug."
+  ],
+  "unblocks_gate": null,
+  "notes": "Choice made here: alternate screen by default because lane C036 virtualises scrollback inside the app. Pasting and selection still work because mouse reporting is off. The `rail` slot is filled by lane C042."
+}

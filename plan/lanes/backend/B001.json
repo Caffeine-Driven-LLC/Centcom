@@ -1,0 +1,89 @@
+{
+  "id": "B001",
+  "title": "Monorepo scaffold and toolchain",
+  "plan": "backend",
+  "phase": "P0 Foundations",
+  "size": "M",
+  "role": "platform",
+  "depends_on": [],
+  "goal": "A fresh clone installs, typechecks, lints, tests and builds the empty pnpm workspace with one command each, so every later lane drops code into a ready toolchain.",
+  "scope_in": [
+    "Root pnpm workspace (pnpm-workspace.yaml) with workspaces apps/api, apps/relay, apps/worker, apps/admin, packages/contracts, packages/core, packages/db, packages/testkit.",
+    "Shared tsconfig.base.json (TypeScript 5.x strict, ESM only, target ES2023, moduleResolution NodeNext, noUncheckedIndexedAccess) and per-workspace tsconfig.json using project references.",
+    "ESLint flat config (no-explicit-any, no-console in library code, no-restricted-imports to block cross-package deep imports) and Prettier config.",
+    "Vitest workspace config (coverage thresholds 80 % lines hard floor), root scripts: build, typecheck, lint, test, format, dev:up, contracts:gen, contracts:check.",
+    "Per-workspace package.json stubs named @centcom/<name>, private, engines node >=22 <23, exact-pinned devDependencies, .npmrc with ignore-scripts=true, .node-version = 22.",
+    "Repo hygiene files: .gitignore, .editorconfig, and the folder layout from plan/LANE_CARD_SPEC.md."
+  ],
+  "scope_out": [
+    "CI workflows and the contract-lock check (B002).",
+    "Contract codegen (B003) and any runtime code or config loader (B004).",
+    "docker-compose and seed data (B012); the dev:up script only calls tools/dev/up.sh which B012 provides."
+  ],
+  "implements": [],
+  "consumes": [],
+  "build_against": "No counterpart needed. Verify by running the root scripts on an empty workspace; each workspace contains only a placeholder src/index.ts that exports nothing.",
+  "deliverables": [
+    "package.json",
+    "pnpm-workspace.yaml",
+    "pnpm-lock.yaml",
+    "tsconfig.base.json",
+    "tsconfig.json",
+    "eslint.config.js",
+    "prettier.config.js",
+    "vitest.workspace.ts",
+    ".editorconfig",
+    ".gitignore",
+    "./.npmrc",
+    ".node-version",
+    "apps/api/package.json",
+    "apps/api/tsconfig.json",
+    "apps/relay/package.json",
+    "apps/relay/tsconfig.json",
+    "apps/worker/package.json",
+    "apps/worker/tsconfig.json",
+    "apps/admin/package.json",
+    "packages/contracts/package.json",
+    "packages/contracts/tsconfig.json",
+    "packages/core/package.json",
+    "packages/core/tsconfig.json",
+    "packages/db/package.json",
+    "packages/db/tsconfig.json",
+    "packages/testkit/package.json",
+    "packages/testkit/tsconfig.json",
+    "docs/repo-layout.md"
+  ],
+  "interfaces": [
+    "Root scripts: `pnpm build | typecheck | lint | test | format | contracts:gen | contracts:check | dev:up`.",
+    "Workspace package names: @centcom/api, @centcom/relay, @centcom/worker, @centcom/admin, @centcom/contracts, @centcom/core, @centcom/db, @centcom/testkit.",
+    "Every workspace exposes `exports` only via its package.json `exports` map; deep imports are lint errors."
+  ],
+  "acceptance": [
+    "`pnpm install --frozen-lockfile` succeeds on a clean clone with Node 22 and exits non-zero on Node 20 (engines check).",
+    "`pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build` all exit 0 on the empty workspace in under 60 s total.",
+    "A file containing `const x: any = 1` in packages/core/src fails `pnpm lint`; a `console.log` in packages/core/src fails `pnpm lint`; console use is allowed only in apps/*/src/main.ts entrypoints.",
+    "A cross-package deep import such as `@centcom/core/src/x` fails `pnpm lint`.",
+    "tsconfig.base.json has `strict: true`, `noUncheckedIndexedAccess: true`, `module: NodeNext`; `pnpm typecheck` fails on an implicit any added to any workspace.",
+    "No dependency in any package.json uses a range (`^`, `~`, `*`); `pnpm lint` fails if one is added.",
+    "`.npmrc` sets ignore-scripts=true and `pnpm install` runs no dependency lifecycle scripts."
+  ],
+  "tests": [
+    "repo-layout.test.ts: asserts each workspace dir has package.json with the expected name and private=true.",
+    "exact-pins.test.ts: scans all package.json files and fails on non-exact dependency versions.",
+    "lint-fixtures: tiny fixture files under tools/lint-fixtures that must fail lint (any, console.log, deep import), run via a Vitest case spawning eslint.",
+    "Smoke: `pnpm -r build` on the empty workspace exits 0."
+  ],
+  "guardrails": [
+    "MUST NOT add runtime dependencies here beyond dev tooling (typescript, eslint, prettier, vitest, tsx); runtime deps are added by the lane that uses them with a justification.",
+    "MUST commit pnpm-lock.yaml and MUST NOT allow packages with install scripts (ignore-scripts=true; exceptions only via an allow-list reviewed in PR).",
+    "MUST NOT put any secret or real URL in committed files; .env.example is created by B004.",
+    "MUST keep the layout exactly as plan/ARCHITECTURE.md section 3; no extra top-level folders without an ADR."
+  ],
+  "failure_modes": [
+    "Wrong Node version -> install fails fast with an engines error, not a cryptic build error.",
+    "Lint config conflict between workspaces -> single root config is the source of truth; workspaces must not override rules to disable them.",
+    "A workspace without a src entry -> `pnpm build` must still succeed (placeholder index.ts)."
+  ],
+  "unblocks_gate": "G0",
+  "notes": "pnpm-lock.yaml is generated, not hand-written, but is a deliverable. Lanes other than B001 add files inside apps/*/src and packages/*/src; B001 owns only the manifests and configs listed. The tools/lint-fixtures files named in tests are created by this lane but are not separate deliverables (test fixtures)."
+}

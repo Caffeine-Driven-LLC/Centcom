@@ -1,0 +1,88 @@
+{
+  "id": "B057",
+  "title": "Agent registry (ids, owners, modes, states)",
+  "plan": "backend",
+  "phase": "P4 Fleet",
+  "size": "M",
+  "role": "realtime",
+  "depends_on": [
+    "B008",
+    "B044"
+  ],
+  "goal": "The relay keeps an authoritative registry of agents per session (id, owner, mode, current state), built from agent.spawn, agent.state and agent.exit frames, so late joiners and quota checks never depend on replay of the client.",
+  "scope_in": [
+    "Hooks on sequenced agent.spawn, agent.state and agent.exit frames after they receive their seq; registry updated from their cleartext p only.",
+    "Registry entity {agent_id, owner member, mode command_post|branch, state, since, spawned_seq, exited_seq?, outcome?}.",
+    "Authorisation: in command_post mode only the host may emit agent.* frames; in branch mode only the agent's owner (or host) may emit for their own agent id; others get `forbidden`.",
+    "max_parallel_agents check on agent.spawn using the session's cached entitlements (relay checks spawn per CT-ENTITLEMENTS).",
+    "Rate limit: at most 2 agent.state frames per agent per second (excess dropped, identical consecutive states dropped).",
+    "Registry snapshot API for roster/join flows and Redis-backed storage with Postgres write-through for audit/history of agent lifetimes."
+  ],
+  "scope_out": [
+    "Validating the state name against the state map: B058 (called as a validator hook).",
+    "File locks, branch/conflict signalling, approvals: B059, B061, B060.",
+    "Running agents or reading agent content (label, branch, worktree stay in ct, never seen).",
+    "Usage metering of agent minutes: B074/B075."
+  ],
+  "implements": [
+    "CT-WS-SESSION-EVENTS"
+  ],
+  "consumes": [
+    "CT-ENTITLEMENTS",
+    "CT-RBAC",
+    "CT-WS-ENVELOPE",
+    "CT-IDS",
+    "CT-ERR"
+  ],
+  "build_against": "Fake SequencerPort/FanoutPort/EntitlementsPort in apps/relay/src/agents/ports.ts; the B011 simulator emits agent.* frames; fixtures contracts/fixtures/events/agent.*.json.",
+  "deliverables": [
+    "apps/relay/src/agents/registry.ts",
+    "apps/relay/src/agents/handler.ts",
+    "apps/relay/src/agents/state-rate-limit.ts",
+    "apps/relay/src/agents/ports.ts",
+    "apps/relay/src/agents/index.ts",
+    "apps/relay/src/agents/README.md",
+    "apps/relay/test/agents/",
+    "packages/db/migrations/0057_agents.sql"
+  ],
+  "interfaces": [
+    "AgentRegistry.onSpawn(sid, frame): Promise<Result>; onState(sid, frame): Promise<Result>; onExit(sid, frame): Promise<Result>",
+    "AgentRegistry.list(sid): AgentRecord[]; get(sid, agentId): AgentRecord|undefined; countLive(sid): number",
+    "AgentRecord = {agentId:'agt_…', owner:'mem_…', mode:'command_post'|'branch', state:string, since:string, exited?:{outcome:'ok'|'error'|'canceled', errorCode?:string}}",
+    "Pluggable StateValidator = (state: string) => boolean (injected by B058)",
+    "Table agent(session_id, agent_id, owner_member, mode, state, since, spawned_seq, exited_seq, outcome, error_code, pk(session_id, agent_id))",
+    "Metric: relay_agents_live{mode}, relay_agent_state_dropped_total{reason}"
+  ],
+  "acceptance": [
+    "agent.spawn from the host in a command_post session creates a record; the same frame id replayed creates no second record.",
+    "In command_post mode an editor's agent.spawn returns sys.error `forbidden`; in branch mode an editor may spawn an agent with owner = self but not with owner = another member.",
+    "When countLive == max_parallel_agents (e.g. 8 for pro fixture) the next agent.spawn is rejected `forbidden` with quota-class detail and is not sequenced.",
+    "agent.state for an unknown agent id is ignored with sys.error `invalid_frame` to the sender; for an exited agent it is ignored silently.",
+    "Sending 5 agent.state frames for one agent within 1 s results in at most 2 being sequenced; two identical consecutive states result in 1.",
+    "agent.exit sets the record exited, decrements countLive, and a later agent.state for that agent does not resurrect it.",
+    "After restart the registry rebuilds from the agent table and returns the same list() as before for 100 random agents.",
+    "Registry never stores or logs label/branch/worktree/model (a test asserts these keys are absent from the table and from log output captured during the suite)."
+  ],
+  "tests": [
+    "agents.registry.test.ts: lifecycle and idempotency",
+    "agents.authz.test.ts: command_post vs branch ownership rules",
+    "agents.limits.test.ts: max_parallel_agents and state rate limit",
+    "agents.restart.test.ts: rebuild from storage",
+    "agents.privacy.test.ts: no ct-derived fields stored or logged",
+    "agents.contract.test.ts: fixtures"
+  ],
+  "guardrails": [
+    "MUST read only the cleartext p of hybrid agent.* frames; MUST NOT attempt to read ct.",
+    "MUST enforce the spawn limit server-side even though the host client also enforces it.",
+    "MUST treat unknown agent ids and unknown future fields as tolerated input (ignore), never close the connection.",
+    "MUST NOT let an editor spoof the owner field: owner must equal the frame's server-stamped `from` unless sender is host.",
+    "State rate-limit drops MUST NOT be sequenced and MUST NOT be audited per frame (log counter only)."
+  ],
+  "failure_modes": [
+    "Redis unavailable -> registry falls back to Postgres reads and rejects new spawns with 503-class sys.error until Redis returns (fail closed for limits).",
+    "Out-of-order agent.state after agent.exit (race) -> ignored, counter incremented.",
+    "Entitlements cache stale during downgrade -> spawn uses the entitlement rev at that time; mismatch resolved by the next invalidation (<= 30 s)."
+  ],
+  "unblocks_gate": "G5",
+  "notes": "CONTRACT GAP: the rejection code for exceeding max_parallel_agents is not defined; `forbidden` is used with a descriptive detail until errors.json gains an entitlement code."
+}

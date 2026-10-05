@@ -1,0 +1,70 @@
+{
+  "id": "C019",
+  "title": "Context management: token counting and compaction triggers",
+  "plan": "client",
+  "phase": "P1 Agent runtime",
+  "size": "M",
+  "role": "runtime",
+  "depends_on": [
+    "C013"
+  ],
+  "goal": "Track how much of the model context window each agent has used and trigger compaction at sensible thresholds, surfacing 'compacting' and 'context-full' to the UI.",
+  "scope_in": [
+    "`ContextTracker` per agent updated from SDK usage data (`input_tokens`, `output_tokens`, cache fields) after each message and from an estimator for the pending prompt (`ceil(chars / 3.5)`, replaced by real counts when available).",
+    "Model window table in config `context.windows` (default 200 000 tokens for unknown models) so new models need only config changes.",
+    "Thresholds (config, defaults): warn at 75%, auto-compact when idle at >= 85%, `context-full` at >= 97%. Hysteresis: each fires once until usage drops 10 points below it.",
+    "`compact(agentId)` asks the runner to run the SDK compaction (the `/compact` command) between turns only, never mid-tool-call; emits `agent:compaction {phase:'start'|'end', before, after}` and a `message.system` text payload (level `info`) for the transcript.",
+    "`UsageAccumulator` producing per-agent deltas `{ tokens_in, tokens_out }` consumed by the usage-events client (separate lane) with monotonic totals and no double counting after resume.",
+    "Emits `agent:context {agent_id, used, window, pct}` at most once per second per agent."
+  ],
+  "scope_out": [
+    "Sending usage events to the API: billing/usage client lane.",
+    "Choosing what to drop from context (the SDK does the summarisation).",
+    "Rendering the context meter: TUI lanes.",
+    "Mapping to wire states: lane C014 turns `compaction` signals into `compacting`."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-API-USAGE",
+    "CT-WS-SESSION-EVENTS",
+    "CT-ENTITLEMENTS"
+  ],
+  "build_against": "FakeSdkAdapter (lane C013) emits scripted usage numbers; fake clock; no network. Usage event shape checked against the generated `POST /v1/usage/events` request type (types `tokens_in`, `tokens_out`).",
+  "deliverables": [
+    "packages/agent/src/context/",
+    "docs/context-management.md"
+  ],
+  "interfaces": [
+    "`createContextTracker(deps: { bus: AgentBus; clock: Clock; config: ContextConfig; compact: (id: AgentId) => Promise<void> }): ContextTracker`",
+    "`interface ContextTracker { onUsage(id: AgentId, u: { model: string; input_tokens: number; output_tokens: number; cache_read_tokens?: number }): void; onPrompt(id: AgentId, chars: number): void; setIdle(id: AgentId, idle: boolean): void; snapshot(id: AgentId): { used: number; window: number; pct: number }; usageDelta(id: AgentId): { tokens_in: number; tokens_out: number } }`",
+    "`estimateTokens(chars: number): number`; bus events `agent:context`, `agent:compaction`."
+  ],
+  "acceptance": [
+    "With window 200 000: usage 150 000 emits one warn (75%), 170 000 while idle triggers exactly one `compact` call, and a second update at 171 000 does not trigger again until usage drops below 150 000.",
+    "`context-full` signal fires once at 194 000 (97%) and clears after compaction reduces usage below 174 000.",
+    "Compaction is never invoked while `setIdle(id,false)` (tool running); a deferred trigger fires within one tick after `setIdle(id,true)`.",
+    "`estimateTokens(3500)` returns 1000; for any chars in [0, 10^7] the result is monotone non-decreasing (property test).",
+    "`usageDelta` totals equal the sum of reported usage across 1,000 randomly ordered updates including a resume replay of already-counted messages (message ids de-duplicate).",
+    "`agent:context` events are rate-limited to <= 1/s/agent even when 100 updates arrive in 1 s (fake clock).",
+    "Unknown model name uses the default window and logs once at debug."
+  ],
+  "tests": [
+    "thresholds.test.ts (hysteresis), idle-gating.test.ts.",
+    "estimate.test.ts (property), usage-delta.test.ts (dedupe).",
+    "rate-limit.test.ts, config.test.ts.",
+    "integration with fake SDK."
+  ],
+  "guardrails": [
+    "MUST NOT trigger compaction during a tool call or while an approval is pending.",
+    "MUST NOT send prompt or message text anywhere; the tracker sees only counts and model names (model names are secret on the wire and never logged).",
+    "Usage counts MUST be monotonic and de-duplicated by message id; MUST NOT report negative deltas.",
+    "All timers/intervals MUST use the injected clock and be cleared on agent exit."
+  ],
+  "failure_modes": [
+    "SDK gives no usage data -> fall back to estimates, flag `estimated:true` in snapshots and skip auto-compaction (warn only).",
+    "Compaction fails -> emit `message.system` level `warn`, back off 60 s, retry at most 3 times.",
+    "Window config invalid (<= 0) -> default 200 000 with a warning."
+  ],
+  "unblocks_gate": "G6",
+  "notes": "Thresholds and the 3.5 chars/token heuristic are product choices. `context-full` is a client-local UI state in CT-STATE-MAP (limits category)."
+}

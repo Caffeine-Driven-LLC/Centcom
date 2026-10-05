@@ -1,0 +1,76 @@
+{
+  "id": "C042",
+  "title": "Fleet panel: agent list, states, needs-you ordering",
+  "plan": "client",
+  "phase": "P2 TUI",
+  "size": "M",
+  "role": "tui",
+  "depends_on": [
+    "C014",
+    "C034"
+  ],
+  "goal": "Show every agent in the session as a sorted, glanceable list with owner colour and initial, branch, state word and elapsed time, putting agents that need a human at the top.",
+  "scope_in": [
+    "`<FleetPanel>` rows `[colour dot] name · branch · state · elapsed` per DESIGN §10.1.6: state word in its status colour plus a glyph, active row in reverse video, rows needing a human show `needs you` in `status.warning`.",
+    "Sorting by the visibility priority of DESIGN §11.2 (tiers 1-8 from `crash`/`error`/`auth-required` down to `idle`/`sleeping`), then needs-you first within human-needed states, then oldest `since` first.",
+    "State label table `STATE_LABELS` covering every key of CT-STATE-MAP (60 names) with a short word and glyph category (work, human-needed, outcome, connectivity, limits, social, lifecycle); unknown states render `working` and are logged once at debug.",
+    "Owner identity: coloured dot via `memberColor` (lane C032) plus owner initial and name in the row detail, never colour alone; `you` for the user's own agents.",
+    "Presentation modes: right rail 28 columns wide at >= 100 columns (slot `rail` of lane C034, toggled by `ctrl+b`), otherwise a full-width overlay list; keyboard `↑/↓` move, `⏎` selects an agent (emits `onSelect(agentId)`), `esc` closes the overlay.",
+    "Elapsed time derived from `agent.state.p.since`, ticking once per second; model of rows built by a reducer from `agent.spawn`, `agent.state`, `agent.exit` and `branch.update` events."
+  ],
+  "scope_out": [
+    "Transcript filtering by agent (lane C036 responds to `onSelect`).",
+    "The agent task list with per-agent todos (lane C043, toggled by `ctrl+t`).",
+    "Mascot art per agent (the web fleet board shows 36 px Centos; the terminal list is text only).",
+    "Spawning, killing or reassigning agents (runner and session lanes)."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-STATE-MAP",
+    "CT-WS-SESSION-EVENTS",
+    "CT-WS-PRESENCE"
+  ],
+  "build_against": "Pure component tests with prop fixtures and the pty/TUI snapshot tester from lane C008 (ink-testing-library plus pty harness, frames captured at 80x24 and 120x40). No backend is needed; any session data comes from contracts/fixtures/events/*.json or hand-built typed values from @centcom/protocol (lane C003). Rows are built from the `agent.spawn`, `agent.state`, `agent.exit` and `branch.update` fixtures in contracts/fixtures/events/; local agents from the lane C014 state machine are fed through the same reducer.",
+  "deliverables": [
+    "packages/tui/src/fleet/",
+    "packages/tui/src/fleet/README.md"
+  ],
+  "interfaces": [
+    "`<FleetPanel agents: FleetAgent[]; selfMemberId: string; selfSlot: number; mode: 'rail'|'overlay'; selectedId?: string; onSelect: (agentId: string) => void; now: () => Date />`",
+    "`type FleetAgent = {agentId: string; label?: string; ownerMemberId: string; ownerName: string; ownerSlot: number; branch?: string; state: string; since: string; mode: 'command_post'|'branch'; needsMe: boolean}`",
+    "`reduceFleet(state: FleetState, evt: SessionEventInput): FleetState`; `sortFleet(agents: FleetAgent[]): FleetAgent[]`",
+    "`stateLabel(state: string): {word: string; glyph: string; tone: 'work'|'human'|'good'|'bad'|'muted'}`; `priorityTier(state: string): 1|2|3|4|5|6|7|8`",
+    "Actions: `fleet.toggleRail` (`ctrl+b`), `fleet.next`, `fleet.prev`, `fleet.select`."
+  ],
+  "acceptance": [
+    "Given 6 agents in states `idle`, `editing-file`, `awaiting-approval`, `error`, `thinking`, `merge-conflict`, the order is `error`, `awaiting-approval`, `merge-conflict`, `editing-file`, `thinking`, `idle` (tier then needs-you then age).",
+    "`STATE_LABELS` has an entry for each of the 60 keys in contracts/state-map.json (test reads the file) and `priorityTier` classifies each key exactly once.",
+    "A row at 28 columns (rail) shows dot, truncated name, and state word; at 80+ columns shows all columns; no row exceeds the panel width (property test over widths 28-120).",
+    "`awaiting-approval` for an agent whose approver is the current user shows `needs you` in the warning token; for another approver it shows `waiting` without `needs you`.",
+    "Under `NO_COLOR` each state keeps glyph + word and the active row is shown with reverse video; owner shown as `M · Maya` text.",
+    "Elapsed re-renders once per second (not per event); 10 `agent.state` frames/s from one agent cause at most 1 row re-render per frame budget.",
+    "An `agent.exit` with `outcome:'ok'` moves the row to `idle`-tier and shows `done`; `outcome:'error'` shows `error` with `error_code` if present.",
+    "Unknown state `future-state` renders `working`, does not throw, and is reported once to the logger."
+  ],
+  "tests": [
+    "fleet/sort.test.ts: tiers and ordering property test.",
+    "fleet/labels.test.ts: coverage of contracts/state-map.json keys.",
+    "fleet/reducer.test.ts: fixtures for spawn, state, exit, branch.update; unknown kinds.",
+    "fleet/render.test.ts: rail and overlay snapshots 80x24, 100x30, 120x40, NO_COLOR, light.",
+    "fleet/needs-you.test.ts: approver logic."
+  ],
+  "guardrails": [
+    "MUST derive the agent's state only from events; the panel never infers or invents a state.",
+    "MUST identify owners by initial + name as well as colour (DESIGN §16.3); colours come from slot via `memberColor`, never from a stored hex.",
+    "MUST sanitise labels and branch names (remote, untrusted) before rendering and MUST NOT log them.",
+    "MUST keep at most one re-render per second for elapsed ticks and cap the row model at 200 agents (extra shown as `⋯ N more`).",
+    "MUST treat `state` as an open enum: unknown values never crash or hide the row."
+  ],
+  "failure_modes": [
+    "`since` missing or unparsable -> show `--` for elapsed.",
+    "Owner not found in the roster -> show `unknown member` with outlined violet dot.",
+    "Panel height smaller than 3 rows -> show only the count `N agents` with `needs you` count."
+  ],
+  "unblocks_gate": "G3",
+  "notes": "Key-binding note: DESIGN §22.2 lists `ctrl+t` as 'Task / agent list' and `ctrl+b` as 'Toggle fleet rail'. This card binds `ctrl+b` to the fleet and leaves `ctrl+t` to lane C043 (per-agent tasks); design may want to merge them. `needs you` for `merge-conflict` applies to the owner only."
+}

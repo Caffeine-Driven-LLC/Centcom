@@ -1,0 +1,11 @@
+{
+  "schema": "problem.schema.json",
+  "valid": false,
+  "note": "code is required",
+  "data": {
+    "type": "https://centcom.dev/errors/x",
+    "title": "x",
+    "status": 400,
+    "request_id": "req_01JA3Z8K2M5N7P9Q0R1S2T3V4W"
+  }
+}

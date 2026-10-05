@@ -1,0 +1,20 @@
+{
+  "kind": "queue.reject",
+  "frame": {
+    "v": 1,
+    "t": "queue",
+    "id": "msg_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+    "sid": "ses_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+    "from": "mem_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+    "ts": "2026-10-05T18:07:41.123Z",
+    "k": "queue.reject",
+    "seq": 1042,
+    "p": {
+      "item": "que_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+      "code": "not_now"
+    }
+  },
+  "secret_payload": {
+    "note": "text"
+  }
+}

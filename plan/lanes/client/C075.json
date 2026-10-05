@@ -1,0 +1,106 @@
+{
+  "id": "C075",
+  "title": "Host session engine: queue, approvals, broadcast, history",
+  "plan": "client",
+  "phase": "P4 LAN",
+  "size": "L",
+  "role": "net",
+  "depends_on": [
+    "C025",
+    "C026",
+    "C074"
+  ],
+  "goal": "Run the host's authority for LAN sessions: apply the queue, control, approval and event rules that the hosted relay applies, broadcast the results, and keep history and snapshots, so a LAN command post behaves exactly like a hosted one.",
+  "scope_in": [
+    "`HostSessionEngine` plugged into the LAN server's `FrameInterceptor` (lane C072): per-sender authorisation from the live roster (host, editor, viewer, muted, locked) following the CT-RBAC session-action matrix; rejected actions answer the sender with `sys.error` (`forbidden`, `queue_full`, `queue_item_gone`, `invalid_frame`) and are logged locally.",
+    "Queue authority per CT-WS-QUEUE: states queued/approved/running/done|failed, canceled/rejected/dropped, `held` on host loss; caps (5 live per member, `control.policy.queue_limit` default 20, 192 KiB); order derived from frames; auto-approval policies `ask|trusted|everyone` emitting `queue.approve` as the server; `queue.state {version, items}` after every change and to each joiner.",
+    "Control authority per CT-WS-CONTROL: kick (close 4403, revoke reconnect token via lane C073's `ReconnectTokens`, emit `member_left` + `rotate_key` with consecutive seq), mute/unmute, role, transfer_host (atomic), end (`session_state ended`, close 1000), policy; server-only kinds (`member_joined`, `member_left`, `roster`, `host_changed`, `session_state`, `rotate_key`) emitted by the engine and rejected from members.",
+    "Approvals and events broadcast: forwards `approval.request/decision` (checking decision authority), `agent.*`, `file.lock` (arbitrates `acquire/release/deny/expire` on `path_hmac` with ttl), `branch.update`, `conflict.detected`, `key.grant`, `reaction`, `comment.add` and unknown kinds (sequence and forward, never close); enforces sender rules from the catalogue and size/rate rules (delta <= 4 KiB, ct <= 192 KiB, `agent.state` <= 2/s).",
+    "Roster and presence bookkeeping: lowest free `slot` stable for the session, `control.member_joined` on first connection, 10 s offline grace before `member_left timeout`, `control.roster` on join and after bulk changes.",
+    "History and snapshots (CT-RESUME on the host): in-memory replay window >= 5 000 frames / 10 min via the LAN server, local transcript file via lane C026's persistence API, host-built encrypted snapshot (`{fmt:'centcom.snapshot', v:1, ...}`) every 500 frames or 5 minutes of activity and on graceful end, kept latest 3 on local disk, served through `lan.snapshot.get`; snapshot restore on host restart is not supported (session ends).",
+    "Host-as-member wiring: the host's own client participates through the loopback link so its actions pass through the same authority code path."
+  ],
+  "scope_out": [
+    "The socket server, handshake and sequencing: lane C072. Pairing: lane C073. Discovery: lane C071. Transport abstraction: lane C074.",
+    "Running agents and the runner (lane C013 family); the engine only emits/consumes events on the internal bus (lane C025) and calls the persistence API (lane C026).",
+    "Guest-side engine and rendering: lane C076. Handoff and pair mode: lane C079.",
+    "Hosted-relay behaviours with no LAN equivalent: billing, audit, entitlements, failover."
+  ],
+  "implements": [
+    "CT-WS-QUEUE",
+    "CT-WS-CONTROL",
+    "CT-WS-SESSION-EVENTS",
+    "CT-RESUME"
+  ],
+  "consumes": [
+    "CT-LAN",
+    "CT-RBAC",
+    "CT-CRYPTO",
+    "CT-WS-ENVELOPE",
+    "CT-STATE-MAP",
+    "CT-ERR",
+    "CT-IDS"
+  ],
+  "build_against": "Pure in-process tests: an in-memory multicast bus fake (no real sockets) for mDNS, loopback `ws://127.0.0.1:<ephemeral>` for the server, and the relay-simulator-free client from lane C054. The mock backend (lane C007) is not involved because LAN mode never touches the backend. Guests are real client stacks (lanes C054/C055) over loopback; the agent runner is a fake that claims queue items and emits agent events on the bus; persistence (lane C026) uses a temp directory.",
+  "deliverables": [
+    "packages/session/src/host/engine.ts",
+    "packages/session/src/host/authority.ts",
+    "packages/session/src/host/queue-machine.ts",
+    "packages/session/src/host/control-enforcer.ts",
+    "packages/session/src/host/approval-router.ts",
+    "packages/session/src/host/lock-arbiter.ts",
+    "packages/session/src/host/roster.ts",
+    "packages/session/src/host/history.ts",
+    "packages/session/src/host/snapshots.ts",
+    "packages/session/src/host/index.ts",
+    "packages/session/src/host/README.md",
+    "packages/session/src/host/__tests__/"
+  ],
+  "interfaces": [
+    "`new HostSessionEngine(o: { server: LanHostServer; bus: EventBus; persistence: SessionPersistence; policy: SessionPolicy; snapshotBuilder: () => Promise<Uint8Array> /* encrypted by caller */; tokens: ReconnectTokens; clock; ids; logger; maxMembers?: number /*8*/ })`; `start(): Promise<void>`, `stop(code?: 'done'|'abandoned'|'error'): Promise<void>`",
+    "Host actions (used by the host UI/agents; same code path as remote frames): `approveItem(item)`, `rejectItem(item, code)`, `reorder(order)`, `dropItem(item)`, `claim(item, agentId)`, `complete(item, outcome)`, `kick(member, code)`, `mute(member, until?)`, `setRole(member, role)`, `transferHost(to)`, `setPolicy(p)`, `end(code)`",
+    "Views: `queue(): QueueView`, `roster(): MemberInfo[]`, `policy(): SessionPolicy`, `headSeq(): number`, `locks(): LockView[]`",
+    "Events: `member-joined`, `member-left`, `queue-changed`, `approval-request`, `protocol-violation({member, kind})`, `ended`",
+    "`interface SessionPersistence { appendFrame(sid: string, f: SequencedFrame): Promise<void>; readFrames(sid: string, afterSeq: number, limit: number): AsyncIterable<SequencedFrame>; saveSnapshot(sid: string, s: { seq: number; bytes: Uint8Array }): Promise<void>; latestSnapshot(sid: string): Promise<{ seq: number; bytes: Uint8Array } | null> }` (implemented by lane C026)"
+  ],
+  "acceptance": [
+    "Role matrix: for every row of the CT-RBAC session-action table, a table-driven test sends the frame as host, editor and viewer; only allowed senders get a sequenced echo, others get `sys.error forbidden` to the sender only and no fan-out.",
+    "Queue flow with 3 guests: submit -> `queue.state` broadcast -> host approve -> claim -> done; all four replicas (host + 3) reconstruct identical `QueueView` including `version` when replaying the transcript from seq 1.",
+    "Caps: a member's 6th live item gets `queue_full`; session limit from `control.policy.queue_limit` (set to 3) blocks the 4th; a `queue.submit` with p.size > 196 608 bytes is rejected; a duplicate `queue.submit` id is a no-op returning the existing seq.",
+    "Auto-approval: with `auto_approve:'everyone'` a submit is followed by a server-originated `queue.approve` (marked as policy-approved) without host action; with `ask` nothing is approved until the host acts; `trusted` approves only members on the trusted list.",
+    "`queue.approve` for an unknown item returns `queue_item_gone` to the sender only; two concurrent `queue.reorder` frames resolve by higher `seq`; non-submitter `queue.cancel` is `forbidden`; cancel of a `running` item is refused.",
+    "Kick: after `control.kick` the target socket is closed with 4403 within 1 s, its reconnect token no longer validates, and the next two sequenced frames are `member_left {code:'kicked'}` and `rotate_key` with consecutive seq; a member-sent `control.roster` is rejected.",
+    "Mute drops the target's `queue`/`event` frames (silently to others, `forbidden` to the target) but still allows presence; `until` expiry unmutes at the deadline (fake clock).",
+    "`control.transfer_host` makes the target host and the old host `editor` atomically (one seq window, `host_changed` emitted); with `locked:true` policy new submits are refused with `forbidden`.",
+    "Locks: two agents acquiring the same `path_hmac`: first `file.lock acquire` is echoed, second yields a server `deny`; `ttl_ms: 1000` expires with an `expire` frame at 1 s (fake clock) and the lock is free again.",
+    "Late joiner: joins at seq 1 200 after 1 100 frames, receives `control.roster`, `queue.state`, presence burst and replay from its `last_seq`, or `snapshot_required` plus a served snapshot when beyond the window; the snapshot is produced after 500 frames / 5 min (whichever first) and keeps the latest 3.",
+    "The engine never decrypts `ct`: running the privacy test with a spy on the crypto module shows zero decrypt calls made by the engine code path (host UI decrypts for itself elsewhere).",
+    "Host process stop sends `control.session_state {state:'ended'}` then closes guests with 1000; a hard host crash leaves no stale snapshot references beyond the latest 3."
+  ],
+  "tests": [
+    "host/authority.test.ts: full role matrix, muted, locked, viewer reactions/comments rights.",
+    "host/queue-machine.test.ts: state machine, caps, policies, held on host loss, property test for replica convergence.",
+    "host/control-enforcer.test.ts: kick/mute/role/transfer/end/policy with ordering and revocation.",
+    "host/lock-arbiter.test.ts: acquire/deny/release/expire.",
+    "host/history.test.ts: window, transcript file replay, snapshot cadence and retention of 3.",
+    "host/e2e-lan.test.ts: host + 3 guests over loopback including kick and late join, ciphertext opaque to the engine.",
+    "host/conformance.test.ts: runs the same queue/control/event scenarios used against the mock relay (lane C007) and requires identical observable frames."
+  ],
+  "guardrails": [
+    "MUST determine authority from the host's own roster at sequencing time, never from role claims inside frames or tokens; role changes apply to frames with higher `seq` only.",
+    "MUST treat `ct` as opaque: the engine MUST NOT decrypt, store separately or log any encrypted payload, and MUST NOT put plaintext work content in cleartext `p` of frames it originates (privacy budget).",
+    "MUST emit server-only control kinds itself and MUST reject them when sent by members; MUST ensure `kick` + `rotate_key` are consecutive sequence numbers.",
+    "MUST NOT let a rejected or unauthorised frame be sequenced or fanned out; the error goes only to the sender.",
+    "MUST bound memory and disk: replay window per lane C072, snapshots latest 3, transcript append-only with mode 0600, pending lock table capped at 10 000 entries.",
+    "MUST NOT depend on the backend or entitlements: LAN is free; member cap is 8.",
+    "MUST NOT lose queue state on guest reconnect: state is rebuilt from frames and `queue.state`, never from guest-supplied state."
+  ],
+  "failure_modes": [
+    "Host UI/agent action while a guest sends a conflicting frame -> both go through the single sequencing path; the first by arrival wins and the second receives the proper error.",
+    "Transcript or snapshot write fails -> engine continues serving from memory, emits `history-degraded` for the UI, and snapshots stop until storage recovers.",
+    "Guest sends an unknown future kind -> sequenced and forwarded without interpretation; no close.",
+    "Host loses power -> session is over (no failover in LAN); guests detect the dead connection within 50 s and end their local view."
+  ],
+  "unblocks_gate": "G3",
+  "notes": "SPLIT? Queue/control authority and history/snapshots could be two PRs (engine core first)."
+}

@@ -1,0 +1,10 @@
+{
+  "schema": "envelope.schema.json",
+  "valid": true,
+  "note": "",
+  "data": {
+    "v": 1,
+    "t": "ack",
+    "ack": 1040
+  }
+}

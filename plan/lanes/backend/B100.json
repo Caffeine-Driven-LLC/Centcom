@@ -1,0 +1,110 @@
+{
+  "id": "B100",
+  "title": "Provider conformance suite and release gate",
+  "plan": "backend",
+  "phase": "P7 Ops",
+  "size": "L",
+  "role": "qa",
+  "depends_on": [
+    "B011",
+    "B042",
+    "B047",
+    "B052",
+    "B054"
+  ],
+  "goal": "Prove that the backend satisfies every contract it implements by running the shared fixtures and wire-level checks against real services, emit a machine-readable conformance report, and own the provider-side scripts for integration gates G1-G6.",
+  "scope_in": [
+    "Vitest conformance project in `packages/testkit/src/conformance/` with one file per contract named `ct-<id>.conf.ts` (lower-case id, e.g. `ct-ws-queue.conf.ts`) for every contract that lists `backend` in `implemented_by`, each running the fixtures in `contracts/fixtures/<area>/` and wire-level behaviour checks against the live stack started by the testkit containers.",
+    "Fixture runner: for event fixtures (`contracts/fixtures/events/*.json`, `{kind, frame, secret_payload}`) validate the frame against `schemas/events.schema.json`, send it through a real relay with the client simulator (B011) as sender and a second simulator as receiver, assert byte-identical `p`/`ct` delivery, correct sequencing and enforcement of who-may-send, payload mode (clear/encrypted/hybrid), size limits and notices; negative cases derived from the catalogue.",
+    "REST contracts: for each endpoint in the CT-API-* tables assert method/path/scope/role/Idem columns against the live API (authz matrix, `Idempotency-Key` required/accepted, pagination envelope, ETag/If-Match, problem+json shape, rate-limit headers).",
+    "Report generator writing `conformance-report.json` (schema below) plus a human summary; `pnpm conformance` root command with `--only <CT-ID>`, `--strict`, `--target local|stage`.",
+    "Gate scripts `packages/testkit/src/gates/g1.ts ... g6.ts` (`pnpm gate:g1` ... `pnpm gate:g6`) running the provider-side checks of each integration gate and appending to the report's `gates` section; G6 aggregates conformance, load, chaos, security, DR and release evidence.",
+    "Release workflow `.github/workflows/release-gate.yml` running the suite on every PR to main (local stack) and nightly against stage, uploading the report as an artifact."
+  ],
+  "scope_out": [
+    "Writing or changing contract fixtures or schemas (Contract PR process); missing fixtures are reported as `missing_fixtures`, not invented.",
+    "Unit tests of individual lanes (each lane owns its own); this suite only checks contract behaviour end to end.",
+    "The client-side conformance suite and the real client's side of the gates (run jointly later); this lane covers the provider side with the simulator.",
+    "Load, chaos and security tests themselves (B095, B096, B097, B098, B099); G6 only verifies their evidence files."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-IDS",
+    "CT-ERR",
+    "CT-VER",
+    "CT-PAGE",
+    "CT-STATUS",
+    "CT-AUTH",
+    "CT-RBAC",
+    "CT-API-ACCOUNTS",
+    "CT-API-WORKSPACES",
+    "CT-API-SESSIONS",
+    "CT-API-BILLING",
+    "CT-API-USAGE",
+    "CT-API-AUDIT",
+    "CT-API-NOTIFY",
+    "CT-API-WEBHOOKS",
+    "CT-API-RELEASES",
+    "CT-API-FLAGS",
+    "CT-WS-ENVELOPE",
+    "CT-RESUME",
+    "CT-WS-SESSION-EVENTS",
+    "CT-WS-PRESENCE",
+    "CT-WS-QUEUE",
+    "CT-WS-CONTROL",
+    "CT-ENTITLEMENTS",
+    "CT-WEBHOOKS",
+    "CT-NOTIF-PAYLOAD",
+    "CT-TELEMETRY",
+    "CT-DEEPLINK",
+    "CT-CRYPTO",
+    "CT-STATE-MAP"
+  ],
+  "build_against": "Everything runs against the provider's own stack: testkit containers (B010), the mock client simulator (B011) as the only counterpart, Stripe replaced by recorded signed webhook events and a Stripe API fake, email and push by capture doubles. The real client is never required; gate scripts expose `--external-client` only to print instructions for the joint run.",
+  "deliverables": [
+    "packages/testkit/src/conformance/",
+    "packages/testkit/src/gates/",
+    "packages/testkit/vitest.conformance.config.ts",
+    ".github/workflows/release-gate.yml",
+    "docs/testing/conformance.md"
+  ],
+  "interfaces": [
+    "Commands: `pnpm conformance [--only CT-WS-QUEUE,CT-ERR] [--strict] [--target local|stage] [--report conformance-report.json]`; `pnpm gate:g1 ... pnpm gate:g6`. Root scripts forward to `@centcom/testkit` (the root `package.json` edit needs the scaffold owner's approval in the PR).",
+    "Per-contract files: `packages/testkit/src/conformance/ct-<id>.conf.ts` exporting `export const contract = 'CT-...'` and Vitest suites tagged with the contract id; shared helpers `fixtures.ts` (`loadFixtures(area): Fixture[]`), `harness.ts` (`startStack()`, `connectSim(role)`), `report.ts`.",
+    "Report JSON (also at `packages/testkit/src/conformance/report.schema.json`): `{schema_version: 1, generated_at: string, git_sha: string, contract_version: string, contracts_lock_hash: string, target: {kind: 'local'|'stage', base_url: string}, duration_ms: number, summary: {contracts_total: number, contracts_passed: number, contracts_failed: number, cases_total: number, passed: number, failed: number, skipped: number, missing_fixtures: number}, contracts: [{id: string, status: 'pass'|'fail'|'missing_fixtures', fixtures_run: number, cases: [{name: string, fixture: string|null, status: 'pass'|'fail'|'skip', duration_ms: number, error: {message: string, pointer: string|null}|null}]}], gates: [{id: 'G1'|'G2'|'G3'|'G4'|'G5'|'G6', status: 'pass'|'fail'|'not_run', checks: [{name: string, status: 'pass'|'fail', detail: string|null}]}]}`.",
+    "Exit codes: 0 all pass; 1 any failure; 3 `--strict` and any `missing_fixtures`; 2 usage error.",
+    "Gate checks: G1 device-flow start/poll/token and `GET /v1/me`; G2 handshake, ping/pong at 20 s/50 s, forced socket kill and resume with gap-free `seq`; G3 two simulators host+guest, queue submit -> approve -> agent events fan out with canary plaintext absent from relay logs/DB; G4 checkout -> signed webhook -> `rev` bump and `ent` claim change -> relay accepts session create -> 80 % usage yields `sys.notice usage_warning`; G5 three simulators, branch mode, `file.lock`, presence, notifications, webhook delivered with valid signature; G6 aggregates evidence files."
+  ],
+  "acceptance": [
+    "`pnpm conformance --strict` on a clean checkout runs one `ct-*.conf.ts` per contract whose `implemented_by` includes backend (28 contracts) and writes `conformance-report.json` that validates against the schema; `contracts[]` contains exactly those ids plus CT-CRYPTO and CT-STATE-MAP consumption checks.",
+    "Every file in `contracts/fixtures/events/*.json` (42 at freeze) is executed: schema validity, relay round trip, sender/receiver authorisation and payload-mode check; a fixture count mismatch between the directory and the report fails the run.",
+    "A contract with no fixture directory yields `status:'missing_fixtures'` (exit 3 under `--strict`, never silently green); a deliberately broken relay build (drops `seq` on `queue.approve`) makes `CT-WS-QUEUE` fail with a pointer to the fixture and exit 1.",
+    "REST authz matrix: for each endpoint row of the CT-API-* tables the suite asserts allowed roles succeed and every other workspace role gets 403 `forbidden`, anonymous gets 401, and endpoints with Idem `R` return 400 `idempotency_key_required` without the header and replay with `Idempotency-Replayed: true`.",
+    "Privacy check: a canary string sent in message text appears in no relay log line, no database column and no blob (full scan) after a G3 run; the check fails the contract `CT-WS-SESSION-EVENTS` if found.",
+    "G1-G5 scripts each finish in < 5 min locally, write their section in the report, and exit non-zero on failure; `pnpm gate:g6` fails when any of: conformance report older than 24 h or failed, load report (B095) missing or `passed:false`, chaos report (B096) failing, `pnpm security:deps` failing, last `dr-drill-report.json` older than 35 days or `verified:false`, `pnpm alerts:lint` failing, release manifest check failing.",
+    "The whole local suite runs in <= 15 min in CI; test-level timeouts are 60 s and every test is deterministic (injected clock/ids).",
+    "The report is stable: running twice on the same commit produces identical `summary` and case names (timestamps and durations excluded)."
+  ],
+  "tests": [
+    "meta-tests: the runner against a fake provider with seeded violations (missing header, wrong status, dropped seq) must report each as a failure.",
+    "report schema validation test and snapshot test of the summary.",
+    "fixture discovery test comparing directory listing to executed cases.",
+    "gate script tests with stubbed evidence files (fresh/stale/failing) for G6.",
+    "determinism test running the quick subset twice and diffing normalised reports.",
+    "CI workflow lint (`actionlint`) and a dry-run of `release-gate.yml`."
+  ],
+  "guardrails": [
+    "MUST NOT modify files under `contracts/`; fixtures are read-only inputs and `tools/plan/lock.py --check` runs first in the suite.",
+    "MUST NOT mark a contract `pass` without executing at least one case; absent fixtures are `missing_fixtures`, never skipped silently.",
+    "MUST use synthetic data and random-byte ciphertext only; the suite never contacts live Stripe, email or push providers.",
+    "MUST fail (not skip) on a stage run that detects it points at production hostnames.",
+    "MUST NOT weaken assertions to make a lane pass; an expected-failure list is not allowed (a broken contract is fixed in its lane or by Contract PR)."
+  ],
+  "failure_modes": [
+    "Stack fails to start -> run aborts with exit 1 and a report whose `summary.cases_total` is 0 and a top-level failure, never an empty pass.",
+    "A single contract suite crashes -> that contract is `fail` with the error; others still run so the report is complete.",
+    "Evidence file for G6 missing -> that check fails with the expected path in `detail`."
+  ],
+  "unblocks_gate": "G6",
+  "notes": "This lane also owns the provider-side scripts for G1-G5 (the card field holds a single gate, G6, the final one). SPLIT? Conformance suite plus six gate scripts is large; if it slips, deliver in two PRs (conformance first, gates second)."
+}

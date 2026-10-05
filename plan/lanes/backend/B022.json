@@ -1,0 +1,82 @@
+{
+  "id": "B022",
+  "title": "Accounts endpoints: /v1/me, preferences",
+  "plan": "backend",
+  "phase": "P1 Identity",
+  "size": "S",
+  "role": "identity",
+  "depends_on": [
+    "B013",
+    "B021"
+  ],
+  "goal": "Clients can read and update their own account through `/v1/me` with ETag concurrency, and learn the plan summary, active workspace and entitlement revision in one call.",
+  "scope_in": [
+    "`GET /v1/me`: current user (id, email, display_name, locale, avatar_slot, telemetry, created_at), plan summary, active workspace (id, name, role), entitlement revision `ent`; returns `ETag`.",
+    "`PATCH /v1/me`: partial update of display_name (1-40), locale (BCP 47), avatar_slot, telemetry (opt-in); honours `If-Match` (mismatch -> `412 precondition_failed`); returns the updated resource and new ETag.",
+    "Active workspace resolution: token `wsp` claim if the user is still a member, else the user's personal workspace.",
+    "Plan summary from an injected `EntitlementsLookup` (default free plan from CT-ENTITLEMENTS defaults) so billing lanes plug in later.",
+    "Audit event on each successful PATCH via an injected `AuditSink`."
+  ],
+  "scope_out": [
+    "Account deletion and data export endpoints (B026).",
+    "Notification preferences (notification lanes).",
+    "Devices and API keys endpoints (B020, B019).",
+    "User persistence logic (B013)."
+  ],
+  "implements": [
+    "CT-API-ACCOUNTS"
+  ],
+  "consumes": [
+    "CT-AUTH",
+    "CT-RBAC",
+    "CT-ENTITLEMENTS",
+    "CT-PAGE",
+    "CT-IDS",
+    "CT-ERR",
+    "CT-TELEMETRY"
+  ],
+  "build_against": "B017 test principal helper, B013 service, B010 stack; entitlements via stub lookup.",
+  "deliverables": [
+    "apps/api/src/routes/me.ts",
+    "apps/api/src/modules/me/service.ts",
+    "apps/api/src/modules/me/etag.ts",
+    "apps/api/src/modules/me/entitlements-lookup.ts",
+    "apps/api/test/routes/me.test.ts"
+  ],
+  "interfaces": [
+    "`GET /v1/me` (scope `profile`) -> 200 `{user, plan:{id: 'free'|'pro'|'team', status}, workspace:{id, name, role}|null, ent: number}` + `ETag`.",
+    "`PATCH /v1/me` (scope `profile`, header `If-Match`) body any subset of `{display_name, locale, avatar_slot, telemetry}`; unknown fields ignored per CT-VER.",
+    "`interface EntitlementsLookup { forUser(userId: string, workspaceId?: string): Promise<{plan: 'free'|'pro'|'team'; status: string; rev: number}> }`.",
+    "`computeEtag(user: User): string` (derived from updated_at + version)."
+  ],
+  "acceptance": [
+    "GET with a valid token returns 200 with an `ETag` header and `ent` equal to the stub's revision; without a valid token returns 401 with `token_invalid` or `token_expired` as appropriate.",
+    "PATCH `{display_name:'Ada'}` with a matching `If-Match` returns 200 and a different ETag; with a stale ETag returns 412 `precondition_failed` and changes nothing.",
+    "PATCH with a 41-char name, control chars, or an invalid locale returns a validation problem with `errors[].pointer` `/display_name` or `/locale`.",
+    "PATCH `{telemetry:true}` persists `telemetry_opt_in=true`; `{telemetry:'yes'}` is rejected.",
+    "Unknown fields (e.g. `{foo:1}`) are ignored and do not cause a 400.",
+    "A token with only scope `workspaces:read` gets 403 on both routes; an API-key principal gets 403 on PATCH.",
+    "The GET response contains no refresh tokens, secrets or other users' data; a snapshot test pins the exact key set.",
+    "Two concurrent PATCHes with the same If-Match: exactly one succeeds, the other gets 412."
+  ],
+  "tests": [
+    "me.get.test.ts: shape, ETag, auth failures.",
+    "me.patch.test.ts: validation matrix, unknown fields, If-Match 412.",
+    "etag.test.ts: concurrent PATCH compare-and-set.",
+    "scopes.test.ts: profile scope and API-key denial.",
+    "active-workspace.test.ts: claim valid, invalid, membership removed."
+  ],
+  "guardrails": [
+    "MUST NOT allow changing email, id or status through PATCH.",
+    "MUST NOT return or log the email of any user other than the caller.",
+    "MUST honour If-Match atomically (compare-and-set in SQL), never read-then-write.",
+    "MUST NOT trust the `wsp` claim without checking current membership."
+  ],
+  "failure_modes": [
+    "Entitlements lookup unavailable -> respond 200 with the free-plan fallback; log `entitlements_unavailable` at most once per minute.",
+    "User row deleted -> 404; `pending_deletion` -> 200 with the status visible.",
+    "DB timeout -> 503 problem with `retry_after_s`."
+  ],
+  "unblocks_gate": "G1",
+  "notes": "CONTRACT GAP: exact field names of the /v1/me response live in openapi.yaml; the shape above follows CT-API-ACCOUNTS and CT-TELEMETRY (`PATCH /v1/me {telemetry:true}`). The title says 'preferences': only the PATCH /v1/me fields in the contract are implemented here."
+}

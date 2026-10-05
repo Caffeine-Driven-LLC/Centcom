@@ -1,0 +1,21 @@
+{
+  "kind": "control.member_joined",
+  "frame": {
+    "v": 1,
+    "t": "control",
+    "id": "msg_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+    "sid": "ses_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+    "from": "mem_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+    "ts": "2026-10-05T18:07:41.123Z",
+    "k": "control.member_joined",
+    "seq": 1042,
+    "p": {
+      "member": "mem_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+      "name": "short text",
+      "slot": 3,
+      "role": "host",
+      "device": "dev_01JA3Z8K2M5N7P9Q0R1S2T3V4W"
+    }
+  },
+  "secret_payload": null
+}

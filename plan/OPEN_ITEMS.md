@@ -1,0 +1,139 @@
+# Open items
+
+Collected automatically from lane-card `notes`. Nothing here blocks a lane: each card says how to proceed conservatively. Items are for the **contract owners** (gaps) and **plan leads** (splits) to triage before or during the gates.
+
+## Contract gaps (99)
+
+Resolve with a Contract PR (GUIDELINES §9) or close as "internal decision". Until then follow the card’s conservative reading behind a flag.
+
+- **B008**: CONTRACT GAP: the legal values of sessions.state are not enumerated in the contracts (only `paused` and `expired` are named); store as unconstrained text now and constrain once CT-WS-SESSION-EVENTS `control.session_state` lists them.
+- **B013**: CONTRACT GAP: avatar_slot range is not defined in CT-API-ACCOUNTS; accept integer 0..255 and tighten when the contract says. markDeleted is declared here but used by B026.
+- **B014**: CONTRACT GAP: login methods are explicitly outside the CT-AUTH wire contract, so these browser routes have no contract definition; paths are internal and may be renamed. Depends on B032 only through the `MagicLinkMailer` interface.
+- **B015**: CONTRACT GAP: social login is outside CT-AUTH, so routes and the `identities` table are internal decisions. Adds dependency jose (MIT) if not already added by B017; coordinate versions.
+- **B016**: CONTRACT GAP: the `verification_uri` host/path (the browser approval page) is not specified; make it config `DEVICE_VERIFICATION_URI`. The page needs a logged-in browser session supplied by the login lanes. Device creation here duplicates registry logic owned by B020; B020's `registerDevice` should be adopted in a follow-up. SPLIT? L-sized.
+- **B018**: CONTRACT GAP: the authorization code TTL (60 s used here) and the default scope for the web client are not specified; both are config. The login page URL is a deployment decision.
+- **B019**: CONTRACT GAP: the POST /v1/api-keys request body and response fields live in openapi.yaml; the shape above is provisional. The contract's 8-char display prefix of `cen_live_...` is just `cen_live`; implemented as specified, flag for a contract clarification. The title mentions 'rotate' but no rotate endpoint exists in CT-API-ACCOUNTS; implemented as an internal service function only.
+- **B021**: CONTRACT GAP: the 'guest (limited)' read of workspace/members is not defined field by field; this lane returns a boolean and leaves field filtering to the workspace lanes.
+- **B022**: CONTRACT GAP: exact field names of the /v1/me response live in openapi.yaml; the shape above follows CT-API-ACCOUNTS and CT-TELEMETRY (`PATCH /v1/me {telemetry:true}`). The title says 'preferences': only the PATCH /v1/me fields in the contract are implemented here.
+- **B024**: CONTRACT GAP: HTTP statuses for `idempotency_key_required` (400 assumed) and the exact in-flight duplicate behaviour are not specified in CT-PAGE; the conservative reading above is used. `idempotency_conflict` is stated as 409.
+- **B025**: CONTRACT GAP: no dedicated error code exists for an expired/invalid cursor in the .md contracts; use the generic validation error until errors.json lists one. Adds no third-party dependency (node:crypto).
+- **B026**: CONTRACT GAP: contract says DELETE /v1/me returns a `Location` of status but defines no deletion-status endpoint nor a way to cancel; this card points `Location` at /v1/me and offers `cancelDeletion` as a service function only.
+- **B028**: CONTRACT GAP: whether admins may promote to admin is not stated; conservative reading used (owner only).
+- **B028**: CONTRACT GAP: workspace-level removal effect on live sessions is not described beyond CT-RBAC rule 2; the relay (B043) subscribes to `centcom:membership`. This channel name is internal to the backend, not a contract.
+- **B031**: CONTRACT GAP: the contract does not say how slots behave when the same user joins from two devices; this card keys slots by member id, so both devices share one slot.
+- **B032**: CONTRACT GAP: none for the contracts consumed.
+- **B033**: CONTRACT GAP: share-link URL form (`/v1/share-links/{token}/join`) has no entry in the CT-DEEPLINK table; B068 decides.
+- **B035**: CONTRACT GAP: project fields ('named repo references') are not specified; `name` and opaque `repo_ref` are proposed. Recommendation to clients (documentation only): store a hash of the normalised remote, not the URL.
+- **B037**: CONTRACT GAP: CT-VER lists no version field on the relay's HTTP surface other than `/v1/status` (served by the API); this lane keeps version info in logs and in `sys.welcome` (B038).
+- **B037**: CONTRACT GAP: the `sys.error` code for overload (4503) is not named in a visible errors.json; use the registry's 503-class code.
+- **B038**: CONTRACT GAP: `welcome.limits` shape is not specified beyond 'server-advertised limits'; this card advertises keys `max_frame_bytes`, `seq_rate`, `seq_burst`, `presence_rate`, `outbound_buffer_bytes`. SPLIT? size L: ticket verification and negotiation/supersede could be two lanes.
+- **B039**: CONTRACT GAP: the registry code for 'frame too large' is not visible; use the 413-class code from errors.json.
+- **B042**: CONTRACT GAP: behaviour for `last_seq: null` is implied by the handshake example only. SPLIT? size L: hydration could be separate.
+- **B043**: CONTRACT GAP: the catalogue says in command-post mode only the host emits events marked `*`, but the session mode is not carried in any frame; this lane applies role checks only and leaves mode-specific restrictions to B051/B052 via the `session.mode` field once B053 provides it. Placement of the first-event handling for unknown kinds from `viewer`s is conservative (rejected).
+- **B046**: CONTRACT GAP: the contract shows `sys.slow_down` as S->C with 'client must reduce rate for p.for_ms' but also uses it for outbound-buffer pressure; this card sends it in both situations (inbound rate limit in B041, outbound pressure here) and documents `p.reason`. If `reason` is not allowed by the schema, drop it.
+- **B048**: CONTRACT GAP: the cursor `ct` size cap of 4 KiB is a lane decision (contract gives only the global 192 KiB limit); product may adjust via config. Client behaviour 'cursors disappear after 10 s' is not enforced by the relay.
+- **B049**: CONTRACT GAP: no client->relay frame exists to request a non-kick rotation (CT-CRYPTO says the relay emits `rotate_key` after the host publishes grants for the next epoch); this card treats a host `key.grant` with the next kid as the commit signal. Scheduled rotation is the host's job (every 7 days or 100 000 frames); the relay only exposes `due()`.
+- **B051**: CONTRACT GAP: control.mute `until` has no stated maximum; this lane caps at 7 days as a conservative default.
+- **B051**: CONTRACT GAP: control.role schema allows only editor|viewer, so promoting to host is only via transfer_host. Migration numbering uses the lane number as prefix to avoid collisions; B007 conventions win if they differ. Size L is appropriate; SPLIT? kick/rotate atomicity could be its own PR.
+- **B052**: CONTRACT GAP: no error code is defined for submit by a muted member or locked session; this lane uses `forbidden`.
+- **B052**: CONTRACT GAP: the 'trusted list' for auto_approve='trusted' has no endpoint or field in the contracts; the lane reads a TrustedListPort that defaults to the workspace owners/admins until the contract defines it.
+- **B052**: CONTRACT GAP: queue.approve has only `item` in p, so the auto-approve 'policy as reason' is recorded in the audit event, not on the frame. Size L is fair; SPLIT? the auto-approve policy could be a separate lane.
+- **B055**: CONTRACT GAP: the history response frame shape reuses the envelope (CT-WS-ENVELOPE) but the OpenAPI document is not yet in contracts/, so item shape is the envelope minus nothing. Whether guests may read history is not stated; this lane gates it on share_history. Deliverable migration prefix 0055 = lane number.
+- **B056**: CONTRACT GAP: the commit failure code for a hash mismatch is not in the registry; use 422 with errors[] pointers until errors.json exists. The 15 min pending expiry and pending cap of 3 are this lane's conservative defaults.
+- **B057**: CONTRACT GAP: the rejection code for exceeding max_parallel_agents is not defined; `forbidden` is used with a descriptive detail until errors.json gains an entitlement code.
+- **B058**: CONTRACT GAP: 09-state-map.md lists wire categories in prose only (idle, work, human-needed, outcome, merge-conflict, deploying, saving); individual keys such as `listening`, `prompt-received` and `host-session` are not explicitly assigned. This lane classifies by category text and records the ambiguous keys in a constant with a TODO-free comment citing the contract; a human should confirm.
+- **B059**: CONTRACT GAP: the clear p for file.lock has `ttl_ms` optional with no default or bounds; defaults and clamps here are this lane's choices. Waiter queue behaviour (queued position) has no wire representation; waiters are told only via the eventual server grant, so clients see a 'deny' then a later 'acquire'.
+- **B060**: CONTRACT GAP: timeout default and maximum are not specified; this lane requires expires_at from the sender and bounds it to 24 h. The meaning of approver='owner' (session creator vs workspace owner) is not defined; this lane implements workspace owner/admin members present in the session. Delegation to arbitrary members is not in the contracts, so no delegation endpoint is added.
+- **B061**: CONTRACT GAP: the contract sequences every branch.update and does not allow dropping events, so the 1-per-2-s coalescing here is a lane choice that contract owners should confirm; if rejected, remove the rate limit and keep only the 30 s conflict de-dup. LockDenialPort is satisfied by B059 at integration time (no depends_on edge).
+- **B062**: CONTRACT GAP: whether reaction targets must exist and the per-target comment cap are not specified; caps here are lane defaults. The reaction code set is taken from p_reaction in events.schema.json (the prose says 'codes map to pixel animations'). Migration prefix 0062 = lane number.
+- **B063**: CONTRACT GAP: per-category `params` keys and `action.type` values other than `open_session` are not defined; this lane defines provisional allow-lists in params.ts (ids and enums only) and uses action types open_session and open_billing with deeplinks from CT-DEEPLINK.
+- **B065**: CONTRACT GAP: the X-Unread-Count header is an additive extra, not in the contract; remove if reviewers object.
+- **B066**: CONTRACT GAP: the preference document shape (channels x categories, quiet hours fields) is described only in prose in CT-API-NOTIFY; the shape above is this lane's proposal pending openapi.yaml. 'High may bypass quiet hours only for approval_needed if the user opted in' is modelled as quiet_hours.allow_high_approval.
+- **B067**: CONTRACT GAP: CT-WS-PRESENCE says presence is ephemeral and never stored durably, and no last-seen API exists in CT-API-SESSIONS. This lane therefore stores connection facts only and exposes no endpoint; if product wants a last-seen field on GET /v1/sessions/{id}/members it needs a Contract PR. The skeleton title says 'last-seen API'; it is implemented as an internal API.
+- **B068**: CONTRACT GAP: the request/response bodies of share-link endpoints, the guest display name field and the guest device-key story are not in the contracts: a guest without a registered device has no X25519 key to receive key.grant. This lane returns a ticket without `dev` and leaves key delivery to the fragment-carried key; a Contract PR should define how guests prove a key. Defaults (1 h, 10 uses, max 50) are lane choices. B068 depends on B017 (token service) for signing and B054 for session routes.
+- **B069**: CONTRACT GAP: shape of the /v1/plans response is not specified; the proposal above must be confirmed. The `tokens_month` and `queue_items_month` reference values are not in the contract's default table; seed uses null (unlimited) for all plans. GET /v1/workspaces/{id}/entitlements and GET /v1/plans are CT-API-BILLING routes owned here because no other planned lane lists them.
+- **B070**: CONTRACT GAP: the subscription response shape is not specified beyond 'Subscription state (active|trialing|past_due|canceled)'; the 'free/none' view for unsubscribed workspaces is this lane's proposal.
+- **B071**: CONTRACT GAP: request bodies for checkout and portal are not specified (summary says only 'Create a hosted checkout session -> {url}'); the bodies above are proposals. The EUR and USD currency options follow CT-IDS. Trial and promo handling is deferred to B079.
+- **B073**: CONTRACT GAP: the contract summary only says 'Change seat count (returns proration preview with ?preview=true)'; the request/response shapes and the base-plus-add-on item model are proposals. Pricing structure (5 included + add-ons) follows the Team column in CT-ENTITLEMENTS but the Stripe item layout is a product decision.
+- **B074**: CONTRACT GAP: the response body for POST /v1/usage/events and the event id format are not specified; {accepted, duplicates} and a 8..40 char [A-Za-z0-9_-] id are proposals (CT-IDS defines no usage event prefix). Per-type qty caps and the 31-day window are lane choices. Contract text says Role 'device', so API-key principals are rejected.
+- **B075**: CONTRACT GAP: the usage/summary response shape is not specified; the shape above mirrors the entitlement `limits`/`usage`/`warnings` fields. 'ent' claim refresh happens through rev bumps. Warnings in the contract only name 80 percent explicitly, 100 percent is added as a quota_reached signal by B076; this lane records both crossings but only 80 appears in warnings[] if product prefers (open question).
+- **B076**: CONTRACT GAP: no `notice` level mapping is given for usage_warning/quota_reached; chosen `warn` and `error`.
+- **B077**: CONTRACT GAP: no Invoice response schema and no invoice id prefix exist in CT-IDS or schemas; the shape above is provisional and the id is the opaque Stripe invoice id until a Contract PR defines both.
+- **B077**: CONTRACT GAP: the REST table lists the role for invoices as owner/billing while CT-RBAC lists owner, admin and billing for 'View billing, invoices'; this lane follows the CT-RBAC matrix through the B021 engine. There are no separate tax endpoints in the contract; tax information is carried inside the invoice object.
+- **B078**: CONTRACT GAP: CT-NOTIF-PAYLOAD has category `billing_issue` but no param vocabulary; this lane uses `params: {kind: 'payment_failed'}` only if the registry allows it, otherwise empty params. The `SessionEnder` adapter needs the session lifecycle service (B053), which is not in this lane's depends_on; wire it at integration time. Retry counts of Stripe itself are not part of the contract.
+- **B079**: CONTRACT GAP: the error registry has no coupon-specific codes; use the registry's generic validation error for 422 and add specific codes via a Contract PR if product wants them.
+- **B079**: CONTRACT GAP: the success response body of coupon redeem is not specified; the subscription summary is assumed.
+- **B079**: CONTRACT GAP: no notification category for 'trial ending'; this lane sends email only.
+- **B081**: CONTRACT GAP: the contract names no event type for `POST /v1/webhooks/{id}/test`; this lane sends the first subscribed event type with synthetic ids in `data` and a `Centcom-Event-Type` header of that type (to be confirmed by Contract PR).
+- **B081**: CONTRACT GAP: the body `id` is documented as `dlv_` while the header is `Centcom-Event-Id`; both carry the delivery id here. SPLIT? Management API and delivery engine could be two lanes if schedule slips. Deliverable log retention is 30 days (assumption, enforced by B090).
+- **B082**: CONTRACT GAP: no audit event schema, no `exp_` id prefix in CT-IDS, and no stable action-name catalogue exist; the shape above is provisional and `exp_`-style ids are generated with the `exp` prefix pending a Contract PR. The emitter (B036) owns the canonical column set; this lane reads it.
+- **B082**: CONTRACT GAP: audit_log_days = 0 denial code is an `entitlement_*` code not named in the contracts.
+- **B083**: CONTRACT GAP: how an anonymous client is bucketed for percentage rollouts is unspecified; anonymous callers are not bucketed (only 0 %/100 % public flags). Flag key naming convention is not in a contract; `[a-z0-9_.-]{1,64}` is used.
+- **B086**: CONTRACT GAP: incident `status` values other than `investigating` (e.g. identified, monitoring, resolved) and the `inc_` id prefix are not defined; this lane uses `investigating|identified|monitoring|resolved` provisionally and consumers must tolerate unknown values (CT-VER robustness rule). This lane covers the API app; the relay's own liveness endpoints belong to B037.
+- **B087**: CONTRACT GAP: the `admin` scope is declared 'internal only' in CT-AUTH but nothing defines how it is issued; this lane assumes an internal IdP/allow-listed login produces it, tracked as an operational decision. Admin routes are not part of any public contract and are excluded from the OpenAPI document. `implements` is empty because the internal API realises no wire contract.
+- **B089**: CONTRACT GAP: the REST contracts define no search endpoint; this lane is internal tooling and the `member` scope function is prepared but not exposed publicly. The lane depends on B054 only; wiring the plugin into the admin listener happens in the composition root edited by the admin API lane (one-line registration).
+- **B091**: CONTRACT GAP: relay WebSocket URL and path are not defined by any contract; the `relay_urls` output is the only place it appears and clients must receive it via the session-create 'region hint'.
+- **B097**: CONTRACT GAP: the relay's WebSocket URL/path is not specified in any contract; the WAF module takes it as the variable `ws_path_regex`. The security-header test must also be run against the relay's HTTP upgrade response, which the relay lane owns. This lane's scripts live in `infra/security/` because the backend layout has no `tools/` directory.
+- **B098**: CONTRACT GAP: none for content, but CT-CRYPTO is client-implemented and consumed here only as a trust assumption (relay never sees plaintext).
+- **B099**: CONTRACT GAP: no contract defines the deletion log; this lane assumes the account deletion lane (B026) writes a durable, restorable log (e.g. a `deletion_log` table outside normal purge) and exposes a read function; confirm the table name with that owner. History frames are ciphertext, so restoring them leaks nothing new, but deleted workspaces' blobs must also be re-purged using the same replay mechanism.
+- **C014**: CONTRACT GAP: CT-STATE-MAP says which categories travel as `agent.state` but the 'outcome (agent-level)' wording does not list which of celebrate, ci-*, pr-* count; this lane emits only success, error, crash, warning, tests-pass, tests-fail, merge-conflict, deploying (when a hint is given) and saving. `context-full` is under 'limits' (client-local) so it is surfaced as a local UI state, not on the wire. Event schema `agent.state.since` semantics ('state started at') assumed.
+- **C015**: CONTRACT GAP: delegation mechanism (who is a delegated approver, how the client learns it). Implemented conservatively as: host always; `any_editor` honoured only if the session policy says so. SPLIT? engine vs approval broker could be separate PRs.
+- **C018**: CONTRACT GAP: encoding of `path_hmac` (base64url vs hex) is only constrained by the schema pattern `^[A-Za-z0-9_-]+$`; base64url without padding is used. Per-epoch rehash on key rotation is assumed by the client.
+- **C026**: CONTRACT GAP: none; the local log format is client-private. SPLIT? Not needed if the picker UI stays out of scope.
+- **C028**: CONTRACT GAP: no contract defines model ids or prices; the catalog is client data and its values must be filled from the provider's published list at implementation time. Sub-agent model override depends on lane C024's spawn options.
+- **C029**: CONTRACT GAP: CT-API-USAGE does not state the format of the event `id` (only that it dedupes); this lane uses a monotonic ULID without prefix. Free LAN usage is also counted locally but never uploaded unless a later lane decides otherwise.
+- **C037**: CONTRACT GAP: `diff.share` secret payload defines `files` as an array of unspecified objects (and an optional `blob`). This lane assumes entries like `{path, patch}` and degrades if the shape differs; the session lane that produces them must document the shape in a contract clarification.
+- **C038**: CONTRACT GAP: `approval.decision` carries no field for an edited command; edit is therefore only possible when the approver is the machine running the agent, and the edited command stays local. Scope `session` has no key in DESIGN §10.1.4; it is reachable only from the rules UI (not part of v1 keys).
+- **C050**: CONTRACT GAP: CT-ERR defines no process exit codes; the table here is a client-local convention and must be documented in the README and docs. Mapping rule suggestions: 401 -> 4, 403 -> 3 only for tool permissions (API 403 `forbidden` -> 1), 429 -> 5, 5xx/offline -> 6. Print-mode resume/continue is deferred until lane C026 can be a dependency; `--allow` rule syntax is owned by lane C015.
+- **C051**: CONTRACT GAP: the error code for an expired/invalid pagination cursor is not named in CT-PAGE; handled as a generic 4xx until errors.json says otherwise.
+- **C052**: CONTRACT GAP: whether POST /v1/auth/token takes form-encoded (RFC 8628) or JSON bodies is only defined by openapi.yaml; follow it.
+- **C054**: CONTRACT GAP: close code 4409 (superseded) is not in the contract's 'reconnect except' list but reconnecting would create a supersede loop; this card stops on 4409.
+- **C054**: CONTRACT GAP: for 4400 repeated reconnects the contract is silent; this card stops after 3 consecutive 4400 closes within 60 s (client defence).
+- **C055**: CONTRACT GAP: the pure ack frame is described as `{ack: n}`; this card sends `{v:1,t:'ack',sid,ack:n}` using the top-level `ack` field of the envelope.
+- **C063**: CONTRACT GAP: the contract does not state how frames queued under an old epoch must be treated after `rotate_key`; this card drops and notifies (conservative).
+- **C064**: CONTRACT GAP: the error codes for entitlement denials (`entitlement_*`) and the checkout request body fields (plan, seats, currency) live only in errors.json/openapi.yaml; the card follows those files. Quota behaviour at 100 % blocks only hosted work server-side; this lane only informs the UI.
+- **C065**: CONTRACT GAP: the format of usage event `id` is not given in CT-IDS (no prefix listed); this card uses a plain 26-char ULID. The contract also does not say whether the client should report `queue_items`/`relay_bytes`; this card does not (the relay records those).
+- **C068**: CONTRACT GAP: the exact byte string covered by the Ed25519 artifact signature (artifact bytes vs. hash vs. canonical manifest entry) must be stated by the schema/CT-API-RELEASES; this card assumes the signature covers the artifact SHA-256 digest bytes until clarified.
+- **C070**: CONTRACT GAP: the audit event object fields and the export job status values are defined only in openapi.yaml; the card assumes the table columns above map to `ts/actor/action/target/outcome`-like fields and must be reconciled with openapi.yaml.
+- **C073**: CONTRACT GAP: CT-LAN names CPace but not the ciphersuite id, domain-separation strings, channel-identifier concatenation order, the exact `ISK` derivation input or the confirmation MAC construction (BLAKE2b keyed vs HMAC); this card follows CPACE-RISTR255-SHA512 from the IRTF draft and needs fixtures in contracts/fixtures/lan/ to be pinned in a Contract PR. Also: libsodium-wrappers (non-sumo) may lack some ristretto255 helpers; confirm with lane C056 whether the sumo build is required.
+- **C078**: CONTRACT GAP: the schema does not define a frame that asks the holder to release a lock or lets a waiting agent 'take turns'; the actions are realised locally (queue order of the waiting agent) and via branch-off (new worktree through C017). No new event kinds are invented.
+- **C081**: CONTRACT GAP: redirect and CORS origin list for `centcom.dev` web origin versus `api.centcom.dev` is not in the contracts; assumed CORS with credentials allowed for the web origin on /v1/auth/token. Assumes packages/net exports are browser-safe (no node: imports); if not, request a browser entry from the owning lanes. DESIGN.md says high-contrast `data-theme="hc"` is planned; the theme switch reserves the value but ships dark/light/auto only.
+- **C082**: CONTRACT GAP: PKCE authorize does not carry `device_pubkeys`, so no `dev_` identity or key registration exists for browsers; E2E in the web app (C083/C084/C085) cannot sign frames until the contract defines web device registration.
+- **C082**: CONTRACT GAP: CT-AUTH says web refresh cookie is scoped to /v1/auth/token; the `authorization_code` response body shape (access token field names) is taken from RFC 6749.
+- **C083**: CONTRACT GAP: browsers have no registered device (see C082 notes), so signing frames and unsealing key.grant for a web device is undefined; until resolved the web client is receive-only for encrypted content it can obtain via a grant addressed to a registered web device. SPLIT? transcript renderer and queue UI could be two lanes; keep as L. Markdown renderer dependency must be justified (prefer marked + DOMPurify or micromark with no HTML).
+- **C088**: CONTRACT GAP: CT-DEEPLINK does not say how a fragment key `#k` is carried into the desktop handler; implemented conservatively: not carried (the desktop uses the key bundle or host grant). Fragment key naming mismatch: CT-CRYPTO calls the one-time invite key `I_x` whose private half is in `#k=`.
+- **C089**: CONTRACT GAP: `GET /v1/plans` response shape and price object are not detailed in the Markdown contract (only 'Public plans and prices'); the UI follows the OpenAPI document once present. The coupon redemption error codes are not enumerated.
+- **C091**: CONTRACT GAP: the audit event object fields and the delivery object fields are not enumerated in the Markdown contract; the UI renders a minimal subset (id `aud_`, actor, action, time) and tolerates others. The CT-WEBHOOKS table abbreviates `.joined / .left / .role_changed` suffixes; the picker uses the expanded 18 strings.
+- **C097**: CONTRACT GAP: there is no crash-report ingest endpoint or crash event type in the contracts (CT-TELEMETRY only allows `error.shown {code}`), so v1 crash reporting is local with manual sharing; if product wants upload, a Contract PR must add it. Kept at S: doctor checks are independent small functions; SPLIT? if more than ~14 checks are added.
+
+## Split candidates (27)
+
+Lanes whose authors think they may exceed their size. Split before starting if the owner agrees (new IDs go through a plan PR).
+
+- **B011**: SPLIT?
+- **B016**: SPLIT?
+- **B038**: SPLIT?
+- **B041**: SPLIT?
+- **B042**: SPLIT?
+- **B045**: SPLIT?
+- **B051**: Size L is appropriate; SPLIT?
+- **B052**: Size L is fair; SPLIT?
+- **B070**: SPLIT?
+- **B081**: SPLIT?
+- **B091**: SPLIT?
+- **B092**: SPLIT?
+- **B095**: SPLIT?
+- **B100**: SPLIT?
+- **C008**: SPLIT?
+- **C013**: SPLIT?
+- **C015**: SPLIT?
+- **C025**: If the catalogue grows beyond ~25 events consider splitting per area; keep names stable because C013/C014/C015/C018/C024 depend on them.
+- **C026**: SPLIT?
+- **C035**: SPLIT?
+- **C035**: Size is L; if over budget, split the slash-registry from the editing buffer.
+- **C036**: SPLIT?
+- **C051**: SPLIT?
+- **C057**: SPLIT?
+- **C075**: SPLIT?
+- **C083**: SPLIT?
+- **C097**: Kept at S: doctor checks are independent small functions; SPLIT?

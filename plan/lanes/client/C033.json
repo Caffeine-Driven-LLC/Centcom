@@ -1,0 +1,73 @@
+{
+  "id": "C033",
+  "title": "Half-block pixel renderer and Cento terminal component",
+  "plan": "client",
+  "phase": "P2 TUI",
+  "size": "M",
+  "role": "tui",
+  "depends_on": [
+    "C009",
+    "C032"
+  ],
+  "goal": "Render Cento's pixel animations in the terminal with the half-block technique at every colour tier, exposed as an Ink `<Cento>` component that respects frame durations, redraw budgets and the ASCII fallback.",
+  "scope_in": [
+    "Half-block renderer `renderHalfBlock(rows, palette, opts)` ported from assets/mascot/play.py: two vertical pixels per cell, `▀` with fg = top and bg = bottom, `▄` when only the bottom pixel is set, space when empty; odd row counts padded with a transparent row.",
+    "Recolour support for the five Cento colours using the `palmap` and friend characters (`1`,`2`,`3`) in animations.json (violet, red, yellow, green, brown) so a crowd scene can mix colours.",
+    "Tier handling: truecolor 38;2/48;2 sequences, xterm-256 via `toXterm256` (lane C032) for tier 256, ASCII fallback for tier 16 and none or `unicode:false`.",
+    "ASCII Cento fallback (DESIGN §19.3): antenna `¡` line then face, frames idle `(•_•)`, happy `(^_^)`, thinking `(•_•?)`, error `(x_x)`, sleeping `(-_-)zZ`, working `(•_•)⌨`; ASCII-only variants `(o_o)` when unicode is off.",
+    "`<Cento animation color size playing onDone />` Ink component with a frame clock honouring each frame's `d` ms (80-500 ms), a per-animation frame cache of rendered ANSI strings, and lazy loading of animations.json by category from packages/mascot (lane C009).",
+    "Sizes: `hero` = full animation canvas (body 12x12 = 6 rows x 12 cols; canvases up to 14x15 px = 8 rows x 14 cols with props) and `mini` = 2 rows x 6 cols (DESIGN §3.7) produced by 2x box downsample of the body region only."
+  ],
+  "scope_out": [
+    "Choosing which animation plays for which state, dwell, caps and priorities (lane C046).",
+    "Where the mascot is placed in layouts (callers in lanes C034, C036, C048).",
+    "Reduced-motion substitution logic (lane C049 sets a `motion` context this component reads).",
+    "Creating or editing animation data (assets/mascot is the source of truth; lane C009 packages it)."
+  ],
+  "implements": [],
+  "consumes": [],
+  "build_against": "animations.json and `palmap` from assets/mascot via packages/mascot (lane C009); Python reference output from `python3 assets/mascot/play.py <name>` captured once into golden files under packages/tui/test/golden/pixel/.",
+  "deliverables": [
+    "packages/tui/src/pixel/",
+    "packages/tui/src/pixel/README.md",
+    "packages/tui/test/golden/pixel/"
+  ],
+  "interfaces": [
+    "`renderHalfBlock(rows: string[], palette: Record<string,[number,number,number]>, opts: {tier: ColorTier; recolor?: (ch: string) => string}): string[]`",
+    "`type CentoSize = 'hero' | 'mini'`; `type CentoColor = 'violet'|'red'|'yellow'|'green'|'brown'`",
+    "`<Cento animation: string; color?: CentoColor; size?: CentoSize; playing?: boolean; loop?: boolean; onDone?: () => void />`",
+    "`asciiCento(animation: string, unicode: boolean): string[]`",
+    "`createFrameCache(loader: AnimationLoader): { lines(animation: string, frame: number, color: CentoColor, tier: ColorTier): string[] }`"
+  ],
+  "acceptance": [
+    "For 10 animations (`idle_breathe`, `thinking`, `error`, `celebrate`, `sleeping`, `reading_file`, `permission_prompt`, `tests_passing`, `crash`, `first_run_welcome`) the truecolor output is byte-identical to the Python `play.py` render for frame 0 and the last frame (golden files).",
+    "`idle_breathe` renders to 8 rows x 14 columns (canvas 14x15 px) and the Cento body occupies 6 rows x 12 columns; the `mini` size renders in exactly 2 rows x 6 columns.",
+    "Tier 256 output contains no `38;2` sequences; tier 16 and none output contains no ANSI colour sequences and uses `asciiCento`.",
+    "Frame advance honours each frame's `d`: with a fake clock, a 450 ms frame stays 450 ms (+/-10 ms) and the component never re-renders faster than the current frame's duration.",
+    "Rendering one frame from cache takes under 2 ms at p95 on the CI runner over 1,000 iterations (DESIGN §19.6 budget); the first uncached render is allowed 10 ms.",
+    "At most 6 `<Cento>` components animate concurrently; the 7th and later hold on their first frame until a slot frees (enforced by a shared `AnimationBudget`).",
+    "`playing={false}` or the motion context `reduced` renders a single static frame (the last frame for one-shots, frame 0 for loops) and starts no timers.",
+    "Unmounting clears the timer and leaves no pending callbacks (leak test)."
+  ],
+  "tests": [
+    "pixel/golden.test.ts: byte comparison with play.py renders.",
+    "pixel/tiers.test.ts: 256 quantisation, 16/none fallback, unicode off.",
+    "pixel/clock.test.ts: frame timing, cache hits, unmount cleanup.",
+    "pixel/budget.test.ts: concurrent animation cap of 6; render time benchmark guard.",
+    "pixel/recolor.test.ts: five colours and mixed crowd friend chars."
+  ],
+  "guardrails": [
+    "MUST NOT draw the mascot inside tool results, diffs or code blocks (DESIGN §10.1.9); the component refuses to render when a `noMascot` context flag is set by those containers.",
+    "MUST NOT redraw faster than the frame duration and MUST NOT clear the whole screen; update only the component's own rows (Ink diffing) per DESIGN §19.3.",
+    "MUST NOT add pixels, highlights or colours to the sprites; render exactly what animations.json defines (DESIGN §3.4).",
+    "MUST NOT block the render loop: animation JSON is loaded lazily by category and parsing happens once, off the hot path.",
+    "MUST treat an unknown animation name as `idle_breathe` and log once at debug; never throw during render.",
+    "Antenna tip mint (`glow-400`) and body colours MUST come from the animation palette even when the status colours use ANSI names (brand moment)."
+  ],
+  "failure_modes": [
+    "animations.json fails to load -> render the ASCII fallback for the requested state and log once at warn.",
+    "Terminal narrower than the sprite (cols < 14) -> render nothing (caller should already have hidden it via `mascotAllowed`)."
+  ],
+  "unblocks_gate": null,
+  "notes": "The `mini` 2x6 size in DESIGN §3.7 has no dedicated sprite set in animations.json; this card produces it by box downsampling the 12x12 body. If design wants hand-drawn mini sprites, that is a new asset task. Palette keys beyond B D H S T P are in `DATA['palette']`."
+}

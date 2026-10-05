@@ -1,0 +1,76 @@
+{
+  "note": "Known-answer vectors for CT-CRYPTO. Fixed test keys; NEVER use these keys anywhere real.",
+  "contract_version": "1.0.0",
+  "keys": {
+    "session_key_k1": "nnUTcdCUpcohUCbyliGRlNttogkU_lDf6dmMd0Ghlow",
+    "device_ed25519_public": "wMdAEL50IG_yO7Ed0v57eE_zpg6A3t5HLSWZayPKva8",
+    "device_x25519_public": "2w6drXxWqm4jp8YdN3EWmeHEpm-03DJErYrMhE5hJzg",
+    "path_mac_key": "nm2_d7qyqpAZwpFBM0gwwQYMSBN3mrstOeIFTQR1kks"
+  },
+  "derivations": {
+    "path_mac_key": "BLAKE2b-256(key=K[e], data=\"centcom.pathmac.v1\")",
+    "path_hmac": "b64url(BLAKE2b-256(key=K_p, data=utf8(path)))",
+    "fingerprint": "first 12 chars of base32_rfc4648(BLAKE2b-256(D_x||D_s)), grouped 4-4-4"
+  },
+  "xchacha20poly1305": {
+    "key": "nnUTcdCUpcohUCbyliGRlNttogkU_lDf6dmMd0Ghlow",
+    "nonce": "snUFRaptHBWI36QfYKpzY3KZaTatgR3C",
+    "aad_header": {
+      "v": 1,
+      "t": "event",
+      "id": "msg_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+      "sid": "ses_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+      "from_dev": "dev_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+      "k": "message.user",
+      "kid": "k1"
+    },
+    "aad_jcs": "{\"from_dev\":\"dev_01JA3Z8K2M5N7P9Q0R1S2T3V4W\",\"id\":\"msg_01JA3Z8K2M5N7P9Q0R1S2T3V4W\",\"k\":\"message.user\",\"kid\":\"k1\",\"sid\":\"ses_01JA3Z8K2M5N7P9Q0R1S2T3V4W\",\"t\":\"event\",\"v\":1}",
+    "plaintext_jcs": "{\"text\":\"add retry logic to the relay client\"}",
+    "ciphertext": "Uw24zKjuhAH8pJTPMI1i2DztqSRwrhpnpCp1qF8pMlt-p56zpoOdY0i5t3xg0dt_ewToTVVp9GyZz1iwEDE"
+  },
+  "frame_signature": {
+    "signed_input_jcs": "{\"c\":\"Uw24zKjuhAH8pJTPMI1i2DztqSRwrhpnpCp1qF8pMlt-p56zpoOdY0i5t3xg0dt_ewToTVVp9GyZz1iwEDE\",\"from_dev\":\"dev_01JA3Z8K2M5N7P9Q0R1S2T3V4W\",\"id\":\"msg_01JA3Z8K2M5N7P9Q0R1S2T3V4W\",\"k\":\"message.user\",\"kid\":\"k1\",\"n\":\"snUFRaptHBWI36QfYKpzY3KZaTatgR3C\",\"sid\":\"ses_01JA3Z8K2M5N7P9Q0R1S2T3V4W\",\"t\":\"event\",\"v\":1}",
+    "signature": "x0Wr5kL1jxcmL_oD-fgMud5bEO52w1gvjSDsE3TrcxLjqrdq62VEXnek6T-1NvgdqFW92FQEO8YDCCq5c--CAw"
+  },
+  "path_hmac": [
+    {
+      "path": "src/relay/client.ts",
+      "hmac": "WXOG4R5vDayOl5MGH6iMorViUFhXPh-oEB44l6HXFp4"
+    },
+    {
+      "path": "README.md",
+      "hmac": "4Y0ltzAWuDj9YVbzmkm1nRgZq2nRIgU4I62Pud4txCg"
+    },
+    {
+      "path": "src/\u00fcn\u00ef/\u043a\u043b\u044e\u0447.ts",
+      "hmac": "ge-QtjDSTnhs4VMYaUN76X2i8BJj_0cveJg74jR8hrw"
+    }
+  ],
+  "fingerprint": "TV2Q-DT6H-VGRO",
+  "negative": [
+    {
+      "name": "flipped ciphertext bit",
+      "must": "fail AEAD authentication",
+      "ciphertext": "Ug24zKjuhAH8pJTPMI1i2DztqSRwrhpnpCp1qF8pMlt-p56zpoOdY0i5t3xg0dt_ewToTVVp9GyZz1iwEDE"
+    },
+    {
+      "name": "wrong aad (kid changed)",
+      "must": "fail AEAD authentication",
+      "aad_header": {
+        "v": 1,
+        "t": "event",
+        "id": "msg_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+        "sid": "ses_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+        "from_dev": "dev_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+        "k": "message.user",
+        "kid": "k2"
+      }
+    },
+    {
+      "name": "tampered signature",
+      "must": "fail Ed25519 verification",
+      "signature": "xkWr5kL1jxcmL_oD-fgMud5bEO52w1gvjSDsE3TrcxLjqrdq62VEXnek6T-1NvgdqFW92FQEO8YDCCq5c--CAw"
+    }
+  ],
+  "sealed_box": "crypto_box_seal output is randomised; implementations check structure (48-byte overhead = 32-byte ephemeral key + 16-byte MAC) and round-trip, not bytes."
+}

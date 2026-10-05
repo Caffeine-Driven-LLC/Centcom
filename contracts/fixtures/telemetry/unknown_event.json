@@ -1,0 +1,14 @@
+{
+  "schema": "telemetry.schema.json",
+  "valid": false,
+  "note": "content-ish events are not allowed",
+  "data": {
+    "install_id": "01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+    "events": [
+      {
+        "type": "prompt.sent",
+        "at": "2026-10-05T18:07:41.123Z"
+      }
+    ]
+  }
+}

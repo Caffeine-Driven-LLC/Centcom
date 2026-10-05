@@ -1,0 +1,70 @@
+{
+  "id": "C043",
+  "title": "Task list and progress components",
+  "plan": "client",
+  "phase": "P2 TUI",
+  "size": "S",
+  "role": "tui",
+  "depends_on": [
+    "C034"
+  ],
+  "goal": "Provide small, reusable task-list and progress components so any lane can show what an agent plans to do and how far a long operation has got.",
+  "scope_in": [
+    "`<TaskList items maxRows />` for agent plan/todo items: glyphs `○` pending, `◐` in progress, `✓` done (ASCII `[ ]`, `[~]`, `[x]` without unicode), done items dimmed, in-progress item in `text.primary` bold; header `Tasks 3/7`.",
+    "Collapsing: show at most `maxRows` (default 10) with the in-progress item always visible and a final row `⋯ +4 more`; toggled by action `tasks.toggle` (`ctrl+t`) as a panel above the prompt, remembered per session.",
+    "`<ProgressBar>` determinate `▕████████░░░░▏ 62 %` using `█` and `░` (coloured `signal` on `border.subtle`), width-adaptive (min 10 cells, label never truncated before the bar), always with a label of what is progressing.",
+    "Indeterminate bar: sliding 6-cell block `▏░░▓▓▓░░░░▕` advancing one cell every 80 ms; in reduced motion it is a static bar with the label plus `…`.",
+    "`useProgress` helper exposing `{value, label}` from bus events of the form `{type:'progress', id, value, total?, label}`.",
+    "Task update intake: `reduceTasks(state, update)` for a `TaskUpdate = {tasks: {id, text, status}[]}` supplied by the agent runner (replace-all semantics, order preserved)."
+  ],
+  "scope_out": [
+    "Emitting task updates from the agent (lane C013 / C014 wiring).",
+    "Fleet list of agents (lane C042).",
+    "Spinner line (lane C040).",
+    "Web progress components."
+  ],
+  "implements": [],
+  "consumes": [],
+  "build_against": "Pure component tests with prop fixtures and the pty/TUI snapshot tester from lane C008 (ink-testing-library plus pty harness, frames captured at 80x24 and 120x40). No backend is needed; any session data comes from contracts/fixtures/events/*.json or hand-built typed values from @centcom/protocol (lane C003).",
+  "deliverables": [
+    "packages/tui/src/tasks/",
+    "packages/tui/src/tasks/README.md"
+  ],
+  "interfaces": [
+    "`<TaskList items: TaskItem[]; maxRows?: number; width: number; title?: string />`; `type TaskItem = {id: string; text: string; status: 'pending'|'in_progress'|'completed'}`",
+    "`<ProgressBar value?: number /*0..1, undefined = indeterminate*/; label: string; width: number; motion?: 'full'|'reduced' />`",
+    "`reduceTasks(state: TaskState, update: TaskUpdate): TaskState`; `useProgress(bus: EventBus, id: string): {value?: number; label: string}`",
+    "`renderBar(value: number, cells: number): string` pure function",
+    "Action id `tasks.toggle` (default `ctrl+t`)."
+  ],
+  "acceptance": [
+    "`renderBar(0.62, 12)` returns 7 filled cells (7.44 rounded) so the full determinate line equals `▕███████░░░░░▏ 62 %`; 0 and 1 render all empty / all filled with `0 %` and `100 %`.",
+    "Indeterminate: over 10 ticks of 80 ms the 6-cell block moves one cell each tick and bounces at both ends; the string width is constant at 12 cells.",
+    "With 12 tasks and `maxRows=10` where task 11 is in progress, the in-progress task is visible and the list ends with `⋯ +N more` where N is the number hidden; list never exceeds `maxRows + 2` rows including header and footer.",
+    "Task text longer than the width is truncated with `…`; it is never wrapped onto a second row.",
+    "Under `NO_COLOR` and `unicode:false` the list uses `[ ] [~] [x]` and the bar uses `#` and `-` with brackets `[##########----] 62 %`.",
+    "Status unknown (`status:'blocked'`) renders as pending and does not throw.",
+    "`ProgressBar` without a label is a TypeScript compile error and a runtime dev warning; value outside 0..1 is clamped.",
+    "Unmounting clears the 80 ms timer (leak test)."
+  ],
+  "tests": [
+    "tasks/bar.test.ts: renderBar table incl. rounding and clamping.",
+    "tasks/indeterminate.test.ts: fake timers, bounce, reduced motion.",
+    "tasks/list.test.ts: collapse rules, truncation, glyph fallbacks.",
+    "tasks/reducer.test.ts: replace-all, order.",
+    "tasks/render.test.ts: snapshots 80x24, NO_COLOR, light."
+  ],
+  "guardrails": [
+    "MUST always render a label with a progress bar (DESIGN §10.1.7).",
+    "MUST NOT convey status by colour only; glyph and dim/bold differences are required.",
+    "MUST sanitise task text (it comes from model output) before rendering.",
+    "MUST cap items at 200 and update batching at one render per 80 ms.",
+    "MUST NOT animate in reduced-motion or non-TTY output."
+  ],
+  "failure_modes": [
+    "`total` of 0 in progress events -> treat as indeterminate.",
+    "Task update with duplicate ids -> keep the last, log at debug."
+  ],
+  "unblocks_gate": null,
+  "notes": "Task data source (todo tool events) is not defined by the contracts because the local agent's todo state is not a wire event; wiring is a runner concern. If tasks must be shared across members later, that needs a contract change."
+}

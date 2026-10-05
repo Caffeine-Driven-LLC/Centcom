@@ -1,0 +1,345 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://centcom.dev/contracts/envelope.schema.json",
+  "title": "WebSocket frame envelope - CT-WS-ENVELOPE",
+  "type": "object",
+  "required": [
+    "v",
+    "t"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "t": {
+      "enum": [
+        "sys.hello",
+        "sys.welcome",
+        "sys.ping",
+        "sys.pong",
+        "sys.error",
+        "sys.slow_down",
+        "sys.notice",
+        "sys.resume",
+        "sys.resumed",
+        "sys.bye",
+        "event",
+        "queue",
+        "control",
+        "presence",
+        "ack"
+      ]
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "sid": {
+      "type": "string",
+      "pattern": "^ses_[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "from": {
+      "type": "string",
+      "pattern": "^(mem_[0-9A-HJKMNP-TV-Z]{26}|srv)$"
+    },
+    "ts": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "ack": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "ref": {
+      "type": "string",
+      "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "k": {
+      "type": "string",
+      "pattern": "^[a-z_]+(\\.[a-z_]+)*$",
+      "maxLength": 64
+    },
+    "p": {
+      "type": "object"
+    },
+    "ct": {
+      "type": "object",
+      "required": [
+        "alg",
+        "kid",
+        "n",
+        "c"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "alg": {
+          "const": "xchacha20poly1305"
+        },
+        "kid": {
+          "type": "string",
+          "pattern": "^k[0-9]+$"
+        },
+        "n": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{32}$"
+        },
+        "c": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]+$"
+        }
+      }
+    },
+    "sig": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{86}$|^AAAA$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "t": {
+            "enum": [
+              "event",
+              "queue",
+              "control",
+              "presence"
+            ]
+          }
+        },
+        "required": [
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "k",
+          "sid"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "t": {
+            "enum": [
+              "event",
+              "queue",
+              "control"
+            ]
+          }
+        },
+        "required": [
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "ct"
+        ]
+      },
+      "then": {
+        "required": [
+          "sig"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "t": {
+            "const": "sys.hello"
+          }
+        },
+        "required": [
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p"
+        ],
+        "properties": {
+          "p": {
+            "type": "object",
+            "required": [
+              "protocols",
+              "ticket",
+              "client"
+            ],
+            "properties": {
+              "protocols": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 1
+              },
+              "caps": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "ticket": {
+                "type": "string",
+                "minLength": 10
+              },
+              "last_seq": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "client": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "version"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "string"
+                  },
+                  "contract": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "t": {
+            "const": "sys.welcome"
+          }
+        },
+        "required": [
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p"
+        ],
+        "properties": {
+          "p": {
+            "type": "object",
+            "required": [
+              "protocol",
+              "member",
+              "heartbeat",
+              "limits"
+            ],
+            "properties": {
+              "protocol": {
+                "const": 1
+              },
+              "caps": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "member": {
+                "type": "object",
+                "required": [
+                  "id",
+                  "name",
+                  "slot",
+                  "role"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^mem_[0-9A-HJKMNP-TV-Z]{26}$"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "slot": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "role": {
+                    "enum": [
+                      "host",
+                      "editor",
+                      "viewer"
+                    ]
+                  }
+                }
+              },
+              "roster_v": {
+                "type": "integer"
+              },
+              "server_time": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "heartbeat": {
+                "type": "object",
+                "required": [
+                  "ping_ms",
+                  "dead_ms"
+                ],
+                "properties": {
+                  "ping_ms": {
+                    "type": "integer"
+                  },
+                  "dead_ms": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "limits": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "t": {
+            "const": "sys.error"
+          }
+        },
+        "required": [
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p"
+        ],
+        "properties": {
+          "p": {
+            "$ref": "problem.schema.json"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,76 @@
+{
+  "id": "B089",
+  "title": "Metadata search across sessions and members",
+  "plan": "backend",
+  "phase": "P6 Platform",
+  "size": "S",
+  "role": "data",
+  "depends_on": [
+    "B054"
+  ],
+  "goal": "Provide fast, privacy-safe metadata search across sessions, members, workspaces and users for staff tooling, using only cleartext metadata and never any session content.",
+  "scope_in": [
+    "Search service `searchMetadata(q, filter, page)` over: session names, session ids, workspace names/slugs, user display names and emails, member display names within a workspace.",
+    "Postgres indexes (`pg_trgm` GIN on lower-cased name columns, btree on ids and email) added by migration; no separate search engine.",
+    "Query handling: NFC normalisation, lower-casing, min length 2 chars, id-prefix detection (`ses_`, `wsp_`, `usr_`, `mem_`) for exact lookups, ranking by trigram similarity then recency.",
+    "Route plugin `searchPlugin` registering `GET /search?q=&type=&workspace=&limit=&cursor=` intended for the internal admin listener, using the `requireStaff` preHandler supplied by the composition root; and a workspace-scoped function variant for future member-facing use (membership checked through the RBAC engine).",
+    "CT-PAGE cursor pagination with `limit` 1..50 (default 20)."
+  ],
+  "scope_out": [
+    "Any search over message text, queue bodies, code, diffs, paths, branch names, comments or history (impossible: ciphertext only).",
+    "Admin authentication and mounting (B087); public search endpoints (not in the contracts).",
+    "Full-text engines (OpenSearch, Typesense) and background reindexing."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-RBAC",
+    "CT-PAGE",
+    "CT-IDS",
+    "CT-API-SESSIONS",
+    "CT-ERR",
+    "CT-WS-SESSION-EVENTS"
+  ],
+  "build_against": "Postgres container seeded by the testkit factories with 100 000 sessions, 50 000 users and 10 000 workspaces; staff preHandler replaced with a test double.",
+  "deliverables": [
+    "apps/api/src/modules/search/",
+    "packages/db/migrations/089_search_indexes.sql",
+    "docs/platform/metadata-search.md"
+  ],
+  "interfaces": [
+    "`searchMetadata(input: {q: string; types?: ('session'|'workspace'|'user'|'member')[]; workspaceId?: string; scope: {kind: 'staff'} | {kind: 'member'; userId: string}; limit?: number; cursor?: string}): Promise<{data: SearchHit[]; next_cursor: string|null; has_more: boolean}>`.",
+    "`type SearchHit = {type: 'session'|'workspace'|'user'|'member'; id: string; label: string; workspace_id: string|null; created_at: string; score: number}`.",
+    "Fastify plugin `searchPlugin(opts: {requireAccess: preHandler})` mounting `GET /search`.",
+    "Indexes `idx_sessions_name_trgm`, `idx_workspaces_name_trgm`, `idx_users_display_trgm`, `idx_users_email_lower`."
+  ],
+  "acceptance": [
+    "With 100 000 sessions, a trigram query returns the first page in <= 100 ms p95 and uses an index scan (asserted by EXPLAIN).",
+    "Searching a full id (`ses_...`) returns exactly that session first; a query shorter than 2 characters returns 422 with pointer `/q`.",
+    "In `member` scope, results contain only entities in workspaces where the user has a membership; a query matching another workspace's session name returns zero hits for that user.",
+    "Email search is available only in `staff` scope; in `member` scope the email column is neither searched nor returned.",
+    "Searching for a string that exists only inside a (test) ciphertext blob or a branch-like name returns nothing, because those columns are not indexed or readable (schema scan test over index definitions).",
+    "Pagination yields each hit exactly once across pages while rows are inserted; cursor bound to the query (different `q` -> 400).",
+    "Query is parameterised: input `'; drop table users; --` and LIKE wildcards `%`/`_` return normal (empty) results without error."
+  ],
+  "tests": [
+    "unit: normalisation, id-prefix detection, escaping of LIKE metacharacters.",
+    "integration with seeded Postgres: ranking, pagination, scope isolation.",
+    "EXPLAIN performance tests.",
+    "authz test: member scope isolation across workspaces.",
+    "privacy test: introspect index definitions and queried columns against an allow-list.",
+    "failure-path: statement timeout (2 s) returns 503 `retry_after_s`."
+  ],
+  "guardrails": [
+    "MUST only read cleartext metadata columns on an allow-list in code (`SEARCHABLE_COLUMNS`); adding a column requires review.",
+    "MUST NOT index or return content-bearing data; session names are user-chosen cleartext metadata and are searchable, nothing from `ct` is ever read.",
+    "MUST enforce tenant scoping in SQL for `member` scope and MUST NOT rely on post-filtering.",
+    "MUST set a 2 s statement timeout and cap `limit` at 50 to prevent expensive scans.",
+    "MUST NOT log the query string `q` (it may be a personal name or email); log only length and type filters."
+  ],
+  "failure_modes": [
+    "Trigram extension missing -> migration fails fast; service refuses to start with a clear error.",
+    "Very common short trigram query -> bounded by limit and timeout, returns partial page with `has_more`.",
+    "Deleted/ended entities -> still searchable by staff within retention, flagged `ended` in the label."
+  ],
+  "unblocks_gate": "G6",
+  "notes": "CONTRACT GAP: the REST contracts define no search endpoint; this lane is internal tooling and the `member` scope function is prepared but not exposed publicly. The lane depends on B054 only; wiring the plugin into the admin listener happens in the composition root edited by the admin API lane (one-line registration)."
+}

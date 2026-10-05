@@ -1,0 +1,28 @@
+{
+  "background": "#07091A",
+  "foreground": "#E6EBFF",
+  "cursor": "#3DF2C8",
+  "cursor_text": "#07091A",
+  "selection_bg": "#2A3568",
+  "selection_fg": "#F3F6FF",
+  "normal": [
+    "#0B1026",
+    "#FF5C5C",
+    "#4ADE80",
+    "#FFD166",
+    "#5AA9FF",
+    "#A892FF",
+    "#3DF2C8",
+    "#A9B6E8"
+  ],
+  "bright": [
+    "#3D4A85",
+    "#FF8A8A",
+    "#86EFAC",
+    "#FFE29A",
+    "#9FD0FF",
+    "#C3B3FF",
+    "#8CF8E0",
+    "#E6EBFF"
+  ]
+}

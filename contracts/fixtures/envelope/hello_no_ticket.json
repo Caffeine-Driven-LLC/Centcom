@@ -1,0 +1,18 @@
+{
+  "schema": "envelope.schema.json",
+  "valid": false,
+  "note": "ticket required",
+  "data": {
+    "v": 1,
+    "t": "sys.hello",
+    "p": {
+      "protocols": [
+        1
+      ],
+      "client": {
+        "name": "x",
+        "version": "1"
+      }
+    }
+  }
+}

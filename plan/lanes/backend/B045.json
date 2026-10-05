@@ -1,0 +1,76 @@
+{
+  "id": "B045",
+  "title": "Cross-node routing over pub/sub (multi-instance relay)",
+  "plan": "backend",
+  "phase": "P3 Relay",
+  "size": "L",
+  "role": "realtime",
+  "depends_on": [
+    "B009",
+    "B044"
+  ],
+  "goal": "Make the relay horizontally scalable: nodes sharing a session exchange sequenced frames, ephemeral frames and control commands over Redis pub/sub while preserving per-session `seq` order for every client.",
+  "scope_in": [
+    "`ClusterDispatcher` implementing `RemoteDispatcher` (B044): publishes each sequenced frame to `relay:{sid}:frames`; ephemeral (presence) frames to `relay:{sid}:eph`.",
+    "Node subscription lifecycle: subscribe to a session's channels when the first local connection joins its room and unsubscribe 30 s after the last leaves.",
+    "Receiver: ignore own `node` id, feed frames into B044 `OrderedRelease`, fill gaps from `SeqStore.range` after 250 ms, de-duplicate by `seq`.",
+    "Cross-node control channel `relay:member:{mid}:ctl`: commands `close {code}` and `bye {reason}` so supersede (4409), membership revocation (4403) and kick work for connections on other nodes.",
+    "Node identity (`RELAY_NODE_ID`, default random ULID), heartbeat key `relay:node:{id}` TTL 15 s for diagnostics, metrics for publish/receive/lag."
+  ],
+  "scope_out": [
+    "Sequencing atomicity itself (B041 does it in Redis, node-independent).",
+    "Presence aggregation (B047), key grants (B049).",
+    "Session-to-region placement, DNS, Fly regions (infra lanes); cross-region replication (v1 sessions live in one region)."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-WS-ENVELOPE",
+    "CT-WS-SESSION-EVENTS",
+    "CT-ERR"
+  ],
+  "build_against": "The mock client simulator from B011 (scripted fake clients speaking the WS protocol), the in-memory B009 KV/pub-sub implementations, and the frame fixtures in contracts/fixtures/events/; no real client is needed. Two or three `RelayContext` instances are started in one test process sharing one in-memory (or container) Redis pub/sub; the simulator connects clients to different nodes.",
+  "deliverables": [
+    "apps/relay/src/cluster/",
+    "apps/relay/src/cluster/module.ts",
+    "apps/relay/src/cluster/README.md"
+  ],
+  "interfaces": [
+    "TS: `class ClusterDispatcher implements RemoteDispatcher { constructor(deps: { redis: RedisLike; nodeId: string; release: OrderedRelease; seq: SeqStore; clock: Clock }) }`",
+    "TS: `interface MemberControl { closeMember(memberId: string, cmd: { code: number; bye?: string }): Promise<void> }` (publishes on `relay:member:{mid}:ctl`; consumed by B043/B038 superseding).",
+    "Redis channels: `relay:{sid}:frames`, `relay:{sid}:eph`, `relay:member:{mid}:ctl`; message envelope `{node, sid, frame}` JSON.",
+    "TS: `export default relayModule: RelayModule` (order 60).",
+    "Env: `RELAY_NODE_ID`, `RELAY_CLUSTER_GAP_MS` (250), `RELAY_UNSUB_GRACE_MS` (30000)."
+  ],
+  "acceptance": [
+    "With members on node A and node B in one session, 1 000 frames sent from both sides arrive at every client in the same total `seq` order with no gap and no duplicate (3 runs, random delays injected into pub/sub delivery up to 50 ms).",
+    "A frame published but dropped from pub/sub to node B is recovered from the hot buffer within 250 ms + 50 ms and delivered in order.",
+    "Superseding a connection (same member + device) that lives on node A by connecting to node B closes the A connection with `sys.bye superseded` and 4409 within 500 ms.",
+    "A `removed` membership closes the member's connections on all nodes within 1 s.",
+    "A node with no local member of session S receives no messages for S after the 30 s unsubscribe grace (counted via subscription metrics).",
+    "Messages published by a node are not re-delivered to its own local connections a second time (own-node filter); a 5-node test shows each client receiving each frame exactly once.",
+    "Cross-node added latency p95 < 20 ms on the local Redis container for frames <= 4 KiB.",
+    "Killing node A mid-run: clients on node B continue; clients reconnecting to B resume with `last_seq` and see no loss."
+  ],
+  "tests": [
+    "cluster.order.test.ts: 3 nodes, random pub/sub delays and reordering, property test on per-client order.",
+    "cluster.gap-fill.test.ts: dropped messages recovered from SeqStore.range.",
+    "cluster.control.test.ts: supersede, revoke, kick across nodes.",
+    "cluster.subscription.test.ts: subscribe/unsubscribe lifecycle and grace.",
+    "cluster.failover.test.ts: node loss and resume.",
+    "cluster.load.test.ts: 5 nodes, 500 frames/s."
+  ],
+  "guardrails": [
+    "Redis pub/sub is lossy and unordered across publishers: receivers MUST NOT assume delivery or order and MUST reorder and gap-fill by `seq`; never invent a local seq.",
+    "Cross-node payloads MUST carry the frame exactly as stored (ciphertext opaque); channel messages are never logged and Redis traffic stays inside the private network with TLS.",
+    "Presence/ephemeral channel MUST NOT feed the hot buffer or durable log (never replayed, CT-WS-PRESENCE).",
+    "Control commands MUST originate from authenticated server code paths only; the channel must not be reachable from any client input.",
+    "Subscription to a session channel MUST happen only after local authorisation succeeded for a member of that session."
+  ],
+  "failure_modes": [
+    "Redis pub/sub connection drops -> resubscribe with backoff + jitter, then run gap-fill for every subscribed session before resuming ordered release.",
+    "Gap-fill range empty (frames trimmed) -> close the room's local connections with 1001 so clients resume via B042.",
+    "Publish fails for a frame -> the frame is already in the hot buffer; other nodes recover via gap-fill; increment `relay_cluster_publish_failed_total`."
+  ],
+  "unblocks_gate": "G3",
+  "notes": "`implements` is empty because no contract defines inter-node behaviour; behaviour is dictated by CT-WS-ENVELOPE ordering guarantees. RISK: Redis pub/sub throughput for large sessions; consider Redis Streams consumers if load tests (infra) show lag. SPLIT? size L: control channel could be a separate small lane."
+}

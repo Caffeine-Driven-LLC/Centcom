@@ -1,0 +1,74 @@
+{
+  "id": "C084",
+  "title": "Web fleet board",
+  "plan": "client",
+  "phase": "P5 Web",
+  "size": "M",
+  "role": "web",
+  "depends_on": [
+    "C062",
+    "C081"
+  ],
+  "goal": "Web users in branch mode see a live fleet board with one card per agent: owner colour, branch, state, locks and merge actions, ordered so the agents that need a human come first.",
+  "scope_in": [
+    "Route `/s/:sessionId/fleet` in apps/web/src/fleet/ rendering agent cards (DESIGN.md 10.2.3 Agent card): colour dot + initial, branch (middle-truncated), state text + glyph, elapsed time, 36 px mascot thumbnail for the running state, `glow-signal` for the running card only.",
+    "Data from `agent.spawn`, `agent.state`, `agent.exit`, `branch.update`, `file.lock`, `conflict.detected`, `diff.share` via the shared reducer (C076/C062).",
+    "Sort 'needs you first' (awaiting-approval, asking-question, merge-conflict, errors) following DESIGN.md 11.2 priority; filters by owner and state; compact density table view (28 px rows).",
+    "Branch graph summary per card: ahead/behind/dirty from `branch.update`; merge action buttons emit callbacks to the host-side owner via normal queue/control paths only (no new events).",
+    "Conflict banner and lock list reusing C078's semantics rendered in web components (implemented locally; no TUI import)."
+  ],
+  "scope_out": [
+    "Terminal fleet panel (C042) and TUI conflict UX (C078).",
+    "Fleet sync logic (C062).",
+    "Mascot player (C086) and presence roster (C085).",
+    "Executing merges (the owner's client does it)."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-WS-SESSION-EVENTS",
+    "CT-STATE-MAP",
+    "CT-WS-ENVELOPE",
+    "CT-CRYPTO",
+    "CT-RBAC"
+  ],
+  "build_against": "Mock backend (lane C007) scripted branch-mode session with 3 agents and lock/conflict events; fixtures from contracts/fixtures/events.",
+  "deliverables": [
+    "apps/web/src/fleet/",
+    "apps/web/test/fleet/"
+  ],
+  "interfaces": [
+    "Route: /s/:sessionId/fleet",
+    "export function FleetBoard(props: {agents: AgentView[]; locks: LockView[]; conflicts: ConflictView[]; density: 'comfortable'|'compact'; selfMember: MemberId}): JSX.Element",
+    "export function sortAgents(a: AgentView[]): AgentView[]  // DESIGN.md 11.2 priority then owner then spawn time",
+    "AgentView = {id: AgentId; owner: MemberId; mode: string; state: StateName|'working'; since: string; label?: string; branch?: string; git?: {head: string; ahead: number; behind: number; dirty: boolean}}"
+  ],
+  "acceptance": [
+    "With 16 agents (max_parallel_agents team default) the board renders in < 100 ms and only <= 6 mascots animate; the rest pause on first frame (DESIGN.md 19.6).",
+    "Cards re-order within one render when an agent enters awaiting-approval; the mascot state obeys the 600 ms minimum dwell and the 3-calls-in-2s collapse rule.",
+    "Unknown `agent.state.state` values display as 'working' (thinking class) and are logged at debug.",
+    "Each state has a glyph and a word in addition to colour; colour-blind simulation (3 types) test screenshots still distinguish approval, error and running.",
+    "Branch names and labels appear only after successful decrypt; before key arrival cards show `Agent 1`-style neutral labels.",
+    "Keyboard: Tab order follows visual order, Enter opens inspector, `j`/`k` moves between cards; hit target >= 32 px.",
+    "Under reduced motion no mascot animates and the running card has a static signal border (no glow pulse)."
+  ],
+  "tests": [
+    "fleet.sort.test.ts: priority table from DESIGN.md 11.2.",
+    "fleet.render.test.tsx: 16-card perf and budget on animated mascots.",
+    "fleet.states.a11y.test.tsx: text equivalents + axe.",
+    "fleet.unknown-state.test.ts.",
+    "fleet.privacy.test.ts: no branch/label in logs."
+  ],
+  "guardrails": [
+    "MUST NOT show branch/worktree names or paths in tab titles, URLs or telemetry (they are `ct`-only).",
+    "MUST derive mascot from real state only; the mascot never changes state (DESIGN.md 11.4 rule 1).",
+    "MUST NOT use `crash`, `glitch`, `panic` animations in reduced-motion mode.",
+    "Max one `glow-signal` element per region."
+  ],
+  "failure_modes": [
+    "agent.exit with `error_code` unknown -> generic error chip with the word 'Failed'.",
+    "Roster does not contain owner yet -> neutral violet-outlined avatar with '?' until roster arrives.",
+    "Lock/conflict `path_hmac` without decrypted path -> show hmac prefix label."
+  ],
+  "unblocks_gate": "G5",
+  "notes": "Share the pure sorting/priority function with the TUI only through a package if one exists; this lane keeps a local copy to avoid cross-area imports, flagged for later dedupe."
+}

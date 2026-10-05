@@ -1,0 +1,96 @@
+{
+  "id": "B063",
+  "title": "Notification dispatcher core: events to channels",
+  "plan": "backend",
+  "phase": "P4 Fleet",
+  "size": "M",
+  "role": "platform",
+  "depends_on": [
+    "B009",
+    "B036"
+  ],
+  "goal": "A notification dispatcher core that turns domain events into CT-NOTIF-PAYLOAD notifications, applies per-category channel routing, quiet hours, de-duplication and hourly email digests, and hands off to inbox, push and email channels.",
+  "scope_in": [
+    "publish(event) entry point enqueueing onto BullMQ queue `notify.dispatch`; worker resolves recipients, loads preferences, builds the payload and writes the inbox row.",
+    "Payload builder producing exactly the CT-NOTIF-PAYLOAD fields: id (ntf_), created_at, read_at, category, title_key, body_key, params, action, priority; keys follow `notif.<category>.title|body`.",
+    "Per-category param allow-lists: params may contain only prefixed ids, enums and integers (never free text, never anything from ct).",
+    "Default channel routing per contract (approval_needed -> inbox+push+os; billing_issue -> inbox+email; all other categories -> inbox), overridden by user preferences read through PreferencesPort.",
+    "Quiet hours: suppress `push` and `os`, never for security_alert or billing_issue; high-priority approval_needed bypasses only if the user opted in.",
+    "De-duplication by (user, dedupe_key) over 10 min; hourly email digest job batching low/normal items for users with email enabled.",
+    "Notification table and ports to channel senders (PushSenderPort, EmailPort) so B064 and the email service plug in."
+  ],
+  "scope_out": [
+    "Web push/APNs/FCM delivery: B064.",
+    "Inbox REST endpoints: B065. Preference storage, validation and endpoints: B066.",
+    "Email templates and provider: B032.",
+    "Producing events (approvals, billing, usage): each producing lane calls publish().",
+    "The client-local `os` channel (clients render it themselves from inbox/push)."
+  ],
+  "implements": [
+    "CT-NOTIF-PAYLOAD"
+  ],
+  "consumes": [
+    "CT-API-NOTIFY",
+    "CT-DEEPLINK",
+    "CT-IDS",
+    "CT-ERR"
+  ],
+  "build_against": "In-memory Redis/BullMQ test mode from B009, fake PreferencesPort, PushSenderPort and EmailPort recorders, injected clock. Payload fixtures validated against the generated notification type.",
+  "deliverables": [
+    "apps/api/src/modules/notifications/dispatcher/dispatcher.ts",
+    "apps/api/src/modules/notifications/dispatcher/routing.ts",
+    "apps/api/src/modules/notifications/dispatcher/params.ts",
+    "apps/api/src/modules/notifications/dispatcher/recipients.ts",
+    "apps/api/src/modules/notifications/dispatcher/digest.ts",
+    "apps/api/src/modules/notifications/dispatcher/ports.ts",
+    "apps/api/src/modules/notifications/dispatcher/index.ts",
+    "apps/api/src/modules/notifications/dispatcher/README.md",
+    "apps/worker/src/jobs/notify-dispatch.ts",
+    "apps/worker/src/jobs/notify-digest.ts",
+    "apps/api/test/notifications/dispatcher/",
+    "packages/db/migrations/0063_notifications.sql"
+  ],
+  "interfaces": [
+    "NotificationDispatcher.publish(evt: NotificationEvent): Promise<void>",
+    "NotificationEvent = {category: NotifCategory, recipients: {users: UserId[]} | {workspace: WorkspaceId, roles: WorkspaceRole[]} | {session: SessionId, members: MemberId[]}, params: Record<string,string|number>, priority?: 'low'|'normal'|'high', dedupeKey?: string, action?: {type: string, deeplink: string}}",
+    "NotifCategory = 'approval_needed'|'queue_turn'|'mention'|'member_joined'|'member_left'|'agent_done'|'ci_failed'|'pr_merged'|'usage_warning'|'quota_reached'|'billing_issue'|'invite_received'|'update_available'|'security_alert'",
+    "decideChannels(input:{category, priority, prefs: UserNotificationPrefs, quiet: boolean}): Set<'inbox'|'push'|'email'|'os'>",
+    "Ports: PreferencesPort.get(userId); QuietHoursPort.isQuiet(prefs, now); PushSenderPort.enqueue(userId, payload); EmailPort.enqueue(userId, template, payload)",
+    "Table notification(id pk 'ntf_', user_id, category, params jsonb, priority, action jsonb, dedupe_key, created_at, read_at, unique(user_id, dedupe_key) where dedupe_key not null)",
+    "BullMQ queues: notify.dispatch, notify.digest (hourly repeatable)"
+  ],
+  "acceptance": [
+    "publish of approval_needed to one user with default prefs creates one inbox row and one PushSenderPort.enqueue call; billing_issue creates inbox + one EmailPort.enqueue and no push; mention creates inbox only.",
+    "The stored/returned payload validates against the generated notification type and contains no keys outside the CT-NOTIF-PAYLOAD set; title_key equals 'notif.approval_needed.title'.",
+    "An event whose params contain a free-text string (e.g. a value with a space or longer than 64 chars) or a key not in the category allow-list is rejected at publish with a typed error and nothing is written.",
+    "With quiet hours active, approval_needed (normal priority) yields inbox only; with priority high and opt-in yields push; security_alert and billing_issue ignore quiet hours.",
+    "Two events with the same (user, dedupeKey) within 10 min produce one row; after 10 min a second row is created.",
+    "Recipient resolution by {workspace, roles:['owner','admin']} returns only active members with those roles, never members who left.",
+    "The hourly digest job sends one email per user containing all unsent low/normal email-channel items from the last hour (max 50 per email), marks them sent, and sends nothing when there are none; running it twice in the same hour sends nothing the second time.",
+    "Dispatch failure in the push channel does not prevent the inbox row (channels are isolated; test with a throwing PushSenderPort).",
+    "Queue job failures retry 5 times with exponential backoff plus jitter then land in dead-letter queue notify.dispatch.dlq."
+  ],
+  "tests": [
+    "dispatcher.routing.test.ts: matrix of category x priority x quiet x prefs",
+    "dispatcher.params.test.ts: allow-list and rejection of free text",
+    "dispatcher.dedupe.test.ts",
+    "dispatcher.recipients.test.ts",
+    "dispatcher.digest.test.ts: batching and idempotent hourly run",
+    "dispatcher.isolation.test.ts: channel failure isolation and DLQ",
+    "dispatcher.payload.contract.test.ts"
+  ],
+  "guardrails": [
+    "MUST NOT put display text in a payload; only keys, ids, enums and integers (CT-NOTIF-PAYLOAD).",
+    "MUST NOT accept anything derived from ct or plaintext work content as a param, and MUST NOT log params values beyond category and counts.",
+    "MUST NOT suppress security_alert or billing_issue by quiet hours or by disabling the channel `inbox`.",
+    "MUST NOT notify a user who is not a member of the related workspace/session at publish time.",
+    "Jobs MUST be idempotent: re-running a dispatch job for the same event id cannot create a second inbox row (dedupe by event id)."
+  ],
+  "failure_modes": [
+    "Preferences read fails -> fall back to contract defaults for that category and log a warning; never drop security_alert or billing_issue.",
+    "Email provider down -> email jobs retry with backoff up to 24 h, then dead-letter; inbox unaffected.",
+    "Redis unavailable at publish -> publish throws a typed retryable error; the producing lane decides (outbox) and must not lose the event silently."
+  ],
+  "unblocks_gate": "G5",
+  "notes": "CONTRACT GAP: per-category `params` keys and `action.type` values other than `open_session` are not defined; this lane defines provisional allow-lists in params.ts (ids and enums only) and uses action types open_session and open_billing with deeplinks from CT-DEEPLINK."
+}

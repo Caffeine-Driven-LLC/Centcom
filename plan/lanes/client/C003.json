@@ -1,0 +1,104 @@
+{
+  "id": "C003",
+  "title": "Protocol package: types and validators generated from contracts/",
+  "plan": "client",
+  "phase": "P0 Foundations",
+  "size": "M",
+  "role": "devx",
+  "depends_on": [
+    "C001"
+  ],
+  "goal": "Generate typed models and runtime validators for every wire contract from contracts/, and provide the shared helpers the contracts mandate (ULID ids, timestamps, base64url, text rules, version/User-Agent). No other lane hand-writes a wire type.",
+  "scope_in": [
+    "Generator packages/protocol/scripts/gen.ts: reads contracts/schemas/*.json, contracts/openapi.yaml, contracts/errors.json, contracts/state-map.json, contracts/index.json and writes committed output to packages/protocol/src/generated/ (types .d.ts-style .ts, standalone Ajv validators, `openapi.json`, `error-codes.ts`, `agent-state.ts`, `contract-version.ts`). Flags: `--check` (diff only, exit 1 if stale), `--out <dir>`.",
+    "Validators compiled ahead of time with Ajv 2020-12 standalone mode (no `new Function`/eval at runtime) so they work in the Node SEA binary and in the browser under a strict CSP.",
+    "Two validation modes: `parse*` (read side: unknown fields, unknown event kinds, unknown enum values, unknown caps are tolerated per CT-VER 'Unknown data') and `assertWritable*` (write side: rejects any field not in the schema).",
+    "Frame/payload API covering CT-WS-ENVELOPE modes: for each kind, whether it is clear / encrypted / hybrid, and validators for the clear `p` (`p_*` defs) and the decrypted secret (`s_*` defs) from events.schema.json.",
+    "CT-IDS helpers: `IdPrefix` union (usr,wsp,dev,mem,inv,key,whk,ntf,snp,blb,ses,agt,que,msg,apr,sub,dlv,aud,prj,req), monotonic ULID generator with injected clock+RNG, `isId`, `idPrefix`; RFC 3339 ms-UTC formatter/parser; `Money`; base64url (no padding); `<alg>:<hex>` hash strings; text normaliser (NFC, reject control chars except \\n \\t, length limits for display/workspace/session names, slug regex `[a-z0-9-]{3,40}`).",
+    "CT-VER helpers: `CONTRACT_VERSION` (from index.json), `PROTOCOL_VERSIONS = [1]`, `userAgent(info)` producing `centcom-cli/1.4.2 (contract/1.0.0; linux-x64; node/22.9.0)`, `compareVersions`, `isClientTooOld(clientVersion, minClientVersion)`.",
+    "Fixture runner: a test that loads every file under contracts/fixtures/** and validates it against its schema (valid fixtures pass, `invalid/` fixtures fail)."
+  ],
+  "scope_out": [
+    "Error parsing, retry table and user messages (uses generated `ErrorCode`): lane C006.",
+    "Encryption, signing and canonical JSON: crypto lane in net (not part of codegen).",
+    "HTTP or WebSocket clients: net/session lanes.",
+    "Editing anything under contracts/ (read-only; gaps are reported, not patched)."
+  ],
+  "implements": [
+    "CT-IDS",
+    "CT-VER"
+  ],
+  "consumes": [
+    "CT-ERR",
+    "CT-PAGE",
+    "CT-AUTH",
+    "CT-WS-ENVELOPE",
+    "CT-RESUME",
+    "CT-WS-SESSION-EVENTS",
+    "CT-WS-PRESENCE",
+    "CT-WS-QUEUE",
+    "CT-WS-CONTROL",
+    "CT-ENTITLEMENTS",
+    "CT-NOTIF-PAYLOAD",
+    "CT-TELEMETRY",
+    "CT-STATE-MAP",
+    "CT-API-ACCOUNTS",
+    "CT-API-WORKSPACES",
+    "CT-API-SESSIONS",
+    "CT-API-BILLING",
+    "CT-API-USAGE",
+    "CT-API-NOTIFY",
+    "CT-API-RELEASES",
+    "CT-API-FLAGS"
+  ],
+  "build_against": "Runs entirely from files in contracts/. Use contracts/fixtures/events/*.json (42 files at time of writing) as the conformance corpus; no network, no mock needed.",
+  "deliverables": [
+    "packages/protocol/src/",
+    "packages/protocol/scripts/",
+    "packages/protocol/test/",
+    "packages/protocol/README.md"
+  ],
+  "interfaces": [
+    "`export type Frame = { v: 1; t: FrameType; id?: string; sid: string; from?: string; ts?: string; seq?: number; ack?: number; ref?: string; k?: EventKind; p?: unknown; ct?: Ciphertext; sig?: string }` (generated; exact shape follows the envelope schema).",
+    "`parseFrame(input: unknown): ParseResult<Frame>`; `parseEventPayload(kind: string, p: unknown): ParseResult<unknown>`; `parseSecretPayload(kind: string, decrypted: unknown): ParseResult<unknown>`; `assertWritableFrame(f: Frame): asserts f is Frame`. `type ParseResult<T> = { ok: true; value: T; unknown?: boolean } | { ok: false; issues: Issue[] }` where `Issue = { pointer: string; code: string }`.",
+    "`payloadMode(kind: string): 'clear' | 'encrypted' | 'hybrid' | 'unknown'`; `isAgentWireState(s: string): s is AgentWireState`; `type StateName` (all keys of state-map.json) and `AGENT_WIRE_STATES` (the subset allowed in `agent.state`, see CT-STATE-MAP).",
+    "`type ErrorCode` (union from errors.json) and `type ProblemJson` re-exported for lane C006; `type OpenApiOperation` map `operations[operationId]` consumed by the mock backend (lane C007).",
+    "`newIdGenerator(deps: { now: () => number; random: (n: number) => Uint8Array }): { next<P extends IdPrefix>(prefix: P): `${P}_${string}` }`; `isId(prefix, s): boolean`; `nowRfc3339(clock): string`; `b64u.encode(bytes): string` / `b64u.decode(s): Uint8Array`; `normalizeText(s, { max: number }): string`.",
+    "`userAgent(i: { name: 'centcom-cli'|'centcom-tui'|'centcom-web'; version: string; platform: string; arch: string; node: string }): string`; `CONTRACT_VERSION: '1.0.0'`; `PROTOCOL_VERSIONS: readonly [1]`.",
+    "CLI: `pnpm --filter @centcom/protocol gen [--check] [--out dir]`."
+  ],
+  "acceptance": [
+    "`gen --check` exits 0 on a clean tree and exits 1 if one byte of generated output differs; generation twice is byte-identical (deterministic, sorted keys, no timestamps).",
+    "Every valid fixture in contracts/fixtures/** passes its validator and every file in an `invalid/` subfolder (if present) fails with at least one `Issue`; the test enumerates fixtures by glob so new fixtures are picked up automatically.",
+    "`parseFrame` accepts a frame with an extra unknown top-level field and an unknown `k` (returns `ok:true`, `unknown:true` for the kind) and `assertWritableFrame` rejects the same frame.",
+    "`parseEventPayload('agent.state', {agent_id, state: 'not-a-state', since})` returns ok:true with the value unchanged (unknown enum tolerated) while `isAgentWireState('not-a-state')` is false.",
+    "The 100,000-frame loop test (`parseFrame` on a mixed fixture set) finishes in < 1.5 s on CI and allocates no Ajv instance at call time (grep test: no `new Ajv` and no `new Function` in `src/` except inside scripts/).",
+    "`newIdGenerator` produces strictly increasing IDs for 10,000 calls within the same millisecond and every ID matches `^[a-z]{3}_[0-9A-HJKMNP-TV-Z]{26}$`; max length <= 40 bytes.",
+    "`userAgent({name:'centcom-cli',version:'1.4.2',platform:'linux',arch:'x64',node:'22.9.0'})` returns exactly `centcom-cli/1.4.2 (contract/1.0.0; linux-x64; node/22.9.0)`.",
+    "`normalizeText('e\\u0301')` returns the NFC form; input containing U+0000 or U+001B throws a typed validation error; display name of 41 chars is rejected, 40 accepted.",
+    "`AGENT_WIRE_STATES` is a subset of the keys in contracts/state-map.json and excludes connectivity, account, limit and social states."
+  ],
+  "tests": [
+    "fixtures.test.ts: glob contracts/fixtures/** and validate (valid and invalid).",
+    "tolerance.test.ts: unknown field/kind/enum/cap tolerance on read, strictness on write.",
+    "ids.test.ts, time.test.ts, b64u.test.ts, text.test.ts: unit + fast-check property tests (round trip, monotonic order, NFC idempotent).",
+    "version.test.ts: userAgent format, isClientTooOld semver cases (1.2.0 vs 1.10.0, prerelease).",
+    "state.test.ts: generated state union equals contracts/state-map.json keys (no hand-maintained list).",
+    "gen.test.ts: determinism and `--check` behaviour on a temp copy of contracts/."
+  ],
+  "guardrails": [
+    "MUST generate from contracts/ only; MUST NOT hand-write or hand-edit any type that a contract defines, and MUST NOT modify contracts/.",
+    "MUST NOT use Ajv in non-standalone mode or any eval/`new Function` at runtime.",
+    "Readers MUST ignore unknown fields/kinds/enums/caps; writers MUST NOT emit fields outside the schema (CT-VER).",
+    "IDs MUST come from a platform CSPRNG via the injected `random` (default `crypto.getRandomValues`); MUST NOT use `Math.random`. Clients MUST NOT parse a ULID for meaning except sort order.",
+    "Validation issues MUST carry only JSON pointer + code, never the offending value (it may be work content).",
+    "The generated state union MUST come from state-map.json; MUST NOT add states."
+  ],
+  "failure_modes": [
+    "A contract file is missing or fails to parse -> `gen` exits 2 naming the file; it never emits partial output.",
+    "Schema uses a keyword the generator does not support -> `gen` fails loudly (no silent `unknown` types).",
+    "Incoming frame fails validation at runtime -> caller gets `{ok:false, issues}`; the function never throws for bad input."
+  ],
+  "unblocks_gate": "G0",
+  "notes": ""
+}

@@ -1,0 +1,69 @@
+{
+  "id": "C005",
+  "title": "Logging and diagnostics with redaction",
+  "plan": "client",
+  "phase": "P0 Foundations",
+  "size": "S",
+  "role": "runtime",
+  "depends_on": [
+    "C004"
+  ],
+  "goal": "A structured JSON-lines logger with mandatory redaction and a diagnostics bundle for bug reports, so no token, key, ciphertext, message body, file content, path or branch name ever reaches a log file.",
+  "scope_in": [
+    "`createLogger` producing one JSON object per line: `{ts, level, component, msg, request_id?, session_id?, ...ctx}`; levels trace|debug|info|warn|error; `msg` is a static event name (e.g. `http.retry`), variable data goes in `ctx`.",
+    "Redactor applied to every record before any sink: key deny-list (token, access_token, refresh_token, authorization, cookie, password, secret, key, private_key, ct, c, n, sig, text, body, delta, command, cwd, path, paths, file, branch, worktree, diff, prompt, content, summary, email) replaced by `\"[redacted]\"`; value patterns: JWT (`eyJ...` three dot-separated base64url parts), `cen_live_`/`cen_test_` keys, `Bearer ` credentials, `sk-ant-` keys, long base64url runs >= 43 chars, URL userinfo, absolute filesystem paths (replaced by `[path]`), home directory prefix.",
+    "Safety limits: object depth cap 6, string cap 2048 chars (truncate with `...[truncated N]`), array cap 50 items, cycle-safe, never throws.",
+    "Sinks: `stderr`, rotating file sink (default `<state dir>/logs/centcom.log`, 5 MiB x 3 files, mode 0600, directory 0700), in-memory ring (last 500 records) and a no-op sink; TUI mode must use file/ring only.",
+    "Child loggers via `logger.child({component, request_id, session_id})`; `X-Request-Id` ids (`req_`) accepted from the HTTP client.",
+    "`collectDiagnostics(deps): Diagnostics` for `centcom doctor --bundle`: version, contract version, OS/arch/node, terminal color tier, config summary (keys + origin layer, values only for non-sensitive keys), last 500 ring records. Produces data only; writing/zipping is the CLI lane."
+  ],
+  "scope_out": [
+    "Config loading: lane C004 (this lane takes level and sizes as parameters).",
+    "Telemetry (a separate opt-in channel): lane C010.",
+    "The `doctor` CLI command and bundle upload: CLI lane."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-IDS",
+    "CT-ERR"
+  ],
+  "build_against": "Pure library; tests inject a clock, an in-memory sink and an in-memory fs. No network.",
+  "deliverables": [
+    "packages/net/src/log/",
+    "docs/logging.md"
+  ],
+  "interfaces": [
+    "`export type Level = 'trace'|'debug'|'info'|'warn'|'error'`; `export interface Logger { trace|debug|info|warn|error(msg: string, ctx?: Record<string, unknown>): void; child(bindings: { component?: string; request_id?: string; session_id?: string }): Logger; flush(): Promise<void> }`",
+    "`createLogger(opts: { level: Level; sinks: Sink[]; clock: () => number; redactor?: Redactor }): Logger`; `createFileSink(opts: { dir: string; maxBytes: number; maxFiles: number; fs: LogFs }): Sink`; `createRingSink(max = 500): Sink & { snapshot(): LogRecord[] }`.",
+    "`redact(value: unknown): unknown` (pure); `looksLikeSecret(s: string): boolean` (reused by the memory store lane C023).",
+    "`collectDiagnostics(deps: DiagDeps): Diagnostics`."
+  ],
+  "acceptance": [
+    "Logging `{authorization:'Bearer abc.def.ghi', nested:{refresh_token:'x'}}` writes `\"[redacted]\"` for both and the raw strings appear nowhere in the output file (grep test).",
+    "A record with a JWT, a `cen_live_` key, a 64-char base64url ciphertext and `/home/alex/project/src/a.ts` inside a free-text string field contains none of those substrings after redaction.",
+    "Keys named `text`, `delta`, `command`, `branch`, `cwd`, `ct` are always redacted at any depth up to 6, including in arrays and `Error` causes.",
+    "A circular object and a 5 MB string are logged without throwing; the output line is <= 16 KiB.",
+    "File sink rotates at 5 MiB: after writing 12 MiB there are exactly 3 files (`centcom.log`, `.1`, `.2`), each <= 5 MiB + one record, mode 0600.",
+    "`level:'info'` drops `debug` records and logging 100,000 dropped debug records costs < 100 ms (level check is the first operation).",
+    "`collectDiagnostics` output, serialised, contains no value from the redaction deny-list keys and no home directory path (property test over generated configs)."
+  ],
+  "tests": [
+    "redact.test.ts with a table of 40 secret shapes and 20 benign strings (false-positive guard: ULIDs, sha256 hex, semver pass through).",
+    "fuzz.test.ts (fast-check): arbitrary nested objects never throw and never leak a planted canary.",
+    "file-sink.test.ts (rotation, permissions, ENOSPC), diagnostics.test.ts, level-filter perf test."
+  ],
+  "guardrails": [
+    "MUST run redaction on every record in the logger core, not in individual sinks; MUST NOT offer an option to disable it.",
+    "MUST NOT log tokens, keys, ciphertext, message bodies, file contents, paths, branch names or worktree paths (GUIDELINES §3.5); callers pass ids and enums only.",
+    "MUST NOT use `console.*` in the library; only the stderr sink may write to `process.stderr`, and never stdout.",
+    "Log file writes MUST be non-blocking for the caller and MUST swallow sink errors (disk full must not crash the agent).",
+    "Redaction failure MUST fail closed: if the redactor throws, the record is replaced by `{msg:'log.redaction_failed'}` with no context."
+  ],
+  "failure_modes": [
+    "Log directory unwritable -> fall back to ring sink only and emit one stderr warning (`log.sink_unavailable`), never crash.",
+    "Disk full -> drop records, count drops, emit a single `log.dropped` record when space returns.",
+    "Clock goes backwards -> records still emitted in call order."
+  ],
+  "unblocks_gate": "G1",
+  "notes": "Redaction deny-list is deliberately broad; a callers needing a field logged must rename it (e.g. `agent_id`). `looksLikeSecret` is exported for reuse by other lanes instead of re-implementing patterns."
+}

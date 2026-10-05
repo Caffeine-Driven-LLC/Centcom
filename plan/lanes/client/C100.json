@@ -1,0 +1,106 @@
+{
+  "id": "C100",
+  "title": "Consumer conformance suite and release gate",
+  "plan": "client",
+  "phase": "P6 Distribution",
+  "size": "L",
+  "role": "qa",
+  "depends_on": [
+    "C007",
+    "C055",
+    "C056",
+    "C057",
+    "C058",
+    "C059",
+    "C075",
+    "C076"
+  ],
+  "goal": "Prove that the client matches every contract it implements by running the shared fixtures in per-contract suites with one command and a machine-readable report, and own the consumer-side scripts for integration gates G1-G6 plus the release gate checklist.",
+  "scope_in": [
+    "Per-contract conformance tests in packages/testkit/src/conformance/: one file per client-implemented contract (`ct-ids.test.ts`, `ct-err.test.ts`, `ct-ver.test.ts`, `ct-page.test.ts`, `ct-auth.test.ts`, `ct-ws-envelope.test.ts`, `ct-resume.test.ts`, `ct-ws-session-events.test.ts`, `ct-ws-presence.test.ts`, `ct-ws-queue.test.ts`, `ct-ws-control.test.ts`, `ct-crypto.test.ts`, `ct-lan.test.ts`, `ct-telemetry.test.ts`, `ct-deeplink.test.ts`, `ct-state-map.test.ts`) plus consumer checks for `ct-entitlements`, `ct-notif-payload`, `ct-status`, `ct-api-releases` payload parsing.",
+    "Fixture loader that walks contracts/fixtures/<area>/** and schemas in contracts/schemas/*.json; every fixture in contracts/fixtures/events (42 files today) is decoded by the client's generated validators (C003), reduced by the guest engine (C076), and, for encrypted kinds, round-tripped through the crypto module (C056).",
+    "Crypto known-answer vectors (fixtures/crypto/vectors.json): AEAD output `c`, `sig`, `path_hmac`, sealed-box structure checks.",
+    "`pnpm conformance [--contract CT-X ...] [--json] [--out conformance-report.json] [--strict]` runner producing the report; `--strict` fails when a client-implemented contract has zero fixtures and no waiver.",
+    "Consumer-side gate scripts in tools/gates/ (`g1.ts` ... `g6.ts`, `pnpm gate G3 --backend <url>`): G1 device-flow login then GET /v1/me; G2 relay handshake, heartbeat, forced-disconnect resume; G3 host+guest queue->approve->agent runs->events E2E-encrypted using two headless clients; G4 checkout->entitlement flip->relay unlock->quota notices; G5 three clients, branch mode, locks, presence, notifications, webhooks; G6 aggregate.",
+    "Release gate checklist (docs/release-gate/CHECKLIST.md) and `tools/release-gate/check.ts` that aggregates conformance, coverage floor, perf (C098), security (C099), installers (C094), update (C095), docs (C096), contract lock, SBOM and signatures into `release-gate-report.json`."
+  ],
+  "scope_out": [
+    "The provider-side conformance suite (the real backend's own).",
+    "Changing contracts or fixtures (Contract PR process only; this lane only reads them).",
+    "The mock backend itself (C007) and the individual feature test suites owned by each lane.",
+    "Load/chaos tests."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-IDS",
+    "CT-ERR",
+    "CT-VER",
+    "CT-PAGE",
+    "CT-AUTH",
+    "CT-WS-ENVELOPE",
+    "CT-RESUME",
+    "CT-WS-SESSION-EVENTS",
+    "CT-WS-PRESENCE",
+    "CT-WS-QUEUE",
+    "CT-WS-CONTROL",
+    "CT-CRYPTO",
+    "CT-LAN",
+    "CT-TELEMETRY",
+    "CT-DEEPLINK",
+    "CT-STATE-MAP",
+    "CT-ENTITLEMENTS",
+    "CT-NOTIF-PAYLOAD",
+    "CT-STATUS",
+    "CT-API-RELEASES"
+  ],
+  "build_against": "Run `pnpm conformance` entirely offline using fixtures and the mock backend (lane C007); gate scripts take `--backend mock|<base url>` and default to the mock, so they are rehearsed before the real backend exists.",
+  "deliverables": [
+    "packages/testkit/src/conformance/",
+    "tools/gates/",
+    "tools/release-gate/",
+    "docs/release-gate/"
+  ],
+  "interfaces": [
+    "pnpm conformance [--contract CT-ID]... [--json] [--out conformance-report.json] [--strict]; exit 0 all pass, 1 any fail, 3 strict violation (no fixtures, no waiver)",
+    "conformance-report.json schema (packages/testkit/src/conformance/report.schema.json): {schema_version: 1, generated_at: RFC3339, client_version: string, contract_version: string, runner: {node, os, arch}, summary: {total, passed, failed, skipped}, contracts: [{id: 'CT-*', status: 'pass'|'fail'|'skipped'|'waived', fixtures_total: int, fixtures_passed: int, waiver?: {issue: string, expires: string}, cases: [{name, fixture?: string, status: 'pass'|'fail'|'skipped', duration_ms: int, error?: {code?: string, message: string}}]}]}",
+    "pnpm gate <G1|G2|G3|G4|G5|G6> [--backend mock|<url>] [--out gate-report-<G>.json]; gate report: {gate, passed: bool, steps: [{id, status, duration_ms, evidence?}], started_at, ended_at}",
+    "pnpm release-gate [--out release-gate-report.json]  // checks listed in docs/release-gate/CHECKLIST.md; exit 0 only if every required check passes",
+    "packages/testkit/src/conformance/waivers.json: [{contract, reason, issue, expires}] (expires <= 60 days)"
+  ],
+  "acceptance": [
+    "`pnpm conformance` runs offline in <= 60 s and writes conformance-report.json that validates against report.schema.json; `--contract CT-WS-QUEUE` runs only that suite.",
+    "All 42 contracts/fixtures/events/*.json fixtures are loaded; each frame validates against events.schema.json, and each encrypted/hybrid fixture's `secret_payload` validates against the kind's `s_*` schema (summary.fixtures_total for CT-WS-SESSION-EVENTS >= 42).",
+    "Unknown-data rule: a frame with an extra unknown field, an unknown `k`, an unknown enum value and an unknown agent state is accepted and ignored by the client reducers without throwing (4 negative-tolerance cases per contract that defines enums).",
+    "Crypto vectors: the client reproduces `c`, `sig` and `path_hmac` byte-for-byte from the fixed keys/nonces and refuses a tampered `aad` field, flipped signature bit or wrong `kid` (3 negative cases).",
+    "Queue conformance: replaying the sequenced frames of a scripted session (submit, approve, reorder, claim, done, cancel, reject, drop) yields identical queue state on host engine and guest engine, and matches the expected `queue.state` snapshot in the fixture.",
+    "CT-ERR: problem+json with unknown `code` maps to its HTTP status class; retry table honoured (429 retried with Retry-After, 400/403/404 never, 5xx only idempotent) via the HTTP client (C051) against the mock.",
+    "`--strict` exits 3 when CT-LAN (or any client-implemented contract) has 0 fixtures and no valid waiver; waivers older than their `expires` are ignored.",
+    "`pnpm gate G1 --backend mock` exits 0 in <= 30 s (login device flow + /v1/me); G2 <= 60 s including a forced disconnect where the final seq equals the server head and 0 frames are lost or duplicated.",
+    "`pnpm gate G3 --backend mock` runs host + guest headless clients: the guest's queued message is approved by the host, the agent stub runs, `message.assistant.delta/done` and `agent.state` events reach the guest, and the relay recorder contains no plaintext marker string (`CANARY-7f3a`).",
+    "`pnpm release-gate` fails (exit 1) when any of these is true: conformance not green; coverage < 80 % on any package (floor from GUIDELINES); bench budget breach; security report has a high finding; artifacts unsigned or SBOM missing; contract lock check fails; docs check fails."
+  ],
+  "tests": [
+    "conformance.report.schema.test.ts (report validates, rejects malformed).",
+    "conformance.fixtures.loader.test.ts (all areas; missing area -> skipped, not pass).",
+    "conformance.events.test.ts, conformance.crypto.vectors.test.ts, conformance.queue.replay.test.ts, conformance.errors.test.ts, conformance.deeplink.test.ts, conformance.telemetry.test.ts (privacy denylist), conformance.statemap.test.ts (all 61 keys), conformance.entitlements.test.ts.",
+    "gates.g1-g5.mock.test.ts: each gate script passes against the mock and fails against a deliberately faulty mock mode.",
+    "release-gate.aggregate.test.ts: each failing input flips the result.",
+    "conformance.strict.waivers.test.ts."
+  ],
+  "guardrails": [
+    "MUST NOT edit anything in contracts/; fixtures are read-only inputs and the lock check is part of the release gate.",
+    "MUST NOT report `pass` for a contract that has no fixtures; the status is `skipped` (or `waived` with an issue link), and `--strict` / the release gate fail on it.",
+    "Gate scripts MUST run against both `mock` and a real base URL with identical steps; they MUST NOT contain mock-only shortcuts (no reading mock internals except the explicitly named recorder).",
+    "Gate and conformance code MUST NOT print tokens, keys, ciphertext or decrypted payloads; reports contain only ids, names, statuses and durations.",
+    "The canary-plaintext check in G3 MUST scan every frame recorded on the transport; a single plaintext hit fails the gate.",
+    "Waivers expire within 60 days and carry an issue link; expired waivers are failures."
+  ],
+  "failure_modes": [
+    "Backend unreachable in a gate -> step `fail` with `backend_unreachable`, remaining steps `skipped`, exit 1 (no partial pass).",
+    "Fixture fails schema validation -> case `fail` naming the fixture and JSON pointer; run continues so one report lists all problems.",
+    "A dependent lane's behaviour is missing (e.g. LAN not built) -> contract suite `skipped` with reason; release gate treats as failure.",
+    "Timeouts: every gate step has a 30 s timeout, whole gate 5 min; on timeout capture the last 20 recorded frame kinds (kinds only) for diagnosis."
+  ],
+  "unblocks_gate": "G6",
+  "notes": "unblocks_gate is single-valued; this lane also owns the consumer scripts for G1-G5 (tools/gates/g1.ts..g5.ts) and so is the consumer-side prerequisite of every gate."
+}

@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://centcom.dev/contracts/telemetry.schema.json",
+  "title": "Telemetry batch - CT-TELEMETRY",
+  "type": "object",
+  "required": [
+    "install_id",
+    "events"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "install_id": {
+      "type": "string",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "app": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "os": {
+          "type": "string"
+        },
+        "arch": {
+          "type": "string"
+        },
+        "contract": {
+          "type": "string"
+        }
+      }
+    },
+    "events": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "required": [
+          "type",
+          "at"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "enum": [
+              "app.start",
+              "app.exit",
+              "command.run",
+              "session.created",
+              "session.joined",
+              "agent.state_change",
+              "feature.used",
+              "error.shown",
+              "perf.startup",
+              "perf.frame",
+              "update.result"
+            ]
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "props": {
+            "type": "object",
+            "maxProperties": 8,
+            "additionalProperties": {
+              "type": [
+                "string",
+                "number",
+                "boolean"
+              ],
+              "maxLength": 64
+            }
+          }
+        }
+      }
+    }
+  }
+}

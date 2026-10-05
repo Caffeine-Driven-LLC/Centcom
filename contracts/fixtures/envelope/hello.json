@@ -1,0 +1,24 @@
+{
+  "schema": "envelope.schema.json",
+  "valid": true,
+  "note": "",
+  "data": {
+    "v": 1,
+    "t": "sys.hello",
+    "p": {
+      "protocols": [
+        1
+      ],
+      "caps": [
+        "resume"
+      ],
+      "ticket": "eyJhbGciOiJFZERTQSJ9.eyJzaWQiOiJ4In0.sig",
+      "client": {
+        "name": "centcom-cli",
+        "version": "1.0.0",
+        "contract": "1.0.0"
+      },
+      "last_seq": null
+    }
+  }
+}

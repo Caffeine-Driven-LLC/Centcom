@@ -1,0 +1,71 @@
+{
+  "id": "C017",
+  "title": "Git worktree manager",
+  "plan": "client",
+  "phase": "P1 Agent runtime",
+  "size": "M",
+  "role": "runtime",
+  "depends_on": [
+    "C013"
+  ],
+  "goal": "Create, track, inspect and clean up git worktrees so each agent in branch mode works on its own branch without touching the user's main checkout.",
+  "scope_in": [
+    "`WorktreeManager.create` running `git worktree add -b <branch> <path> <baseRef>` by argv (no shell) under a configurable root (`worktree.root`, default `<repo>/.centcom/worktrees/`, auto-added to `.git/info/exclude`), branch name `centcom/<owner-slug>/<agent-slug>` validated with `git check-ref-format --branch`; collision handling appends `-2`, `-3` up to 20.",
+    "Registry `.centcom/worktrees.json` (atomic writes) mapping `agt_` id to path, branch, base ref, created_at; reconciled at startup with `git worktree list --porcelain` (orphans flagged, missing dirs pruned via `git worktree prune`).",
+    "`status(wt)` returning `{ branch, head, ahead, behind, dirty }` (same fields as the `branch.update` secret payload) using `git rev-parse`, `git rev-list --left-right --count base...HEAD`, `git status --porcelain=v1 -z`; ahead/behind are relative to the base ref recorded at creation.",
+    "`remove(wt, { force })` refusing to delete a dirty worktree or one with unmerged commits unless `force`; `list()`; `prune()`; `detectConflict(wt, otherRef)` using `git merge-tree --write-tree` (no working-tree changes) returning conflicted file list (relative paths) or empty.",
+    "Git hygiene: every call sets `GIT_TERMINAL_PROMPT=0`, `GIT_OPTIONAL_LOCKS=0`, `LC_ALL=C`, timeouts (read 10 s, add/remove 30 s, merge-tree 30 s), stdout cap 4 MiB, argv arrays only.",
+    "Emits `worktree:created` / `worktree:removed` on the bus (C025); also exposes a helper `branchUpdatePayload(wt)` producing the secret `branch.update` body (`agent_id, branch, head, ahead, behind, dirty`)."
+  ],
+  "scope_out": [
+    "Merging branches, pushing, PR creation: later git lanes or the user.",
+    "File locks: lane C018. Sub-agent isolation policy: lane C024.",
+    "Encrypting and sending `branch.update`: session lanes."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-WS-SESSION-EVENTS",
+    "CT-IDS"
+  ],
+  "build_against": "Real `git` against throwaway repos built by `tools/dev/make-fixture-repo.mjs` (lane C011) or by an in-test helper that runs `git init` in a temp dir with fixed identity; no network; git >= 2.38 required (merge-tree --write-tree).",
+  "deliverables": [
+    "packages/agent/src/worktrees/",
+    "docs/worktrees.md"
+  ],
+  "interfaces": [
+    "`createWorktreeManager(deps: { git: GitRunner; fs: WtFs; bus: AgentBus; ids: IdGenerator; clock: Clock; config: { root?: string } }): WorktreeManager`",
+    "`interface WorktreeManager { create(o: { repoRoot: string; agentId: AgentId; ownerSlug: string; baseRef?: string; label?: string }): Promise<Worktree>; list(repoRoot: string): Promise<Worktree[]>; status(w: Worktree): Promise<WorktreeStatus>; remove(w: Worktree, o?: { force?: boolean }): Promise<void>; prune(repoRoot: string): Promise<number>; detectConflict(w: Worktree, otherRef: string): Promise<string[]> }`",
+    "`interface Worktree { agentId: AgentId; path: string; branch: string; baseRef: string; repoRoot: string }`; `interface GitRunner { run(argv: string[], o: { cwd: string; timeoutMs: number; maxBytes: number }): Promise<{ code: number; stdout: string; stderr: string }> }`.",
+    "Local error identifiers: `NotAGitRepo`, `DirtyWorktree`, `BranchExists`, `GitTimeout`, `GitTooOld`."
+  ],
+  "acceptance": [
+    "`create` on a fixture repo yields a directory under `<repo>/.centcom/worktrees/`, a new branch `centcom/...`, and `git worktree list` shows it; the main checkout's `git status` stays clean and `.git/info/exclude` contains the root exactly once.",
+    "Branch name collisions: creating 3 worktrees with the same label produces `...`, `...-2`, `...-3`; a label with spaces, `..`, `~` or unicode is slugged to `[a-z0-9-]` and passes `check-ref-format`.",
+    "`status` after editing one file and committing another reports `dirty:true`, `ahead:1`, `behind:0`; after the base ref advances by 2 commits `behind:2`.",
+    "`remove` on a dirty worktree throws `DirtyWorktree`; with `{force:true}` removes directory, registry entry and branch reference worktree metadata; `list` no longer contains it.",
+    "Startup reconcile: deleting a worktree directory by hand then `list` marks it `missing` and `prune` removes the git metadata; an orphan registry entry is dropped.",
+    "`detectConflict` returns the exact conflicted relative paths for a two-branch edit of the same line and `[]` for non-overlapping edits, leaving both working trees untouched.",
+    "Every git call used argv arrays: a test with a repo path containing spaces, `$()` and `;` succeeds and executes nothing extra.",
+    "A hung git (fake runner never resolves) is rejected with `GitTimeout` after exactly the configured timeout (fake clock)."
+  ],
+  "tests": [
+    "create.test.ts, collision.test.ts, status.test.ts.",
+    "remove.test.ts, reconcile.test.ts, conflict.test.ts.",
+    "hostile-paths.test.ts, timeout.test.ts, windows-paths.test.ts (path normalisation unit cases).",
+    "bus-events.test.ts."
+  ],
+  "guardrails": [
+    "MUST invoke git via `execFile`-style argv only; MUST NOT build shell strings or pass user text as an option (use `--` before refs/paths; refs validated first).",
+    "MUST NOT touch the main working tree, run `git clean`, `reset --hard`, `checkout -f` or force-delete branches except through `remove({force:true})` for worktrees this manager created.",
+    "MUST confine worktree paths under the configured root; reject roots that resolve (realpath) outside the repo parent or onto a system directory.",
+    "MUST NOT log branch names, paths or file names (they are secret fields on the wire); logs carry agent ids, counts and durations.",
+    "Registry writes MUST be atomic; MUST never delete a directory not recorded in the registry."
+  ],
+  "failure_modes": [
+    "Repo is bare or git too old -> `GitTooOld`/`NotAGitRepo` with an actionable local message; agents can still run in the plain cwd (branch mode disabled).",
+    "Disk full mid-create -> rollback: remove partial directory and branch, registry unchanged.",
+    "Lock file `.git/index.lock` present -> retry 3 times with 200 ms jittered backoff then fail with `GitTimeout`-class error."
+  ],
+  "unblocks_gate": "G5",
+  "notes": "Worktree root default is a product choice; `.centcom/` must stay out of the user's tracked files (hence `info/exclude`, not .gitignore). Requires git >= 2.38 for `merge-tree --write-tree`."
+}

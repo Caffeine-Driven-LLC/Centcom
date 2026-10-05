@@ -1,0 +1,85 @@
+{
+  "id": "B071",
+  "title": "Checkout and customer portal sessions",
+  "plan": "backend",
+  "phase": "P5 Billing",
+  "size": "M",
+  "role": "billing",
+  "depends_on": [
+    "B070"
+  ],
+  "goal": "Create hosted Stripe Checkout and Customer Portal sessions for a workspace, with server-controlled redirect URLs, mandatory idempotency and strict role checks, so no client can choose where money or users are sent.",
+  "scope_in": [
+    "POST /v1/workspaces/{id}/checkout (Idempotency-Key required): validates plan, interval, currency, seats; creates a Stripe Checkout Session in subscription mode and returns {url}.",
+    "POST /v1/workspaces/{id}/portal (Idempotency-Key accepted): creates a billing portal session and returns {url}; requires an existing Stripe customer.",
+    "Server-fixed success/cancel/return URLs built from config (https://centcom.dev/billing, with centcom://billing deep link variants per CT-DEEPLINK); the request cannot supply URLs.",
+    "Metadata on the Checkout Session and subscription carrying workspace id (for B072) and automatic tax; plan->price mapping from the B070 catalogue.",
+    "Refusals: already-active paid subscription on checkout (409, direct to portal), plan 'free', seats outside the plan's range.",
+    "Audit events billing.checkout_created and billing.portal_created via the B036 emitter."
+  ],
+  "scope_out": [
+    "Gateway, customers and subscription persistence: B070. Webhook processing that activates the plan: B072.",
+    "Seat changes after purchase and proration: B073.",
+    "Coupons/promotion codes and trials: B079.",
+    "Any card collection UI (Stripe hosted pages do it)."
+  ],
+  "implements": [
+    "CT-API-BILLING"
+  ],
+  "consumes": [
+    "CT-AUTH",
+    "CT-RBAC",
+    "CT-PAGE",
+    "CT-DEEPLINK",
+    "CT-ENTITLEMENTS",
+    "CT-ERR",
+    "CT-IDS"
+  ],
+  "build_against": "StripeGateway fake from B070's interface (records createCheckoutSession/createPortalSession inputs), Fastify inject, idempotency middleware from B024 faked with the in-memory store.",
+  "deliverables": [
+    "apps/api/src/routes/checkout/index.ts",
+    "apps/api/src/routes/portal/index.ts",
+    "apps/api/src/modules/billing/checkout/service.ts",
+    "apps/api/src/modules/billing/checkout/redirects.ts",
+    "apps/api/src/modules/billing/checkout/README.md",
+    "apps/api/test/billing/checkout/"
+  ],
+  "interfaces": [
+    "POST /v1/workspaces/{id}/checkout {plan:'pro'|'team', interval:'month'|'year', currency:'USD'|'EUR', seats?:number} -> 200 {url:string, expires_at:string}",
+    "POST /v1/workspaces/{id}/portal {} -> 200 {url:string}",
+    "CheckoutService.createCheckout(workspaceId, actor, input, idemKey): Promise<{url, expiresAt}>; createPortal(workspaceId, actor): Promise<{url}>",
+    "buildRedirects(kind:'checkout_success'|'checkout_cancel'|'portal_return'): string  // from config, no user input"
+  ],
+  "acceptance": [
+    "checkout without an Idempotency-Key returns 400/422 `idempotency_key_required`; the same key + body twice returns the identical body with Idempotency-Replayed: true and creates exactly one Stripe session; same key with a different body returns 409 `idempotency_conflict`.",
+    "checkout by owner or billing role returns 200; by admin, member or guest returns 403 `forbidden`; scope billing:write is required (token with billing:read only gets 403).",
+    "Body containing success_url, cancel_url or return_url is ignored (not forwarded); the recorded Stripe call uses only the configured URLs (test asserts equality).",
+    "plan 'free', interval 'week', currency 'GBP', or team seats below 5 / above the configured max (default 500) return 422 with errors[].pointer.",
+    "A workspace with status active/trialing on a paid plan gets 409 on checkout; a workspace with past_due may still reach the portal.",
+    "The Stripe call includes metadata.workspace_id, automatic_tax.enabled=true, mode 'subscription', client_reference_id = workspace id, and customer = ensureCustomer result.",
+    "portal for a workspace without a Stripe customer returns 404/409 (no customer is created by portal); with a customer returns {url} and the return URL is the configured billing URL.",
+    "Both endpoints write one audit event with actor, workspace and plan (no URL, no Stripe ids in the audit payload)."
+  ],
+  "tests": [
+    "checkout.authz.test.ts: role x scope matrix",
+    "checkout.idempotency.test.ts",
+    "checkout.redirects.test.ts: client URLs ignored",
+    "checkout.validation.test.ts",
+    "checkout.portal.test.ts",
+    "checkout.audit.test.ts"
+  ],
+  "guardrails": [
+    "MUST NOT accept redirect URLs from the client (open-redirect and phishing risk).",
+    "MUST require Idempotency-Key on checkout creation (CT-PAGE) and forward a deterministic Stripe idempotency key.",
+    "MUST NOT log the returned Stripe URL (it grants a session) or the Stripe session id with user data.",
+    "MUST NOT grant any entitlement on checkout creation; only B072 webhook processing may change the plan.",
+    "Plan, price and currency MUST come from the server catalogue; the client cannot send price ids or amounts."
+  ],
+  "failure_modes": [
+    "Stripe error 4xx (invalid price) -> 502 with generic detail and alert (config bug), never leak Stripe messages.",
+    "Stripe timeout -> 503 with retry_after_s; the client retries with the same Idempotency-Key and gets the same session.",
+    "Customer creation succeeded but session failed -> customer reused on retry (B070)."
+  ],
+  "unblocks_gate": "G4",
+  "notes": "CONTRACT GAP: request bodies for checkout and portal are not specified (summary says only 'Create a hosted checkout session -> {url}'); the bodies above are proposals. The EUR and USD currency options follow CT-IDS. Trial and promo handling is deferred to B079."
+}

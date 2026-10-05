@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://centcom.dev/contracts/notification.schema.json",
+  "title": "Notification - CT-NOTIF-PAYLOAD",
+  "type": "object",
+  "required": [
+    "id",
+    "created_at",
+    "category",
+    "title_key",
+    "body_key",
+    "priority"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^ntf_[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "read_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "category": {
+      "enum": [
+        "approval_needed",
+        "queue_turn",
+        "mention",
+        "member_joined",
+        "member_left",
+        "agent_done",
+        "ci_failed",
+        "pr_merged",
+        "usage_warning",
+        "quota_reached",
+        "billing_issue",
+        "invite_received",
+        "update_available",
+        "security_alert"
+      ]
+    },
+    "title_key": {
+      "type": "string",
+      "pattern": "^notif\\.[a-z_.]+$"
+    },
+    "body_key": {
+      "type": "string",
+      "pattern": "^notif\\.[a-z_.]+$"
+    },
+    "params": {
+      "type": "object",
+      "additionalProperties": {
+        "type": [
+          "string",
+          "number",
+          "boolean"
+        ]
+      }
+    },
+    "action": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "open_session",
+            "open_billing",
+            "open_invite",
+            "open_update",
+            "none"
+          ]
+        },
+        "deeplink": {
+          "type": "string",
+          "pattern": "^centcom://"
+        }
+      }
+    },
+    "priority": {
+      "enum": [
+        "low",
+        "normal",
+        "high"
+      ]
+    }
+  }
+}

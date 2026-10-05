@@ -1,0 +1,75 @@
+{
+  "id": "B046",
+  "title": "Backpressure and slow-consumer handling",
+  "plan": "backend",
+  "phase": "P3 Relay",
+  "size": "M",
+  "role": "realtime",
+  "depends_on": [
+    "B044"
+  ],
+  "goal": "Protect the relay and healthy clients from slow consumers and floods by enforcing the 2 MiB per-connection outbound limit with `sys.slow_down`, then close 4429, while never silently dropping sequenced frames.",
+  "scope_in": [
+    "Outbound buffer accounting per connection (`ws.bufferedAmount` plus the B044 send queue bytes).",
+    "Policy: above 1 MiB (50 % watermark) drop `droppable` ephemeral frames (presence, cursor) for that connection; above 2 MiB send `sys.slow_down {for_ms: 2000}` once, start a 5 s grace timer; if the buffer is not below 1 MiB within the grace, close 4429 after a `sys.error`.",
+    "Rate of `sys.slow_down` frames limited to one per second per connection.",
+    "Send-queue pause/resume hooks so replay (B042) waits for drain.",
+    "Per-node global memory guard: if total buffered bytes exceed `RELAY_NODE_BUFFER_MAX` (default 1 GiB), close the largest buffers first with 4429 and stop accepting new connections (readiness degraded).",
+    "Metrics: buffered bytes histogram, slow_down count, 4429 closes."
+  ],
+  "scope_out": [
+    "Inbound sequenced-frame rate limit (B041).",
+    "Heartbeat (B040), fan-out ordering (B044).",
+    "Client-side behaviour on `sys.slow_down`."
+  ],
+  "implements": [
+    "CT-WS-ENVELOPE"
+  ],
+  "consumes": [
+    "CT-ERR"
+  ],
+  "build_against": "The mock client simulator from B011 (scripted fake clients speaking the WS protocol), the in-memory B009 KV/pub-sub implementations, and the frame fixtures in contracts/fixtures/events/; no real client is needed. The simulator has a mode that stops reading its socket so the server buffer grows; `ConnectionSender` fakes expose a settable `bufferedBytes`.",
+  "deliverables": [
+    "apps/relay/src/backpressure/",
+    "apps/relay/src/backpressure/module.ts",
+    "apps/relay/src/backpressure/README.md"
+  ],
+  "interfaces": [
+    "TS: `interface BackpressureController { onEnqueue(conn: RelayConnection, bytes: number, droppable: boolean): 'ok' | 'drop'; onDrain(conn: RelayConnection): void; isPaused(conn: RelayConnection): boolean; whenDrained(conn: RelayConnection): Promise<void> }`",
+    "Wire: `sys.slow_down {p:{for_ms:number, reason:'outbound_buffer'}}` then `sys.error` + close 4429.",
+    "TS: `export default relayModule: RelayModule` (order 55) hooking `ConnectionSender`.",
+    "Env: `RELAY_OUT_BUF_BYTES` (2097152), `RELAY_OUT_BUF_SOFT_BYTES` (1048576), `RELAY_SLOW_GRACE_MS` (5000), `RELAY_NODE_BUFFER_MAX` (1073741824)."
+  ],
+  "acceptance": [
+    "A client that stops reading while 100 KiB frames are sent receives `sys.slow_down` once the buffer passes 2 MiB (+-100 KiB) and is closed 4429 at 5 s (+-0.5 s) if it did not drain below 1 MiB.",
+    "If the client resumes reading within the grace and the buffer falls under 1 MiB, no close occurs and delivery continues in order with no frame lost.",
+    "Presence/cursor frames to a connection above 1 MiB are dropped (counter increments) while sequenced frames are still queued in order.",
+    "At most one `sys.slow_down` per second per connection even when 1 000 frames are enqueued.",
+    "Replay of 5 000 frames to a slow reader never lets buffered bytes exceed 2 MiB + one frame (256 KiB).",
+    "Other connections in the same room keep a delivery latency p95 within 2x baseline while one consumer is stalled.",
+    "A closed-for-4429 client reconnecting with `last_seq` resumes without loss (end-to-end with B042 in the integration test).",
+    "Node-level guard: forcing total buffered bytes above `RELAY_NODE_BUFFER_MAX` closes the largest buffers first until below 90 %, and `/readyz` reports `checks.buffers.ok=false` while above 100 %."
+  ],
+  "tests": [
+    "backpressure.watermarks.test.ts: soft/hard thresholds, grace, recovery.",
+    "backpressure.ephemeral-drop.test.ts: droppable vs sequenced behaviour.",
+    "backpressure.slowdown-rate.test.ts: one per second.",
+    "backpressure.replay.test.ts: interaction with resume.",
+    "backpressure.isolation.test.ts: healthy peers unaffected.",
+    "backpressure.node-guard.test.ts: global cap and readyz."
+  ],
+  "guardrails": [
+    "Sequenced frames MUST NEVER be dropped to relieve pressure; the only remedies are slowing the producer and closing the slow consumer (it recovers by resume).",
+    "Every buffer in the relay MUST have a documented cap; no queue may be unbounded (GUIDELINES section 3.7).",
+    "`sys.slow_down` MUST NOT itself go through the congested queue (write directly) and MUST NOT be sent more than once per second.",
+    "Ephemeral frames MUST be droppable and never retried or replayed.",
+    "Backpressure decisions MUST NOT depend on frame content; sizes only."
+  ],
+  "failure_modes": [
+    "Socket `bufferedAmount` unavailable -> fall back to app-side byte counting; log once.",
+    "Many connections hit the cap at once (network event) -> closes are spread by 0-500 ms jitter to avoid a reconnect storm.",
+    "Timer leak on close -> all grace timers are cleared in `onClose`."
+  ],
+  "unblocks_gate": "G3",
+  "notes": "CONTRACT GAP: the contract shows `sys.slow_down` as S->C with 'client must reduce rate for p.for_ms' but also uses it for outbound-buffer pressure; this card sends it in both situations (inbound rate limit in B041, outbound pressure here) and documents `p.reason`. If `reason` is not allowed by the schema, drop it."
+}

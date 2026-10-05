@@ -1,0 +1,69 @@
+{
+  "id": "C031",
+  "title": "Terminal capability detection and colour tiers",
+  "plan": "client",
+  "phase": "P2 TUI",
+  "size": "S",
+  "role": "tui",
+  "depends_on": [
+    "C001"
+  ],
+  "goal": "One module decides, once at startup, what the terminal can do (colour tier, unicode, size, background, env opt-outs) so every TUI component degrades the same way.",
+  "scope_in": [
+    "`detectCapabilities(env, stdout, stdin)` returning an immutable `TermCaps` using the tier rules of DESIGN §19.3: truecolor (`COLORTERM=truecolor|24bit`), 256 (`TERM` contains `256color`), 16 (otherwise), none (`NO_COLOR` set, not a TTY, or `TERM=dumb`).",
+    "Unicode support flag (UTF-8 locale from `LC_ALL`/`LC_CTYPE`/`LANG`, false for `TERM=linux`), half-block capability (unicode and tier is not `none`), hyperlink and bracketed-paste capability flags.",
+    "Async `queryBackground(io, timeoutMs=150)`: OSC 11 query (`ESC ] 11 ; ? BEL`), parse `rgb:RRRR/GGGG/BBBB`, return `dark` or `light` by relative luminance < 0.5, `unknown` on timeout or non-TTY.",
+    "Env opt-outs parsed into typed values: `CENTO_MASCOT=on|off`, `CENTO_REDUCE_MOTION=1`, `CENTO_SPINNER=fun|plain`, `CENTO_THEME=dark|light|auto`.",
+    "Size helpers: `watchSize(stdout, cb)` (debounced 50 ms) and `layoutClass(cols, rows)` returning `ok` (>= 80x24), `narrow` (< 80 cols), `short` (< 24 rows), `tiny` (< 40 cols or < 10 rows); `mascotAllowed(caps)` encoding §10.1.9 (>= 80 cols, >= 30 rows, not `CENTO_MASCOT=off`)."
+  ],
+  "scope_out": [
+    "Mapping tokens to colours and ANSI output (lane C032).",
+    "Drawing the mascot or any fallback art (lane C033).",
+    "Persisted user settings and the `/theme` and `/mascot` commands (lane C047); this lane only reads the environment.",
+    "Screen-reader mode detection (lane C049 adds its flag on top of `TermCaps`)."
+  ],
+  "implements": [],
+  "consumes": [],
+  "build_against": "Pure function tests with synthetic env objects and fake streams (EventEmitter with `isTTY`, `columns`, `rows`); the OSC 11 query is tested against a scripted fake TTY from lane C008.",
+  "deliverables": [
+    "packages/tui/src/terminal/",
+    "packages/tui/src/terminal/README.md"
+  ],
+  "interfaces": [
+    "`type ColorTier = 'truecolor' | '256' | '16' | 'none'`",
+    "`interface TermCaps { tier: ColorTier; unicode: boolean; isTTY: boolean; cols: number; rows: number; halfBlock: boolean; hyperlinks: boolean; bracketedPaste: boolean; mascotEnv: 'on'|'off'|'auto'; reduceMotionEnv: boolean; spinnerEnv: 'fun'|'plain'|'auto'; themeEnv: 'dark'|'light'|'auto' }`",
+    "`detectCapabilities(env: NodeJS.ProcessEnv, out: NodeJS.WriteStream, inp?: NodeJS.ReadStream): TermCaps`",
+    "`queryBackground(io: {out: NodeJS.WriteStream; inp: NodeJS.ReadStream}, timeoutMs?: number): Promise<'dark'|'light'|'unknown'>`",
+    "`layoutClass(cols: number, rows: number): 'ok'|'narrow'|'short'|'tiny'`; `mascotAllowed(caps: TermCaps): boolean`; `watchSize(out, cb): () => void`"
+  ],
+  "acceptance": [
+    "Table test of 20 env combinations: `COLORTERM=truecolor` -> truecolor; `TERM=xterm-256color` without COLORTERM -> 256; `TERM=xterm` -> 16; `NO_COLOR=1` with COLORTERM=truecolor -> none; `NO_COLOR=` (empty) -> colour allowed per the no-color.org rule (empty means unset); stdout not a TTY -> none; `TERM=dumb` -> none.",
+    "`LANG=C` or `TERM=linux` gives `unicode:false` and `halfBlock:false`; `LANG=en_US.UTF-8` gives both true when tier is not none.",
+    "`queryBackground` resolves `dark` for `rgb:0707/0909/1a1a`, `light` for `rgb:f3f3/f6f6/ffff`, and `unknown` after 150 ms (+/-20 ms) when no reply arrives; the reply bytes are consumed and never reach the prompt input.",
+    "`queryBackground` writes nothing when stdout is not a TTY and returns `unknown` immediately.",
+    "`layoutClass(80,24)` = ok; (79,24) = narrow; (80,23) = short; (39,24) = tiny.",
+    "`mascotAllowed` is false at 80x24 (needs 30 rows), true at 80x30, false at 120x40 with `CENTO_MASCOT=off`.",
+    "`watchSize` coalesces 10 resize events within 50 ms into one callback with the final size, and the returned disposer removes the listener.",
+    "Invalid env values (`CENTO_THEME=purple`) fall back to `auto` and report the problem through the returned `warnings` array, never throw."
+  ],
+  "tests": [
+    "terminal/tiers.test.ts: env matrix table.",
+    "terminal/unicode.test.ts: locale and TERM cases.",
+    "terminal/osc11.test.ts: reply parsing (4-digit and 2-digit hex channels), timeout, non-TTY, reply swallowed.",
+    "terminal/size.test.ts: debounce and layout classes.",
+    "terminal/env-values.test.ts: invalid values and warnings."
+  ],
+  "guardrails": [
+    "MUST honour `NO_COLOR` above every other signal (truecolor env, user theme setting) per DESIGN §19.3.",
+    "MUST NOT emit any escape sequence (including the OSC 11 query) when stdout or stdin is not a TTY, and MUST NOT leave stdin in raw mode after the query.",
+    "MUST bound the OSC 11 wait to 150 ms; startup must not stall on terminals that ignore the query.",
+    "MUST be a pure function of its inputs (no reading `process.env` directly), so tests are deterministic.",
+    "MUST NOT cache capabilities across a terminal resize beyond `cols`/`rows`; colour tier is detected once, size is live."
+  ],
+  "failure_modes": [
+    "Terminal replies to OSC 11 late (after the timeout) -> the late bytes are discarded by a one-shot input filter that expires after 500 ms; they must not be typed into the prompt.",
+    "Stream has no `columns` (piped) -> default to 80x24 and `isTTY:false`."
+  ],
+  "unblocks_gate": null,
+  "notes": "Windows: treat `WT_SESSION` as truecolor-capable; this is an implementation detail not in DESIGN §19.3, record it in the README. FORCE_COLOR is not in the design system; do not add it without a design decision."
+}

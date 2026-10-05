@@ -1,0 +1,91 @@
+{
+  "id": "C074",
+  "title": "Transport abstraction: LAN, relay, local behind one interface",
+  "plan": "client",
+  "phase": "P4 LAN",
+  "size": "M",
+  "role": "net",
+  "depends_on": [
+    "C054",
+    "C072"
+  ],
+  "goal": "Hide the three ways of talking to a session (hosted relay, LAN host, in-process local) behind one `SessionTransport` interface, so session, queue, fleet and approval code is written once and tested against all three.",
+  "scope_in": [
+    "`SessionTransport` interface: `connect`, `send`, `close`, events `welcome`, `frame`, `notice`, `link`, `closed`, plus `kind: 'relay'|'lan'|'local'`, `capabilities`, and `FrameLink` compatibility so lane C055's reliable channel can wrap any of them.",
+    "`RelayTransport`: wraps the RelayClient (lane C054) with a `getTicket` that mints a join token via the session REST client, region URL handling, and relay-only capabilities (`durableHistory`, `restSnapshots`, `entitlements`, `failover`, `auditLog`).",
+    "`LanTransport`: wraps RelayClient with `allowPlainWs`, `ws://host:port` from discovery or manual `ip:port`, pairing via lane C073's `guestPair` on first connect, reconnect with the stored LAN token afterwards, LAN capabilities (`failover:false`, snapshots via `lan.snapshot.get`, no entitlements/billing).",
+    "`LocalTransport`: in-process loopback to a `LanHostServer` loopback link (lane C072) or to a fake peer, used by the host's own member, single-user sessions and tests; no sockets, no network.",
+    "`openTransport(target: TransportTarget, deps): SessionTransport` factory and `parseJoinTarget(input)` for `ip:port`, `[ipv6]:port`, `ses_..` ids and `centcom://join/<token>` links (validated per CT-DEEPLINK).",
+    "A shared conformance suite `transportConformance(factory)` run against all three transports.",
+    "Capability reporting for `lan.upgrade` (LAN -> hosted) as a boolean check only."
+  ],
+  "scope_out": [
+    "The host server (lane C072), pairing (lane C073), discovery (lane C071), RelayClient internals (lane C054), reliable delivery (lane C055).",
+    "Performing the LAN->relay upgrade (`adopt`): post-launch capability, not built here.",
+    "Session semantics (queue/control/approvals): lanes C058, C060, C061, C075."
+  ],
+  "implements": [
+    "CT-WS-ENVELOPE"
+  ],
+  "consumes": [
+    "CT-LAN",
+    "CT-AUTH",
+    "CT-API-SESSIONS",
+    "CT-DEEPLINK",
+    "CT-ERR",
+    "CT-VER"
+  ],
+  "build_against": "The relay variant runs against the mock backend (lane C007) started with `startMockBackend()` from @centcom/testkit; the LAN and local variants run against a real `LanHostServer` (lane C072) on loopback; no real backend or second machine needed.",
+  "deliverables": [
+    "packages/session/src/transport/types.ts",
+    "packages/session/src/transport/relay-transport.ts",
+    "packages/session/src/transport/lan-transport.ts",
+    "packages/session/src/transport/local-transport.ts",
+    "packages/session/src/transport/open.ts",
+    "packages/session/src/transport/join-target.ts",
+    "packages/session/src/transport/conformance.ts",
+    "packages/session/src/transport/index.ts",
+    "packages/session/src/transport/README.md",
+    "packages/session/src/transport/__tests__/"
+  ],
+  "interfaces": [
+    "`interface SessionTransport extends FrameLink { readonly kind: 'relay'|'lan'|'local'; readonly capabilities: TransportCapabilities; connect(): Promise<Welcome>; close(code?: number): Promise<void>; on(ev: 'welcome'|'frame'|'notice'|'link'|'closed'|'protocol_warning', fn): () => void }`",
+    "`TransportCapabilities = { durableHistory: boolean; restSnapshots: boolean; lanSnapshots: boolean; entitlements: boolean; failover: boolean; auditLog: boolean; lanUpgrade: boolean; maxMembers: number }`",
+    "`type TransportTarget = { kind: 'relay'; sessionId: string; inviteSecret?: string } | { kind: 'lan'; host: string; port: number; code?: string; expectedFingerprint?: string; reconnectToken?: string } | { kind: 'local'; server?: LanHostServer }`",
+    "`openTransport(target: TransportTarget, deps: { sessions: SessionRestApi; keychain: TokenStore; device: DeviceKeyStore; clock; rng; logger }): SessionTransport`",
+    "`parseJoinTarget(input: string): TransportTarget | { error: 'invalid' }`",
+    "`transportConformance(name: string, make: () => Promise<{ transport: SessionTransport; teardown(): Promise<void> }>): void` (vitest suite registrar)"
+  ],
+  "acceptance": [
+    "The same conformance suite (hello/welcome, ordered delivery of 100 frames, echo with seq, ping/pong liveness, resume with `last_seq`, invalid-frame handling, graceful close) passes unchanged for relay, lan and local transports.",
+    "`RelayTransport.connect()` calls join-token once per attempt and passes the ticket via hello only; `LanTransport` performs pairing on first connect with the code and on a second connect (token stored) sends no `lan.pair.*` frames.",
+    "`capabilities` differ as specified: relay `{durableHistory:true, restSnapshots:true, failover:true, entitlements:true}`; lan `{failover:false, lanSnapshots:true, entitlements:false, maxMembers:8}`; local `{...all network caps false}`.",
+    "`parseJoinTarget` accepts `192.168.1.20:7070`, `[fe80::1]:7070`, `ses_01JA3Z8K2M5N7P9Q0R1S2T3V4W`, `centcom://join/<token>`; rejects `javascript:...`, hosts with whitespace, ports 0 or > 65535, and non-private LAN IPs unless the caller passes `allowWan`.",
+    "A LAN target with `expectedFingerprint` different from the host's pairing fingerprint fails with `FingerprintMismatchError` before any key grant is accepted.",
+    "Closing a transport is idempotent and releases timers/sockets: after `close()` the vitest open-handle check shows none for all three kinds.",
+    "Local transport round trip needs no network: with network access blocked in the test (all sockets except loopback denied) the local suite passes.",
+    "`lanUpgrade` capability is true only when the welcome `caps` contains `lan.upgrade`; no upgrade call exists in this lane.",
+    "Errors from every transport surface as the same typed C006 errors (e.g. forbidden 4403 -> `ForbiddenError`; 4426 -> `ClientTooOldError`) regardless of kind."
+  ],
+  "tests": [
+    "transport/conformance.relay.test.ts, conformance.lan.test.ts, conformance.local.test.ts: the shared suite per kind.",
+    "transport/open.test.ts: factory dispatch, dependency injection, invalid targets.",
+    "transport/join-target.test.ts: parse/reject table including IPv6 and deep links, fuzz.",
+    "transport/capabilities.test.ts: per-kind capability matrix and welcome-cap derivation.",
+    "transport/lifecycle.test.ts: idempotent close, handle leaks, error mapping parity."
+  ],
+  "guardrails": [
+    "MUST NOT let callers observe differences between transports except through `capabilities`; feature code branches on capabilities, never on `kind`.",
+    "MUST NOT allow plain `ws://` for any non-private address and MUST NOT send LAN tokens or relay tickets to a different kind of endpoint (no ticket in LAN hello, no LAN token to the relay).",
+    "MUST keep LAN and local transports functional with the backend unreachable; the relay-only code path may fail without affecting them.",
+    "MUST validate user-provided targets (ip:port, links) strictly and MUST NOT act on a deep link without caller confirmation (CT-DEEPLINK).",
+    "MUST NOT log tickets, tokens, pairing codes, frame bodies or addresses beyond the host/port the user typed."
+  ],
+  "failure_modes": [
+    "LAN host unreachable (firewall) -> connect rejects with `LanUnreachableError` after 10 s including the hint to check the port; no retry loop beyond C054's schedule.",
+    "Relay unreachable -> relay transport reports `link: offline`; local and LAN transports in other sessions continue.",
+    "Pairing fails (bad code) -> `PairingFailedError` with remaining attempts unknown to the guest; the transport stays closed."
+  ],
+  "unblocks_gate": "G3",
+  "notes": "Depends on a `FrameLink` type exported by lane C054 (relay/index.ts). The relay and LAN transports reuse RelayClient, so protocol fixes land once."
+}

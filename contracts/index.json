@@ -1,0 +1,383 @@
+{
+  "contract_version": "1.0.0",
+  "frozen": true,
+  "rules": "Contract files are identical in both repos and locked by CONTRACTS.lock. See plan/GUIDELINES.md \u00a79 for the change process.",
+  "contracts": [
+    {
+      "id": "CT-IDS",
+      "title": "Identifiers, time, money, text",
+      "file": "00-foundations.md",
+      "kind": "policy",
+      "implemented_by": [
+        "backend",
+        "client"
+      ],
+      "consumed_by": []
+    },
+    {
+      "id": "CT-ERR",
+      "title": "Error model and code registry",
+      "file": "00-foundations.md",
+      "kind": "wire",
+      "implemented_by": [
+        "backend",
+        "client"
+      ],
+      "consumed_by": []
+    },
+    {
+      "id": "CT-VER",
+      "title": "Versioning and compatibility",
+      "file": "00-foundations.md",
+      "kind": "policy",
+      "implemented_by": [
+        "backend",
+        "client"
+      ],
+      "consumed_by": []
+    },
+    {
+      "id": "CT-PAGE",
+      "title": "Pagination, idempotency, rate limits",
+      "file": "00-foundations.md",
+      "kind": "wire",
+      "implemented_by": [
+        "backend",
+        "client"
+      ],
+      "consumed_by": []
+    },
+    {
+      "id": "CT-STATUS",
+      "title": "Health and status endpoints",
+      "file": "00-foundations.md",
+      "kind": "wire",
+      "implemented_by": [
+        "backend"
+      ],
+      "consumed_by": [
+        "client"
+      ]
+    },
+    {
+      "id": "CT-AUTH",
+      "title": "Authentication (device flow, PKCE, tokens, API keys)",
+      "file": "01-auth-rbac.md",
+      "kind": "wire",
+      "implemented_by": [
+        "backend",
+        "client"
+      ],
+      "consumed_by": []
+    },
+    {
+      "id": "CT-RBAC",
+      "title": "Roles and permissions",
+      "file": "01-auth-rbac.md",
+      "kind": "policy",
+      "implemented_by": [
+        "backend"
+      ],
+      "consumed_by": [
+        "client"
+      ]
+    },
+    {
+      "id": "CT-API-ACCOUNTS",
+      "title": "Accounts, devices, API keys (REST)",
+      "file": "02-rest-api.md",
+      "kind": "wire",
+      "implemented_by": [
+        "backend"
+      ],
+      "consumed_by": [
+        "client"
+      ]
+    },
+    {
+      "id": "CT-API-WORKSPACES",
+      "title": "Workspaces, members, invites, projects (REST)",
+      "file": "02-rest-api.md",
+      "kind": "wire",
+      "implemented_by": [
+        "backend"
+      ],
+      "consumed_by": [
+        "client"
+      ]
+    },
+    {
+      "id": "CT-API-SESSIONS",
+      "title": "Sessions, join tokens, history, snapshots (REST)",
+      "file": "02-rest-api.md",
+      "kind": "wire",
+      "implemented_by": [
+        "backend"
+      ],
+      "consumed_by": [
+        "client"
+      ]
+    },
+    {
+      "id": "CT-API-BILLING",
+      "title": "Plans, subscription, checkout, seats (REST)",
+      "file": "02-rest-api.md",
+      "kind": "wire",
+      "implemented_by": [
+        "backend"
+      ],
+      "consumed_by": [
+        "client"
+      ]
+    },
+    {
+      "id": "CT-API-USAGE",
+      "title": "Usage event ingestion (REST)",
+      "file": "02-rest-api.md",
+      "kind": "wire",
+      "implemented_by": [
+        "backend"
+      ],
+      "consumed_by": [
+        "client"
+      ]
+    },
+    {
+      "id": "CT-API-AUDIT",
+      "title": "Audit log (REST)",
+      "file": "02-rest-api.md",
+      "kind": "wire",
+      "implemented_by": [
+        "backend"
+      ],
+      "consumed_by": [
+        "client"
+      ]
+    },
+    {
+      "id": "CT-API-NOTIFY",
+      "title": "Notifications inbox and preferences (REST)",
+      "file": "02-rest-api.md",
+      "kind": "wire",
+      "implemented_by": [
+        "backend"
+      ],
+      "consumed_by": [
+        "client"
+      ]
+    },
+    {
+      "id": "CT-API-WEBHOOKS",
+      "title": "Webhook management (REST)",
+      "file": "02-rest-api.md",
+      "kind": "wire",
+      "implemented_by": [
+        "backend"
+      ],
+      "consumed_by": [
+        "client"
+      ]
+    },
+    {
+      "id": "CT-API-RELEASES",
+      "title": "Release manifest / update channel (REST)",
+      "file": "02-rest-api.md",
+      "kind": "wire",
+      "implemented_by": [
+        "backend"
+      ],
+      "consumed_by": [
+        "client"
+      ]
+    },
+    {
+      "id": "CT-API-FLAGS",
+      "title": "Feature flags / remote config (REST)",
+      "file": "02-rest-api.md",
+      "kind": "wire",
+      "implemented_by": [
+        "backend"
+      ],
+      "consumed_by": [
+        "client"
+      ]
+    },
+    {
+      "id": "CT-WS-ENVELOPE",
+      "title": "WebSocket connection, frames, heartbeat, delivery",
+      "file": "03-ws-envelope.md",
+      "kind": "wire",
+      "implemented_by": [
+        "backend",
+        "client"
+      ],
+      "consumed_by": []
+    },
+    {
+      "id": "CT-RESUME",
+      "title": "Resume, history, snapshots",
+      "file": "03-ws-envelope.md",
+      "kind": "wire",
+      "implemented_by": [
+        "backend",
+        "client"
+      ],
+      "consumed_by": []
+    },
+    {
+      "id": "CT-WS-SESSION-EVENTS",
+      "title": "Event catalogue, notices, privacy budget",
+      "file": "04-session-events.md",
+      "kind": "wire",
+      "implemented_by": [
+        "backend",
+        "client"
+      ],
+      "consumed_by": []
+    },
+    {
+      "id": "CT-WS-PRESENCE",
+      "title": "Presence, typing, cursors",
+      "file": "04-session-events.md",
+      "kind": "wire",
+      "implemented_by": [
+        "backend",
+        "client"
+      ],
+      "consumed_by": []
+    },
+    {
+      "id": "CT-WS-QUEUE",
+      "title": "Command-post queue",
+      "file": "04-session-events.md",
+      "kind": "wire",
+      "implemented_by": [
+        "backend",
+        "client"
+      ],
+      "consumed_by": []
+    },
+    {
+      "id": "CT-WS-CONTROL",
+      "title": "Authority actions (kick, mute, roles, host)",
+      "file": "04-session-events.md",
+      "kind": "wire",
+      "implemented_by": [
+        "backend",
+        "client"
+      ],
+      "consumed_by": []
+    },
+    {
+      "id": "CT-CRYPTO",
+      "title": "End-to-end encryption",
+      "file": "05-crypto.md",
+      "kind": "wire",
+      "implemented_by": [
+        "client"
+      ],
+      "consumed_by": [
+        "backend"
+      ]
+    },
+    {
+      "id": "CT-LAN",
+      "title": "LAN discovery, pairing, direct mode",
+      "file": "06-lan.md",
+      "kind": "wire",
+      "implemented_by": [
+        "client"
+      ],
+      "consumed_by": []
+    },
+    {
+      "id": "CT-ENTITLEMENTS",
+      "title": "Entitlements and quotas",
+      "file": "07-billing-entitlements.md",
+      "kind": "data",
+      "implemented_by": [
+        "backend"
+      ],
+      "consumed_by": [
+        "client"
+      ]
+    },
+    {
+      "id": "CT-WEBHOOKS",
+      "title": "Outgoing webhook payloads and signing",
+      "file": "08-integrations.md",
+      "kind": "wire",
+      "implemented_by": [
+        "backend"
+      ],
+      "consumed_by": []
+    },
+    {
+      "id": "CT-NOTIF-PAYLOAD",
+      "title": "Notification payload",
+      "file": "08-integrations.md",
+      "kind": "data",
+      "implemented_by": [
+        "backend"
+      ],
+      "consumed_by": [
+        "client"
+      ]
+    },
+    {
+      "id": "CT-TELEMETRY",
+      "title": "Opt-in telemetry events",
+      "file": "08-integrations.md",
+      "kind": "wire",
+      "implemented_by": [
+        "backend",
+        "client"
+      ],
+      "consumed_by": []
+    },
+    {
+      "id": "CT-DEEPLINK",
+      "title": "Deep links and join URLs",
+      "file": "08-integrations.md",
+      "kind": "policy",
+      "implemented_by": [
+        "backend",
+        "client"
+      ],
+      "consumed_by": []
+    },
+    {
+      "id": "CT-STATE-MAP",
+      "title": "Product state names",
+      "file": "09-state-map.md",
+      "kind": "data",
+      "implemented_by": [
+        "client"
+      ],
+      "consumed_by": [
+        "backend"
+      ]
+    }
+  ],
+  "files": {
+    "docs": [
+      "00-foundations.md",
+      "01-auth-rbac.md",
+      "02-rest-api.md",
+      "03-ws-envelope.md",
+      "04-session-events.md",
+      "05-crypto.md",
+      "06-lan.md",
+      "07-billing-entitlements.md",
+      "08-integrations.md",
+      "09-state-map.md"
+    ],
+    "machine": [
+      "openapi.yaml",
+      "errors.json",
+      "state-map.json",
+      "schemas/*.json",
+      "fixtures/**"
+    ]
+  }
+}

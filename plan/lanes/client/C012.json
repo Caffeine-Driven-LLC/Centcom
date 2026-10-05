@@ -1,0 +1,75 @@
+{
+  "id": "C012",
+  "title": "Release engineering skeleton: versioning, changesets, signing placeholders",
+  "plan": "client",
+  "phase": "P0 Foundations",
+  "size": "S",
+  "role": "release",
+  "depends_on": [
+    "C002"
+  ],
+  "goal": "Release engineering skeleton: Changesets-based versioning, build metadata stamped with the contract version, release channels, and signing/manifest scripts with placeholders. It produces dry-run artifacts only; publishing is added later.",
+  "scope_in": [
+    "Changesets: `.changeset/config.json` with all `@centcom/*` packages in one `fixed` group (single product version), `changelog` plain, `access: restricted`, and `.changeset/README.md` explaining when to add a changeset.",
+    "`tools/release/build-meta.mjs` writing `dist/build-meta.json`: `{ version, contract_version (from contracts/index.json), commit, built_at (RFC 3339 ms UTC), channel: 'stable'|'beta'|'nightly', node }`; version rules: stable `x.y.z`, beta `x.y.z-beta.N`, nightly `x.y.z-nightly.YYYYMMDD`.",
+    "`tools/release/sign.mjs --file <artifact> --key-file <path>` producing `<artifact>.sig` (Ed25519 over `sha256:<hex>` of the file, base64url) and a CLI `--verify --pub <path>`; with no key it fails closed. A throwaway test key pair is generated inside tests only.",
+    "`tools/release/manifest.mjs` assembling a release manifest JSON (per platform+arch: url placeholder, sha256, size, sig, version, channel, min_client_version) shaped to the release-manifest schema from lane C003 output; platforms linux-x64, linux-arm64, darwin-x64, darwin-arm64, win32-x64.",
+    "`.github/workflows/release.yml`: `workflow_dispatch` only, `environment: release`, builds, runs build-meta, signs with a placeholder key from the environment secret `RELEASE_SIGNING_KEY` if present, uploads artifacts, and does NOT publish to npm/Homebrew/CDN (steps are commented stubs with TODO issue links).",
+    "`docs/releasing.md`: versioning policy, channels, the dry-run procedure, key custody notes (key never in repo)."
+  ],
+  "scope_out": [
+    "Standalone binary building (Node SEA), installers, Homebrew tap, auto-update client: later packaging lanes.",
+    "CI checks: lane C002. The server side of the release manifest endpoint: the real backend.",
+    "Generating the manifest schema (lane C003 does)."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-VER",
+    "CT-API-RELEASES"
+  ],
+  "build_against": "Dry run only: tests use temp dirs, a generated Ed25519 test key and fake artifacts; the manifest is validated against the generated release-manifest validator.",
+  "deliverables": [
+    ".changeset/config.json",
+    ".changeset/README.md",
+    ".github/workflows/release.yml",
+    "tools/release/build-meta.mjs",
+    "tools/release/sign.mjs",
+    "tools/release/manifest.mjs",
+    "tools/release/release.test.ts",
+    "docs/releasing.md"
+  ],
+  "interfaces": [
+    "`node tools/release/build-meta.mjs [--channel stable|beta|nightly] [--out dist/build-meta.json]` exit 0.",
+    "`node tools/release/sign.mjs --file F --key-file K` / `--verify --file F --sig S --pub P`; exit 0 ok, 1 verify fail, 2 usage/key error.",
+    "`node tools/release/manifest.mjs --channel C --dir artifacts/ --out manifest.json`; output fields mirror the release manifest contract.",
+    "`build-meta.json` is read by `userAgent()` callers (lane C003) to fill version and contract version."
+  ],
+  "acceptance": [
+    "`build-meta.mjs` output for channel nightly on 2026-10-05 contains `version` matching `^\\d+\\.\\d+\\.\\d+-nightly\\.20261005$` and `contract_version` equal to contracts/index.json `contract_version`.",
+    "`sign.mjs` signature verifies with the matching public key and fails (exit 1) after flipping one byte of the file; signing without `--key-file` exits 2 and prints no key material.",
+    "`sign.mjs` refuses a key file with mode other than 0600 on POSIX (exit 2).",
+    "`manifest.mjs` lists exactly the 5 platform/arch pairs present in the artifacts dir, sorted deterministically, and output validates against the generated manifest validator.",
+    "Workflow `release.yml` contains no `npm publish`, `gh release create` or upload-to-CDN command outside comments (grep test), and runs only on `workflow_dispatch`.",
+    "`changeset status` passes on a PR that bumps one package and the fixed group bumps all `@centcom/*` to the same version."
+  ],
+  "tests": [
+    "release.test.ts: build-meta (all channels, date injection).",
+    "sign/verify (good, tampered, wrong key, bad perms).",
+    "manifest (ordering, validation).",
+    "workflow grep test."
+  ],
+  "guardrails": [
+    "MUST NOT commit any signing key, even a test one; tests generate keys at run time.",
+    "MUST NOT publish anywhere in this lane; release workflow is dry-run and gated by the `release` environment.",
+    "Signature verification MUST use constant-time compare for digests and MUST verify before any artifact is trusted.",
+    "Build metadata MUST NOT include hostnames, usernames or absolute paths.",
+    "MUST pin third-party actions by SHA like CI (C002)."
+  ],
+  "failure_modes": [
+    "contracts/index.json unreadable -> build-meta exits 2; no artifact is stamped with an unknown contract version.",
+    "Missing platform artifact -> manifest exits 1 listing the missing platform/arch pair.",
+    "Key file unreadable -> sign exits 2 without touching the artifact."
+  ],
+  "unblocks_gate": "G6",
+  "notes": ""
+}

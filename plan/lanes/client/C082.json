@@ -1,0 +1,82 @@
+{
+  "id": "C082",
+  "title": "Web authentication with PKCE",
+  "plan": "client",
+  "phase": "P5 Web",
+  "size": "M",
+  "role": "web",
+  "depends_on": [
+    "C051",
+    "C081"
+  ],
+  "goal": "Users can sign in to the web app with Authorization Code + PKCE, stay signed in through short-lived in-memory access tokens and a rotating HttpOnly refresh cookie, and sign out cleanly, with no token ever in a URL or web storage.",
+  "scope_in": [
+    "PKCE flow in apps/web/src/auth/: generate 64-char `code_verifier` with crypto.getRandomValues, S256 `code_challenge`, random `state`; redirect to `GET /v1/auth/authorize` with client_id `centcom-web`.",
+    "Callback route `/auth/callback`: validate `state`, exchange `code` at `POST /v1/auth/token` with grant_type `authorization_code`, header `X-Centcom-Client: web`, credentials included; strip query from history immediately.",
+    "Silent refresh using grant_type `refresh_token` with the cookie; single-flight across tabs via Web Locks (`navigator.locks.request('centcom-refresh')`) and BroadcastChannel to share the new access token.",
+    "Auth store (Zustand): `{status: 'unknown'|'anonymous'|'authenticated'; user?: Me; accessToken?: string (memory only)}` plus `useAuth()` and a fetch wrapper adding `Authorization: Bearer`, refresh-once-on-401 `token_expired` semantics from CT-ERR/CT-AUTH.",
+    "Route guards (`requireAuth`, `requireRole`) and sign-out: `POST /v1/auth/revoke` then clear store, broadcast to other tabs.",
+    "`GET /v1/me` bootstrap, exposing plan, active workspace and entitlement revision (`ent` claim) to other web lanes."
+  ],
+  "scope_out": [
+    "Login methods (magic link, GitHub, Google): backend authorize page only.",
+    "Device flow (CLI, C052) and keychain storage.",
+    "Device key generation and registration for E2E (see notes, C083).",
+    "API keys UI."
+  ],
+  "implements": [
+    "CT-AUTH"
+  ],
+  "consumes": [
+    "CT-API-ACCOUNTS",
+    "CT-ERR",
+    "CT-PAGE",
+    "CT-VER"
+  ],
+  "build_against": "Mock backend (lane C007) implementing /v1/auth/authorize, /v1/auth/token, /v1/auth/revoke, /v1/me including 401 `token_expired`, `token_revoked`, `device_revoked` and `refresh_reuse_detected` scenarios; no real identity provider.",
+  "deliverables": [
+    "apps/web/src/auth/",
+    "apps/web/test/auth/"
+  ],
+  "interfaces": [
+    "export function startLogin(opts?: {returnTo?: string}): Promise<never>  // redirects",
+    "export async function completeLogin(url: URL): Promise<{returnTo: string}>  // callback handler",
+    "export function getAccessToken(): Promise<string>  // refreshes if exp within 60 s",
+    "export function useAuth(): {status; user?: Me; signOut(): Promise<void>}",
+    "export const authedFetch: (input: RequestInfo, init?: RequestInit) => Promise<Response>",
+    "Routes: /login, /auth/callback, /logout"
+  ],
+  "acceptance": [
+    "The authorize URL contains response_type=code, client_id=centcom-web, code_challenge_method=S256, a 43-128 char verifier-derived challenge, and `state` of >= 128 bits; `plain` challenge is never produced.",
+    "A callback with a mismatched or missing `state` aborts without calling /v1/auth/token and shows a neutral error with a 'Try again' action.",
+    "After callback, `window.location` contains no `code`/`state` query (history.replaceState) and localStorage/sessionStorage/IndexedDB contain no access or refresh token (test scans all three).",
+    "Every request to /v1/auth/token carries `X-Centcom-Client: web` and `credentials: 'include'`; none carries a refresh token in body or URL.",
+    "Two tabs hitting expiry simultaneously cause exactly one refresh request (mock counts) and both end authenticated.",
+    "401 `token_expired` triggers exactly one refresh + retry; a second 401 signs out; `token_revoked`, `device_revoked`, `token_invalid` sign out without refresh; `refresh_reuse_detected` signs out and shows 'Signed out for your safety'.",
+    "Access token is refreshed when < 60 s remain (15 min lifetime); the timer survives tab sleep by checking on `visibilitychange`.",
+    "Sign-out calls /v1/auth/revoke, clears memory, and other open tabs become anonymous within 1 s."
+  ],
+  "tests": [
+    "pkce.test.ts: RFC 7636 test vectors for S256, verifier charset/length.",
+    "callback.state.test.ts: valid, missing, replayed state.",
+    "refresh.singleflight.test.ts: two simulated tabs with Web Locks polyfill.",
+    "authedFetch.401.test.ts: table of all CT-AUTH 401 codes.",
+    "storage.scan.test.ts: asserts no token in any web storage.",
+    "e2e later in C093."
+  ],
+  "guardrails": [
+    "MUST NOT store access or refresh tokens in localStorage, sessionStorage, IndexedDB, cookies readable by JS, URLs or logs; access token lives in a module-scoped variable only.",
+    "MUST keep `code_verifier` only in sessionStorage between redirect and callback and delete it on first use (success or failure).",
+    "MUST use S256 only; MUST validate `state` in constant time; MUST reject callback if no pending login exists.",
+    "MUST serialise refreshes across tabs (Web Locks); concurrent refresh with a rotated token triggers `refresh_reuse_detected`, which revokes the whole token family.",
+    "MUST NOT follow open redirects: `returnTo` is a same-origin path validated against /^\\/[A-Za-z0-9/_\\-?=&.]*$/ and defaults to `/`.",
+    "Error screens MUST NOT echo server `detail` that contains anything but the CT-ERR `title`/`detail` text; no request ids in URLs."
+  ],
+  "failure_modes": [
+    "Cookie blocked by browser (third-party/Safari ITP) -> after callback, refresh returns 401: show 'Your browser blocked sign-in cookies' with help link and keep user on /login.",
+    "Network down during refresh -> stay authenticated with expired token marked, retry with backoff 500 ms x2^n cap 30 s; requests queue max 20 for 10 s then fail with typed error.",
+    "Authorize returns error params (`access_denied`) -> neutral message, no details from the query rendered as HTML."
+  ],
+  "unblocks_gate": "G1",
+  "notes": "CONTRACT GAP: PKCE authorize does not carry `device_pubkeys`, so no `dev_` identity or key registration exists for browsers; E2E in the web app (C083/C084/C085) cannot sign frames until the contract defines web device registration. CONTRACT GAP: CT-AUTH says web refresh cookie is scoped to /v1/auth/token; the `authorization_code` response body shape (access token field names) is taken from RFC 6749."
+}

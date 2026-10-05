@@ -1,0 +1,87 @@
+{
+  "id": "C083",
+  "title": "Web transcript and command-post view",
+  "plan": "client",
+  "phase": "P5 Web",
+  "size": "L",
+  "role": "web",
+  "depends_on": [
+    "C055",
+    "C056",
+    "C081"
+  ],
+  "goal": "Web users can open a session, read the live decrypted transcript with approvals and agent activity, and (if allowed) submit to and manage the command-post queue, using the same protocol, resume and crypto behaviour as the terminal client.",
+  "scope_in": [
+    "Session route `/s/:sessionId` in apps/web/src/session/: transcript list (virtualised, windowed to 200 rendered rows), message blocks per DESIGN.md 10.1.2 equivalents, tool/approval cards, diff share view, agent chips with state text and 36 px mascot (via C086).",
+    "Command-post header (DESIGN.md 10.2.15): session name, host crown chip, presence stack, connection chip `relay`/`offline`, invite button.",
+    "Queue strip above the composer: queued chips `[colour dot] Name · \"text…\" · #pos`, host actions approve, edit, reorder, drop; guest sees own item with cancel (DESIGN.md 12.3).",
+    "Browser session engine: relay WebSocket with subprotocol `centcom.v1`, hello/welcome, heartbeat (ping_ms 20 000, dead_ms 50 000), ack every 5 s or 64 frames, reconnect and resume, snapshot+history fallback; reuses packages/session guest engine (C076) and net (C055/C056) where browser-safe.",
+    "Crypto in a lazy chunk: libsodium (WASM) for XChaCha20-Poly1305, Ed25519 verify, sealed boxes; `waiting_for_key` screen ('Waiting for the host to let you in').",
+    "Approval UI for the host: `approval.request` cards with risk chip and Approve/Deny keyboard shortcuts; text equivalents for agent states (`aria-live=\"polite\"`)."
+  ],
+  "scope_out": [
+    "Fleet board (C084), roster/presence/cursors (C085), mascot canvas player (C086).",
+    "Auth (C082) and workspace/invite flows (C087, C088).",
+    "The relay handshake and crypto primitives themselves (C054, C055, C056) and the guest engine (C076).",
+    "Running agents in the browser: the web client is never a host runner."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-WS-ENVELOPE",
+    "CT-RESUME",
+    "CT-WS-SESSION-EVENTS",
+    "CT-WS-QUEUE",
+    "CT-WS-CONTROL",
+    "CT-CRYPTO",
+    "CT-API-SESSIONS",
+    "CT-RBAC",
+    "CT-ERR",
+    "CT-STATE-MAP",
+    "CT-AUTH"
+  ],
+  "build_against": "Mock backend (lane C007) relay simulator + REST (POST /v1/sessions/{id}/join-token, GET members/history/snapshot), driven by contracts/fixtures/events/*.json and a scripted host.",
+  "deliverables": [
+    "apps/web/src/session/",
+    "apps/web/test/session/"
+  ],
+  "interfaces": [
+    "Route: /s/:sessionId?focus=approval|queue (deep link target of centcom://session/<id> web twin)",
+    "export function useSession(sessionId: SessionId): {state: GuestState; submit(body: string): Promise<void>; cancel(item: QueueItemId): Promise<void>; hostActions?: {approve(i): Promise<void>; reject(i, code): Promise<void>; reorder(order: QueueItemId[]): Promise<void>; drop(i): Promise<void>}}",
+    "export function TranscriptView(props: {entries: TranscriptEntry[]; onReact?: (id: MsgId, code: ReactionCode) => void}): JSX.Element",
+    "export function QueueStrip(props: {queue: QueueView; role: SessionRole; self: MemberId}): JSX.Element"
+  ],
+  "acceptance": [
+    "Join flow: POST join-token then WS `sys.hello` with ticket in the frame (never in the URL); `sys.welcome` accepted; transcript of a 5 000-frame fixture renders with scroll at >= 50 fps (Chrome trace, p95 frame < 20 ms) and DOM rows <= 250.",
+    "Forced socket close then resume: transcript has no gap or duplicate, resend of one unacked submit appears exactly once; reconnect backoff follows 250 ms x2^n cap 15 s.",
+    "`message.assistant.delta` of 10 frames/s for one agent updates the DOM with <= 1 layout per 100 ms and announces 'Cento is writing' once (aria-live polite), not per delta.",
+    "Host approving a queue item sends `queue.approve` with the item id; non-host never sees approve controls; viewer sees no composer.",
+    "Initial route JS (excluding the lazy crypto chunk) <= 100 KB gzip; crypto chunk <= 250 KB gzip and is not fetched on non-session routes.",
+    "Unreadable ciphertext before key.grant shows the waiting screen; after grant the transcript fills without reload.",
+    "Keyboard-only: every control reachable, `?` opens shortcut help, `a`/`d` approve/deny focused approval, `g q` focuses the queue; axe 0 serious/critical on /s/:id in all states.",
+    "Close code 4426 shows an 'update required' full-page message; 4403 shows 'You were removed from this session'; 4404 'This session has ended'."
+  ],
+  "tests": [
+    "session.transcript.virtual.test.tsx with 5 000 fixture frames.",
+    "session.reconnect.test.ts using fake WebSocket and clock.",
+    "session.queue.ui.test.tsx role matrix (host/editor/viewer/muted).",
+    "session.crypto.vectors.test.ts runs fixtures/crypto/vectors.json in the browser build (Vitest browser mode).",
+    "session.a11y.test.tsx jest-axe + keyboard walk.",
+    "e2e in C093."
+  ],
+  "guardrails": [
+    "MUST NOT put the relay ticket in a URL, log or storage; MUST fetch a new ticket for every connect attempt (single-use, 60 s lifetime).",
+    "MUST render all remote text via React text nodes; Markdown rendering uses a sanitising renderer with links `rel=\"noopener noreferrer\"` and `target=_blank`, no raw HTML, no images from remote origins (CSP img-src 'self' data:).",
+    "MUST NOT persist decrypted content, session keys or tickets to localStorage/IndexedDB; keys stay in memory (optional non-extractable CryptoKey storage only after the key-registration gap is resolved).",
+    "MUST verify `sig` before showing any decrypted frame; MUST drop and count invalid frames and show a one-line protocol warning, never crash.",
+    "MUST NOT mirror authority: hide, but never rely on hidden controls; the server answers `forbidden`.",
+    "Mascot MUST NOT appear in approval or destructive confirmations (DESIGN.md 11.5); `aria-live=\"assertive\"` regions contain no mascot."
+  ],
+  "failure_modes": [
+    "4401 -> refresh access token (C082) once and reconnect; if that fails go to /login with returnTo.",
+    "4503 / `sys.error` with retry_after_s -> show banner 'Relay busy, retrying in N s' and honour retry_after_s.",
+    "Snapshot hash mismatch -> discard, retry once, then show 'earlier history unavailable' and continue with live frames.",
+    "Tab hidden for > 5 min -> heartbeat missed; reconnect on visibility, resume with last_seq."
+  ],
+  "unblocks_gate": "G3",
+  "notes": "CONTRACT GAP: browsers have no registered device (see C082 notes), so signing frames and unsealing key.grant for a web device is undefined; until resolved the web client is receive-only for encrypted content it can obtain via a grant addressed to a registered web device. SPLIT? transcript renderer and queue UI could be two lanes; keep as L. Markdown renderer dependency must be justified (prefer marked + DOMPurify or micromark with no HTML)."
+}

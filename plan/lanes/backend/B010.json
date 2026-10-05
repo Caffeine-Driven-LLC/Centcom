@@ -1,0 +1,80 @@
+{
+  "id": "B010",
+  "title": "Test harness: containers, factories, contract test runner",
+  "plan": "backend",
+  "phase": "P0 Foundations",
+  "size": "M",
+  "role": "qa",
+  "depends_on": [
+    "B002",
+    "B007"
+  ],
+  "goal": "Backend tests start real Postgres/Redis in containers (or CI services), build data through factories, and run the shared contract fixtures with one helper.",
+  "scope_in": [
+    "`startTestStack()` using testcontainers: Postgres 16 and Redis 7, migrated with B007's runner, returning urls and a `reset()` that truncates all tables between tests; honours `DATABASE_URL`/`REDIS_URL` when already provided (CI).",
+    "Factories for users, devices, workspaces, memberships, sessions, session_members (using @centcom/db table types and B008 tables) with deterministic ids via injected generator.",
+    "Fake clock (`createFakeClock`) and seeded RNG (`createSeededRandom`) for deterministic tests.",
+    "Contract fixture runner: loads contracts/fixtures/** and contracts/schemas/*.json and asserts each fixture validates (Ajv 2020-12 used directly), exposing `runFixtureSuite(opts)` for implementers to call in their own tests.",
+    "Vitest global setup/teardown wiring and a `withApp(buildApp)` helper for Fastify `inject()` tests."
+  ],
+  "scope_out": [
+    "The WebSocket client simulator (B011).",
+    "Production fixtures or seed data for dev (B012).",
+    "Load-test tooling (later infra lanes)."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-IDS",
+    "CT-WS-ENVELOPE",
+    "CT-WS-SESSION-EVENTS",
+    "CT-ENTITLEMENTS"
+  ],
+  "build_against": "Containers or the CI service containers; the fixture runner needs only the files in contracts/.",
+  "deliverables": [
+    "packages/testkit/src/containers.ts",
+    "packages/testkit/src/clock.ts",
+    "packages/testkit/src/random.ts",
+    "packages/testkit/src/factories/",
+    "packages/testkit/src/fixtures.ts",
+    "packages/testkit/src/app.ts",
+    "packages/testkit/src/index.ts",
+    "packages/testkit/vitest.setup.ts",
+    "packages/testkit/test/harness/",
+    "packages/testkit/README.md"
+  ],
+  "interfaces": [
+    "`startTestStack(opts?:{reuse?: boolean}): Promise<{databaseUrl: string; redisUrl: string; db: Kysely<Database>; reset(): Promise<void>; stop(): Promise<void>}>`.",
+    "`createFakeClock(startIso?: string): {now(): number; advance(ms: number): void; set(iso: string): void}`.",
+    "`userFactory(db).create(overrides?)`, `workspaceFactory(db).create({owner?})`, `deviceFactory`, `sessionFactory`, each returning the inserted row.",
+    "`runFixtureSuite(opts:{fixturesDir: string; schemaFile: string; defKey?: (fixtureName: string) => string}): void` (registers vitest cases).",
+    "`withApp(build: () => Promise<FastifyInstance>): {app: FastifyInstance; close(): Promise<void>}`."
+  ],
+  "acceptance": [
+    "`startTestStack()` returns migrated databases in under 20 s cold; with `reuse:true` a second call in the same worker returns in under 2 s.",
+    "`reset()` leaves every application table empty (row counts 0) and does not touch schema_migrations.",
+    "Two test files running in parallel get isolated databases (distinct database names) and do not see each other's rows.",
+    "`userFactory.create()` twice produces distinct emails and strictly increasing ids; with a seeded generator the output is identical across runs.",
+    "`runFixtureSuite` registers one test per fixture file under contracts/fixtures/events (42) and fails when a fixture is made invalid.",
+    "Fake clock `advance(1000)` changes `now()` by exactly 1000 and never reads real time.",
+    "If DATABASE_URL and REDIS_URL are set, no container is started."
+  ],
+  "tests": [
+    "containers.test.ts: start/reset/isolation.",
+    "factories.test.ts: constraints satisfied, determinism.",
+    "fixtures.test.ts: runner catches a deliberately broken fixture (in-memory copy).",
+    "clock-random.test.ts."
+  ],
+  "guardrails": [
+    "MUST NOT connect to any non-test database: refuse to run `reset()` unless the database name starts with `test_` or the stack was created by this helper.",
+    "MUST NOT ship real tokens, keys or production-like secrets in factories; generated secrets are random per run.",
+    "MUST NOT depend on network access beyond pulling container images (offline mode via env URLs).",
+    "MUST keep the testkit out of production bundles (package is devDependency-only)."
+  ],
+  "failure_modes": [
+    "Docker unavailable and no env URLs -> tests fail fast with a message saying how to provide DATABASE_URL/REDIS_URL, not a timeout.",
+    "Container startup exceeds 60 s -> abort with logs of the container.",
+    "Stale container from an earlier run -> labelled and reaped at the start of the next run."
+  ],
+  "unblocks_gate": "G1",
+  "notes": "The fixture runner uses Ajv directly rather than @centcom/contracts because B003 is not a declared dependency of this lane. Adds dependencies testcontainers, ajv, ajv-formats."
+}

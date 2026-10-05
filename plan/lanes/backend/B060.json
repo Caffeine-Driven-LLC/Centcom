@@ -1,0 +1,87 @@
+{
+  "id": "B060",
+  "title": "Approval routing: tool approvals, delegates, timeouts",
+  "plan": "backend",
+  "phase": "P4 Fleet",
+  "size": "M",
+  "role": "realtime",
+  "depends_on": [
+    "B044",
+    "B051"
+  ],
+  "goal": "Route approval requests and decisions between the right approvers, enforce delegation and expiry, and notify the notification dispatcher, using only the cleartext routing metadata.",
+  "scope_in": [
+    "Handler for approval.request and approval.decision hybrid frames using p fields approval_id, agent_id, risk, expires_at, approver (host|owner|any_editor), decision (approve|deny), scope (once|session|always).",
+    "Authorisation of deciders: host always; delegated approvers only for requests whose p.approver allows them (owner = workspace owner/admin member in the session, any_editor = any editor).",
+    "Pending-approval store with expiry: at expires_at the relay sequences an approval.decision {decision:'deny', scope:'once'} from the server (timeout), once.",
+    "First decision wins; later decisions for the same approval_id are ignored with sys.error `forbidden` or a no-op for exact duplicates.",
+    "Mute and kick of a requester cancel their pending approvals; agent.exit cancels pending approvals for that agent.",
+    "Event to the notification dispatcher (category approval_needed, params agent/session/risk) through a NotifyPort, and sys.notice-free (no display text)."
+  ],
+  "scope_out": [
+    "Notification delivery: B063+.",
+    "The permission engine that decides what needs approval (client).",
+    "Agent registry: B057; control commands such as delegating the host: B051.",
+    "Storing summary/command/cwd (inside ct, never seen)."
+  ],
+  "implements": [
+    "CT-WS-SESSION-EVENTS"
+  ],
+  "consumes": [
+    "CT-RBAC",
+    "CT-WS-CONTROL",
+    "CT-WS-ENVELOPE",
+    "CT-NOTIF-PAYLOAD",
+    "CT-IDS",
+    "CT-ERR"
+  ],
+  "build_against": "FakeSequencer/Fanout/Clock ports, MembershipPort fake with roles, NotifyPort recorder; contracts/fixtures/events/approval.*.json; B011 simulator for host, editor and guest.",
+  "deliverables": [
+    "apps/relay/src/approvals/router.ts",
+    "apps/relay/src/approvals/store.ts",
+    "apps/relay/src/approvals/expiry.ts",
+    "apps/relay/src/approvals/ports.ts",
+    "apps/relay/src/approvals/index.ts",
+    "apps/relay/src/approvals/README.md",
+    "apps/relay/test/approvals/"
+  ],
+  "interfaces": [
+    "ApprovalRouter.onRequest(ctx, frame): Promise<Result>; onDecision(ctx, frame): Promise<Result>; sweep(now: Date): Promise<number>",
+    "PendingApproval = {approvalId:'apr_…', agentId, requester:'mem_…', risk:'low'|'medium'|'high', approver:'host'|'owner'|'any_editor', expiresAt:string, requestSeq:number}",
+    "NotifyPort.approvalNeeded(sid, a: {approvalId, agentId, risk}): void",
+    "Redis hash approval:{sid}:{apr} with TTL = expires_at + 60 s",
+    "Metric: relay_approvals_pending, relay_approval_timeouts_total, relay_approval_decision_latency_ms"
+  ],
+  "acceptance": [
+    "approval.request from the host/owner of the agent is sequenced and stored; NotifyPort.approvalNeeded is called exactly once per approval_id even if the frame is retried.",
+    "Decision by an editor when approver='host' is rejected `forbidden` and audited; with approver='any_editor' an editor decision is accepted; with 'owner' only owner/admin members of the workspace are accepted.",
+    "Viewers never decide; a requester cannot approve their own request unless they are the host.",
+    "Two decisions race (approve and deny) -> the one with the lower seq wins, the other gets a no-op error and no second state change.",
+    "expires_at in the past on a request is rejected `invalid_frame`; a request with expires_at more than 24 h ahead is clamped by rejecting `invalid_frame`; at expires_at (fake clock) one server deny decision is sequenced exactly once even with two sweepers.",
+    "agent.exit or kick of the requester removes pending approvals without emitting a timeout deny.",
+    "Decision scope 'always' or 'session' is forwarded as-is; the relay stores no memory of scopes and does not auto-answer future requests.",
+    "Pending approvals survive relay restart (Redis restore) and are re-armed with their original expires_at."
+  ],
+  "tests": [
+    "approvals.routing.test.ts: approver matrix",
+    "approvals.expiry.test.ts: timeout, duplicate sweepers",
+    "approvals.race.test.ts: concurrent decisions",
+    "approvals.cleanup.test.ts: exit, kick, mute",
+    "approvals.notify.test.ts: exactly-once notification",
+    "approvals.privacy.test.ts: no ct-derived data in store/logs"
+  ],
+  "guardrails": [
+    "MUST NOT auto-approve anything; the only server-originated decision is deny on expiry.",
+    "MUST authorise deciders from live membership; the request's `approver` field narrows who may decide but never widens beyond role rules in CT-RBAC.",
+    "MUST NOT read summary, command or cwd from ct, and MUST NOT include them in notifications.",
+    "Expiry deny MUST be sequenced exactly once (guard with SET NX on the approval key).",
+    "Notification params MUST contain ids and enums only (agent, session, risk)."
+  ],
+  "failure_modes": [
+    "Sweeper lag -> a late decision after expires_at but before the sweep is rejected as expired; sweeper emits deny afterwards only if no decision exists.",
+    "NotifyPort failure -> approval still routed; notification retried by dispatcher outbox; failure counted.",
+    "Host disconnected when request arrives -> request is kept; notification is sent; on expiry the deny is still emitted."
+  ],
+  "unblocks_gate": "G5",
+  "notes": "CONTRACT GAP: timeout default and maximum are not specified; this lane requires expires_at from the sender and bounds it to 24 h. The meaning of approver='owner' (session creator vs workspace owner) is not defined; this lane implements workspace owner/admin members present in the session. Delegation to arbitrary members is not in the contracts, so no delegation endpoint is added."
+}

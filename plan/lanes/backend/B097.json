@@ -1,0 +1,80 @@
+{
+  "id": "B097",
+  "title": "Security hardening: headers, WAF rules, secret scanning, dependency policy",
+  "plan": "backend",
+  "phase": "P7 Ops",
+  "size": "M",
+  "role": "security",
+  "depends_on": [
+    "B002"
+  ],
+  "goal": "Harden the platform's surface: security response headers and CORS, WAF and edge rate-limit rules, secret scanning, and a dependency policy enforced in CI, so common web attacks and supply-chain mistakes are caught automatically.",
+  "scope_in": [
+    "Fastify plugin `securityHeaders` for the API: `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`, `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Cross-Origin-Resource-Policy: same-site`, `Permissions-Policy` empty, `Cache-Control: no-store` on `/v1/auth/*`, billing and other authenticated JSON by default.",
+    "CORS policy: allow only the web app origins from config (`CORS_ALLOWED_ORIGINS`), no wildcard, credentials only for `/v1/auth/token` with the `X-Centcom-Client: web` header, preflight cache 600 s.",
+    "Edge WAF module `infra/terraform/modules/waf/`: managed rule sets, rate-limit rules mirroring CT-PAGE buckets (anonymous 30/min/IP, auth endpoints 20/min/IP), body-size limits (1 MiB on `/v1/usage/events`, 256 KiB elsewhere), blocked methods, bot rules for anonymous endpoints, WebSocket upgrade allow-list for the relay host.",
+    "Secret scanning: `.gitleaks.toml`, pre-commit hook and a CI workflow `security-scan.yml` (gitleaks on the diff and full history weekly).",
+    "Dependency policy enforced by `tools/security/`-style scripts under `infra/security/`: `check-deps.mjs` (no install scripts except allow-list, exact pins, `pnpm audit` fails on high/critical, lockfile integrity), `check-licenses.mjs` (MIT, Apache-2.0, BSD-2/3, ISC only), CycloneDX SBOM per build, Renovate/Dependabot config with grouped weekly updates.",
+    "Container hardening checks: non-root user, read-only root filesystem where possible, distroless/slim base, trivy gate (fail on critical)."
+  ],
+  "scope_out": [
+    "Application-level authn/authz (B017-B021) and rate limiting middleware (B023).",
+    "Threat model and pentest preparation (B098).",
+    "Core CI pipeline (B002); this lane adds a separate workflow file and scripts.",
+    "Terraform of the rest of the infrastructure (B091)."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-AUTH",
+    "CT-PAGE",
+    "CT-ERR",
+    "CT-WS-ENVELOPE",
+    "CT-DEEPLINK"
+  ],
+  "build_against": "A header-assertion test suite running against an in-process Fastify instance; WAF rules validated with `terraform validate`/plan JSON policy tests; dependency scripts run against the repo and fixtures containing deliberately bad packages.",
+  "deliverables": [
+    "apps/api/src/plugins/security-headers.ts",
+    "infra/terraform/modules/waf/",
+    "infra/security/",
+    ".gitleaks.toml",
+    ".github/workflows/security-scan.yml",
+    "docs/security/hardening.md"
+  ],
+  "interfaces": [
+    "Fastify plugin `securityHeaders(opts: {allowedOrigins: string[]})` registered before routes.",
+    "Scripts: `pnpm security:deps`, `pnpm security:licenses`, `pnpm security:secrets`, `pnpm security:sbom`.",
+    "Terraform module `waf` inputs: `zone_id`, `api_hostname`, `relay_hostnames`, `ws_path_regex`, `rate_limits`; outputs rule ids.",
+    "Allow-lists: `infra/security/install-script-allowlist.json`, `infra/security/license-allowlist.json`."
+  ],
+  "acceptance": [
+    "Every API response (200, 304, 4xx, 5xx, preflight) carries the headers listed above; a table-driven test over 15 representative routes asserts exact values; authenticated and billing routes also carry `Cache-Control: no-store`.",
+    "A request with `Origin: https://evil.example` receives no `Access-Control-Allow-Origin`; an allowed origin receives exactly that origin (not `*`) with `Vary: Origin`; credentials are allowed only on `/v1/auth/token`.",
+    "`pnpm security:secrets` fails on a planted fake AWS key and a planted `cen_live_` key in a test fixture, and passes on a clean tree; the weekly full-history scan job is defined.",
+    "`pnpm security:deps` fails for: a dependency with an install script not on the allow-list, a range (`^`/`~`) version, a high-severity advisory, a GPL licence; passes on the repo's real lockfile.",
+    "SBOM CycloneDX JSON is produced for each service image and attached to the CI run; trivy fails the build on critical findings in the image.",
+    "WAF plan JSON contains: managed ruleset enabled, rate-limit rules 30/min and 20/min as stated, body limits, and denies non-HTTPS; policy test asserts them.",
+    "Containers run as non-root (UID != 0) verified by a Dockerfile lint test; the WAF does not block the relay's WS upgrade on the allow-listed path (verified in a plan test of rule ordering)."
+  ],
+  "tests": [
+    "header table-driven tests (Vitest) incl. error paths.",
+    "CORS preflight tests (allowed/denied/credentials).",
+    "script tests with fixture repos for deps, licences and secrets.",
+    "Terraform plan-JSON policy tests for the WAF module.",
+    "Dockerfile lint (hadolint) and trivy in CI.",
+    "regression test that `Cache-Control: no-store` is present on `/v1/auth/token`."
+  ],
+  "guardrails": [
+    "MUST NOT use wildcard CORS origins and MUST NOT reflect arbitrary `Origin` values.",
+    "MUST NOT weaken a header per route without a documented exception list in `docs/security/hardening.md` and a test.",
+    "MUST NOT add runtime dependencies with install scripts; exceptions require an issue link and an allow-list entry with justification.",
+    "MUST NOT commit secrets scanning baselines that hide real findings; baseline entries need expiry dates.",
+    "MUST NOT block `/healthz`, `/readyz`, `/v1/status` or the relay WS upgrade through WAF rules (availability)."
+  ],
+  "failure_modes": [
+    "WAF rule false positive blocks legitimate traffic -> rule can be switched to `log` mode via variable without redeploying the app; runbook entry.",
+    "Advisory database outage in CI -> `security:deps` fails closed on main, warns on PRs after 1 retry.",
+    "New dependency lacks licence metadata -> treated as failure until reviewed."
+  ],
+  "unblocks_gate": "G6",
+  "notes": "CONTRACT GAP: the relay's WebSocket URL/path is not specified in any contract; the WAF module takes it as the variable `ws_path_regex`. The security-header test must also be run against the relay's HTTP upgrade response, which the relay lane owns. This lane's scripts live in `infra/security/` because the backend layout has no `tools/` directory."
+}

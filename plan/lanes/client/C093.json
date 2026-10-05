@@ -1,0 +1,84 @@
+{
+  "id": "C093",
+  "title": "Web end-to-end tests with Playwright against the mock backend",
+  "plan": "client",
+  "phase": "P5 Web",
+  "size": "M",
+  "role": "qa",
+  "depends_on": [
+    "C007",
+    "C083"
+  ],
+  "goal": "A Playwright suite runs the web app in Chromium, Firefox and WebKit against the mock backend and proves the critical journeys, accessibility, CSP and bundle behaviour on every PR in under 10 minutes.",
+  "scope_in": [
+    "Playwright config and fixtures in apps/web/e2e/: starts the mock backend (lane C007) and the Vite preview build, per-test isolation via seeded state, trace/video on first retry, 3 browsers, 1 retry on CI.",
+    "Journeys: sign-in with PKCE (C082), join via /j/<token> with fragment key (C088), open session and read transcript, submit queue item as editor and approve as host (two browser contexts), reconnect and resume, workspace + invite management (C087), checkout return and entitlement flip (C089), notifications inbox (C090), webhooks secret-once and audit export (C091).",
+    "Accessibility gate: axe-core scan on every route in light and dark; keyboard-only walkthrough scripts; 200 % zoom and 320 px reflow checks; forced-colors and reduced-motion emulation.",
+    "Security assertions: CSP violation listener fails tests on any violation; request log asserts no token or fragment key in any URL; no `localStorage` secrets.",
+    "Performance smoke: Lighthouse CI (desktop and mobile throttled) with thresholds; bundle size report check.",
+    "Visual regression for primitives in both themes using pixel-diff with a 0.1 % tolerance."
+  ],
+  "scope_out": [
+    "Unit/component tests inside each web lane (those lanes own them).",
+    "Mock backend implementation (C007).",
+    "Cross-repo integration with the real backend (C100 gate scripts).",
+    "TUI end-to-end (pty harness, C008)."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-AUTH",
+    "CT-WS-ENVELOPE",
+    "CT-RESUME",
+    "CT-WS-QUEUE",
+    "CT-DEEPLINK",
+    "CT-ENTITLEMENTS",
+    "CT-API-WEBHOOKS",
+    "CT-API-AUDIT",
+    "CT-API-NOTIFY",
+    "CT-ERR"
+  ],
+  "build_against": "Entirely against the mock backend (lane C007) REST + relay simulator started by the Playwright `webServer` config; no real services.",
+  "deliverables": [
+    "apps/web/e2e/",
+    "apps/web/playwright.config.ts",
+    "apps/web/lighthouserc.json"
+  ],
+  "interfaces": [
+    "pnpm --filter @centcom/web e2e [--project=chromium|firefox|webkit] [--grep @smoke]",
+    "pnpm --filter @centcom/web e2e:a11y  // axe scans on all routes",
+    "pnpm --filter @centcom/web lighthouse  // LHCI, thresholds below",
+    "Fixture API: test.extend<{mock: MockBackendHandle; asUser(role): Page; asHost(): Page}>",
+    "Tags: @smoke (<= 2 min), @journey, @a11y, @security, @visual"
+  ],
+  "acceptance": [
+    "Full suite runs in <= 10 min on the CI matrix (3 browsers sharded 3 ways); @smoke subset <= 2 min and runs on every push.",
+    "Two-context test: host approves a guest's queued message and the guest context shows state `running` then `done` within 3 s on the simulator; asserts frame-level sequence via the mock's recorder.",
+    "Forced disconnect (mock closes socket with 1001) -> transcript resumes with no duplicates; with 4403 the removal message is shown and no reconnect occurs within 20 s.",
+    "PKCE journey asserts: `state` mismatch blocked, no `code` in the URL after callback, no tokens in any storage after sign-in and sign-out.",
+    "/j/<token>#k=… journey asserts the fragment never appears in any recorded request URL or header.",
+    "axe: zero serious/critical violations on every route and state registered by the route glob (suite fails if a route lacks an a11y test).",
+    "Lighthouse thresholds on `/` and `/s/:id` mock: performance >= 90, accessibility >= 95, best-practices >= 95, LCP < 2.5 s, CLS < 0.1, TBT < 200 ms.",
+    "CSP: any `securitypolicyviolation` event fails the test; the suite includes a negative test that injecting an inline script is blocked.",
+    "Flake budget: 0 tests retried more than once in 20 consecutive CI runs (tracked via report); quarantined tests need an issue link."
+  ],
+  "tests": [
+    "e2e/journeys/*.spec.ts (auth, session, invite, workspace, billing, notifications, integrations).",
+    "e2e/a11y/routes.spec.ts, e2e/a11y/keyboard.spec.ts, e2e/a11y/zoom.spec.ts.",
+    "e2e/security/csp.spec.ts, e2e/security/no-secrets-in-urls.spec.ts.",
+    "e2e/visual/primitives.spec.ts.",
+    "The suite's own self-test: e2e/meta/route-coverage.spec.ts asserting every route has a journey or a11y test."
+  ],
+  "guardrails": [
+    "MUST run against the mock only; tests MUST NOT call real api.centcom.dev or relay hosts (network deny-list in config fails the test).",
+    "MUST use deterministic data: fixed clock (`page.clock`), seeded ULIDs, no sleeps over 250 ms (use web-first assertions).",
+    "MUST NOT commit trace/video artifacts or screenshots with secrets; CI artifacts retained 7 days.",
+    "Test secrets and tokens are generated per run and never printed in logs."
+  ],
+  "failure_modes": [
+    "Mock backend fails to start in 30 s -> abort with a single clear error, no per-test noise.",
+    "Browser install missing in CI -> fail fast with install hint.",
+    "Visual diffs from font rendering -> compare only within same OS image; update snapshots via a labelled PR job."
+  ],
+  "unblocks_gate": "G6",
+  "notes": "WebKit lacks some Web Locks behaviours; the refresh single-flight test is tagged chromium+firefox only if WebKit proves unsupported (documented skip with issue link)."
+}

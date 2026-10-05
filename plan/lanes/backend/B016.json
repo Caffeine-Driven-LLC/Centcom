@@ -1,0 +1,86 @@
+{
+  "id": "B016",
+  "title": "Device authorization grant endpoints (RFC 8628)",
+  "plan": "backend",
+  "phase": "P1 Identity",
+  "size": "L",
+  "role": "identity",
+  "depends_on": [
+    "B013",
+    "B017"
+  ],
+  "goal": "Terminal clients can sign in through the RFC 8628 device authorization grant: request a code, wait while the user approves in a browser, and receive tokens bound to a newly registered device.",
+  "scope_in": [
+    "`POST /v1/auth/device/code`: body `{client_id, scope?, device_name, device_pubkeys:{x25519,ed25519}}`; client_id must be `centcom-cli`, `centcom-web` or `centcom-tui`; returns `{device_code, user_code, verification_uri, verification_uri_complete, expires_in:600, interval:5}`.",
+    "Code generation: `device_code` 256-bit CSPRNG (stored as sha256 hash only); `user_code` 8 chars from `[A-Z2-9]` minus `0,O,1,I,L`, shown `ABCD-EFGH`, unique among live codes, TTL 10 min.",
+    "Device grant handler for `POST /v1/auth/token` with `grant_type=urn:ietf:params:oauth:grant-type:device_code`, registered into B017's grant-handler registry: returns `authorization_pending`, `slow_down` (+5 s to interval, persisted), `access_denied`, `expired_token`, or tokens.",
+    "On approval: validates both public keys (32 bytes base64url, not all-zero), inserts the `dev_` row in devices (name, platform, keys, fingerprint per CT-CRYPTO `BLAKE2b-128(Dx||Ds)` base32 `ABCD-EFGH-IJKL`) and calls B017 `issueTokens` bound to that device.",
+    "Service functions for the browser page: `lookupUserCode(userCode)`, `approveDeviceGrant(userCode, userId)`, `denyDeviceGrant(userCode, userId)`, with per-user attempt limiting.",
+    "Migration for table `device_grants` (hash of device_code, user_code, client_id, scope, pubkeys, status, user_id, interval_s, last_polled_at, expires_at)."
+  ],
+  "scope_out": [
+    "The verification web page and the login methods behind it (login lanes); this lane exposes only the service functions.",
+    "Token minting, refresh, JWKS (B017).",
+    "Device listing/revocation endpoints (B020).",
+    "Rate-limit middleware itself (B023); this lane only declares the `auth` bucket on its routes."
+  ],
+  "implements": [
+    "CT-AUTH"
+  ],
+  "consumes": [
+    "CT-ERR",
+    "CT-IDS",
+    "CT-CRYPTO",
+    "CT-PAGE",
+    "CT-RBAC"
+  ],
+  "build_against": "B017 token service and B010 test stack; a test helper calls `approveDeviceGrant` to play the browser, and scripted HTTP calls play the terminal client.",
+  "deliverables": [
+    "apps/api/src/modules/auth/device/routes.ts",
+    "apps/api/src/modules/auth/device/service.ts",
+    "apps/api/src/modules/auth/device/usercode.ts",
+    "apps/api/src/modules/auth/device/store.ts",
+    "apps/api/src/modules/auth/device/grant-handler.ts",
+    "apps/api/src/modules/auth/device/keys.ts",
+    "packages/db/migrations/20260102000100_device_grants.sql",
+    "packages/db/src/schema/device-grants.ts",
+    "apps/api/test/modules/auth/device/"
+  ],
+  "interfaces": [
+    "`POST /v1/auth/device/code` (application/json) -> 200 `{device_code, user_code, verification_uri, verification_uri_complete, expires_in, interval}`.",
+    "`POST /v1/auth/token` with `grant_type=urn:ietf:params:oauth:grant-type:device_code`, `device_code`, `client_id` -> tokens or RFC 8628 error codes `authorization_pending|slow_down|access_denied|expired_token`.",
+    "`DeviceGrantService { start(req): Promise<DeviceCodeResponse>; lookupUserCode(code): Promise<PendingGrant|null>; approveDeviceGrant(userCode: string, userId: string): Promise<void>; denyDeviceGrant(userCode: string, userId: string): Promise<void> }`.",
+    "`generateUserCode(rng): string`, `formatUserCode`, `normaliseUserCode` (accepts lower-case and missing hyphen)."
+  ],
+  "acceptance": [
+    "Start returns `expires_in` 600, `interval` 5, `user_code` matching `^[A-HJ-KM-NP-Z2-9]{4}-[A-HJ-KM-NP-Z2-9]{4}$` (no 0,O,1,I,L) and `verification_uri_complete` containing the user_code.",
+    "Polling before approval returns `authorization_pending`; polling again sooner than `interval` returns `slow_down` and the stored interval grows to 10 s.",
+    "After `approveDeviceGrant`, the next poll returns an access token (JWT with `dev` claim = the new `dev_` id, 15 min) and a refresh token; a second poll with the same device_code returns `expired_token` (single use).",
+    "After 600 s (fake clock) polling returns `expired_token`; after `denyDeviceGrant` it returns `access_denied`.",
+    "An invalid `client_id` or invalid pubkey (31 bytes, not base64url, all zero) returns a 400-class problem+json with `errors[]` pointer `/device_pubkeys/x25519` (or `/device_pubkeys/ed25519`, `/client_id`).",
+    "`device_code` exists in the database only as a hash: dumping the table never yields a usable device_code.",
+    "10 wrong `user_code` lookups from one user/IP within 10 minutes lock further lookups for 15 minutes; responses for wrong and expired codes are identical in body.",
+    "Requested `scope` is intersected with the CLI-allowed scopes; `admin` is never granted."
+  ],
+  "tests": [
+    "usercode.test.ts: alphabet, collision handling, normalisation, 100 000 generated codes have no forbidden chars.",
+    "flow.test.ts: pending, slow_down, approve, deny, expiry, single-use (fake clock).",
+    "keys.test.ts: pubkey validation table, fingerprint format.",
+    "security.test.ts: hashes at rest, lookup lockout, uniform errors.",
+    "rfc8628.test.ts: error body fields and HTTP statuses."
+  ],
+  "guardrails": [
+    "MUST store only sha256(device_code) and never log device_code, user_code or tokens.",
+    "MUST compare secrets with constant-time functions and return the same body for unknown/expired/used codes.",
+    "MUST make approval and device creation one transaction; a failed token issue MUST NOT leave an approved but orphaned device row.",
+    "MUST bind issued tokens to the new device and MUST NOT allow polling with a different `client_id` than the one used at start.",
+    "MUST NOT let an approved grant be approved twice or by a different user afterwards."
+  ],
+  "failure_modes": [
+    "DB error during poll -> 503 problem with `retry_after_s`; the client keeps polling per interval.",
+    "User approves after expiry -> approval rejected with `expired_token` semantics; the page can offer retry.",
+    "Concurrent polls racing the approval -> exactly one receives tokens (row lock / status compare-and-set)."
+  ],
+  "unblocks_gate": "G1",
+  "notes": "CONTRACT GAP: the `verification_uri` host/path (the browser approval page) is not specified; make it config `DEVICE_VERIFICATION_URI`. The page needs a logged-in browser session supplied by the login lanes. Device creation here duplicates registry logic owned by B020; B020's `registerDevice` should be adopted in a follow-up. SPLIT? L-sized."
+}

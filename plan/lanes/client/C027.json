@@ -1,0 +1,76 @@
+{
+  "id": "C027",
+  "title": "Checkpoints and rewind",
+  "plan": "client",
+  "phase": "P1 Agent runtime",
+  "size": "M",
+  "role": "runtime",
+  "depends_on": [
+    "C017",
+    "C026"
+  ],
+  "goal": "Before each user prompt the agent's working tree is captured as a checkpoint, and the user can rewind code, conversation, or both to any earlier checkpoint without touching their branch, index or unrelated work.",
+  "scope_in": [
+    "Automatic checkpoint at the start of every user turn (before the first tool call), labelled with the prompt's first 60 chars, stored per session; cap 100 checkpoints per session, oldest evicted first.",
+    "Git-backed strategy: snapshot the working tree into a commit object using a temporary index (`GIT_INDEX_FILE`), `git add -A` (respecting .gitignore), `git write-tree`, `git commit-tree`, stored under `refs/centcom/checkpoints/<ses_id>/<n>`; never touches HEAD, the real index, stash or the branch.",
+    "Non-git strategy: content-addressed backup (sha256) of each file just before an agent write tool modifies it, via a `beforeWrite(path)` hook, under `<data>/checkpoints/<ses_id>/blobs/`.",
+    "`rewind(sessionId, checkpointId, mode)` with modes `code`, `conversation`, `both`; `previewRewind` returns the exact file list that would change (restored, deleted, untouched-because-modified-outside-agent).",
+    "Slash command `/rewind [n]` and an action `checkpoints.rewind` bound to `esc esc` through the lane C034 action registry; interactive picker lists checkpoints with age, label and file-change counts.",
+    "Conversation rewind calls lane C026 `markRewind(toSeq)` and tells the runner to fork from that point; the old turns stay in the log."
+  ],
+  "scope_out": [
+    "Worktree creation and branch management (lane C017); this lane works inside whichever worktree the agent runs in.",
+    "Undoing side effects outside the working tree: shell commands that touch other directories, network calls, installed packages, database changes. The UI must say so (see guardrails).",
+    "Persisting transcripts (lane C026) and rendering the picker as a polished overlay (basic Ink list only here).",
+    "Remote/shared sessions: a rewind is a local-agent action and sends no wire frame in this lane."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-IDS"
+  ],
+  "build_against": "Real git in temp directories created by the lane C008 fixtures (a scripted repo builder) and an in-memory C026 store stub. No backend involved.",
+  "deliverables": [
+    "packages/agent/src/checkpoints/",
+    "packages/agent/src/checkpoints/README.md",
+    "apps/cli/src/commands/rewind.ts"
+  ],
+  "interfaces": [
+    "`interface CheckpointManager { create(label: string): Promise<Checkpoint>; list(): Checkpoint[]; preview(id: string, mode: RewindMode): Promise<RewindPlan>; rewind(id: string, mode: RewindMode, opts?: {confirmedPaths?: string[]}): Promise<RewindResult>; beforeWrite(absPath: string): Promise<void>; dispose(): Promise<void> }`",
+    "`type RewindMode = 'code' | 'conversation' | 'both'`; `type Checkpoint = {id: string; n: number; at: string; label: string; promptSeq: number; strategy: 'git' | 'blobs'; files: {changed: number; added: number; removed: number}}`",
+    "`type RewindPlan = {restore: string[]; delete: string[]; skippedModifiedOutside: string[]; needsConfirm: boolean}`",
+    "`createCheckpointManager(deps: {cwd: string; sessionId: string; store: SessionHandle; git: GitRunner; clock: Clock}): CheckpointManager`",
+    "Slash `/rewind [n]` (n = checkpoints back from latest); action id `checkpoints.rewind` default key `esc esc` (two presses within 600 ms while the agent is idle)."
+  ],
+  "acceptance": [
+    "Creating a checkpoint in a repo with 2,000 tracked files and 5 changed files takes under 500 ms and leaves `git status --porcelain`, HEAD and `.git/index` byte-identical.",
+    "`rewind(id,'code')` restores every file the agent changed since the checkpoint to its checkpoint content and deletes files the agent created since, verified by tree hash equality with the checkpoint tree.",
+    "Files the user edited outside the agent after the checkpoint (mtime/content differs from the last agent write) appear in `skippedModifiedOutside`, `needsConfirm` is true, and they are untouched unless passed in `confirmedPaths`.",
+    "Untracked files present before the checkpoint that the agent never touched, and anything matched by .gitignore, are never deleted by a rewind.",
+    "`rewind(id,'conversation')` appends a `rewind` record via C026, leaves files unchanged, and the next prompt runs with context truncated to that checkpoint.",
+    "The 101st checkpoint evicts checkpoint 1 and deletes its ref; `git count-objects` growth after 100 checkpoints of 1 MiB changes stays under 150 MiB.",
+    "In a directory that is not a git repo the blob strategy restores a file edited three times by the agent to its content at checkpoint 2, and `delete`s a file the agent created.",
+    "The rewind confirmation text states that shell command effects outside tracked files are not undone."
+  ],
+  "tests": [
+    "checkpoints/git-strategy.test.ts: real git in temp repos; asserts HEAD/index/stash untouched, ignored and untracked-preexisting files preserved.",
+    "checkpoints/blob-strategy.test.ts: beforeWrite hook, dedupe by hash, non-git directory.",
+    "checkpoints/rewind-modes.test.ts: code, conversation, both; modified-outside detection; confirmedPaths.",
+    "checkpoints/eviction.test.ts: cap of 100 and ref cleanup; property test that rewinding to n then to the latest checkpoint is a no-op.",
+    "checkpoints/binary-and-large.test.ts: binary files, 10 MiB files, symlinks, file mode changes."
+  ],
+  "guardrails": [
+    "MUST NEVER modify the user's HEAD, branch, real index, stash, reflog entries or `.gitignore`; all git plumbing uses a temporary index and refs under `refs/centcom/`.",
+    "MUST NEVER delete a file the agent did not create after the checkpoint, and MUST NEVER overwrite a file changed outside the agent without explicit `confirmedPaths`.",
+    "MUST run git with an argument array (no shell), with `GIT_TERMINAL_PROMPT=0` and a 30 s timeout per command.",
+    "MUST resolve every restore/delete path and refuse any that resolves outside the repo root (symlink and `..` escape).",
+    "MUST NOT follow symlinks when restoring; restore the link itself.",
+    "MUST clean up `refs/centcom/checkpoints/<ses_id>/*` when the session is deleted (lane C026 `remove`)."
+  ],
+  "failure_modes": [
+    "`git add -A` fails or exceeds the 30 s timeout -> checkpoint is marked `unavailable`, a warning toast says rewind of code will not be possible for this turn, the turn still runs.",
+    "A restore fails midway -> stop, report which paths were restored and which were not, leave a recovery ref `refs/centcom/rewind-undo/<ses_id>` pointing at the pre-rewind tree so the user can retry.",
+    "Repo is in the middle of a merge/rebase -> refuse code rewind with a clear message; conversation rewind still allowed."
+  ],
+  "unblocks_gate": null,
+  "notes": "Pre-rewind safety: before any code rewind, create an automatic checkpoint so the rewind itself is undoable. Bash-tool side effects cannot be captured; document this in the README and the confirmation copy."
+}

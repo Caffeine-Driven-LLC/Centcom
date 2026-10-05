@@ -1,0 +1,94 @@
+{
+  "id": "C068",
+  "title": "Update client: check, download, verify, apply",
+  "plan": "client",
+  "phase": "P3 Network",
+  "size": "L",
+  "role": "release",
+  "depends_on": [
+    "C012",
+    "C051"
+  ],
+  "goal": "Safely update a Centcom installation: check a release channel, download the artifact for this platform, verify hash and Ed25519 signature, and apply it atomically with rollback, refusing anything unverifiable.",
+  "scope_in": [
+    "Manifest client: GET /v1/releases/{channel}/latest?platform=<linux|darwin|win32>&arch=<x64|arm64> and GET /v1/releases/{channel}/manifest.json for `channel` in `stable|beta|nightly`; validate against schemas/release-manifest.schema.json via C003; read the minimum supported version.",
+    "Version logic: semver compare; update only to a higher version on the same channel (downgrade only with explicit `--rollback` to the saved previous binary); channel switch is explicit; honour `min_client_version` from the manifest and `/v1/status`, and the `client_too_old` (HTTP 426 / WS 4426) signal as 'update required'.",
+    "Download: streamed to a temp file in the install directory with resume (HTTP Range) on interruption, size cap taken from the manifest `size` (abort if more bytes arrive), 10 s connect and 60 s idle timeouts, progress callbacks.",
+    "Verification before any apply: SHA-256 equals the manifest value (constant-time compare), Ed25519 signature over the manifest-defined message verifies against the embedded release public key set (supports 2 keys for rotation) in `keys.ts`; failure deletes the temp file.",
+    "Apply: for standalone binaries (Node SEA) atomic replace via rename in the same directory, keep previous as `centcom.prev` for rollback, Windows rename-away-then-move for a running exe, restart hint; for npm/Homebrew installs detect the install method and print the right command instead of self-modifying.",
+    "Scheduling: background check at most once per 24 h at startup (ETag cached, non-blocking, 5 s timeout), opt-out via config `update.check=false` / env `CENTCOM_NO_UPDATE_CHECK=1`, emits an `update-available` event (state name `update-available`).",
+    "CLI: `centcom update [--check] [--channel stable|beta|nightly] [--yes] [--rollback] [--json]`."
+  ],
+  "scope_out": [
+    "Building, signing and publishing artifacts, version/changeset tooling: lane C012; installer packaging: lane C094; auto-update UX integration and channels in the UI: lane C095.",
+    "The release CDN and manifest generation (real backend and release process).",
+    "Update-result telemetry: lane C010.",
+    "Delta/binary-diff updates (full artifact only in v1)."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-API-RELEASES",
+    "CT-VER",
+    "CT-ERR",
+    "CT-STATUS",
+    "CT-CRYPTO"
+  ],
+  "build_against": "the mock backend (lane C007): REST from OpenAPI plus the WebSocket relay simulator, started in-process with `startMockBackend()` from @centcom/testkit; no real backend is needed for the manifest endpoints, plus a local static artifact server in @centcom/testkit that serves signed fixture binaries (valid, wrong hash, bad signature, truncated, oversized) produced with a test key; the production public keys are never used in tests (injectable key set).",
+  "deliverables": [
+    "packages/net/src/update/checker.ts",
+    "packages/net/src/update/downloader.ts",
+    "packages/net/src/update/verifier.ts",
+    "packages/net/src/update/applier.ts",
+    "packages/net/src/update/install-method.ts",
+    "packages/net/src/update/keys.ts",
+    "packages/net/src/update/index.ts",
+    "packages/net/src/update/README.md",
+    "packages/net/src/update/__tests__/",
+    "apps/cli/src/commands/update/"
+  ],
+  "interfaces": [
+    "`new UpdateClient(o: { http: HttpClient; currentVersion: string; platform: NodeJS.Platform; arch: string; channel: Channel; keys: ReleaseKeySet; installDir: string; clock; fs: FsLike })`",
+    "`check(): Promise<{ available: boolean; version?: string; channel: Channel; notesUrl?: string; required: boolean }>`; `download(o?: { onProgress?: (p: { received: number; total: number }) => void; signal?: AbortSignal }): Promise<StagedUpdate>`; `verify(s: StagedUpdate): Promise<void>`; `apply(s: StagedUpdate): Promise<{ restartRequired: boolean; previous: string }>`; `rollback(): Promise<void>`",
+    "CLI: `centcom update [--check] [--channel stable|beta|nightly] [--yes] [--rollback] [--json]`; exit codes 0 up to date or updated, 1 failure, 10 update available (with `--check`)",
+    "`detectInstallMethod(): 'sea'|'npm'|'homebrew'|'unknown'`",
+    "`ReleaseKeySet = { keys: { id: string; publicKey: string /* base64url Ed25519 */ }[] }` exported from keys.ts (production keys filled by lane C012's signing procedure)"
+  ],
+  "acceptance": [
+    "`check()` with the mock advertising a higher version returns `available:true`; equal or lower returns false; a pre-release on `stable` is ignored; `--channel beta` requests `/v1/releases/beta/latest` with the right `platform` and `arch` query values.",
+    "A staged artifact with a flipped byte fails `verify()` with `HashMismatchError`; with a correct hash but a signature from an unknown key fails with `SignatureError`; with valid hash and signature passes; in both failures the temp file is deleted and the installed binary is byte-identical.",
+    "Verification happens before apply in every code path: an `apply()` call on an unverified StagedUpdate throws `NotVerifiedError` (tested by calling apply first).",
+    "Interrupting a 50 MB download at 40 % and calling `download()` again resumes with a `Range` request and ends with a verified file; a server sending more bytes than manifest `size` aborts at size+1 byte.",
+    "Apply on a SEA fixture directory replaces the binary atomically (the old file is never partially written: a simulated crash between steps leaves either the old or the new file complete) and `centcom.prev` exists; `rollback()` restores it; the downgrade without `--rollback` is refused.",
+    "On npm and Homebrew install methods `apply` is not performed and the command prints the matching upgrade command (`npm i -g ...` / `brew upgrade ...`) with exit 0.",
+    "Background check runs at most once per 24 h (state file), makes no request when `CENTCOM_NO_UPDATE_CHECK=1`, and a failing/slow endpoint (> 5 s) never delays startup or fails the command.",
+    "A `client_too_old` response or WS close 4426 sets `required:true`; `centcom update --check --json` prints `{available, version, channel, required}` and exits 10 when available.",
+    "Manifest failing schema validation, or listing no artifact for this platform/arch, produces a clear 'no update for this platform' result and no download.",
+    "No log line or error contains the signed URL query string."
+  ],
+  "tests": [
+    "update/verifier.test.ts: hash and signature matrices with test keys, key rotation (two keys), wrong key id, malformed signature.",
+    "update/downloader.test.ts: resume, size cap, timeouts, abort, progress.",
+    "update/applier.test.ts: atomic replace with injected fault points, rollback, Windows-style rename path via fs fake.",
+    "update/checker.test.ts: semver/channel rules, required flag, 24 h throttle, opt-out.",
+    "update/install-method.test.ts: detection per install layout fixtures.",
+    "update/cli.test.ts: flags, exit codes, JSON output in the pty harness."
+  ],
+  "guardrails": [
+    "MUST verify SHA-256 and the Ed25519 signature against the embedded public keys BEFORE touching the installed binary; MUST NOT apply, execute or even chmod +x an unverified file.",
+    "MUST NOT fetch public keys from the network or accept keys from the manifest; the trusted key set is compiled in (and MUST support rotation with two active keys).",
+    "MUST download only over https (except an explicit test base URL) and MUST NOT follow redirects to non-https hosts; MUST enforce the manifest `size` as a hard cap.",
+    "MUST apply atomically (same-directory rename) and keep one previous version for rollback; MUST NOT leave a half-written executable on any failure path.",
+    "MUST NOT self-modify package-manager installs (npm, Homebrew); MUST NOT require elevated privileges silently: if the install dir is not writable, print the manual instructions.",
+    "MUST NOT downgrade or switch channel without an explicit flag; MUST NOT block startup or any command on update checks.",
+    "MUST NOT log signed download URLs or signatures beyond the key id."
+  ],
+  "failure_modes": [
+    "Network drops mid-download -> keep the partial file, resume next time (partial files older than 7 days are deleted); never apply a partial.",
+    "Install dir read-only -> report `NotWritableError` with the exact manual steps; nothing changed.",
+    "Manifest signature infrastructure rotated to a key the client does not know -> `SignatureError` with advice to reinstall from the website; no unsigned fallback.",
+    "Disk full during staging -> remove temp file, report the needed space.",
+    "New binary fails a post-apply `--version` smoke check -> automatic rollback to `centcom.prev`."
+  ],
+  "unblocks_gate": "G6",
+  "notes": "Manifest fields (artifact url, sha256, size, signature, min_client_version, notes url) come from schemas/release-manifest.schema.json, which is not present in the contracts/ snapshot. CONTRACT GAP: the exact byte string covered by the Ed25519 artifact signature (artifact bytes vs. hash vs. canonical manifest entry) must be stated by the schema/CT-API-RELEASES; this card assumes the signature covers the artifact SHA-256 digest bytes until clarified."
+}

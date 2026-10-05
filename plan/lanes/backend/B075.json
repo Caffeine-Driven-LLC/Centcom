@@ -1,0 +1,92 @@
+{
+  "id": "B075",
+  "title": "Usage aggregation and quota computation",
+  "plan": "backend",
+  "phase": "P5 Billing",
+  "size": "M",
+  "role": "billing",
+  "depends_on": [
+    "B069",
+    "B074"
+  ],
+  "goal": "Aggregate raw usage into per-workspace period counters, compute quota state against entitlement limits (80 and 100 percent), feed usage into the entitlements object, and serve the usage summary endpoint.",
+  "scope_in": [
+    "Worker job `usage.aggregate` folding usage_event rows (and relay-side counters relay_bytes, queue_items) into usage_counter(workspace, period_start, metric) with <= 60 s lag, idempotent by high-water mark.",
+    "Metric mapping to entitlement keys: agent_minutes -> agent_minutes_month, tokens_in + tokens_out -> tokens_month, queue_items -> queue_items_month; relay_bytes informational only.",
+    "computeQuota(workspaceId, now): per limit {used, limit, pct, exceeded} with null = unlimited and pct = floor(used*100/limit); crossing detection for 80 and 100 stored once per period per limit.",
+    "Period resolution: entitlements.period when subscribed, else calendar month UTC; rollover starts fresh counters.",
+    "On a new crossing: write quota_state, bump entitlements rev through B069 bumpRev, and emit a QuotaCrossed domain event {workspace, limit, pct, resets_at} for B076.",
+    "UsageReaderPort implementation for B069 (usage fields and warnings[]) and GET /v1/workspaces/{id}/usage/summary."
+  ],
+  "scope_out": [
+    "Sending sys.notice and notifications on crossings: B076.",
+    "Ingestion and validation of events: B074.",
+    "Enforcing the 100 percent block on queue approvals, new agents and REST creates: B080 and the relay.",
+    "Pricing or overage billing (none in v1)."
+  ],
+  "implements": [
+    "CT-ENTITLEMENTS",
+    "CT-API-BILLING"
+  ],
+  "consumes": [
+    "CT-API-USAGE",
+    "CT-IDS",
+    "CT-PAGE",
+    "CT-RBAC",
+    "CT-ERR"
+  ],
+  "build_against": "Postgres container seeded with usage_event rows via factories, fixed clock, fake EntitlementService (B069 interface) with plan fixtures from contracts/fixtures/entitlements/, fake RelayCounterPort.",
+  "deliverables": [
+    "apps/api/src/modules/usage/aggregate.ts",
+    "apps/api/src/modules/usage/quota.ts",
+    "apps/api/src/modules/usage/period.ts",
+    "apps/api/src/modules/usage/reader.ts",
+    "apps/api/src/routes/usage-summary/index.ts",
+    "apps/worker/src/jobs/usage-aggregate.ts",
+    "apps/api/src/modules/usage/aggregation-README.md",
+    "apps/api/test/usage/aggregation/",
+    "packages/db/migrations/0075_usage_counters_quota.sql"
+  ],
+  "interfaces": [
+    "UsageAggregator.run(now: Date): Promise<{workspaces:number, events:number}>  // idempotent",
+    "QuotaService.compute(workspaceId, now): Promise<QuotaState>  // {period:{start,end}, items:{key:'agent_minutes_month'|'tokens_month'|'queue_items_month', used:number, limit:number|null, pct:number|null, exceeded:boolean}[], warnings:{limit:string, pct:80|100}[]}",
+    "QuotaService.check(workspaceId, key): Promise<{allowed:boolean, retryAfterS:number|null}>  // used by B080",
+    "UsageReaderPort.read(workspaceId): Promise<{usage:{agent_minutes_month:number, tokens_month:number, queue_items_month:number, seats:number}, warnings:{limit:string,pct:number}[]}>",
+    "GET /v1/workspaces/{id}/usage/summary -> {period, usage, limits, warnings}",
+    "Tables usage_counter(workspace_id, period_start, metric, total bigint, pk(...)), quota_state(workspace_id, period_start, limit_key, crossed_80_at, crossed_100_at), usage_aggregate_cursor(id pk, high_water timestamptz)",
+    "Relay counter port: RelayCounterPort.take(workspaceId, metric): Promise<number>"
+  ],
+  "acceptance": [
+    "Ingesting 3 000 agent_minutes events across a month, then running the aggregator twice, yields a counter equal to the exact sum; the second run changes nothing (idempotent).",
+    "Limit 6000 agent_minutes: used 4799 -> pct 79 and no warning; 4800 -> pct 80 and exactly one warning entry and one QuotaCrossed(80); 6000 -> pct 100, exceeded=true and QuotaCrossed(100); further usage emits no more events in the period.",
+    "tokens_month counts tokens_in + tokens_out; limit null returns pct null, exceeded false and never emits crossings; limit 0 with used 0 returns pct 0, used > 0 returns exceeded true.",
+    "A crossing bumps entitlements rev exactly once (spy on bumpRev) and GET entitlements then lists the warning with the right limit key and pct.",
+    "At the period boundary instant (period.end) counters for the new period start at 0 and previous period state is kept for history; quota_state is per period so a crossing can recur next period.",
+    "Aggregation lag: events ingested at t are visible in QuotaService.compute within 60 s in the integration test using the real job schedule on a fake clock.",
+    "Pooled Team usage: events from 3 users of one workspace sum into one counter; summary endpoint by a workspace member returns 200, by a non-member 404.",
+    "Summary and entitlement `usage.seats` equals seats in use from B030's port (stubbed) and not the Stripe quantity.",
+    "A late event with `at` in the previous period increments the previous period's counter, not the current one."
+  ],
+  "tests": [
+    "usage.aggregate.test.ts: idempotency, high-water mark, late events",
+    "usage.quota.test.ts: thresholds, null/zero limits, property test on random event streams",
+    "usage.period.test.ts: subscription period vs calendar month, rollover",
+    "usage.crossing.test.ts: once-per-period emission and rev bump",
+    "usage.summary-route.test.ts: authz and shape",
+    "usage.entitlements-integration.test.ts: usage and warnings in entitlement object"
+  ],
+  "guardrails": [
+    "MUST aggregate idempotently: a crash and rerun must never double count (use the high-water mark inside the same transaction as the counter update).",
+    "MUST NOT block, delete or modify raw usage_event rows; counters are derived and rebuildable from them.",
+    "MUST emit each 80/100 crossing at most once per (workspace, limit, period).",
+    "MUST treat entitlements as authoritative for limits; MUST NOT read Stripe or plan names.",
+    "LAN and local usage MUST never be counted or blocked: only hosted-session events carry a session_id the backend knows."
+  ],
+  "failure_modes": [
+    "Aggregator crash mid-run -> transaction rolls back, high-water mark unchanged, next run redoes the same window.",
+    "EntitlementService bumpRev fails -> quota_state is not marked crossed (same transaction boundary or retry), so the crossing is retried next run.",
+    "Relay counter source unavailable -> client-reported metrics still aggregate; relay-derived metrics are skipped and retried, flagged by a metric."
+  ],
+  "unblocks_gate": "G4",
+  "notes": "CONTRACT GAP: the usage/summary response shape is not specified; the shape above mirrors the entitlement `limits`/`usage`/`warnings` fields. 'ent' claim refresh happens through rev bumps. Warnings in the contract only name 80 percent explicitly, 100 percent is added as a quota_reached signal by B076; this lane records both crossings but only 80 appears in warnings[] if product prefers (open question)."
+}

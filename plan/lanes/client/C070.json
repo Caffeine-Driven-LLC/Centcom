@@ -1,0 +1,81 @@
+{
+  "id": "C070",
+  "title": "Audit log viewer commands",
+  "plan": "client",
+  "phase": "P3 Network",
+  "size": "S",
+  "role": "net",
+  "depends_on": [
+    "C051"
+  ],
+  "goal": "Let workspace admins read and export the audit log from the CLI, with filters, safe file output and clear messages when the plan or role does not allow it.",
+  "scope_in": [
+    "`centcom audit list [--workspace wsp_..] [--actor <id>] [--action <name>] [--from <time>] [--to <time>] [--limit n] [--json]` over GET /v1/workspaces/{id}/audit with cursor pagination (`--limit` 1..200, default 50) and stable ordering.",
+    "`centcom audit export --format csv|json [--from] [--to] [--actor] [--action] [--out <file>] [--wait] [--force]`: POST .../audit/exports (Idempotency-Key), then poll GET .../audit/exports/{exp} (2 s growing to 10 s, give up after 5 min) and stream the download to a file.",
+    "Time parsing: RFC 3339 or relative (`24h`, `7d`); converted to UTC with millisecond precision; invalid input rejected locally.",
+    "Output: human table (time, actor, action, target, outcome) with control characters stripped, and `--json` passthrough; exit code 4 when no events match (optional) else 0.",
+    "Pre-checks and messages: `audit_log_days == 0` (feature off) from entitlements, `audit:read` scope and admin+ role hints; mapped `forbidden`."
+  ],
+  "scope_out": [
+    "Writing audit events (server) and audit viewer UI (lane C091).",
+    "HTTP plumbing/auth: lanes C051, C052. Entitlement cache: lane C064 (this lane reads entitlements once via the HTTP client only for the pre-check).",
+    "Log shipping or SIEM integration (webhooks lane C069 covers events delivery)."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-API-AUDIT",
+    "CT-PAGE",
+    "CT-ERR",
+    "CT-RBAC",
+    "CT-ENTITLEMENTS",
+    "CT-IDS"
+  ],
+  "build_against": "the mock backend (lane C007): REST from OpenAPI plus the WebSocket relay simulator, started in-process with `startMockBackend()` from @centcom/testkit; no real backend is needed. The mock serves a generated audit log (10 000 events with actors, actions, outcomes), supports the filters, pagination, export job lifecycle (pending, ready with a download URL, failed, expired) and the 403/entitlement paths.",
+  "deliverables": [
+    "apps/cli/src/commands/audit/list.ts",
+    "apps/cli/src/commands/audit/export.ts",
+    "apps/cli/src/commands/audit/time-filter.ts",
+    "apps/cli/src/commands/audit/render.ts",
+    "apps/cli/src/commands/audit/messages.ts",
+    "apps/cli/src/commands/audit/index.ts",
+    "apps/cli/src/commands/audit/README.md",
+    "apps/cli/src/commands/audit/__tests__/"
+  ],
+  "interfaces": [
+    "CLI: `centcom audit list [--workspace wsp_..] [--actor <id>] [--action <name>] [--from <time>] [--to <time>] [--limit n] [--json]`; `centcom audit export --format csv|json [--from] [--to] [--actor] [--action] [--out <file>] [--wait] [--force]`",
+    "`registerAuditCommands(program, deps: { http: HttpClient; io; clock; fs: FsLike; isTTY: boolean })`",
+    "`parseTimeFilter(input: string, now: Date): string /* RFC 3339 UTC ms */`",
+    "Exit codes: 0 ok, 1 failure, 2 auth required, 4 no matching events (list only)"
+  ],
+  "acceptance": [
+    "`audit list --limit 120` against the 10 000-event mock follows cursors until 120 rows are printed, sends `limit<=200` per request and never an offset; `--json` emits one JSON array of 120 events.",
+    "`--actor`, `--action`, `--from` and `--to` are forwarded as query filters; `--from 24h` resolves relative to the injected clock to an RFC 3339 `...Z` value with millisecond precision; `--from yesterday` is rejected locally with exit 1.",
+    "`audit export --format csv --wait --out a.csv` sends POST with an Idempotency-Key, polls at 2 s, 4 s, 8 s, 10 s (cap) on the fake clock until `ready`, downloads to `a.csv` with mode 0600 and prints the byte count; a `failed` job exits 1 with its code.",
+    "An existing output file is not overwritten without `--force` (exit 1, file untouched); a partial download is deleted on failure and on SIGINT.",
+    "Polling gives up after 5 minutes with a message including the export id so the user can resume with `audit export --status <exp>`-style re-run (the id is printed on creation).",
+    "When entitlements report `audit_log_days: 0` the command exits 1 with the 'audit log is not part of your plan' message and makes no audit request; a 403 shows the admin+ hint.",
+    "Event fields from the server containing control or ANSI characters are stripped in table mode; JSON mode preserves data as received.",
+    "No bearer token, signed download URL or export URL appears in logs or error output."
+  ],
+  "tests": [
+    "audit/list.test.ts: pagination, limits, filters, empty result exit code.",
+    "audit/time-filter.test.ts: RFC 3339, relative units, invalid inputs, DST-independent UTC.",
+    "audit/export.test.ts: job lifecycle with fake clock, force/overwrite, SIGINT cleanup, permissions.",
+    "audit/errors.test.ts: 403, entitlement-off, expired export, 429 handling.",
+    "audit/render.test.ts: table width/NO_COLOR/sanitising snapshots."
+  ],
+  "guardrails": [
+    "MUST NOT write export files with permissions broader than 0600 and MUST NOT overwrite existing files without `--force`.",
+    "MUST NOT log or print signed download URLs; stream the body directly to disk with a size/time bound (no unbounded memory buffering).",
+    "MUST NOT use offset pagination or fetch more than the requested `--limit` rows into memory.",
+    "MUST treat role and plan pre-checks as hints only; the server's 403 is authoritative and is shown as is.",
+    "MUST sanitise terminal output (strip control and escape sequences) for table mode."
+  ],
+  "failure_modes": [
+    "Export job expires before download -> exit 1 with 'export expired, run again'; no partial file.",
+    "Network failure mid-download -> remove partial file, exit 1, suggest re-run (export id printed).",
+    "Large log (millions of rows) -> `list` stays bounded by `--limit`; `export` is the path for bulk data."
+  ],
+  "unblocks_gate": "G5",
+  "notes": "CONTRACT GAP: the audit event object fields and the export job status values are defined only in openapi.yaml; the card assumes the table columns above map to `ts/actor/action/target/outcome`-like fields and must be reconciled with openapi.yaml."
+}

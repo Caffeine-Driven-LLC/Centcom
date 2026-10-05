@@ -1,0 +1,75 @@
+{
+  "id": "C008",
+  "title": "Test harness: vitest setup, pty and TUI snapshot tester, fixtures",
+  "plan": "client",
+  "phase": "P0 Foundations",
+  "size": "M",
+  "role": "qa",
+  "depends_on": [
+    "C002"
+  ],
+  "goal": "A shared test toolkit: Vitest preset with coverage floors and offline enforcement, deterministic helpers (clock, RNG, tmp dirs, fixtures loader), and a pty plus Ink snapshot harness for terminal UI tests.",
+  "scope_in": [
+    "Vitest preset `@centcom/testkit/vitest` (exports `defineCentcomConfig(overrides)`): environment node, `testTimeout` 10 000 ms, `hookTimeout` 10 000 ms, coverage v8 with lines/functions/branches/statements floor 80 and target 90 reported, `retry: 0`, `pool: 'forks'`, deterministic `TZ=UTC`, `LANG=en_US.UTF-8`.",
+    "Global setup that blocks real network: patches `net.connect`/`tls.connect`/`dns.lookup` to reject any non-loopback target with an error naming the test; `console.log/info/warn/error` called from library code fails the test unless explicitly allowed.",
+    "Deterministic helpers: `fakeClock(start)` (implements the injectable `Clock` and drives Vitest fake timers), `seededRng(seed)`, `fixedIds(seed)` (CT-IDS generator), `tmpDir()` with automatic cleanup, in-memory fs (`memfs`-style adapter implementing the fs interfaces other lanes inject), `loadContractFixture(path)`.",
+    "pty harness `PtyHarness`: spawns a command in a pseudo terminal with fixed size (default 100x30), `TERM=xterm-256color`, `COLORTERM=truecolor`, isolated `CENTCOM_CONFIG_DIR`/`CENTCOM_STATE_DIR` temp dirs, `HOME` redirected; `send`, `press`, `waitForText(re, ms=5000)`, `screen()` (rows of plain text from an xterm headless emulator), `cells()` (text + fg/bg + attrs), `resize`, `kill`, `exitCode`.",
+    "Ink snapshot tester `renderInk(element, { cols, rows, colorTier })`: renders with a fake TTY stream, returns `frames`, `lastFrame()`, `screen()`; `expectScreen(screen).toMatchSnapshot()` stores ANSI-stripped text snapshots plus an optional color snapshot (`colorTier: 'truecolor'|'256'|'16'|'none'`).",
+    "Snapshot update policy: snapshots live next to tests in `__snapshots__/`; CI runs with `--ci` so a missing snapshot fails instead of being written.",
+    "A `docs/testing.md` describing conventions: injectable clock/RNG, no real network, 60 s per-lane budget, how to use the mock backend (lane C007)."
+  ],
+  "scope_out": [
+    "The mock backend itself: lane C007.",
+    "CI workflows: lane C002. Example fixtures and seed data: lane C011.",
+    "Playwright setup for the web app: web lanes.",
+    "Writing the TUI components being tested: TUI lanes."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-IDS",
+    "CT-VER"
+  ],
+  "build_against": "Self-testing: the harness is exercised against tiny fixture programs under packages/testkit/src/harness/__fixtures__/ (an echo script, a color printer, an Ink hello component). No backend needed.",
+  "deliverables": [
+    "packages/testkit/src/harness/",
+    "packages/testkit/src/vitest/",
+    "packages/testkit/src/helpers/",
+    "docs/testing.md"
+  ],
+  "interfaces": [
+    "`defineCentcomConfig(o?: UserConfig): UserConfig` (import from `@centcom/testkit/vitest`).",
+    "`interface Clock { now(): number; setTimeout(fn, ms): Handle; clearTimeout(h): void }`; `fakeClock(startMs?: number): Clock & { advance(ms: number): Promise<void>; set(ms: number): void }`.",
+    "`seededRng(seed: number): () => number` (xoshiro128**, values in [0,1)); `fixedIds(seed: number): IdGenerator` (shape from C003).",
+    "`tmpDir(): Promise<{ path: string; dispose(): Promise<void> }>`; `memFs(): FsLike`.",
+    "`class PtyHarness { static spawn(cmd: string, args: string[], o?: PtyOptions): Promise<PtyHarness>; send(s: string): void; press(key: 'enter'|'esc'|'up'|'down'|'left'|'right'|'tab'|'ctrl-c'|string): void; waitForText(re: RegExp | string, timeoutMs?: number): Promise<void>; screen(): string[]; cells(): Cell[][]; resize(cols: number, rows: number): void; kill(): Promise<number> }`.",
+    "`renderInk(el: ReactElement, o?: { cols?: number; rows?: number; colorTier?: ColorTier }): InkTestRun`."
+  ],
+  "acceptance": [
+    "A test that calls `net.connect({host:'example.com', port:443})` fails with an error containing `network access blocked in tests`; loopback connections to 127.0.0.1 succeed.",
+    "`fakeClock(0)`: `advance(1000)` fires a `setTimeout(fn, 999)` exactly once and a 1001 ms timer zero times; two runs produce identical firing order (property test over 200 random timers).",
+    "`PtyHarness.spawn('node', ['fixture-echo.js'])` then `send('hello\\r')` and `waitForText('hello')` resolves in < 2 s; `waitForText('never')` rejects after exactly the given timeout with the last screen contents (redacted of env values) in the message.",
+    "`screen()` of a fixture that prints truecolor text returns plain text rows; `cells()` reports the exact fg hex for each cell; a 100x30 screen has 30 rows of 100 columns.",
+    "`renderInk` of a component printing `<Text color='green'>ok</Text>` with `colorTier:'none'` yields no SGR escape codes; with `truecolor` yields `38;2;` sequences.",
+    "Coverage: `vitest run --coverage` fails with exit code 1 when lines coverage of a package is below 80%.",
+    "The whole harness test-suite finishes in < 30 s on CI and leaves no temp dirs or child processes behind (checked by a leak test)."
+  ],
+  "tests": [
+    "preset.test.ts (config values), network-guard.test.ts, console-guard.test.ts, clock.test.ts, rng.test.ts, tmpdir.test.ts.",
+    "pty.test.ts (spawn, send, wait, timeout, resize, kill, exit code, Windows skip with reason when ConPTY unavailable).",
+    "ink.test.ts (frames, color tiers), snapshot-ci.test.ts (missing snapshot fails under --ci), leak.test.ts."
+  ],
+  "guardrails": [
+    "MUST NOT allow real outbound network in tests; the guard is on by default and can only be lifted per test file with an explicit `allowNetwork('reason')` that CI greps for.",
+    "MUST run spawned programs with an isolated HOME and config/state dirs so tests never read or write the developer's real config or keychain.",
+    "MUST NOT include env values or file contents in failure messages beyond the redacted screen text.",
+    "Pty/emulator packages MUST be prebuilt-binary or pure JS with no install scripts; justify each in the PR.",
+    "Tests MUST be deterministic: no wall-clock sleeps longer than 50 ms; use `fakeClock` or `waitForText`."
+  ],
+  "failure_modes": [
+    "PTY unavailable (e.g. Windows without ConPTY) -> `PtyHarness.spawn` throws `PtyUnavailable`; tests use `describe.skipIf` with the reason printed, never silently pass.",
+    "Child process hangs -> killed after the harness timeout (default 15 s) with SIGKILL and the test fails with the last screen.",
+    "Snapshot differs -> failure shows a unified diff of plain-text rows."
+  ],
+  "unblocks_gate": "G1",
+  "notes": "Colour-tier names match assets/DESIGN.md section 19.3 (truecolor, 256, 16, none). SPLIT? pty+emulator and Ink tester could be separate PRs if the pty dependency choice drags."
+}

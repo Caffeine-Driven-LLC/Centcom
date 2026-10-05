@@ -1,0 +1,92 @@
+{
+  "id": "B081",
+  "title": "Outgoing webhooks: endpoints, delivery, retries, signing",
+  "plan": "backend",
+  "phase": "P6 Platform",
+  "size": "L",
+  "role": "platform",
+  "depends_on": [
+    "B009",
+    "B036"
+  ],
+  "goal": "Deliver workspace events to customer HTTPS endpoints reliably and safely: endpoint management API, signed deliveries, the contract's retry schedule, secret rotation with overlap, a delivery log, and SSRF-safe egress.",
+  "scope_in": [
+    "All CT-API-WEBHOOKS routes: list/create/get/patch/delete endpoints, `POST /v1/webhooks/{id}/test`, `GET /v1/webhooks/{id}/deliveries`, `POST /v1/webhooks/{id}/deliveries/{dlv}/redeliver`; secret shown once on create and on `rotate_secret:true`.",
+    "Event intake: BullMQ queue `webhook.events` and in-process helper `emitWebhookEvent(evt)` that fans an event out to matching enabled endpoints as `dlv_` delivery rows.",
+    "Delivery worker: POST with 10 s timeout, HTTPS only, no redirects, headers `Centcom-Event-Id`, `Centcom-Event-Type`, `Centcom-Delivery-Attempt`, `Centcom-Signature: t=<unix>,v1=<hex>`; `v1 = HMAC_SHA256(secret, t + '.' + raw_body)`.",
+    "Retry schedule 1 m, 5 m, 30 m, 2 h, 6 h, 12 h, 24 h (7 attempts after the first), endpoint health states `healthy -> failing -> disabled` (disabled after 3 consecutive days of failure, owners notified).",
+    "Secret rotation with 24 h overlap during which every delivery carries two `v1` signatures (new and old).",
+    "SSRF defence: resolve DNS, reject private/loopback/link-local/metadata ranges (IPv4 and IPv6), connect to the resolved IP (no re-resolution), re-validate on every attempt.",
+    "Enforcement of `webhooks_max` entitlement on create and workspace/role checks (admin+)."
+  ],
+  "scope_out": [
+    "Producing domain events in other modules; they call `emitWebhookEvent` (billing, sessions, membership, API keys).",
+    "Notification dispatch to owners beyond calling the email service (B032) and the dispatcher (B063).",
+    "Retention purge of old delivery rows (B090 owns the purge job; this lane documents the 30 day delivery-log retention).",
+    "Audit log API (B082); this lane only emits audit events through B036.",
+    "Entitlement cache itself (B080); this lane calls `check('webhooks_max')`."
+  ],
+  "implements": [
+    "CT-API-WEBHOOKS",
+    "CT-WEBHOOKS"
+  ],
+  "consumes": [
+    "CT-RBAC",
+    "CT-ENTITLEMENTS",
+    "CT-PAGE",
+    "CT-ERR",
+    "CT-IDS",
+    "CT-API-AUDIT",
+    "CT-AUTH"
+  ],
+  "build_against": "A local HTTP receiver (testkit, started on loopback with `WEBHOOK_ALLOW_LOOPBACK=true` test-mode flag which is rejected at config validation in stage/prod) records requests and answers with scripted statuses and delays; a fake clock drives the retry schedule; Redis and Postgres containers from B010.",
+  "deliverables": [
+    "apps/api/src/modules/webhooks/",
+    "apps/api/src/routes/webhooks.ts",
+    "apps/worker/src/jobs/webhooks/",
+    "packages/core/src/webhooks/",
+    "packages/db/migrations/081_webhooks.sql",
+    "docs/webhooks/delivery.md"
+  ],
+  "interfaces": [
+    "REST routes exactly as the CT-API-WEBHOOKS table; create body `{url: string, events: string[]}` (HTTPS URL <= 2048 chars, 1..32 events from the CT-WEBHOOKS type list or `*`), response includes `secret` once; `Idempotency-Key` required on create.",
+    "`emitWebhookEvent(evt: {type: WebhookEventType; workspace: string; data: object; created_at?: string}): Promise<void>` exported from `@centcom/core/webhooks`; enqueues to BullMQ `webhook.events`.",
+    "`signPayload(secrets: string[], rawBody: string, nowSeconds: number): string` returns the header value `t=...,v1=...[,v1=...]`.",
+    "BullMQ queues `webhook.events`, `webhook.deliver` (job per attempt, delay per schedule), DLQ `webhook.dead`.",
+    "Tables `webhook_endpoints(id whk_, workspace_id, url, events, enabled, status, secret_enc, prev_secret_enc, prev_secret_expires_at, failing_since)`, `webhook_deliveries(id dlv_, endpoint_id, event_type, attempt, status, http_status, duration_ms, next_attempt_at, created_at)` (no payload body stored beyond the event id and type)."
+  ],
+  "acceptance": [
+    "A 2xx response ends the delivery as `delivered`; non-2xx, timeout (> 10 s) and connection errors each schedule the next attempt using delays 1 m, 5 m, 30 m, 2 h, 6 h, 12 h, 24 h (+/- 10 % jitter) and stop after the 7th retry, marking the delivery `failed`.",
+    "`Centcom-Signature` verifies with `HMAC_SHA256(secret, t + '.' + raw_body)` over the exact bytes sent; during the 24 h overlap the header holds two `v1=` entries and both verify; 24 h + 1 s after rotation only the new one is sent.",
+    "The `id` in the body, the `Centcom-Event-Id` header and the delivery row id are identical across retries of one delivery; `Centcom-Delivery-Attempt` increments 1, 2, 3 ...",
+    "An endpoint URL resolving to 127.0.0.1, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.169.254, ::1 or fc00::/7 is rejected on create (422) and at delivery time (attempt fails with `blocked_destination`), including via DNS rebinding where the second lookup returns a private IP.",
+    "HTTP 301/302 responses are not followed and count as failures; `http://` URLs are rejected on create (422).",
+    "After 3 consecutive days of failing deliveries the endpoint becomes `enabled:false`, `status:'disabled'`, and an email plus audit event are produced exactly once.",
+    "Creating the (`webhooks_max` + 1)-th endpoint returns 403 with an `entitlement_*` code; creating without `Idempotency-Key` returns 400 `idempotency_key_required`; replay returns the stored response and does not return a second different secret.",
+    "No payload contains session content, paths, branch names or keys: a contract test feeds every event type's `data` through the schema and asserts it contains only ids, enums, counts and names allowed by CT-WEBHOOKS.",
+    "`redeliver` of a delivery creates a new attempt within 5 s and appears in the delivery log; test endpoint delivery returns in < 15 s with the attempt result."
+  ],
+  "tests": [
+    "unit: signature generation/verification incl. overlap; retry schedule table with fake clock; SSRF classifier for IPv4/IPv6 forms (decimal, octal, mapped IPv4, bracketed, trailing dot).",
+    "integration: full delivery against the local receiver with scripted failures (500, timeout, redirect, slow body).",
+    "contract: payload shape vs `schemas/webhook.schema.json` and the event type list of CT-WEBHOOKS.",
+    "authz matrix: owner/admin allowed, member/billing/guest denied, cross-workspace denied.",
+    "failure-path: worker crash mid-attempt -> exactly one extra attempt, same delivery id, no duplicate row.",
+    "load test: 1 000 events x 10 endpoints drained in < 60 s on one worker with concurrency 50."
+  ],
+  "guardrails": [
+    "MUST block SSRF: resolve once, validate the IP, connect to that IP with the original Host/SNI; never follow redirects; never send credentials or cookies.",
+    "MUST store signing secrets encrypted at rest (AES-256-GCM with the key from config/KMS) and MUST NOT log secrets, signatures, request bodies or response bodies; store at most the first 1 KiB of a response in the delivery log, with control characters removed.",
+    "MUST show the secret only in the create/rotate response; GET never returns it.",
+    "MUST cap the delivery concurrency per endpoint at 5 and per workspace at 20 so one slow receiver cannot starve others; MUST cap response body reading at 64 KiB.",
+    "MUST NOT include any `ct`, plaintext content, path, branch name or key in any payload (CT-WEBHOOKS).",
+    "MUST treat deliveries as at-least-once and unordered; MUST NOT promise ordering."
+  ],
+  "failure_modes": [
+    "Receiver down for days -> retries per schedule, endpoint `failing`, auto-disable after 3 days, owners emailed once.",
+    "Redis outage -> `emitWebhookEvent` falls back to an outbox table row (`webhook_outbox`) drained when Redis returns; no event lost.",
+    "Secret decryption key unavailable -> deliveries pause (no unsigned sends), alert metric `webhook_secret_unavailable_total`."
+  ],
+  "unblocks_gate": "G5",
+  "notes": "CONTRACT GAP: the contract names no event type for `POST /v1/webhooks/{id}/test`; this lane sends the first subscribed event type with synthetic ids in `data` and a `Centcom-Event-Type` header of that type (to be confirmed by Contract PR). CONTRACT GAP: the body `id` is documented as `dlv_` while the header is `Centcom-Event-Id`; both carry the delivery id here. SPLIT? Management API and delivery engine could be two lanes if schedule slips. Deliverable log retention is 30 days (assumption, enforced by B090)."
+}

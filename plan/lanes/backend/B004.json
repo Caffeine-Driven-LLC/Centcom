@@ -1,0 +1,71 @@
+{
+  "id": "B004",
+  "title": "Typed configuration and secrets loader",
+  "plan": "backend",
+  "phase": "P0 Foundations",
+  "size": "S",
+  "role": "platform",
+  "depends_on": [
+    "B001"
+  ],
+  "goal": "All services read configuration through one typed, validated loader with defaults, documented keys and a safe way to inject secrets.",
+  "scope_in": [
+    "`defineConfig(schema)` helper (zod) that parses `process.env` once at startup, applies defaults, and throws a single aggregated error listing every invalid key (names only, never values).",
+    "Base config sections: node env, service name, log level, HTTP port/host, `PUBLIC_API_URL`, `DATABASE_URL`, `REDIS_URL`, trusted-proxy settings, `REQUEST_TIMEOUT_MS`.",
+    "Secret handling: any `FOO` may be supplied as `FOO_FILE` (path to a file, trimmed) for Docker/Fly secrets; secrets are wrapped in a `Secret<T>` type whose toString/toJSON/inspect output is `[redacted]`.",
+    "`.env.example` with names only and a generated `docs/config.md` table (key, type, default, required, secret).",
+    "Rule that other lanes declare their own keys with `defineConfig` in their module (no central edits)."
+  ],
+  "scope_out": [
+    "Per-feature keys (JWT keys, Stripe, R2, email): owned by the lane that uses them, declared with this helper.",
+    "Loading secrets from a cloud secret manager (infra lane).",
+    "Logging (B005)."
+  ],
+  "implements": [],
+  "consumes": [],
+  "build_against": "Pure unit tests with an injected env object; no files or network except a temp dir for *_FILE tests.",
+  "deliverables": [
+    "packages/core/src/config/define.ts",
+    "packages/core/src/config/secret.ts",
+    "packages/core/src/config/base.ts",
+    "packages/core/src/config/index.ts",
+    "packages/core/test/config/",
+    "packages/core/scripts/gen-config-docs.ts",
+    ".env.example",
+    "docs/config.md"
+  ],
+  "interfaces": [
+    "`defineConfig<S extends ZodTypeAny>(schema: S, env?: Record<string,string|undefined>): z.infer<S>`.",
+    "`class Secret<T=string> { reveal(): T; toString(): '[redacted]'; toJSON(): '[redacted]' }`; `secretString()` zod helper.",
+    "`baseConfig(env?)` returns `{nodeEnv:'development'|'test'|'production', serviceName, logLevel, host, port, publicApiUrl, databaseUrl: Secret, redisUrl: Secret, trustedProxyHops:number}`.",
+    "`ConfigError` listing `{key, problem}` pairs."
+  ],
+  "acceptance": [
+    "With `DATABASE_URL` missing, `baseConfig()` throws ConfigError whose message lists `DATABASE_URL` and not any value from env.",
+    "`JSON.stringify({s: new Secret('x')})` yields `{\"s\":\"[redacted]\"}` and `util.inspect` shows `[redacted]`.",
+    "When both `FOO` and `FOO_FILE` are set the file wins; a trailing newline in the file is trimmed; an unreadable file gives ConfigError naming `FOO_FILE`.",
+    "Defaults: `PORT` 3000, `LOG_LEVEL` info, `REQUEST_TIMEOUT_MS` 30000, `TRUSTED_PROXY_HOPS` 1; out-of-range PORT (0 or 70000) is rejected.",
+    "In `production`, a `DATABASE_URL` without `sslmode=require` or a `REDIS_URL` not starting with `rediss://` is rejected unless `ALLOW_INSECURE_BACKENDS=1`.",
+    "`pnpm --filter @centcom/core gen:config-docs` rewrites docs/config.md; a test fails if docs/config.md is stale vs the schema.",
+    "The parsed config object is deep-frozen; assigning to it throws in strict mode."
+  ],
+  "tests": [
+    "define.test.ts: aggregate errors, defaults, coercion of ints/bools.",
+    "secret.test.ts: redaction under JSON, inspect, template string, structured clone.",
+    "file-secrets.test.ts: *_FILE precedence, missing file, trim.",
+    "docs-fresh.test.ts: generated table equals committed docs/config.md."
+  ],
+  "guardrails": [
+    "MUST NOT include config values (especially secrets) in any error message, log or thrown object.",
+    "MUST parse env exactly once at process start and pass the object by injection; MUST NOT read process.env anywhere else in the codebase (lint rule `no-process-env` outside entrypoints and this package).",
+    "MUST NOT commit real values in .env.example; names and harmless placeholders only.",
+    "MUST reject unknown NODE_ENV values rather than defaulting to development in production."
+  ],
+  "failure_modes": [
+    "Invalid config -> process exits non-zero at startup (entrypoint catches ConfigError), before opening ports.",
+    "Secret file permissions too open (world-readable) in production -> log a warning with the key name only.",
+    "Env value with only whitespace -> treated as unset."
+  ],
+  "unblocks_gate": "G0",
+  "notes": "Adds dependency zod (MIT)."
+}

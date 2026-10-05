@@ -1,0 +1,631 @@
+{
+  "contract_version": "1.0.0",
+  "note": "Stable error codes (CT-ERR). Add codes with a minor contract bump; never repurpose a code.",
+  "base": "https://centcom.dev/errors/",
+  "errors": [
+    {
+      "code": "invalid_request",
+      "status": 400,
+      "area": "generic",
+      "retryable": false,
+      "title": "Invalid request",
+      "type": "https://centcom.dev/errors/invalid_request"
+    },
+    {
+      "code": "validation_failed",
+      "status": 422,
+      "area": "generic",
+      "retryable": false,
+      "title": "Validation failed",
+      "type": "https://centcom.dev/errors/validation_failed"
+    },
+    {
+      "code": "payload_too_large",
+      "status": 413,
+      "area": "generic",
+      "retryable": false,
+      "title": "Payload too large",
+      "type": "https://centcom.dev/errors/payload_too_large"
+    },
+    {
+      "code": "unsupported_media_type",
+      "status": 415,
+      "area": "generic",
+      "retryable": false,
+      "title": "Unsupported media type",
+      "type": "https://centcom.dev/errors/unsupported_media_type"
+    },
+    {
+      "code": "not_found",
+      "status": 404,
+      "area": "generic",
+      "retryable": false,
+      "title": "Not found",
+      "type": "https://centcom.dev/errors/not_found"
+    },
+    {
+      "code": "conflict",
+      "status": 409,
+      "area": "generic",
+      "retryable": false,
+      "title": "Conflict",
+      "type": "https://centcom.dev/errors/conflict"
+    },
+    {
+      "code": "gone",
+      "status": 410,
+      "area": "generic",
+      "retryable": false,
+      "title": "Gone",
+      "type": "https://centcom.dev/errors/gone"
+    },
+    {
+      "code": "precondition_failed",
+      "status": 412,
+      "area": "generic",
+      "retryable": false,
+      "title": "Precondition failed",
+      "type": "https://centcom.dev/errors/precondition_failed"
+    },
+    {
+      "code": "idempotency_conflict",
+      "status": 409,
+      "area": "generic",
+      "retryable": false,
+      "title": "Idempotency key reused with a different request",
+      "type": "https://centcom.dev/errors/idempotency_conflict"
+    },
+    {
+      "code": "idempotency_key_required",
+      "status": 400,
+      "area": "generic",
+      "retryable": false,
+      "title": "Idempotency-Key header required",
+      "type": "https://centcom.dev/errors/idempotency_key_required"
+    },
+    {
+      "code": "rate_limited",
+      "status": 429,
+      "area": "generic",
+      "retryable": true,
+      "title": "Rate limited",
+      "type": "https://centcom.dev/errors/rate_limited"
+    },
+    {
+      "code": "internal_error",
+      "status": 500,
+      "area": "generic",
+      "retryable": true,
+      "title": "Internal error",
+      "type": "https://centcom.dev/errors/internal_error"
+    },
+    {
+      "code": "bad_gateway",
+      "status": 502,
+      "area": "generic",
+      "retryable": true,
+      "title": "Bad gateway",
+      "type": "https://centcom.dev/errors/bad_gateway"
+    },
+    {
+      "code": "service_unavailable",
+      "status": 503,
+      "area": "generic",
+      "retryable": true,
+      "title": "Service unavailable",
+      "type": "https://centcom.dev/errors/service_unavailable"
+    },
+    {
+      "code": "timeout",
+      "status": 504,
+      "area": "generic",
+      "retryable": true,
+      "title": "Timed out",
+      "type": "https://centcom.dev/errors/timeout"
+    },
+    {
+      "code": "client_too_old",
+      "status": 426,
+      "area": "version",
+      "retryable": false,
+      "title": "Client version too old",
+      "type": "https://centcom.dev/errors/client_too_old"
+    },
+    {
+      "code": "unsupported_protocol",
+      "status": 400,
+      "area": "version",
+      "retryable": false,
+      "title": "No common protocol version",
+      "type": "https://centcom.dev/errors/unsupported_protocol"
+    },
+    {
+      "code": "unauthorized",
+      "status": 401,
+      "area": "auth",
+      "retryable": false,
+      "title": "Authentication required",
+      "type": "https://centcom.dev/errors/unauthorized"
+    },
+    {
+      "code": "token_expired",
+      "status": 401,
+      "area": "auth",
+      "retryable": false,
+      "title": "Access token expired",
+      "type": "https://centcom.dev/errors/token_expired"
+    },
+    {
+      "code": "token_invalid",
+      "status": 401,
+      "area": "auth",
+      "retryable": false,
+      "title": "Access token invalid",
+      "type": "https://centcom.dev/errors/token_invalid"
+    },
+    {
+      "code": "token_revoked",
+      "status": 401,
+      "area": "auth",
+      "retryable": false,
+      "title": "Token revoked",
+      "type": "https://centcom.dev/errors/token_revoked"
+    },
+    {
+      "code": "device_revoked",
+      "status": 401,
+      "area": "auth",
+      "retryable": false,
+      "title": "Device revoked",
+      "type": "https://centcom.dev/errors/device_revoked"
+    },
+    {
+      "code": "refresh_reuse_detected",
+      "status": 401,
+      "area": "auth",
+      "retryable": false,
+      "title": "Refresh token reuse detected",
+      "type": "https://centcom.dev/errors/refresh_reuse_detected"
+    },
+    {
+      "code": "invalid_grant",
+      "status": 400,
+      "area": "auth",
+      "retryable": false,
+      "title": "Invalid grant",
+      "type": "https://centcom.dev/errors/invalid_grant"
+    },
+    {
+      "code": "authorization_pending",
+      "status": 400,
+      "area": "auth",
+      "retryable": true,
+      "title": "Authorization pending",
+      "type": "https://centcom.dev/errors/authorization_pending"
+    },
+    {
+      "code": "slow_down",
+      "status": 400,
+      "area": "auth",
+      "retryable": true,
+      "title": "Polling too fast",
+      "type": "https://centcom.dev/errors/slow_down"
+    },
+    {
+      "code": "access_denied",
+      "status": 403,
+      "area": "auth",
+      "retryable": false,
+      "title": "Access denied by the user",
+      "type": "https://centcom.dev/errors/access_denied"
+    },
+    {
+      "code": "expired_token",
+      "status": 400,
+      "area": "auth",
+      "retryable": false,
+      "title": "Device or user code expired",
+      "type": "https://centcom.dev/errors/expired_token"
+    },
+    {
+      "code": "invalid_client",
+      "status": 401,
+      "area": "auth",
+      "retryable": false,
+      "title": "Unknown client",
+      "type": "https://centcom.dev/errors/invalid_client"
+    },
+    {
+      "code": "invalid_scope",
+      "status": 400,
+      "area": "auth",
+      "retryable": false,
+      "title": "Invalid scope",
+      "type": "https://centcom.dev/errors/invalid_scope"
+    },
+    {
+      "code": "forbidden",
+      "status": 403,
+      "area": "authz",
+      "retryable": false,
+      "title": "Forbidden",
+      "type": "https://centcom.dev/errors/forbidden"
+    },
+    {
+      "code": "not_a_member",
+      "status": 403,
+      "area": "authz",
+      "retryable": false,
+      "title": "Not a member",
+      "type": "https://centcom.dev/errors/not_a_member"
+    },
+    {
+      "code": "role_insufficient",
+      "status": 403,
+      "area": "authz",
+      "retryable": false,
+      "title": "Role insufficient",
+      "type": "https://centcom.dev/errors/role_insufficient"
+    },
+    {
+      "code": "entitlement_required",
+      "status": 403,
+      "area": "billing",
+      "retryable": false,
+      "title": "Plan does not include this feature",
+      "type": "https://centcom.dev/errors/entitlement_required"
+    },
+    {
+      "code": "seat_limit_reached",
+      "status": 403,
+      "area": "billing",
+      "retryable": false,
+      "title": "Seat limit reached",
+      "type": "https://centcom.dev/errors/seat_limit_reached"
+    },
+    {
+      "code": "member_limit_reached",
+      "status": 403,
+      "area": "billing",
+      "retryable": false,
+      "title": "Session member limit reached",
+      "type": "https://centcom.dev/errors/member_limit_reached"
+    },
+    {
+      "code": "quota_exceeded",
+      "status": 429,
+      "area": "billing",
+      "retryable": true,
+      "title": "Quota exceeded",
+      "type": "https://centcom.dev/errors/quota_exceeded"
+    },
+    {
+      "code": "payment_required",
+      "status": 402,
+      "area": "billing",
+      "retryable": false,
+      "title": "Payment required",
+      "type": "https://centcom.dev/errors/payment_required"
+    },
+    {
+      "code": "subscription_inactive",
+      "status": 403,
+      "area": "billing",
+      "retryable": false,
+      "title": "Subscription inactive",
+      "type": "https://centcom.dev/errors/subscription_inactive"
+    },
+    {
+      "code": "coupon_invalid",
+      "status": 422,
+      "area": "billing",
+      "retryable": false,
+      "title": "Coupon invalid",
+      "type": "https://centcom.dev/errors/coupon_invalid"
+    },
+    {
+      "code": "workspace_not_found",
+      "status": 404,
+      "area": "workspace",
+      "retryable": false,
+      "title": "Workspace not found",
+      "type": "https://centcom.dev/errors/workspace_not_found"
+    },
+    {
+      "code": "member_exists",
+      "status": 409,
+      "area": "workspace",
+      "retryable": false,
+      "title": "Already a member",
+      "type": "https://centcom.dev/errors/member_exists"
+    },
+    {
+      "code": "invite_invalid",
+      "status": 404,
+      "area": "workspace",
+      "retryable": false,
+      "title": "Invite not found",
+      "type": "https://centcom.dev/errors/invite_invalid"
+    },
+    {
+      "code": "invite_expired",
+      "status": 410,
+      "area": "workspace",
+      "retryable": false,
+      "title": "Invite expired",
+      "type": "https://centcom.dev/errors/invite_expired"
+    },
+    {
+      "code": "invite_revoked",
+      "status": 410,
+      "area": "workspace",
+      "retryable": false,
+      "title": "Invite revoked",
+      "type": "https://centcom.dev/errors/invite_revoked"
+    },
+    {
+      "code": "owner_required",
+      "status": 403,
+      "area": "workspace",
+      "retryable": false,
+      "title": "Only the owner can do this",
+      "type": "https://centcom.dev/errors/owner_required"
+    },
+    {
+      "code": "session_not_found",
+      "status": 404,
+      "area": "session",
+      "retryable": false,
+      "title": "Session not found",
+      "type": "https://centcom.dev/errors/session_not_found"
+    },
+    {
+      "code": "session_ended",
+      "status": 410,
+      "area": "session",
+      "retryable": false,
+      "title": "Session ended",
+      "type": "https://centcom.dev/errors/session_ended"
+    },
+    {
+      "code": "session_paused",
+      "status": 409,
+      "area": "session",
+      "retryable": true,
+      "title": "Session paused",
+      "type": "https://centcom.dev/errors/session_paused"
+    },
+    {
+      "code": "session_full",
+      "status": 403,
+      "area": "session",
+      "retryable": false,
+      "title": "Session is full",
+      "type": "https://centcom.dev/errors/session_full"
+    },
+    {
+      "code": "session_locked",
+      "status": 403,
+      "area": "session",
+      "retryable": false,
+      "title": "Session is locked",
+      "type": "https://centcom.dev/errors/session_locked"
+    },
+    {
+      "code": "host_required",
+      "status": 403,
+      "area": "session",
+      "retryable": false,
+      "title": "Host only",
+      "type": "https://centcom.dev/errors/host_required"
+    },
+    {
+      "code": "muted",
+      "status": 403,
+      "area": "session",
+      "retryable": false,
+      "title": "You are muted in this session",
+      "type": "https://centcom.dev/errors/muted"
+    },
+    {
+      "code": "ticket_invalid",
+      "status": 401,
+      "area": "ws",
+      "retryable": false,
+      "title": "Relay ticket invalid",
+      "type": "https://centcom.dev/errors/ticket_invalid"
+    },
+    {
+      "code": "ticket_replayed",
+      "status": 401,
+      "area": "ws",
+      "retryable": false,
+      "title": "Relay ticket already used",
+      "type": "https://centcom.dev/errors/ticket_replayed"
+    },
+    {
+      "code": "invalid_frame",
+      "status": 400,
+      "area": "ws",
+      "retryable": false,
+      "title": "Invalid frame",
+      "type": "https://centcom.dev/errors/invalid_frame"
+    },
+    {
+      "code": "protocol_violation",
+      "status": 400,
+      "area": "ws",
+      "retryable": false,
+      "title": "Protocol violation",
+      "type": "https://centcom.dev/errors/protocol_violation"
+    },
+    {
+      "code": "frame_too_large",
+      "status": 413,
+      "area": "ws",
+      "retryable": false,
+      "title": "Frame too large",
+      "type": "https://centcom.dev/errors/frame_too_large"
+    },
+    {
+      "code": "slow_consumer",
+      "status": 429,
+      "area": "ws",
+      "retryable": true,
+      "title": "Slow consumer",
+      "type": "https://centcom.dev/errors/slow_consumer"
+    },
+    {
+      "code": "frame_rate_exceeded",
+      "status": 429,
+      "area": "ws",
+      "retryable": true,
+      "title": "Too many frames",
+      "type": "https://centcom.dev/errors/frame_rate_exceeded"
+    },
+    {
+      "code": "queue_full",
+      "status": 429,
+      "area": "ws",
+      "retryable": true,
+      "title": "Queue is full",
+      "type": "https://centcom.dev/errors/queue_full"
+    },
+    {
+      "code": "queue_item_gone",
+      "status": 409,
+      "area": "ws",
+      "retryable": false,
+      "title": "Queue item no longer exists",
+      "type": "https://centcom.dev/errors/queue_item_gone"
+    },
+    {
+      "code": "queue_not_allowed",
+      "status": 403,
+      "area": "ws",
+      "retryable": false,
+      "title": "Cannot submit to the queue",
+      "type": "https://centcom.dev/errors/queue_not_allowed"
+    },
+    {
+      "code": "lock_denied",
+      "status": 409,
+      "area": "ws",
+      "retryable": true,
+      "title": "File is locked by another agent",
+      "type": "https://centcom.dev/errors/lock_denied"
+    },
+    {
+      "code": "key_required",
+      "status": 409,
+      "area": "ws",
+      "retryable": true,
+      "title": "Waiting for the session key",
+      "type": "https://centcom.dev/errors/key_required"
+    },
+    {
+      "code": "key_unknown",
+      "status": 409,
+      "area": "ws",
+      "retryable": false,
+      "title": "Unknown key id",
+      "type": "https://centcom.dev/errors/key_unknown"
+    },
+    {
+      "code": "device_unknown",
+      "status": 404,
+      "area": "ws",
+      "retryable": false,
+      "title": "Unknown device",
+      "type": "https://centcom.dev/errors/device_unknown"
+    },
+    {
+      "code": "signature_invalid",
+      "status": 400,
+      "area": "ws",
+      "retryable": false,
+      "title": "Signature invalid",
+      "type": "https://centcom.dev/errors/signature_invalid"
+    },
+    {
+      "code": "snapshot_missing",
+      "status": 404,
+      "area": "resume",
+      "retryable": false,
+      "title": "No snapshot available",
+      "type": "https://centcom.dev/errors/snapshot_missing"
+    },
+    {
+      "code": "snapshot_hash_mismatch",
+      "status": 409,
+      "area": "resume",
+      "retryable": false,
+      "title": "Snapshot hash mismatch",
+      "type": "https://centcom.dev/errors/snapshot_hash_mismatch"
+    },
+    {
+      "code": "history_unavailable",
+      "status": 410,
+      "area": "resume",
+      "retryable": false,
+      "title": "History no longer available",
+      "type": "https://centcom.dev/errors/history_unavailable"
+    },
+    {
+      "code": "webhook_url_invalid",
+      "status": 422,
+      "area": "webhook",
+      "retryable": false,
+      "title": "Webhook URL not allowed",
+      "type": "https://centcom.dev/errors/webhook_url_invalid"
+    },
+    {
+      "code": "webhook_limit_reached",
+      "status": 403,
+      "area": "webhook",
+      "retryable": false,
+      "title": "Webhook limit reached",
+      "type": "https://centcom.dev/errors/webhook_limit_reached"
+    },
+    {
+      "code": "api_key_limit_reached",
+      "status": 403,
+      "area": "accounts",
+      "retryable": false,
+      "title": "API key limit reached",
+      "type": "https://centcom.dev/errors/api_key_limit_reached"
+    },
+    {
+      "code": "account_deletion_pending",
+      "status": 409,
+      "area": "accounts",
+      "retryable": false,
+      "title": "Account deletion pending",
+      "type": "https://centcom.dev/errors/account_deletion_pending"
+    },
+    {
+      "code": "export_not_ready",
+      "status": 409,
+      "area": "accounts",
+      "retryable": true,
+      "title": "Export not ready",
+      "type": "https://centcom.dev/errors/export_not_ready"
+    },
+    {
+      "code": "pair_bad_code",
+      "status": 403,
+      "area": "lan",
+      "retryable": false,
+      "title": "Wrong pairing code",
+      "type": "https://centcom.dev/errors/pair_bad_code"
+    },
+    {
+      "code": "pair_locked_out",
+      "status": 429,
+      "area": "lan",
+      "retryable": true,
+      "title": "Too many pairing attempts",
+      "type": "https://centcom.dev/errors/pair_locked_out"
+    }
+  ]
+}

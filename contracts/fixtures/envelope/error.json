@@ -1,0 +1,17 @@
+{
+  "schema": "envelope.schema.json",
+  "valid": true,
+  "note": "",
+  "data": {
+    "v": 1,
+    "t": "sys.error",
+    "p": {
+      "type": "https://centcom.dev/errors/queue_full",
+      "title": "Queue is full",
+      "status": 429,
+      "code": "queue_full",
+      "request_id": "req_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+      "retry_after_s": 5
+    }
+  }
+}

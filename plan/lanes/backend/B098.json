@@ -1,0 +1,87 @@
+{
+  "id": "B098",
+  "title": "Threat model and penetration-test preparation",
+  "plan": "backend",
+  "phase": "P7 Ops",
+  "size": "M",
+  "role": "security",
+  "depends_on": [
+    "B097"
+  ],
+  "goal": "Produce the threat model and penetration-test package: documented assets, trust boundaries and threats with owners, abuse cases mapped to controls and tests, a scoped pen-test brief, a seeded target environment and a disclosure policy.",
+  "scope_in": [
+    "`docs/security/threat-model.md`: assets (credentials, entitlements/billing state, ciphertext history, member metadata, webhook secrets, release signing keys), actors (anonymous, free user, paid member, malicious member, workspace admin, staff, compromised device, malicious host, network attacker, malicious webhook receiver), trust boundaries and data-flow diagrams (Mermaid) for API, relay, worker, billing, webhooks, admin, blob store.",
+    "STRIDE threat table with stable ids `TM-<area>-<nn>`, each with the control, the owning lane id, the test that proves it, and status (`mitigated|accepted|open`).",
+    "`docs/security/abuse-cases.md`: at least one abuse case for every wire contract the backend implements (rate/size limit, replay, enumeration, privilege escalation), e.g. ticket replay, `queue.approve` by editor, kick bypass, history read after kick, cross-workspace id guessing, coupon brute force, webhook SSRF, telemetry deanonymisation, usage-event inflation, release-manifest downgrade.",
+    "`docs/security/pentest-scope.md`: in/out of scope targets, rules of engagement, test accounts/roles, rate and DoS limits, reporting format, retest process, severity rubric (CVSS v4 + local override).",
+    "`infra/pentest/`: seed script creating a dedicated pentest environment dataset (users for each workspace role, workspaces on free/pro/team, sessions with synthetic ciphertext) and a checker `check-threat-model.mjs` that validates the tables.",
+    "`docs/security/disclosure-policy.md` and a `security.txt` template for the website (served by the web side, only the file is produced here)."
+  ],
+  "scope_out": [
+    "Implementing the controls (owned by their lanes) and the hardening configuration (B097).",
+    "Running the penetration test or paying a vendor.",
+    "Client-side threat model (the client repo has its own; this document references CT-CRYPTO only as an input).",
+    "Compliance certifications (SOC 2) beyond a mapping table to OWASP ASVS L2."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-CRYPTO",
+    "CT-AUTH",
+    "CT-RBAC",
+    "CT-WS-ENVELOPE",
+    "CT-WS-CONTROL",
+    "CT-WS-QUEUE",
+    "CT-RESUME",
+    "CT-WEBHOOKS",
+    "CT-TELEMETRY",
+    "CT-API-BILLING",
+    "CT-API-SESSIONS",
+    "CT-ENTITLEMENTS",
+    "CT-API-RELEASES"
+  ],
+  "build_against": "Documentation-first lane: the checker script runs on the markdown tables; the seed script runs against the compose stack (B012) and a stage database copy-free synthetic seed. No counterpart is needed.",
+  "deliverables": [
+    "docs/security/threat-model.md",
+    "docs/security/abuse-cases.md",
+    "docs/security/pentest-scope.md",
+    "docs/security/disclosure-policy.md",
+    "docs/security/asvs-mapping.md",
+    "infra/pentest/"
+  ],
+  "interfaces": [
+    "Threat table columns (machine-parsed): `id | area | stride | description | control | owner_lane | test | status`.",
+    "Abuse-case table columns: `id | contract | abuse | expected_response | test`.",
+    "Commands: `pnpm pentest:check` (validates tables), `pnpm pentest:seed --env stage|local` (idempotent seed), `pnpm pentest:reset`.",
+    "Seed output `infra/pentest/accounts.generated.json` (git-ignored) with synthetic credentials for each role."
+  ],
+  "acceptance": [
+    "`pnpm pentest:check` passes: all threat ids unique and formatted `TM-<area>-<nn>`; every row has non-empty control, owner lane in the form `B###`, and status; every `owner_lane` exists in `plan/skeleton.json`; every referenced test path exists or is marked `planned` with an issue link.",
+    "The threat model contains data-flow diagrams for the 6 flows: device login, relay join and handshake, command-post queue approval, history/snapshot access, billing webhook to entitlement flip, outgoing webhook delivery; each diagram marks trust boundaries.",
+    "Abuse cases exist for each of these contracts: CT-AUTH, CT-RBAC, CT-WS-ENVELOPE, CT-WS-QUEUE, CT-WS-CONTROL, CT-RESUME, CT-API-SESSIONS, CT-API-BILLING, CT-API-USAGE, CT-API-WEBHOOKS, CT-TELEMETRY, CT-API-RELEASES (>= 1 each, >= 25 total) and each names an expected response (status/code or close code).",
+    "The relay 'no plaintext' property has at least 4 explicit threats (log leakage, metrics leakage, error message leakage, debug endpoints) tied to B050 tests.",
+    "`asvs-mapping.md` maps all ASVS L2 chapters V2-V14 to a control or an explicit 'not applicable' reason; none left blank (script-checked).",
+    "`pnpm pentest:seed` creates one user per workspace role and per session role, three workspaces (free/pro/team) and two sessions with synthetic ciphertext, twice in a row without duplicates, in < 60 s.",
+    "The pentest scope names the exact hostnames, forbids testing production data stores and third-party providers (Stripe, Postmark, Cloudflare), and sets a maximum of 50 req/s sustained per tester IP."
+  ],
+  "tests": [
+    "`pentest:check` unit tests with valid and broken fixture tables.",
+    "seed idempotency test against the compose stack.",
+    "markdown link checker over `docs/security/`.",
+    "ASVS mapping completeness script test.",
+    "review checklist (two reviewers: security + backend lead) recorded in the PR."
+  ],
+  "guardrails": [
+    "MUST NOT include real secrets, real customer data, real domains of production data stores or internal IPs in documents.",
+    "MUST mark every accepted risk with an owner and review date; no 'accepted' without justification.",
+    "MUST keep generated credentials out of git and valid only in the pentest environment, expiring after 30 days.",
+    "MUST NOT describe exploit details beyond what is needed to reproduce a control test.",
+    "MUST NOT point the pentest environment at production Stripe, email or storage credentials; sandbox/test providers only."
+  ],
+  "failure_modes": [
+    "A control owner lane changes or splits -> `pentest:check` fails on unknown lane id and forces a doc update.",
+    "Seed run against the wrong environment -> script refuses unless `--env` matches an allow-list and the DB host contains `stage` or `local`.",
+    "Findings from the pentest -> tracked as issues with the TM id; document updated within the retest window."
+  ],
+  "unblocks_gate": "G6",
+  "notes": "The pentest itself and fixes belong to the launch process; this lane only prepares. CONTRACT GAP: none for content, but CT-CRYPTO is client-implemented and consumed here only as a trust assumption (relay never sees plaintext)."
+}

@@ -1,0 +1,84 @@
+{
+  "id": "B015",
+  "title": "Social login providers (GitHub, Google)",
+  "plan": "backend",
+  "phase": "P1 Identity",
+  "size": "M",
+  "role": "identity",
+  "depends_on": [
+    "B013"
+  ],
+  "goal": "Users can sign in with GitHub or Google through the standard OAuth flow, with verified-email account matching and no provider tokens retained.",
+  "scope_in": [
+    "Browser-facing routes (outside the /v1 contract): `GET /login/github`, `GET /login/github/callback`, `GET /login/google`, `GET /login/google/callback`.",
+    "Authorization-code flow as a client of the provider with PKCE (S256), `state` and (Google) `nonce`, stored in a signed, short-lived (10 min), HttpOnly cookie; `return_to` allow-list as in B014.",
+    "GitHub: scopes `read:user user:email`; take identity from `GET /user` and the primary verified address from `GET /user/emails`. Google: scopes `openid email profile`; verify the ID token (signature via Google JWKS, `iss`, `aud`, `exp`, `nonce`) and require `email_verified=true`.",
+    "Account matching: table `identities(provider, subject, user_id, created_at)`; existing identity -> that user; else a verified email matching an existing user -> link; else create user via B013 `getOrCreateByEmail`. Unverified provider emails are never used for matching.",
+    "Provider tokens (access/ID/refresh) are used in memory only and discarded; nothing persisted but `(provider, subject)`.",
+    "Injected `LoginCompleter.complete(reply, userId, returnTo)` shared with B014; provider HTTP calls with 5 s timeouts and an injected fetch for tests."
+  ],
+  "scope_out": [
+    "Login-session cookie and PKCE authorize endpoint for Centcom clients (B018).",
+    "Magic-link login (B014).",
+    "Unlinking or managing identities from account settings (not in the contracts).",
+    "Token issuance (B017)."
+  ],
+  "implements": [],
+  "consumes": [
+    "CT-AUTH",
+    "CT-ERR",
+    "CT-IDS",
+    "CT-DEEPLINK"
+  ],
+  "build_against": "A fake GitHub/Google provider server (local HTTP stub with canned JSON and a test JWKS) injected as `fetch`; no real provider credentials; B013 service and B010 stack.",
+  "deliverables": [
+    "apps/api/src/modules/auth/social/github.ts",
+    "apps/api/src/modules/auth/social/google.ts",
+    "apps/api/src/modules/auth/social/oauth-state.ts",
+    "apps/api/src/modules/auth/social/identities.ts",
+    "apps/api/src/modules/auth/social/service.ts",
+    "apps/api/src/modules/auth/social/config.ts",
+    "apps/api/src/routes/login-social.ts",
+    "packages/db/migrations/20260102000400_identities.sql",
+    "packages/db/src/schema/identities.ts",
+    "apps/api/test/modules/auth/social/"
+  ],
+  "interfaces": [
+    "`GET /login/{github|google}?return_to=` -> 302 to the provider authorize URL.",
+    "`GET /login/{github|google}/callback?code=&state=` -> 303 to `return_to` after `LoginCompleter.complete`, or an error page.",
+    "`SocialLoginService { begin(provider: 'github'|'google', returnTo: string): Promise<{redirect: string; stateCookie: string}>; complete(provider, query: {code: string; state: string}, stateCookie: string): Promise<{userId: string; returnTo: string}> }`.",
+    "Config: `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SOCIAL_REDIRECT_BASE_URL`."
+  ],
+  "acceptance": [
+    "`begin` produces an authorize URL containing `code_challenge_method=S256`, a random `state`, and for Google a `nonce`; two calls give different values.",
+    "A callback with a missing, mismatched or expired (>10 min) state is rejected with a generic error and no user is created.",
+    "Google ID token with wrong `aud`, wrong `iss`, expired `exp`, bad signature, wrong `nonce` or `email_verified=false` is rejected (one test per case).",
+    "GitHub account whose only emails are unverified is rejected; a verified primary email logs in.",
+    "The same GitHub `subject` returns to the same user even if the email changed at the provider; a verified email equal to an existing user's email links to that user and writes one identities row.",
+    "Two concurrent first logins for one subject create exactly one identity and one user.",
+    "The database contains no provider access/ID/refresh tokens (schema inspection + dump test); logs contain no codes, tokens or emails.",
+    "A provider call exceeding 5 s results in a generic error page and a `502`-class log entry, with no partial user created."
+  ],
+  "tests": [
+    "state.test.ts: signature, expiry, tamper.",
+    "google.test.ts: ID token verification matrix with test JWKS.",
+    "github.test.ts: email selection rules with canned responses.",
+    "linking.test.ts: identity/user matching and concurrency.",
+    "redirect.test.ts: return_to allow-list.",
+    "leak.test.ts: no secrets in DB or logs."
+  ],
+  "guardrails": [
+    "MUST NOT match or link accounts on an unverified provider email (account takeover vector).",
+    "MUST validate `state` and PKCE on every callback and MUST tie `state` to the initiating browser via the signed cookie.",
+    "MUST NOT persist or log provider tokens, authorization codes or client secrets.",
+    "MUST verify Google ID tokens fully (signature, iss, aud, exp, nonce); MUST NOT trust the userinfo of an unverified token.",
+    "MUST restrict `return_to` to the allow-list."
+  ],
+  "failure_modes": [
+    "Provider outage or timeout -> user sees a generic retry page; no account changes.",
+    "Provider returns no email -> login rejected with a clear page (we require an email).",
+    "Client secret missing for a provider -> that provider's routes return 404 and the provider is omitted from login pages; startup logs a warning."
+  ],
+  "unblocks_gate": "G1",
+  "notes": "CONTRACT GAP: social login is outside CT-AUTH, so routes and the `identities` table are internal decisions. Adds dependency jose (MIT) if not already added by B017; coordinate versions."
+}

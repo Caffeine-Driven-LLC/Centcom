@@ -1,0 +1,106 @@
+{
+  "id": "C057",
+  "title": "Session client: create, join, leave, host mode",
+  "plan": "client",
+  "phase": "P3 Network",
+  "size": "M",
+  "role": "net",
+  "depends_on": [
+    "C051",
+    "C054",
+    "C056"
+  ],
+  "goal": "Give the rest of the client one SessionClient that creates, joins, leaves, ends and hosts relay sessions: it wires REST, the WebSocket client, reliable delivery and crypto together and exposes decrypted, validated, typed session events.",
+  "scope_in": [
+    "REST: POST /v1/sessions (Idempotency-Key, `relay` entitlement error surfaced), GET /v1/sessions, GET /v1/sessions/{id}, PATCH, POST .../end, POST .../join-token (called for every connection attempt), GET .../members, POST .../claim-host, share-link create/revoke and POST /v1/share-links/{token}/join, key-bundle PUT/GET for invites.",
+    "Connection assembly: `getTicket` (join-token with region hint) -> RelayClient (C054) -> ReliableChannel (C055); applies decrypt-and-verify to every received `ct` frame and encrypt-and-sign on send.",
+    "Host mode: creates epoch key `k1`, answers `control.member_joined` with `key.grant` frames (respecting `share_history`), rotates on `control.kick`/leave (publishes new grants after `control.rotate_key`), scheduled rotation, and publishes snapshots.",
+    "Guest mode: waits in `waiting_for_key` until a grant (or invite bundle) opens; verifies the granter's signature; then decrypts history.",
+    "Roster/member cache from `control.member_joined`, `control.member_left`, `control.roster` and GET .../members (slot, role, device id, device public keys); TOFU trust checks through C056 with a `key-changed` event.",
+    "Resume REST side of CT-RESUME: `fetchSnapshot()` (GET .../snapshot, download pre-signed URL, verify sha256 and size, decrypt with the right epoch, require `fmt:'centcom.snapshot'`, `v:1`), `fetchHistory(afterSeq)` (paginated GET .../history), host `uploadSnapshot()` (POST .../snapshot, PUT to `upload_url`, POST .../commit `{seq, sha256, size, kid}`) every 500 frames or 5 min, and on graceful end.",
+    "Typed event API: `on(kind, handler)` for decoded session events (validated against the C003 event schemas, hybrid p+ct merged), `sendEvent(kind, {p, secret})`, lifecycle events (`state`, `roster`, `waiting-for-key`, `ended`)."
+  ],
+  "scope_out": [
+    "Queue semantics (C058), presence/cursors (C059), control commands (C060), approvals (C061), fleet sync (C062): thin clients that sit on this lane's `sendEvent`.",
+    "Socket/handshake (C054), delivery guarantees (C055), crypto primitives (C056), HTTP plumbing (C051).",
+    "LAN sessions: lanes C072, C074, C075.",
+    "Building the snapshot content (transcript/queue/roster state): the host session engine provides a `buildSnapshot()` callback.",
+    "CLI commands for create/join: not specified in this plan's lanes; they will call this API."
+  ],
+  "implements": [
+    "CT-RESUME",
+    "CT-WS-SESSION-EVENTS"
+  ],
+  "consumes": [
+    "CT-API-SESSIONS",
+    "CT-WS-CONTROL",
+    "CT-WS-ENVELOPE",
+    "CT-CRYPTO",
+    "CT-API-ACCOUNTS",
+    "CT-API-WORKSPACES",
+    "CT-ENTITLEMENTS",
+    "CT-PAGE",
+    "CT-ERR",
+    "CT-RBAC"
+  ],
+  "build_against": "the mock backend (lane C007): REST from OpenAPI plus the WebSocket relay simulator, started in-process with `startMockBackend()` from @centcom/testkit; no real backend is needed. The mock serves the session REST surface (create, join-token with single-use jti, members, history, snapshot with a pre-signed URL stub, share links) and a relay simulator that stamps `from`/`seq`, emits member_joined and roster frames. Two in-process SessionClients (host and guest) against one simulator test key grants end to end.",
+  "deliverables": [
+    "packages/net/src/session/client.ts",
+    "packages/net/src/session/host.ts",
+    "packages/net/src/session/guest.ts",
+    "packages/net/src/session/rest.ts",
+    "packages/net/src/session/roster.ts",
+    "packages/net/src/session/snapshots.ts",
+    "packages/net/src/session/codec.ts",
+    "packages/net/src/session/index.ts",
+    "packages/net/src/session/README.md",
+    "packages/net/src/session/__tests__/"
+  ],
+  "interfaces": [
+    "`createSessionClient(deps: { http: HttpClient; crypto: CryptoDeps /* DeviceKeyStore, TrustStore, KeyRingStore */; clock; ids; logger; relayUrl?: string; clientInfo }): SessionClient`",
+    "`SessionClient.createSession(o: { name: string; workspace?: string; policy?: Partial<SessionPolicy> }): Promise<SessionHandle>`; `joinSession(o: { sessionId: string; inviteSecret?: string /* from #k= */ }): Promise<SessionHandle>`; `claimHost(sessionId)`; `listSessions(filter?: { workspace?: string; state?: string; mine?: boolean }): AsyncIterable<SessionSummary>`; `createShareLink(sessionId)`; `joinViaShareLink(token)`",
+    "`SessionHandle`: `id`, `me: MemberInfo`, `state: 'connecting'|'waiting_for_key'|'live'|'paused'|'reconnecting'|'ended'`, `roster(): MemberInfo[]`, `sendEvent<K extends EventKind>(kind: K, body: { p?: EventP<K>; secret?: EventSecret<K> }): Promise<{ id: string; seq: number }>`, `on<K extends EventKind>(kind: K, fn: (e: DecodedEvent<K>) => void): () => void`, `onAny(fn)`, `leave(): Promise<void>`, `end(): Promise<void>` (host), `snapshot: { fetch(): Promise<SnapshotDoc | null>; upload(doc: SnapshotDoc): Promise<void> }`, `history(afterSeq: number): AsyncIterable<DecodedEvent>`",
+    "Lifecycle events: `state(s)`, `roster(members, version)`, `key-changed({device, old, new})`, `waiting-for-key()`, `protocol-warning({reason})`, `ended({code})`",
+    "`DecodedEvent<K> = { kind: K; seq: number; id: string; from: string; ts: string; p?: ...; secret?: ...; verified: true }`"
+  ],
+  "acceptance": [
+    "`createSession` sends one POST /v1/sessions with an `Idempotency-Key`; a forced network retry yields one session on the mock; a `relay_access:false` account gets the typed entitlement error (not a generic failure) and no socket is opened.",
+    "Each connection attempt performs exactly one POST .../join-token; after a forced disconnect the reconnect uses a new ticket and the mock rejects a reused jti (the client never reuses one).",
+    "Host+guest in-process: guest joins, `waiting_for_key` is entered, the host emits one `key.grant` within 2 s of `control.member_joined`, the guest reaches `live` and decrypts a `message.user` fixture sent by the host; the simulator's captured traffic contains no plaintext of `secret`.",
+    "With `share_history:false` the grant contains only the current and later epochs; the guest cannot decrypt epoch-1 history frames and reports them as `unreadable_earlier_history` instead of failing.",
+    "Kicking a member: after `control.kick` + `control.rotate_key {kid:'k2'}` the host's next outbound frame uses `kid:'k2'`, grants for k2 are sealed to every remaining device but not the kicked one, and no frame after rotation is encrypted under k1.",
+    "A frame with a bad signature or from an unknown `from` is dropped, a `protocol-warning` is emitted, and the session stays `live`; a server-only control kind (`control.roster`, `member_joined`, `host_changed`, `session_state`, `rotate_key`) whose `from` is a normal member id is ignored.",
+    "A changed device key for a known device raises `key-changed` and the frames from that device are held (not delivered) until the caller calls `trustDevice(deviceId)`.",
+    "Snapshot restore: given `sys.resumed {snapshot_required:true, snapshot_seq:900}`, the client downloads the snapshot, verifies sha256 and size (mismatch -> typed error, snapshot ignored), decrypts, rejects `fmt:'other'` or `v:2` with a clear message, then applies history after 900 in order and acks.",
+    "Host snapshot upload triggers after 500 frames or 5 min of activity (fake clock), whichever first, and on `end()`; sequence is POST .../snapshot -> PUT upload_url -> POST .../commit with `{seq, sha256, size, kid}`; the three calls carry Idempotency-Keys on the POSTs.",
+    "`end()` sends POST .../end, uploads a final snapshot, and the handle moves to `ended` on `control.session_state {state:'ended'}`; `leave()` closes with 1000 and does not end the session.",
+    "Event decoding validates against the C003 schemas: an unknown `k` is ignored (debug log, still acked), a known kind with a malformed `ct` secret is dropped with a warning."
+  ],
+  "tests": [
+    "session/lifecycle.test.ts: create, join, leave, end, claim-host against the mock.",
+    "session/keys.test.ts: grant on join, share-history on/off, rotation on kick, scheduled rotation at 7 d / 100 000 frames, waiting_for_key.",
+    "session/decode.test.ts: every fixture in contracts/fixtures/events/ round-trips through encode -> mock relay -> decode with matching `p`/`secret`.",
+    "session/trust.test.ts: TOFU new/match/changed and held frames.",
+    "session/snapshot.test.ts: download/verify/decrypt, hash mismatch, unknown fmt, upload sequence and cadence.",
+    "session/security.test.ts: unsigned/forged-from/server-only-kind-from-member frames dropped; logs contain no secrets.",
+    "session/reconnect.test.ts: forced close mid-stream, resend, no duplicate decoded events."
+  ],
+  "guardrails": [
+    "MUST verify `sig` then decrypt every `ct` frame before emitting it; MUST drop failures and keep the session alive. MUST NOT emit undecoded or unverified content to subscribers.",
+    "MUST ignore `control.member_joined/left/roster/host_changed/session_state/rotate_key` unless the frame comes from the server (CT-WS-CONTROL); MUST NOT apply role or host changes from client-originated frames.",
+    "MUST NOT put plaintext work content (message text, paths, branch names, model names) into any `p` field, REST body, log line or error; only fields the privacy budget lists in CT-WS-SESSION-EVENTS may be cleartext.",
+    "MUST NOT send a client-side role claim as authority; UI role checks are for hiding controls only, the server answers `forbidden` (CT-RBAC).",
+    "MUST mint a new join-token per connection attempt and MUST NOT cache or log tickets; MUST send them only via C054's hello.",
+    "MUST NOT grant keys to a device that is not in the roster or whose key check is `changed`; MUST seal grants only to the device's registered X25519 key.",
+    "MUST stay usable offline for non-session work: no network call at construction; creating a LAN or local session never goes through this client."
+  ],
+  "failure_modes": [
+    "Join-token 403 (membership revoked / not entitled) -> state `ended` with a typed error and no retries; 404 -> `ended` (session gone).",
+    "No key holder online -> remain `waiting_for_key` with the 'Waiting for the host to let you in' state; ciphertext is retained, not discarded; resumes automatically when a grant arrives.",
+    "Snapshot hash mismatch or decrypt failure -> discard it, fall back to full history from the earliest retained frame and surface 'earlier history unavailable'.",
+    "Host disconnects -> state `paused` (from `control.session_state`); guests keep read access and queue UI shows held items (C058); host return resumes.",
+    "Quota/plan notices (`sys.notice`) -> re-emitted as `notice` events for C064/C065, never interpreted here."
+  ],
+  "unblocks_gate": "G3",
+  "notes": "SPLIT? Snapshot upload/restore and key handling are each sizeable; if the M estimate is exceeded, move snapshots to a follow-up PR inside the same lane."
+}
