@@ -12,6 +12,7 @@ import type { FlatFlags } from '@centcom/config';
 import { createAppLogger } from '@centcom/net';
 import type { CentoColor } from '@centcom/mascot';
 import { buildPrompt, readStdin, runPrint } from './print.js';
+import { chooseSession, pickSession } from './commands/resume.js';
 import { runProviderCli } from './commands/provider/cli.js';
 import { makeMemoryFiles, runMemoryCli } from './commands/memory/cli.js';
 import { appViews } from './views.js';
@@ -133,11 +134,19 @@ async function main() {
   logger.info('app.start', { version: VERSION, engine: engine.id, demo, mode });
   let instance: ReturnType<typeof render> | undefined;
   const rt = await buildRuntime({ cwd: process.cwd(), engineId: engine.id, demo, dangerous: dangerous || mode === 'bypassPermissions', checkpoints: !has('--no-checkpoints'), sessionUsd: cfg0?.budget?.session_usd || undefined, stateDir: stateDir(defaultDeps()) });
+  // --continue / --resume [id]: decided before the screen starts, so a wrong id is one line and exit 1
+  const sessionStore = has('--no-save') ? undefined : new SessionStore(); let resumeId: string | undefined;
+  if (sessionStore && (has('-c') || has('--continue') || has('--resume'))) {
+    const c = chooseSession(sessionStore, { cwd: process.cwd(), continue: has('-c') || has('--continue'), resume: has('--resume'), id: arg('--resume') });
+    if ('exit' in c) { if (c.message) process.stderr.write(c.message + '\n'); if (c.exit) process.exit(c.exit); }
+    else if ('pick' in c) { resumeId = await pickSession(c.pick, { input: process.stdin, output: process.stdout }); if (!resumeId) process.exit(0); }
+    else resumeId = c.id;
+  }
   const ctl = new AppController({ ...rt.options, views: appViews(process.cwd()),
     engine, demo, cwd: process.cwd(), branch, version: VERSION, permissionMode: mode, dangerous: dangerous || mode === 'bypassPermissions', ghosts: has('--demo-team'),
     logger, settings, ...cc.options({ ...initialSettings(), ...settings }, { saveHistory: !has('--no-save') }),
-    sessions: has('--no-save') ? undefined : new SessionStore(),
-    resume: has('-c') || has('--continue') ? 'last' : arg('--resume'),
+    sessions: sessionStore,
+    resume: resumeId,
     onExit: (code) => { if (code) process.exitCode = code; instance?.unmount(); },
     onMemoryAdd: async (text) => { // a line starting with "# " is a note for this tool's memory file (CLAUDE.md or AGENTS.md), shown as a diff and confirmed
       try { const mf = makeMemoryFiles(process.cwd()); const plan = await mf.plan({ engine: engine.id === 'codex' ? 'codex' : 'claude-code', scope: 'project', quickAdd: text, root: process.cwd() });

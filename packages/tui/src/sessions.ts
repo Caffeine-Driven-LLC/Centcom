@@ -1,6 +1,6 @@
-/** Saved conversations, so closing the app never loses work. One folder per user, two small files per session:
- *  <id>.meta.json (cheap to list) and <id>.items.json (the transcript). Writes are atomic and private (0600). */
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { SESSION_ID, createSessionStore, newId, type LogRecord, type NormalisedEvent, type SessionHandle, type SessionStore as PersistStore, type SessionSummary } from '@centcom/agent';
+import { stateDir } from '@centcom/config';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { Item } from './state/model.js';
@@ -30,30 +30,80 @@ export const titleFrom = (items: Item[]): string => {
   return first && first.kind === 'user' ? first.text.replace(/\s+/g, ' ').trim().slice(0, 80) || 'Untitled' : 'Untitled';
 };
 
+/** Saved conversations, kept by the session log of lane C026 (`<data>/sessions/<id>/log.jsonl`, append-only, redacted, locked).
+ *  The app also keeps a `view.json` beside each log so a resumed conversation looks exactly as it did; without it the
+ *  transcript is rebuilt from the log. Conversations saved by older versions (`<id>.meta.json` + `<id>.items.json`) are moved over once. */
 export class SessionStore {
-  constructor(readonly dir = join(homedir(), '.centcom', 'sessions')) {}
-  private ensure() { mkdirSync(this.dir, { recursive: true, mode: 0o700 }); }
-  private write(path: string, data: unknown) { const tmp = path + '.tmp'; writeFileSync(tmp, JSON.stringify(data), { mode: 0o600 }); renameSync(tmp, path); }
+  private store: PersistStore; private handles = new Map<string, SessionHandle>(); private blocked = new Set<string>();
+  readonly dir: string;
+  constructor(dataDir = stateDir({ env: process.env, homedir: homedir() })) { this.store = createSessionStore({ dataDir }); this.dir = this.store.dir; this.migrate(); }
 
-  save(meta: SessionMeta, items: Item[]) { this.ensure(); this.write(join(this.dir, `${meta.id}.items.json`), sanitizeItems(items)); this.write(join(this.dir, `${meta.id}.meta.json`), meta); }
+  private handle(id: string, cwd: string): SessionHandle | undefined {
+    if (!SESSION_ID.test(id) || this.blocked.has(id)) return undefined; let h = this.handles.get(id); if (h) return h;
+    try { h = existsSync(join(this.dir, id, 'log.jsonl')) ? this.store.sync.resume(id) : this.store.sync.create({ cwd, id }); }
+    catch (e) { if ((e as { code?: string }).code === 'session_in_use') this.blocked.add(id); throw e; } // said once; after that this window just does not save it
+    this.handles.set(id, h); return h;
+  }
+  /** Every normalised event of the conversation, as it happens. */
+  append(id: string, cwd: string, ev: NormalisedEvent) { try { this.handle(id, cwd)?.append(ev); } catch { /* another Centcom has it open: this one goes on without saving */ } }
+  /** What the person typed. */
+  noteUser(id: string, cwd: string, text: string) { try { this.handle(id, cwd)?.note('user.message', { text }); } catch { /* as above */ } }
+
+  save(meta: SessionMeta, items: Item[]) {
+    const h = this.handle(meta.id, meta.cwd); if (!h) return; void h.flush(); // flushes at once, so the log exists before it is read
+    const last = this.store.sync.open(meta.id).engineSessions.at(-1);
+    if (meta.resumeToken && (meta.engine === 'claude-code' || meta.engine === 'codex') && (last?.engineSessionId !== meta.resumeToken || last.engine !== meta.engine)) h.recordEngineSession({ engine: meta.engine, engineSessionId: meta.resumeToken, sinceSeq: 0 });
+    if (!this.store.sync.open(meta.id).records.some((r) => r.type === 'user.message')) for (const it of items) if (it.kind === 'user') h.note('user.message', { text: it.text }); // older callers saved only the items
+    h.saveView({ v: 1, items: sanitizeItems(items), engine: meta.engine, title: meta.title, model: meta.model, tasks: meta.tasks, tasksOpen: meta.tasksOpen, createdAt: meta.createdAt, updatedAt: meta.updatedAt, messages: meta.messages });
+    void h.flush();
+  }
 
   /** Newest first. Only sessions started in this folder unless `cwd` is omitted. */
   list(cwd?: string, limit = 20): SessionMeta[] {
-    if (!existsSync(this.dir)) return [];
-    const out: SessionMeta[] = [];
-    for (const f of readdirSync(this.dir)) {
-      if (!f.endsWith('.meta.json')) continue;
-      try { const m = JSON.parse(readFileSync(join(this.dir, f), 'utf8')) as SessionMeta; if (m.id && (!cwd || m.cwd === cwd)) out.push(m); } catch { /* skip a damaged file */ }
-    }
-    return out.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, limit);
+    let rows: SessionSummary[]; try { rows = this.store.sync.list({ cwd, limit }); } catch { return []; }
+    return rows.map((r) => this.metaOf(r, this.view(r.id)));
   }
 
   load(id: string): { meta: SessionMeta; items: Item[] } | undefined {
-    if (!/^[\w-]+$/.test(id)) return undefined; // ids are ours; never let one escape the folder
-    try { return { meta: JSON.parse(readFileSync(join(this.dir, `${id}.meta.json`), 'utf8')), items: sanitizeItems(JSON.parse(readFileSync(join(this.dir, `${id}.items.json`), 'utf8'))) }; } catch { return undefined; }
+    if (!SESSION_ID.test(id)) return undefined; // ids are ours; never let one escape the folder
+    try { const s = this.store.sync.open(id); const v = this.view(id); return { meta: this.metaOf(s.summary, v), items: sanitizeItems(v?.items ?? itemsFromLog(s.records)) }; } catch { return undefined; }
   }
 
-  delete(id: string) { if (/^[\w-]+$/.test(id)) for (const s of ['meta', 'items']) rmSync(join(this.dir, `${id}.${s}.json`), { force: true }); }
+  delete(id: string) { if (!SESSION_ID.test(id)) return; void this.handles.get(id)?.close(); this.handles.delete(id); try { this.store.sync.remove(id); } catch { /* in use or gone */ } }
+  /** Saves what is buffered and lets other Centcom windows open the conversation. */
+  close(id?: string) { for (const [k, h] of this.handles) if (!id || k === id) { void h.close(); this.handles.delete(k); } }
+
+  private view(id: string): View | undefined { const v = this.store.sync.loadView(id) as View | undefined; return v && Array.isArray(v.items) ? v : undefined; }
+  private metaOf(r: SessionSummary, v?: View): SessionMeta {
+    const last = r.engine_sessions.at(-1);
+    return { id: r.id, cwd: r.cwd, engine: last?.engine ?? v?.engine ?? '', title: v?.title ?? r.title, ...(v?.model !== undefined ? { model: v.model } : {}), ...(last ? { resumeToken: last.engineSessionId } : {}), createdAt: v?.createdAt ?? Date.parse(r.created_at), updatedAt: Math.max(Date.parse(r.updated_at) || 0, v?.updatedAt ?? 0), messages: v?.messages ?? r.message_count, ...(v?.tasks ? { tasks: v.tasks } : {}), ...(v?.tasksOpen !== undefined ? { tasksOpen: v.tasksOpen } : {}) };
+  }
+  /** Moves conversations saved by older versions into the log format, once. */
+  private migrate() {
+    if (!existsSync(this.dir)) return;
+    for (const f of readdirSync(this.dir)) {
+      if (!f.endsWith('.meta.json')) continue; const old = f.slice(0, -'.meta.json'.length);
+      try {
+        const meta = JSON.parse(readFileSync(join(this.dir, f), 'utf8')) as SessionMeta; const items = JSON.parse(readFileSync(join(this.dir, `${old}.items.json`), 'utf8')) as Item[];
+        const id = SESSION_ID.test(meta.id) ? meta.id : newId('ses', meta.createdAt || Date.now()); this.save({ ...meta, id }, items); this.close(id);
+        rmSync(join(this.dir, f), { force: true }); rmSync(join(this.dir, `${old}.items.json`), { force: true });
+      } catch { /* a damaged old file stays where it is */ }
+    }
+  }
+}
+interface View { v: 1; items: Item[]; engine?: string; title?: string; model?: string; tasks?: SessionMeta['tasks']; tasksOpen?: boolean; createdAt?: number; updatedAt?: number; messages?: number }
+
+/** A transcript rebuilt from the log alone (when no view was saved): what was said, and errors. */
+export function itemsFromLog(records: LogRecord[]): Item[] {
+  const out: Item[] = [];
+  for (const r of records) {
+    const d = r.data as Record<string, unknown>; const ts = Date.parse(r.at) || 0;
+    if (r.type === 'user.message') out.push({ kind: 'user', id: `u${r.n}`, text: String(d.text ?? ''), ts });
+    else if (r.type === 'text.done') out.push({ kind: 'assistant', id: `a${r.n}`, messageId: String(d.message_id ?? r.n), agentId: r.agent_id ?? '', text: String(d.text ?? ''), done: true });
+    else if (r.type === 'error') out.push({ kind: 'notice', id: `n${r.n}`, level: 'error', text: String(d.tool_message ?? 'Error') });
+    else if (r.type === 'rewind') { const to = Number((d as { to?: number }).to ?? 0); for (let i = out.length - 1; i >= 0; i--) if (Number(out[i]!.id.slice(1)) > to) out.splice(i, 1); }
+  }
+  return out;
 }
 
 export function ago(ms: number, now = Date.now()): string {

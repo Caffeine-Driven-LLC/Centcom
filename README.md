@@ -13,7 +13,7 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 
 ![Progress](docs/progress.svg)
 
-**39% built** (weighted by lane size across 105 lanes). Details and how this is computed: [`tools/plan/progress.py`](tools/plan/progress.py). Update [`plan/STATUS.json`](plan/STATUS.json) when you finish or advance a lane, then run `python3 tools/plan/progress.py`.
+**40% built** (weighted by lane size across 105 lanes). Details and how this is computed: [`tools/plan/progress.py`](tools/plan/progress.py). Update [`plan/STATUS.json`](plan/STATUS.json) when you finish or advance a lane, then run `python3 tools/plan/progress.py`.
 
 ## Next steps
 
@@ -26,16 +26,16 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 
 | Lane | What | Done | Note |
 |---|---|--:|---|
+| [C012](plan/client/C012.md) | Release engineering skeleton: versioning, changesets, signing placeholders | 90% | Changesets fixed group, build metadata, Ed25519 signing over the SHA-256 digest, release manifest for 5 targets, dry-run release workflow, docs/releasing.md; publish steps are stubs until lanes C094/C068 |
+| [C026](plan/client/C026.md) | Local transcript persistence and engine session resume | 90% | append-only redacted session log with header v2, flush cadence, segments, line cap, lock, index rebuild, retention, engine session map, resumeSession with fresh-with-summary fallback, toSnapshotEvents, app and CLI wired (-c, --resume [id] with picker), old saves migrated; gaps: session.retentionDays/persist config keys, pty-level CLI test |
 | [C029](plan/client/C029.md) | Usage and cost display from engine reports | 90% | ledger (reported cost only, running-total deltas, agent minutes, budget alerts, outbox with cap and drop order), /usage, wired into the app; gap: ledger replay from the golden transcripts of real CLIs |
 | [C013](plan/client/C013.md) | Agent runner daemon hosting AgentEngine processes (claude, codex) | 85% | runner and runnerd; gaps: windows pipe, preflight wiring, runnerd logs, daemon-level tests |
 | [C014](plan/client/C014.md) | Agent session state machine emitting contract state names | 85% | state machine and emitter; gaps: not wired into the app, golden transcripts from real parsers, combined property test |
 | [C030](plan/client/C030.md) | Interrupt and cancel semantics | 85% | interrupt controller, 3 s/8 s signal ladder to whole process groups, registered pids only, Codex protocol-then-ladder with restart on the same thread, approvals denied and late ones refused, partial answer kept, ctrl+c semantics with exit 130 in the app and -p; gaps: turn timeout, interrupt receipt, stale index.lock cleanup |
 | [C104](plan/client/C104.md) | Provider detection and login handoff: provider status, login, logout, doctor checks | 85% | provider detection and commands; gaps: message copy, runtime fs spy, CLI-level hang test, app still uses old detectors |
 | [C004](plan/client/C004.md) | Layered configuration system (defaults, user, project, env, flags) | 85% | layered config used everywhere; gaps vs card: warns instead of throwing on bad files and secrets, sync writer, fewer precedence tests |
-| [C005](plan/client/C005.md) | Logging and diagnostics with redaction | 85% | redacting logger and file sink; gaps: redaction table size, real-fs sink test, injected clock in sink |
-| [C101](plan/client/C101.md) | Engine abstraction: AgentEngine interface, capabilities and normalised event stream | 80% | engine layer; gaps: bounded event buffer with backpressure, validator run on both adapters, denial and rate-limit transcripts |
 
-+30 more in [`plan/STATUS.json`](plan/STATUS.json).
++31 more in [`plan/STATUS.json`](plan/STATUS.json).
 
 ### Ready to pick up (all dependencies done)
 

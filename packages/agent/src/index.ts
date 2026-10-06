@@ -28,3 +28,4 @@ export * from './context/index.js';
 export * from './locks/index.js';
 export * from './accounting/index.js';
 export * from './interrupt/index.js';
+export * from './persistence/index.js';

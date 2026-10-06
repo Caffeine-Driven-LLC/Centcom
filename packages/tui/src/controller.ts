@@ -171,7 +171,7 @@ export class AppController {
   /** Start over with an empty context. The old conversation stays saved and can be resumed. */
   async newSession() {
     if (this.state.busy) { this.toast('warn', 'Cento is still working. Press Esc to interrupt, then try again.'); return; }
-    this.persist(); await this.session?.stop();
+    this.persist(); this.o.sessions?.close(this.state.sessionId); await this.session?.stop();
     this.createdAt = undefined; this.lastItems = undefined;
     this.set({ items: [], scroll: 0, sessionId: newId('ses'), approvals: [], tasks: [] });
     await this.startEngine();
@@ -184,7 +184,7 @@ export class AppController {
     const id = /^\d+$/.test(which) ? list[Number(which) - 1]?.id : which;
     const saved = id ? this.o.sessions.load(id) : undefined;
     if (!saved) { this.toast('warn', `No saved conversation "${which}". Type /resume to see the list.`); return; }
-    this.persist(); await this.session?.stop();
+    this.persist(); this.o.sessions?.close(this.state.sessionId); await this.session?.stop();
     this.lastItems = undefined; this.set({ items: [], approvals: [] }); this.loadSaved(saved.meta, saved.items);
     if (saved.meta.engine === this.o.engine.id) await this.startEngine(saved.meta.resumeToken); else await this.startEngine(undefined, this.carryOver(saved.meta));
   }
@@ -195,7 +195,7 @@ export class AppController {
   }
 
   stop() {
-    this.persist(); void this.o.ledger?.flush().catch(() => undefined);
+    this.persist(); this.o.sessions?.close(); void this.o.ledger?.flush().catch(() => undefined);
     this.driver.stop(); this.ghostTimers.forEach(clearTimeout); if (this.verbTimer) clearInterval(this.verbTimer);
     this.toastTimers.forEach(clearTimeout);
     for (const a of this.state.approvals) a.resolve({ decision: 'deny', scope: 'once', reason: 'exit' });
@@ -214,6 +214,7 @@ export class AppController {
     try { this.ctxView?.onEvent(ev); } catch { /* the meter never breaks the transcript */ }
     for (const ob of this.o.observers ?? []) { try { ob(this.me, ev); } catch { /* an observer never breaks the transcript */ } }
     this.account(this.me, ev, this.o.engine.id);
+    this.o.sessions?.append(this.state.sessionId, this.o.cwd, ev); // the conversation log (lane C026)
     if (ev.type === 'turn.done') void this.cp?.endTurn().catch(() => undefined);
     const me = this.me;
     switch (ev.type) {
@@ -368,7 +369,7 @@ export class AppController {
     this.o.onHistory?.(this.state.history);
     if (text.startsWith('/')) { await this.runCommand(text); return; }
     if (this.state.busy) { this.toast('warn', 'Cento is still working. Press Esc to interrupt, then send again.'); return; }
-    this.addItem({ kind: 'user', id: nid('u'), text, ts: Date.now() });
+    this.addItem({ kind: 'user', id: nid('u'), text, ts: Date.now() }); this.o.sessions?.noteUser(this.state.sessionId, this.o.cwd, text);
     this.setAgentState(this.me, 'prompt-received');
     let outgoing = text;
     if (this.state.settings.autoSkills) {

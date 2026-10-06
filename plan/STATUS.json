@@ -23,7 +23,7 @@
   },
   "C012": {
    "pct": 0.9,
-   "note": "dry-run release skeleton: Changesets fixed group (@changesets/cli 3.0.3), build-meta.mjs (channels, injected date, contract version), sign.mjs (Ed25519 over the raw SHA-256 digest per CT-API-RELEASES, 0600 key check, fail closed), manifest.mjs (5 targets, validated by the generated validator), release.yml (workflow_dispatch, release environment, SHA-pinned, publish steps commented), docs/releasing.md. Missing: real per-platform binaries (C094), a real key in the release environment, never run on GitHub yet"
+   "note": "Changesets fixed group, build metadata, Ed25519 signing over the SHA-256 digest, release manifest for 5 targets, dry-run release workflow, docs/releasing.md; publish steps are stubs until lanes C094/C068"
   },
   "C013": {
    "pct": 0.85,
@@ -54,8 +54,8 @@
    "note": "@centcom/agent/events: createBus (ordered, re-entrancy queue, error isolation, bounded streams, MaxListeners), AgentEventMap catalogue of 18 events with wire-safe marking; nothing emits to it yet (runner C013 will)"
   },
   "C026": {
-   "pct": 0.45,
-   "note": "saved conversations as snapshots, resume across engines safe; card gaps: append-only log, lock, redaction, index and prune, toSnapshotEvents"
+   "pct": 0.9,
+   "note": "append-only redacted session log with header v2, flush cadence, segments, line cap, lock, index rebuild, retention, engine session map, resumeSession with fresh-with-summary fallback, toSnapshotEvents, app and CLI wired (-c, --resume [id] with picker), old saves migrated; gaps: session.retentionDays/persist config keys, pty-level CLI test"
   },
   "C028": {
    "pct": 0.4,
@@ -236,10 +236,6 @@
   "C056": {
    "pct": 0.95,
    "note": "CT-CRYPTO module in @centcom/net: vectors match bit for bit (ciphertext, signature, path MAC, fingerprint), frame encrypt/decrypt/sign/verify with tamper matrix, chunks, device keys in the OS keychain, key ring with rotation and encrypted persistence, grants, invite bundles, TOFU trust store; real keychain only checked through a fake in tests"
-  },
-  "C012": {
-   "pct": 0.0,
-   "note": "not started"
   }
  },
  "next": [
