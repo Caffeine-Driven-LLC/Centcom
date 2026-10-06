@@ -6,8 +6,8 @@
    "note": "pnpm workspaces, strict TS, vitest; no lint/dependency-direction rules yet"
   },
   "C006": {
-   "pct": 0.3,
-   "note": "ProviderError codes and friendly messages only"
+   "pct": 0.95,
+   "note": "@centcom/net errors: parser, retry table, backoff, WS close codes, message table for all 79 codes (compile-time exhaustive), nextAction; shared contract redactor; not yet used by an HTTP client (none exists yet)"
   },
   "C008": {
    "pct": 0.6,

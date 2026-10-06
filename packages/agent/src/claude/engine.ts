@@ -2,6 +2,7 @@
  * Claude Code engine (lane C102): drives the user's own, unmodified `claude` binary, one `claude -p` process per
  * turn, continuing with --resume. Never reads credentials; auth is whatever the user's `claude` is signed in with.
  */
+import { redact as redactSecrets } from '@centcom/protocol';
 import { ApprovalBridge } from './bridge.js';
 import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process';
 import { AsyncQueue } from '../queue.js';
@@ -13,10 +14,8 @@ export interface ClaudeEngineDeps { bin?: string; spawn?: typeof nodeSpawn; now?
 
 const CAPS = new Set<Capability>(['streaming', 'approvals', 'resume', 'subagents', 'mcp', 'skills', 'thinking', 'usage', 'interrupt', 'compact', 'models.list']);
 
-/** Strips things that look like credentials from text we may show or log (CT-PROVIDER rule 2). */
-export function redact(s: string): string {
-  return s.replace(/(?<![A-Za-z0-9_])sk-(ant-|proj-)?[A-Za-z0-9_-]{20,}/g, '[redacted]').replace(/([Aa]uthorization:\s*Bearer\s+)[A-Za-z0-9._-]{20,}/g, '$1[redacted]');
-}
+/** Strips credentials from text we may show or log. The patterns are the contract's (CT-PROVIDER rule 1), shared with the rest of the client. */
+export const redact = (s: string): string => redactSecrets(s);
 
 export class ClaudeCodeEngine implements AgentEngine {
   readonly id = 'claude-code' as const;

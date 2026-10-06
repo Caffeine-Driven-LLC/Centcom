@@ -35,7 +35,7 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 | [C101](plan/client/C101.md) | Engine abstraction: AgentEngine interface, capabilities and normalised event stream | 85% | AgentEngine + normalised events; not yet generated from contracts |
 | [C050](plan/client/C050.md) | Non-interactive mode: print, JSON output, pipes | 85% | centcom -p with text/json/stream-json, piped input, exit codes; verified with real Claude |
 
-+21 more in [`plan/STATUS.json`](plan/STATUS.json).
++20 more in [`plan/STATUS.json`](plan/STATUS.json).
 
 ### Ready to pick up (all dependencies done)
 

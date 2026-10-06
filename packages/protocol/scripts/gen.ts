@@ -138,12 +138,19 @@ async function emitOpenApi(): Promise<{ ts: string; json: string; ops: string }>
   return { ts: `${banner}${types}`, json: JSON.stringify(sortKeys(doc)), ops: `${banner}export const OPERATIONS = ${JSON.stringify(sorted, null, 2)} as const;\nexport type OperationId = keyof typeof OPERATIONS;\nexport interface OpenApiOperation { method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'; path: string; tags: readonly string[]; public: boolean }\n` };
 }
 
+function emitSecrets(): string {
+  const j = readJson(join(CONTRACTS, 'fixtures', 'providers', 'secret-patterns.json'));
+  const pats = j.patterns.map((p: J) => ({ id: p.id, regex: p.regex })).sort((a: J, b: J) => a.id.localeCompare(b.id));
+  for (const p of pats) new RegExp(p.regex); // fail the build if a contract pattern is not valid JavaScript
+  return `${banner}/** Strings that must never appear in frames, logs, telemetry, crash reports or backups (CT-PROVIDER rule 1). */\nexport const SECRET_PATTERNS: readonly { id: string; regex: string }[] = ${JSON.stringify(pats, null, 2)};\n`;
+}
+
 /* ------------------------------------------------------------------ write */
 async function main() {
   const oa = await emitOpenApi();
   const validators = buildValidators();
   const files: Record<string, string> = {
-    'types.ts': emitTypes(), 'error-codes.ts': emitErrors(), 'agent-state.ts': emitStates(), 'event-kinds.ts': emitKinds(),
+    'types.ts': emitTypes(), 'error-codes.ts': emitErrors(), 'secret-patterns.ts': emitSecrets(), 'agent-state.ts': emitStates(), 'event-kinds.ts': emitKinds(),
     'contract-version.ts': `${banner}export const CONTRACT_VERSION = ${q(VERSION)} as const;\nexport const CONTRACT_HASH = ${q(createHash('sha256').update(readFileSync(join(CONTRACTS, 'CONTRACTS.lock'))).digest('hex'))} as const;\n`,
     'openapi.ts': oa.ts, 'openapi.json': oa.json + '\n', 'operations.ts': oa.ops, 'validators-strict.ts': validators.strict, 'validators-tolerant.ts': validators.tolerant,
   };
