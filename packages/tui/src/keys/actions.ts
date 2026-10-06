@@ -12,6 +12,10 @@ const def = (id: string, group: string, description: string, ...defaults: [strin
 def('help.open', 'General', 'Show keys and commands', ['?', 'prompt'], ['f1', 'global']);
 def('app.quit', 'General', 'Quit (when the prompt is empty)', ['ctrl+d', 'prompt']);
 def('palette.open', 'General', 'Open the command palette', ['ctrl+k', 'global']);
+def('palette.close', 'Palette', 'Close the palette', ['esc', 'palette']);
+def('palette.next', 'Palette', 'Next result', ['down', 'palette']);
+def('palette.prev', 'Palette', 'Previous result', ['up', 'palette']);
+def('palette.run', 'Palette', 'Run the selected result', ['enter', 'palette']);
 def('models.open', 'General', 'Choose the model', ['ctrl+o', 'global']);
 def('mode.cycle', 'General', 'Cycle permission mode', ['shift+tab', 'global']);
 def('agent.interrupt', 'Agent', 'Stop the agent / clear (twice: rewind)', ['esc', 'prompt']);

@@ -110,8 +110,8 @@
    "note": "live strip with verbs; card gaps: spinner component, verb pools by state, timings"
   },
   "C041": {
-   "pct": 0.4,
-   "note": "palette with substring filter; card gaps: fuzzy scoring, providers, groups, recent"
+   "pct": 0.7,
+   "note": "palette core: DP fuzzy matcher with indices, engine (debounce, abort, slow-provider append, fixed group order, recent), list and file providers (git ls-files or walk, 20k cap, sliced scoring), view and live component (60/cols-4 wide, 8 rows + more row, wrap-around keys), palette.* actions; gap: the app still shows its older palette, sessions/skills providers not wired"
   },
   "C042": {
    "pct": 0.6,
