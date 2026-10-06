@@ -228,6 +228,10 @@
   "C043": {
    "pct": 1.0,
    "note": "TaskList, ProgressBar (determinate, indeterminate, reduced motion, ASCII), reduceTasks, useProgress; engines send their plans (Claude TodoWrite, Codex plan updates) as tasks.updated; task panel above the prompt on ctrl+t, saved with the conversation"
+  },
+  "C056": {
+   "pct": 0.95,
+   "note": "CT-CRYPTO module in @centcom/net: vectors match bit for bit (ciphertext, signature, path MAC, fingerprint), frame encrypt/decrypt/sign/verify with tamper matrix, chunks, device keys in the OS keychain, key ring with rotation and encrypted persistence, grants, invite bundles, TOFU trust store; real keychain only checked through a fake in tests"
   }
  },
  "next": [

@@ -497,7 +497,7 @@ export class AppController {
       if (!this.fleetIds.includes(agent_id)) return;
       if (ev.type === 'status') this.updateAgent(agent_id, () => ({ state: ev.state, mini: stateToMini(ev.state), busy: isBusyState(ev.state) }));
       else if (ev.type === 'session.started') this.updateAgent(agent_id, () => ({ model: ev.model, loginKind: ev.login_kind }));
-      else if (ev.type === 'usage.report') this.updateAgent(agent_id, (a) => ({ cost: a.cost + (ev.cost_usd ?? 0), inTok: a.inTok + ev.input_tokens, outTok: a.outTok + ev.output_tokens }));
+      else if (ev.type === 'usage.report') this.updateAgent(agent_id, () => ({ cost: ev.cost_usd ?? 0, inTok: ev.input_tokens, outTok: ev.output_tokens })); /* the engines report the session's running totals, the same as for the main agent */
       else if (ev.type === 'approval.requested') this.toast('warn', `${this.state.agents.find((a) => a.id === agent_id)?.name ?? 'An agent'} needs approval`, 5000);
     });
     f.bus.on('fleet:branch_ready', (e) => { const n = this.fleetIds.indexOf(e.agentId) + 1; this.notice('ok', `Agent ${n} finished: branch ${e.branch} is ready (${e.ahead} commit${e.ahead === 1 ? '' : 's'}, ${e.files.length} file${e.files.length === 1 ? '' : 's'}).`, `/fleet preview ${n} checks it for conflicts with its base. Centcom never merges or pushes for you.`); });
