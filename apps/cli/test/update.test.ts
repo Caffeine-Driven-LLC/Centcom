@@ -1,0 +1,23 @@
+import { describe, expect, it, vi } from 'vitest';
+import { ManagedInstallError, UpdateError, type UpdateClient } from '@centcom/net';
+import { runUpdate } from '../src/commands/update/index.js';
+
+type Fake = { check: ReturnType<typeof vi.fn>; download: ReturnType<typeof vi.fn>; verify: ReturnType<typeof vi.fn>; apply: ReturnType<typeof vi.fn>; rollback: ReturnType<typeof vi.fn>; method: string };
+const fake = (o: Partial<Fake> = {}): Fake => ({ check: vi.fn(async () => ({ available: true, version: '1.1.0', channel: 'stable', required: false, notesUrl: 'https://centcom.dev/notes' })), download: vi.fn(async () => ({ version: '1.1.0' })), verify: vi.fn(async () => undefined), apply: vi.fn(async () => ({ restartRequired: true, previous: '1.0.0' })), rollback: vi.fn(async () => undefined), method: 'sea', ...o });
+function run(argv: string[], f: Fake, answer = true) { const out: string[] = []; const err: string[] = []; const channels: string[] = []; return runUpdate(argv, { version: '1.0.0', defaultChannel: 'stable', client: (c) => { channels.push(c); return f as unknown as UpdateClient; } }, { out: (l) => out.push(l), err: (l) => err.push(l), confirm: async () => answer }).then((code) => ({ code, out, err, channels })); }
+
+describe('centcom update', () => {
+  it('--check: exit 10 when something newer exists, 0 when up to date; --json is one line', async () => {
+    const a = await run(['--check'], fake()); expect(a.code).toBe(10); expect(a.out[0]).toContain('1.1.0'); const f = fake(); const j = await run(['--check', '--json'], f); expect(j.code).toBe(10); expect(JSON.parse(j.out[0]!)).toMatchObject({ available: true, version: '1.1.0', channel: 'stable' }); expect(f.download).not.toHaveBeenCalled();
+    const up = await run(['--check'], fake({ check: vi.fn(async () => ({ available: false, channel: 'stable', required: false })) })); expect(up.code).toBe(0); expect(up.out[0]).toMatch(/up to date/);
+  });
+  it('an update is confirmed, downloaded, verified, then applied, in that order; --yes skips only the question', async () => {
+    const f = fake(); const order: string[] = []; f.download.mockImplementation(async () => { order.push('download'); return { version: '1.1.0' }; }); f.verify.mockImplementation(async () => { order.push('verify'); }); f.apply.mockImplementation(async () => { order.push('apply'); return { restartRequired: true, previous: '1.0.0' }; });
+    const r = await run([], f); expect(r.code).toBe(0); expect(order).toEqual(['download', 'verify', 'apply']); expect(r.out.at(-1)).toMatch(/Updated to 1\.1\.0.*--rollback/); const no = fake(); const n = await run([], no, false); expect(n.code).toBe(1); expect(no.download).not.toHaveBeenCalled(); expect(n.out.at(-1)).toMatch(/Nothing was changed/);
+    const y = fake(); expect((await run(['--yes'], y, false)).code).toBe(0); expect(y.apply).toHaveBeenCalled();
+  });
+  it('a failed verification stops before anything is applied and says so plainly', async () => { const f = fake({ verify: vi.fn(async () => { throw new UpdateError('hash_mismatch', 'The downloaded file is not the one that was published.'); }) }); const r = await run(['--yes'], f); expect(r.code).toBe(1); expect(f.apply).not.toHaveBeenCalled(); expect(r.err[0]).toMatch(/not the one that was published/); const j = await run(['--yes', '--json'], f); expect(JSON.parse(j.out[0]!)).toMatchObject({ error: 'hash_mismatch' }); });
+  it('a package-manager install shows the command and changes nothing', async () => { const npm = fake({ method: 'npm' }); const r = await run(['--yes'], npm); expect(r.code).toBe(0); expect(r.out.join(' ')).toContain('npm install --global centcom@latest'); expect(npm.download).not.toHaveBeenCalled(); const m = fake({ download: vi.fn(async () => { throw new ManagedInstallError('brew upgrade centcom'); }) }); expect((await run(['--yes'], m)).out.join(' ')).toContain('brew upgrade centcom'); });
+  it('--rollback goes back; --channel is passed on and checked; bad options are exit 2', async () => { const f = fake(); expect((await run(['--rollback'], f)).code).toBe(0); expect(f.rollback).toHaveBeenCalled(); const f2 = fake({ rollback: vi.fn(async () => { throw new UpdateError('no_previous', 'There is no earlier version saved to go back to.'); }) }); const r = await run(['--rollback'], f2); expect(r.code).toBe(1); expect(r.err[0]).toMatch(/earlier version/);
+    expect((await run(['--check', '--channel', 'beta'], fake())).channels).toEqual(['beta']); expect((await run(['--channel', 'weekly'], fake())).code).toBe(2); expect((await run(['--wat'], fake())).code).toBe(2); expect((await run(['--check'], fake({ check: vi.fn(async () => { throw new Error('offline /home/me'); }) }))).err[0]).not.toContain('/home/me'); });
+});

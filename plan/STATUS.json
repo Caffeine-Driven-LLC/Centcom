@@ -240,6 +240,10 @@
   "C051": {
    "pct": 0.9,
    "note": "HTTP client in @centcom/net: operation table generated from openapi.yaml with a CI drift check; typed call, listPage, paginate, revalidate, getStatus, getJwks; CT-ERR retries with full jitter and a 60 s sleep budget, idempotency keys, single-flight 401 refresh, ETag and If-Match, size guard, tolerant response checks, typed errors; all 93 operations pass against the mock. Gaps: responses are checked with generated shapes (types and required fields), not the C003 Ajv validators; no lane uses the client yet"
+  },
+  "C068": {
+   "pct": 0.8,
+   "note": "update client: check (channel, platform, arch, pre-release and downgrade rules, required flag), resumable size-capped download, hash + Ed25519 verification before apply (two keys), atomic apply with .prev and rollback, managed-install detection, background-check schedule, centcom update with exit 10; reads both manifest spellings (contract mismatch noted); gaps: production keys empty, no run against real signed artifacts, startup background check not wired into the app"
   }
  },
  "next": [
