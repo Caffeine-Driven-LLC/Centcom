@@ -204,6 +204,10 @@
   "C024": {
    "pct": 0.8,
    "note": "fleet manager: worktree and branch per agent, plan/config limit with fair FIFO queue (32), per-engine stagger and pause on provider limits, stop/stopAll/wall clock, cleanup (branch ready, needs attention, orphans, merge preview), native subagent nodes, spawn/exit payloads. centcom fleet command logic. Not yet: wiring to the real engine registry in the app, TUI fleet view"
+  },
+  "C023": {
+   "pct": 0.95,
+   "note": "memory files: quick add with diff and confirmation, edit with conflict detection, atomic writes preserving mode and line endings, secret guard and size caps, marker-based sync with drift status (source_changed/target_edited/conflict), import hint, centcom memory CLI, # line routing in the TUI. Not done: web app hook; Codex user-level AGENTS.md path unconfirmed"
   }
  },
  "next": [

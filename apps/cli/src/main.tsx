@@ -10,12 +10,14 @@ import { createAppLogger } from '@centcom/net';
 import type { CentoColor } from '@centcom/mascot';
 import { buildPrompt, readStdin, runPrint } from './print.js';
 import { runProviderCli } from './commands/provider/cli.js';
+import { makeMemoryFiles, runMemoryCli } from './commands/memory/cli.js';
 
 const VERSION = '0.1.0';
 const HELP = `centcom ${VERSION}: command many hands
 
 Usage
   centcom [options]            start the terminal app in this directory
+  centcom memory show|add|edit|status|sync   edit CLAUDE.md and AGENTS.md (a line starting with "# " in the app adds a note)
   centcom provider status|login|logout|doctor   check, sign in or out of Claude Code and Codex (the tools do the signing in)
 
 Scripting
@@ -76,6 +78,7 @@ async function main() {
   if (has('-h') || has('--help')) { console.log(HELP); return; }
   if (has('-v') || has('--version')) { console.log(VERSION); return; }
   if (process.argv[2] === 'provider') process.exit(await runProviderCli(process.argv.slice(3)));
+  if (process.argv[2] === 'memory') process.exit(await runMemoryCli(process.argv.slice(3)));
   if (has('-p') || has('--print')) {
     const i = Math.max(process.argv.indexOf('-p'), process.argv.indexOf('--print'));
     const next = process.argv[i + 1]; const text = next && !next.startsWith('-') ? next : undefined;
@@ -110,6 +113,10 @@ async function main() {
     sessions: has('--no-save') ? undefined : new SessionStore(),
     resume: has('-c') || has('--continue') ? 'last' : arg('--resume'),
     onExit: () => instance?.unmount(),
+    onMemoryAdd: async (text) => { // a line starting with "# " is a note for this tool's memory file (CLAUDE.md or AGENTS.md), shown as a diff and confirmed
+      try { const mf = makeMemoryFiles(process.cwd()); const plan = await mf.plan({ engine: engine.id === 'codex' ? 'codex' : 'claude-code', scope: 'project', quickAdd: text, root: process.cwd() });
+        return { diff: plan.diff || '(already there)', apply: async () => { await mf.apply(plan, { accepted: true, planHash: plan.planHash }); return 'Added to memory.'; } }; } catch (e) { return { error: String((e as Error).message ?? e) }; }
+    },
   });
   process.stdout.write('\x1b[?1049h\x1b[2J\x1b[H'); // alternate screen: the transcript never pollutes scrollback
   const leave = () => process.stdout.write('\x1b[?1049l');

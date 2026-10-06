@@ -34,6 +34,8 @@ export interface ControllerOptions {
   resume?: string;
   /** Started with --dangerously-skip-permissions: Shift+Tab can cycle into bypass. */
   dangerous?: boolean;
+  /** A line that starts with `# ` is a note for the memory files, not a prompt. Returns the diff to confirm, and what to do when the person says yes. */
+  onMemoryAdd?: (text: string) => Promise<{ diff: string; apply: () => Promise<string> } | { error: string }>;
 }
 
 let uid = 0;
@@ -277,9 +279,21 @@ export class AppController {
     this.patch({ histIdx: idx, draft, input: t, cursor: t.length });
   }
 
+  private pendingMemory?: { diff: string; apply: () => Promise<string> };
   async submit(raw: string) {
     const text = raw.trim();
     if (!text) return;
+    if (this.pendingMemory) { // the answer to "add this to memory?": never goes to the engine or into the prompt history
+      const p = this.pendingMemory; this.pendingMemory = undefined; this.set({ input: '', cursor: 0 });
+      if (/^(y|yes)$/i.test(text)) { try { this.addItem({ kind: 'notice', id: nid('n'), level: 'ok', text: await p.apply() }); } catch (e) { this.addItem({ kind: 'notice', id: nid('n'), level: 'warn', text: String((e as Error).message ?? e) }); } } else this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: 'Nothing was added to memory.' });
+      return;
+    }
+    const note = this.o.onMemoryAdd ? /^#[ \t]+(\S[\s\S]*)$/.exec(text) : null;
+    if (note) {
+      this.set({ input: '', cursor: 0, histIdx: null, draft: '' }); const r = await this.o.onMemoryAdd!(note[1]!.trim());
+      if ('error' in r) this.addItem({ kind: 'notice', id: nid('n'), level: 'warn', text: r.error }); else { this.pendingMemory = r; this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: 'Add this note to memory? Type y to confirm, anything else cancels.', detail: r.diff }); }
+      return;
+    }
     this.set((s) => ({ history: [...s.history.filter((h) => h !== text), text].slice(-200), histIdx: null, draft: '', input: '', cursor: 0, scroll: 0, slashSel: 0 }));
     this.o.onHistory?.(this.state.history);
     if (text.startsWith('/')) { await this.runCommand(text); return; }
