@@ -15,6 +15,7 @@
     "@centcom/mascot": "workspace:*",
     "@centcom/config": "workspace:*",
     "@centcom/net": "workspace:*",
+    "@centcom/lan": "workspace:*",
     "@centcom/protocol": "workspace:*"
   },
   "devDependencies": {

@@ -18,6 +18,7 @@ import { makeMemoryFiles, runMemoryCli } from './commands/memory/cli.js';
 import { appViews } from './views.js';
 import { runInitCli } from './commands/init.js';
 import { resolvedKeys, runKeys } from './commands/keys.js';
+import { runLanCli } from './commands/lan/scan.js';
 import { makeTelemetry, runTelemetry } from './commands/telemetry.js';
 import { defaultDeps, loadConfig } from '@centcom/config';
 import { runMcpCli } from './commands/mcp/cli.js';
@@ -35,6 +36,7 @@ Usage
   centcom hooks list|add|remove|validate|templates   manage Claude Code hooks (the tool runs them, Centcom only edits the settings)
   centcom provider status|login|logout|doctor   check, sign in or out of Claude Code and Codex (the tools do the signing in)
   centcom telemetry status|on|off|reset   anonymous usage counts (off unless you turn them on)
+  centcom lan scan [--timeout 3] [--json]   list Centcom sessions on this network (mDNS; no account needed)
 
 Scripting
   centcom -p "task"             run once, print the answer, exit (no screen). Piped input is added to the prompt.
@@ -97,7 +99,7 @@ async function main() {
   if (process.argv[2] === 'telemetry') process.exit(await runTelemetry(process.argv.slice(3), { out: (l) => console.log(l), err: (l) => console.error(l), version: VERSION }));
   // anonymous counts of which command ran, only when you turned telemetry on (docs/telemetry.md)
   const cfg0 = await loadConfig(defaultDeps()).catch(() => undefined); const tm = makeTelemetry({ enabled: !!cfg0?.telemetry.enabled, baseUrl: cfg0?.api.base_url ?? 'https://api.centcom.dev', version: VERSION });
-  const sub = ['provider', 'memory', 'mcp', 'hooks', 'init', 'keys'].includes(process.argv[2] ?? '') ? process.argv[2]! : has('-p') || has('--print') ? 'print' : 'tui'; tm.appStart(); tm.commandRun(sub);
+  const sub = ['provider', 'memory', 'mcp', 'hooks', 'init', 'keys', 'lan'].includes(process.argv[2] ?? '') ? process.argv[2]! : has('-p') || has('--print') ? 'print' : 'tui'; tm.appStart(); tm.commandRun(sub);
   const done = async (code: number) => { tm.appExit(); await tm.flush(2000); process.exit(code); };
   if (process.argv[2] === 'provider') await done(await runProviderCli(process.argv.slice(3)));
   if (process.argv[2] === 'keys') await done(runKeys(process.argv.slice(3), { out: (l) => console.log(l), err: (l) => console.error(l) }));
@@ -105,6 +107,7 @@ async function main() {
   if (process.argv[2] === 'memory') await done(await runMemoryCli(process.argv.slice(3)));
   if (process.argv[2] === 'mcp') await done(await runMcpCli(process.argv.slice(3)));
   if (process.argv[2] === 'hooks') await done(await runHooksCli(process.argv.slice(3)));
+  if (process.argv[2] === 'lan') { await done(await runLanCli(process.argv.slice(3), { out: (l) => console.log(l), err: (l) => console.error(l) })); }
   if (has('-p') || has('--print')) {
     const i = Math.max(process.argv.indexOf('-p'), process.argv.indexOf('--print'));
     const next = process.argv[i + 1]; const text = next && !next.startsWith('-') ? next : undefined;

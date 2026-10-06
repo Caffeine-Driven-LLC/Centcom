@@ -240,6 +240,14 @@
   "C051": {
    "pct": 0.9,
    "note": "HTTP client in @centcom/net: operation table generated from openapi.yaml with a CI drift check; typed call, listPage, paginate, revalidate, getStatus, getJwks; CT-ERR retries with full jitter and a 60 s sleep budget, idempotency keys, single-flight 401 refresh, ETag and If-Match, size guard, tolerant response checks, typed errors; all 93 operations pass against the mock. Gaps: responses are checked with generated shapes (types and required fields), not the C003 Ajv validators; no lane uses the client yet"
+  },
+  "C071": {
+   "pct": 0.85,
+   "note": "mDNS advertiser and browser (probe, announce, goodbye, query schedule, TTL expiry, name conflicts, member-count updates), DNS-SD codec, TXT validation, fuzz, no-secrets packet scan, --no-announce, mdns-unavailable path, centcom lan scan; gap: not run on a real network (fake bus only)"
+  },
+  "C073": {
+   "pct": 0.85,
+   "note": "pairing code, CPace key exchange, host/guest flow with confirmation, attempt limit and ban list, reconnect token, session trust store, fingerprint binding, redaction tests; gap: no real socket run; host server (C072) not built"
   }
  },
  "next": [
