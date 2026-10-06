@@ -367,6 +367,10 @@ importers:
       react:
         specifier: ^19.0.0
         version: 19.3.0
+    devDependencies:
+      '@centcom/testkit':
+        specifier: workspace:*
+        version: link:../testkit
 
 packages:
 

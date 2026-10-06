@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FakeEngine } from '@centcom/testkit';
+import { FakeEngine, type FakeEngineOptions } from '@centcom/testkit';
 import type { ApprovalRequest, EventBody } from '@centcom/agent';
 import { afterAll, describe, expect, it } from 'vitest';
 import { AppController } from '../src/controller.js';
@@ -14,7 +14,7 @@ const git = (cwd: string, ...a: string[]) => execFileSync('git', a, { cwd, encod
 function repo() { const d = tmp('centcom-wire-'); git(d, 'init', '-q', '-b', 'main'); git(d, 'config', 'commit.gpgsign', 'false'); writeFileSync(join(d, 'a.txt'), 'original\n'); git(d, 'add', '-A'); git(d, 'commit', '-q', '-m', 'i'); return d; }
 const req = (o: Partial<ApprovalRequest>): ApprovalRequest => ({ approval_id: 'apr_' + Math.random().toString(36).slice(2), agent_id: 'agt_you', tool_id: 't', tool: 'Edit', summary: 'edit', risk: 'medium', ...o });
 const until = async (f: () => boolean, ms = 4000) => { const t0 = Date.now(); while (!f()) { if (Date.now() - t0 > ms) throw new Error('timeout'); await new Promise((r) => setTimeout(r, 15)); } };
-async function app(o: { cwd?: string; dangerous?: boolean; mode?: 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions'; script?: ConstructorParameters<typeof FakeEngine>[0]['script']; checkpoints?: boolean } = {}) {
+async function app(o: { cwd?: string; dangerous?: boolean; mode?: 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions'; script?: FakeEngineOptions['script']; checkpoints?: boolean } = {}) {
   const cwd = o.cwd ?? repo(); const configDir = tmp('centcom-cfg-'); const home = tmp('centcom-home-');
   const engine = new FakeEngine({ id: 'claude-code', ...(o.script ? { script: o.script } : {}) });
   const rt = await buildRuntime({ cwd, engineId: 'claude-code', demo: false, dangerous: o.dangerous, configDir, home, checkpoints: o.checkpoints ?? true });

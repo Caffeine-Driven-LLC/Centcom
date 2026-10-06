@@ -14,5 +14,8 @@
     "@centcom/skills": "workspace:*",
     "@centcom/config": "workspace:*",
     "@centcom/net": "workspace:*"
+  },
+  "devDependencies": {
+    "@centcom/testkit": "workspace:*"
   }
 }

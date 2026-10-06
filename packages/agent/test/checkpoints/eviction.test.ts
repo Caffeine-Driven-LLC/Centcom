@@ -24,6 +24,6 @@ describe('rewind to n then to the latest is a no-op (property)', () => {
       const r = repo(); const t = rig(r); for (const [i, s] of steps.entries()) await t.turn(`t${i}`, i, () => { if (s.del) { try { execFileSync('rm', ['-f', `${r.dir}/${s.file}`]); } catch { /* absent */ } } else r.put(s.file, `${s.body}\n`); });
       const snap = () => { sh(r.dir, 'add', '-A'); const x = sh(r.dir, 'write-tree').trim(); sh(r.dir, 'reset', '-q'); return x; }; const original = snap(); const k = t.mgr.list()[pick % t.mgr.list().length]!;
       await t.mgr.rewind(k.id, 'files', { confirmedPaths: [] }); const latest = t.mgr.list().at(-1)!; await t.mgr.rewind(latest.id, 'files'); expect(snap()).toBe(original);
-    }), { numRuns: 12 });
+    }), { numRuns: Number(process.env.CP_RUNS ?? 12) });
   }, 180_000);
 });
