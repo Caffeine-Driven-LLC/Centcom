@@ -31,6 +31,8 @@ export type AgentEventMap = {
   'worktree:removed': { agent_id: AgentId; path: string };
   'lock:changed': { agent_id: AgentId; path: string; action: 'acquire' | 'release' | 'expire'; ttl_ms?: number };
   'lock:conflict': { agent_id: AgentId; other_agent_id: AgentId; path: string };
+  /** The MCP servers one tool reports, as the manager understands them. */
+  'mcp:status': { engine: 'claude-code' | 'codex'; servers: { name: string; state: string; tools?: number; error?: string; builtin?: boolean }[] };
   'subagent:spawned': { agent_id: AgentId; parent_id: AgentId; role?: string };
   'subagent:finished': { agent_id: AgentId; parent_id: AgentId; ok: boolean };
 };
