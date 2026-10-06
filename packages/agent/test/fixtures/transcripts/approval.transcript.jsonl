@@ -1,0 +1,11 @@
+{"transcript": 1, "engine": "fake", "recorded_with": "hand-written for C101, modelled on claude-code 2.1 and codex 0.5 output"}
+{"at_ms": 0, "event": {"type": "session.started", "engine": "fake", "engine_session_id": "sess-1", "model": "fake-model", "cli_version": "0.0.0", "tools": ["Read", "Edit", "Bash"], "mcp_servers": [], "capabilities": ["streaming", "approvals", "resume", "interrupt"], "login_kind": "unknown"}}
+{"expect": "send", "prompt": "fix the typo"}
+{"at_ms": 0, "event": {"type": "turn.started", "turn_id": "trn_01JTEST0000000000000000001"}}
+{"at_ms": 60, "event": {"type": "tool.requested", "tool_id": "toolu_1", "name": "Edit", "input_summary": "src/a.ts", "risk": "medium", "path": "src/a.ts"}}
+{"at_ms": 20, "event": {"type": "approval.requested", "approval_id": "apr_01JTEST0000000000000000001", "tool_id": "toolu_1", "summary": "Edit src/a.ts", "risk": "medium", "path": "src/a.ts"}}
+{"expect": "approval", "decision": "approve"}
+{"at_ms": 120, "event": {"type": "tool.result", "tool_id": "toolu_1", "status": "ok", "summary": "edited"}}
+{"at_ms": 40, "event": {"type": "text.delta", "message_id": "msg_01JTEST0000000000000000001", "index": 0, "text": "Fixed."}}
+{"at_ms": 5, "event": {"type": "text.done", "message_id": "msg_01JTEST0000000000000000001"}}
+{"at_ms": 10, "event": {"type": "turn.done", "outcome": "ok"}}

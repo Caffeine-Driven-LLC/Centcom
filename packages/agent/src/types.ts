@@ -70,7 +70,8 @@ export interface EngineSession {
   readonly events: AsyncIterable<NormalisedEvent>;
   send(prompt: string): Promise<{ turn_id: string }>;
   interrupt(): Promise<{ stopped: boolean }>;
-  stop(): Promise<void>;
+  /** The card also allows reporting how the engine ended; engines that return nothing remain valid. */
+  stop(): Promise<void | { exit_code: number | null; signal: string | null }>;
   resumeToken(): string | undefined;
   setModel?(model: string): void;
   setPermissionMode?(mode: PermissionMode): void;

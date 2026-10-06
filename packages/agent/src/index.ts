@@ -14,3 +14,4 @@ export { CodexMapper, diffFor, errorCodeFor } from './codex/map.js';
 export * from './events/index.js';
 export * from './runner/index.js';
 export * from './state/index.js';
+export * from './engine/index.js';
