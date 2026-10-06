@@ -46,6 +46,10 @@ export interface ControllerOptions {
   context?: Partial<ContextConfig>;
   /** Parallel agents in their own worktrees (`/fleet`). Their events, branch-ready news and approvals come over `bus`. */
   fleet?: { manager: FleetManager; bus: AgentBus; ownerSlug: string };
+  /** Read-only views for `/mcp`, `/hooks` and `/memory` (the CLI's own list and status output). */
+  views?: Partial<Record<'mcp' | 'hooks' | 'memory', (args: string[]) => Promise<string[]>>>;
+  /** Called with the main agent's events too (file locks between agents use it). */
+  observers?: ((agentId: string, ev: NormalisedEvent) => void)[];
 }
 const FLEET_COLORS: CentoColor[] = ['green', 'yellow', 'red', 'brown', 'violet'];
 const FLEET_STATE: Record<string, string> = { queued: 'queued', starting: 'prompt-received', running: 'thinking', waiting: 'idle', done: 'success', failed: 'error', canceled: 'idle' };
@@ -95,6 +99,8 @@ export class AppController {
   }
 
   get state() { return this.store.get(); }
+  /** The display name of an agent ("you" for the main one). */
+  agentName(id: string) { return this.state.agents.find((a) => a.id === id)?.name ?? 'an agent'; }
   private set(p: Partial<AppState> | ((s: AppState) => Partial<AppState>)) { this.store.set(p); }
   /** UI-level state changes (input buffer, scroll, mode, overlay selections). */
   patch(p: Partial<AppState>) { this.store.set(p); }
@@ -199,6 +205,7 @@ export class AppController {
     this.o.onEvent?.(ev);
     this.logEvent(ev);
     try { this.ctxView?.onEvent(ev); } catch { /* the meter never breaks the transcript */ }
+    for (const ob of this.o.observers ?? []) { try { ob(this.me, ev); } catch { /* an observer never breaks the transcript */ } }
     if (ev.type === 'turn.done') void this.cp?.endTurn().catch(() => undefined);
     const me = this.me;
     switch (ev.type) {
@@ -431,6 +438,10 @@ export class AppController {
       case 'rewind': await this.rewindCommand(arg); break;
       case 'compact': await this.compactCommand(); break;
       case 'fleet': await this.fleetCommand(arg); break;
+      case 'mcp': case 'hooks': case 'memory': {
+        const view = this.o.views?.[cmd]; if (!view) { this.toast('info', `/${cmd} is not available here. Use \`centcom ${cmd}\` in a terminal.`); break; }
+        const lines = await view(arg.split(/\s+/).filter(Boolean)).catch((e: unknown) => [String((e as Error)?.message ?? e)]); this.notice('info', lines[0] ?? `(nothing to show)`, lines.slice(1).join('\n') || undefined); break;
+      }
       case 'permissions': await this.permissionsCommand(arg); break;
       case 'trust': await this.trustCommand(arg); break;
       case 'mode': {

@@ -94,3 +94,14 @@ describe('the fleet in the app', () => {
   }, 30_000);
   it('usage errors and the demo are explained', async () => { const { ctl } = await fleetApp(); await ctl.runCommand('/fleet start'); expect(ctl.state.toasts.at(-1)!.text).toMatch(/Usage/); await ctl.runCommand('/fleet stop 7'); expect(ctl.state.toasts.at(-1)!.text).toMatch(/Which agent/); ctl.stop(); const demo = new AppController({ engine: new FakeEngine() as never, demo: true, cwd: '/tmp', version: 't', skills: [] }); await demo.runCommand('/fleet'); expect(demo.state.toasts.at(-1)!.text).toMatch(/real engine/); demo.stop(); }, 30_000);
 });
+
+describe('file locks between agents', () => {
+  it('two agents changing the same file are told their branches will conflict', async () => {
+    const cwd = repo(); const rt = await buildRuntime({ cwd, engineId: 'claude-code', demo: false, configDir: tmp('centcom-cfg-'), home: tmp('centcom-home-'), checkpoints: false });
+    const ctl = new AppController({ ...rt.options, engine: new FakeEngine({ id: 'claude-code' }) as never, demo: false, cwd, version: 't', skills: [] }); rt.bind(ctl); await ctl.start();
+    const ev = (agent: string, path: string) => rt.options.fleet!.bus.emit('agent:event', { agent_id: agent as never, seq: 1, event: { type: 'tool.requested', tool_id: 't', name: 'Edit', input_summary: path, risk: 'medium', path, v: 1, seq: 1, ts: 't', agent_id: agent } as never });
+    ev('agt_01JTEST0000000000000000001', 'src/a.ts'); await until(() => true); await new Promise((r) => setTimeout(r, 50)); ev('agt_01JTEST0000000000000000002', 'src/a.ts'); await until(() => ctl.state.toasts.some((t) => /src\/a\.ts.*conflict/.test(t.text)));
+    for (const o of rt.options.observers!) o('agt_you', { type: 'tool.requested', tool_id: 'x', name: 'Read', input_summary: 'r', risk: 'low', path: 'src/b.ts', v: 1, seq: 2, ts: 't', agent_id: 'agt_you' } as never); expect(ctl.state.toasts.filter((t) => /src\/b\.ts/.test(t.text))).toEqual([]); // reading is not changing
+    ctl.stop();
+  });
+});

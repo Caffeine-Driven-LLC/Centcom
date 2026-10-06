@@ -11,6 +11,9 @@ import type { CentoColor } from '@centcom/mascot';
 import { buildPrompt, readStdin, runPrint } from './print.js';
 import { runProviderCli } from './commands/provider/cli.js';
 import { makeMemoryFiles, runMemoryCli } from './commands/memory/cli.js';
+import { appViews } from './views.js';
+import { makeTelemetry, runTelemetry } from './commands/telemetry.js';
+import { defaultDeps, loadConfig } from '@centcom/config';
 import { runMcpCli } from './commands/mcp/cli.js';
 import { runHooksCli } from './commands/hooks/cli.js';
 
@@ -23,6 +26,7 @@ Usage
   centcom mcp list|add|remove|status|test   manage MCP servers for Claude Code and Codex
   centcom hooks list|add|remove|validate|templates   manage Claude Code hooks (the tool runs them, Centcom only edits the settings)
   centcom provider status|login|logout|doctor   check, sign in or out of Claude Code and Codex (the tools do the signing in)
+  centcom telemetry status|on|off|reset   anonymous usage counts (off unless you turn them on)
 
 Scripting
   centcom -p "task"             run once, print the answer, exit (no screen). Piped input is added to the prompt.
@@ -82,10 +86,15 @@ async function pickEngine(preferred: 'claude-code' | 'codex' = 'claude-code'): P
 async function main() {
   if (has('-h') || has('--help')) { console.log(HELP); return; }
   if (has('-v') || has('--version')) { console.log(VERSION); return; }
-  if (process.argv[2] === 'provider') process.exit(await runProviderCli(process.argv.slice(3)));
-  if (process.argv[2] === 'memory') process.exit(await runMemoryCli(process.argv.slice(3)));
-  if (process.argv[2] === 'mcp') process.exit(await runMcpCli(process.argv.slice(3)));
-  if (process.argv[2] === 'hooks') process.exit(await runHooksCli(process.argv.slice(3)));
+  if (process.argv[2] === 'telemetry') process.exit(await runTelemetry(process.argv.slice(3), { out: (l) => console.log(l), err: (l) => console.error(l), version: VERSION }));
+  // anonymous counts of which command ran, only when you turned telemetry on (docs/telemetry.md)
+  const cfg0 = await loadConfig(defaultDeps()).catch(() => undefined); const tm = makeTelemetry({ enabled: !!cfg0?.telemetry.enabled, baseUrl: cfg0?.api.base_url ?? 'https://api.centcom.dev', version: VERSION });
+  const sub = ['provider', 'memory', 'mcp', 'hooks'].includes(process.argv[2] ?? '') ? process.argv[2]! : has('-p') || has('--print') ? 'print' : 'tui'; tm.appStart(); tm.commandRun(sub);
+  const done = async (code: number) => { tm.appExit(); await tm.flush(2000); process.exit(code); };
+  if (process.argv[2] === 'provider') await done(await runProviderCli(process.argv.slice(3)));
+  if (process.argv[2] === 'memory') await done(await runMemoryCli(process.argv.slice(3)));
+  if (process.argv[2] === 'mcp') await done(await runMcpCli(process.argv.slice(3)));
+  if (process.argv[2] === 'hooks') await done(await runHooksCli(process.argv.slice(3)));
   if (has('-p') || has('--print')) {
     const i = Math.max(process.argv.indexOf('-p'), process.argv.indexOf('--print'));
     const next = process.argv[i + 1]; const text = next && !next.startsWith('-') ? next : undefined;
@@ -98,7 +107,7 @@ async function main() {
     if (!['text', 'json', 'stream-json'].includes(fmt)) { process.stderr.write('--output-format must be text, json or stream-json\n'); process.exit(2); }
     const dangerous = has('--dangerously-skip-permissions') || has('--yolo');
     const code = await runPrint({ engine, demo, cwd: process.cwd(), branch: br, version: VERSION, mode: dangerous || arg('--mode') === 'bypassPermissions' ? 'bypassPermissions' : pc.cfg.client.permission_mode, prompt: buildPrompt(text, piped), format: fmt, save: !has('--no-save'), resume: has('-c') || has('--continue') ? 'last' : arg('--resume'), model: pc.cfg.client.model || undefined });
-    process.exit(code);
+    await done(code);
   }
   if (!process.stdin.isTTY || !process.stdout.isTTY) { console.error('Centcom needs an interactive terminal. Try `centcom --help`.'); process.exit(2); }
 
@@ -115,7 +124,7 @@ async function main() {
   logger.info('app.start', { version: VERSION, engine: engine.id, demo, mode });
   let instance: ReturnType<typeof render> | undefined;
   const rt = await buildRuntime({ cwd: process.cwd(), engineId: engine.id, demo, dangerous: dangerous || mode === 'bypassPermissions', checkpoints: !has('--no-checkpoints') });
-  const ctl = new AppController({ ...rt.options,
+  const ctl = new AppController({ ...rt.options, views: appViews(process.cwd()),
     engine, demo, cwd: process.cwd(), branch, version: VERSION, permissionMode: mode, dangerous: dangerous || mode === 'bypassPermissions', ghosts: has('--demo-team'),
     logger, settings, ...cc.options({ ...initialSettings(), ...settings }, { saveHistory: !has('--no-save') }),
     sessions: has('--no-save') ? undefined : new SessionStore(),
@@ -140,7 +149,7 @@ async function main() {
   await instance.waitUntilExit();
   ctl.stop(); await ctl.stopFleet(); cc.flush();
   leave();
-  process.exit(0);
+  await done(0);
 }
 
 main().catch((e) => { process.stdout.write('\x1b[?1049l'); console.error(e instanceof Error ? e.message : e); process.exit(1); });

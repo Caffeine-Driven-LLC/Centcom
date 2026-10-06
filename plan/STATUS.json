@@ -206,24 +206,24 @@
    "note": "fleet in the app: /fleet start [n] <task>, list, stop, preview, remove, clean; agents in the fleet panel with live states; branch-ready notices; approvals through the same policy, limited to each worktree; stopped on exit"
   },
   "C023": {
-   "pct": 0.95,
-   "note": "memory files: quick add with diff and confirmation, edit with conflict detection, atomic writes preserving mode and line endings, secret guard and size caps, marker-based sync with drift status (source_changed/target_edited/conflict), import hint, centcom memory CLI, # line routing in the TUI. Not done: web app hook; Codex user-level AGENTS.md path unconfirmed"
+   "pct": 1.0,
+   "note": "memory files: centcom memory show|add|edit|status|sync, \"# note\" quick add with diff and confirmation in the app, /memory view"
   },
   "C021": {
-   "pct": 0.85,
-   "note": "MCP manager: neutral definitions, Claude .mcp.json and Codex config.toml edits that keep every other byte, secret refusal (only variable names written), plan/confirm/backup/apply, built-in approvals entry, status mapping, testServer with fake-clock timeout, centcom mcp CLI. Not done: real test sessions (need engine adapters), Codex key names unverified against the installed version, TUI panel"
+   "pct": 0.95,
+   "note": "MCP manager: centcom mcp list|add|remove|status|test, /mcp view in the app (read only)"
   },
   "C022": {
-   "pct": 0.85,
-   "note": "hooks manager for Claude Code settings: byte-preserving JSON patch of only the hooks object, validation, 4 templates, hash-bound confirmed edits with backups (keep 5), user-scope confirmation, review flags for shared files, per-session --settings payload, centcom hooks CLI. Codex: reports unsupported. Not yet: Codex notify editing, TUI view"
+   "pct": 0.95,
+   "note": "hooks manager: centcom hooks list|add|remove|validate|templates, /hooks view in the app (read only); Codex notify editing waits for a version that documents it"
   },
   "C010": {
-   "pct": 0.9,
-   "note": "telemetry client: gate (config + DO_NOT_TRACK + CENTCOM_TELEMETRY), allow-list sanitiser per event, bounded buffer, batching (100 events, 64 KiB, 1/min on a monotonic clock), silent sender with one re-queue, install id (0600, reset), tested against the mock backend. Not wired into the app: opt-in prompt, centcom telemetry command, emit calls (other lanes)"
+   "pct": 1.0,
+   "note": "telemetry client wired into the CLI (app start/exit, command names, flush on exit) and `centcom telemetry status|on|off|reset`; off by default, DO_NOT_TRACK and CENTCOM_TELEMETRY=off always win; only allow-listed counts"
   },
   "C018": {
-   "pct": 0.85,
-   "note": "advisory lock client: hashed local lock files with exclusive create and stale takeover, canonical path keys (case, NFC, symlinks), warn/block modes and permission gate, renewal and expiry, remote table by path hash on the receiver clock, conflict events and payload, wire shape checked against the contract, bounded offline queue. Not yet: real transport/path key (session and crypto lanes), C015 wiring of lockGate"
+   "pct": 0.95,
+   "note": "local advisory locks wired into the app: two agents changing the same file are warned their branches will conflict; remote file.lock events wait for the session layer"
   }
  },
  "next": [

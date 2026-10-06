@@ -199,6 +199,9 @@ importers:
       '@centcom/net':
         specifier: workspace:*
         version: link:../../packages/net
+      '@centcom/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
       '@centcom/theme':
         specifier: workspace:*
         version: link:../../packages/theme

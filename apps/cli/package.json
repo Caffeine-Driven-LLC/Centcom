@@ -14,7 +14,8 @@
     "@centcom/theme": "workspace:*",
     "@centcom/mascot": "workspace:*",
     "@centcom/config": "workspace:*",
-    "@centcom/net": "workspace:*"
+    "@centcom/net": "workspace:*",
+    "@centcom/protocol": "workspace:*"
   },
   "devDependencies": {
     "@centcom/testkit": "workspace:*"
