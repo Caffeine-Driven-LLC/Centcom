@@ -77,7 +77,7 @@ describe('types', () => {
     bus.emit('agent:nope', {});
     bus.on('agent:state_changed', (p) => { expectTypeOf(p.agent_id).toEqualTypeOf<`agt_${string}`>(); expectTypeOf(p.since).toBeString(); });
     bus.on('agent:approval_needed', (p) => { expectTypeOf(p.risk).toEqualTypeOf<'low' | 'medium' | 'high'>(); });
-    expectTypeOf<AgentEventMap['agent:exited']['code']>().toEqualTypeOf<'done' | 'error' | 'killed' | 'crash'>();
+    expectTypeOf<AgentEventMap['agent:exited']['outcome']>().toEqualTypeOf<'ok' | 'error' | 'canceled' | 'crash'>();
   });
   it('wire-bound payloads carry no free text or paths', async () => {
     const { WIRE_SAFE_EVENTS } = await import('../../src/events/index.js'); const ok = (v: unknown) => typeof v !== 'string' || /^(agt|apr|mem)_[0-9A-HJKMNP-TV-Z]{26}$|^\d{4}-|^(low|medium|high|allow|deny|timeout|cancel)$|^[a-z-]+$/.test(v);

@@ -12,7 +12,8 @@
   "dependencies": {
     "@centcom/protocol": "workspace:*",
     "ajv": "^8.17.1",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "@centcom/agent": "workspace:*"
   },
   "devDependencies": {
     "@types/ws": "^8.5.0"

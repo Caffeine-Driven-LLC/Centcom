@@ -12,3 +12,4 @@ export { ApprovalBridge, describeTool, PERMISSION_TOOL } from './claude/bridge.j
 export { CodexEngine, policyFor, loginKindFromAccount } from './codex/engine.js';
 export { CodexMapper, diffFor, errorCodeFor } from './codex/map.js';
 export * from './events/index.js';
+export * from './runner/index.js';

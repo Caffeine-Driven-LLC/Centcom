@@ -22,8 +22,8 @@
    "note": "demo engine and fixtures; no one-command dev env"
   },
   "C013": {
-   "pct": 0.5,
-   "note": "engines run in-process, not as a daemon"
+   "pct": 0.55,
+   "note": "runner core done and tested: supervision, crash isolation, restart policy, limits, interrupt/SIGTERM/SIGKILL escalation, watchdog, approvals gate, env allow-list, TrustStore, FakeEngine. Not yet: runnerd IPC daemon, trust-store tests, line-cap tests for the real engines, docs/agent-runner.md"
   },
   "C014": {
    "pct": 0.6,

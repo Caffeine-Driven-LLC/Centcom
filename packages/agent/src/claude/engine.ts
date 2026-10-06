@@ -39,6 +39,9 @@ export function buildArgv(prompt: string, o: { resume?: string; permissionMode?:
   return a;
 }
 
+/** One JSONL line from the CLI may not exceed 1 MiB. */
+export const MAX_LINE_BYTES = 1024 * 1024;
+
 class ClaudeSession implements EngineSession {
   readonly agentId: string;
   readonly events = new AsyncQueue<NormalisedEvent>();
@@ -76,7 +79,7 @@ class ClaudeSession implements EngineSession {
     const parser = new ClaudeStreamParser();
     const spawnFn = this.deps.spawn ?? nodeSpawn;
     let child: ChildProcess;
-    try { child = spawnFn(this.deps.bin ?? 'claude', argv, { cwd: this.o.cwd, env: { ...process.env, ...this.o.env }, stdio: ['ignore', 'pipe', 'pipe'] }); }
+    try { child = spawnFn(this.deps.bin ?? 'claude', argv, { cwd: this.o.cwd, env: this.o.envExact ? { ...this.o.env } : { ...process.env, ...this.o.env }, stdio: ['ignore', 'pipe', 'pipe'] }); }
     catch (e) { this.fail(e); return { turn_id: turn }; }
     this.child = child;
     this.exitWait = new Promise<void>((res) => { child.once('close', () => res()); child.once('error', () => res()); });
@@ -85,8 +88,8 @@ class ClaudeSession implements EngineSession {
     child.stdout?.on('data', (chunk: string) => {
       buf += chunk;
       let i: number;
-      while ((i = buf.indexOf('\n')) >= 0) { const line = buf.slice(0, i); buf = buf.slice(i + 1); this.handle(parser, line); }
-      if (buf.length > 4 * 1024 * 1024) { buf = ''; this.emit({ type: 'engine.warning', code: 'line_too_long', text: 'Dropped an oversized line from Claude Code' }); }
+      while ((i = buf.indexOf('\n')) >= 0) { const line = buf.slice(0, i); buf = buf.slice(i + 1); if (Buffer.byteLength(line) > MAX_LINE_BYTES) return this.tooLong(child); this.handle(parser, line); }
+      if (Buffer.byteLength(buf) > MAX_LINE_BYTES) { buf = ''; this.tooLong(child); }
     });
     child.stderr?.setEncoding('utf8');
     child.stderr?.on('data', (c: string) => { err = (err + c).slice(-64 * 1024); });
@@ -103,6 +106,15 @@ class ClaudeSession implements EngineSession {
     });
     return { turn_id: turn };
   }
+
+  /** A line longer than the cap means the stream cannot be trusted any more: report it and stop the process. */
+  private tooLong(child: ChildProcess) {
+    if (this.sawResult) return; this.sawResult = true; child.kill('SIGKILL');
+    this.emit({ type: 'error', code: 'provider_protocol_error', tool_message: 'Claude Code sent a line that was too long to read, so the turn was stopped.', fatal: true });
+    this.emit({ type: 'status', state: 'error' }); this.emit({ type: 'turn.done', outcome: 'error', stop_reason: 'line_too_long' });
+  }
+
+  signal(sig: 'SIGINT' | 'SIGTERM' | 'SIGKILL') { try { this.child?.kill(sig); } catch { /* already gone */ } }
 
   private interrupted = false;
   private exitWait: Promise<void> = Promise.resolve();

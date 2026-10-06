@@ -4,6 +4,8 @@ import type { ChildProcess } from 'node:child_process';
 export interface RpcError { code: number; message: string; data?: unknown }
 export type ServerRequestHandler = (id: number | string, method: string, params: any) => void;
 
+export const MAX_RPC_LINE = 1024 * 1024;
+
 export class RpcClient {
   private next = 1;
   private pending = new Map<number | string, { res: (v: any) => void; rej: (e: Error) => void }>();
@@ -12,17 +14,22 @@ export class RpcClient {
   onNotification: (method: string, params: any) => void = () => undefined;
   onServerRequest: ServerRequestHandler = () => undefined;
   onClose: (code: number | null) => void = () => undefined;
+  /** Called once when a line longer than 1 MiB arrives; the stream cannot be trusted after that. */
+  onLineTooLong: () => void = () => undefined;
 
   constructor(private child: ChildProcess) {
     child.stdout?.setEncoding('utf8');
     child.stdout?.on('data', (c: string) => {
       this.buf += c; let i: number;
-      while ((i = this.buf.indexOf('\n')) >= 0) { const line = this.buf.slice(0, i).trim(); this.buf = this.buf.slice(i + 1); if (line) this.handle(line); }
-      if (this.buf.length > 8 * 1024 * 1024) this.buf = '';
+      while ((i = this.buf.indexOf('\n')) >= 0) { const raw = this.buf.slice(0, i); this.buf = this.buf.slice(i + 1); if (Buffer.byteLength(raw) > MAX_RPC_LINE) { this.overflow(); return; } const line = raw.trim(); if (line) this.handle(line); }
+      if (Buffer.byteLength(this.buf) > MAX_RPC_LINE) this.overflow();
     });
     const end = (code: number | null) => { if (this.closed) return; this.closed = true; for (const p of this.pending.values()) p.rej(new Error('codex app-server closed')); this.pending.clear(); this.onClose(code); };
     child.once('close', end); child.once('error', () => end(null));
   }
+
+  private tooLong = false;
+  private overflow() { this.buf = ''; if (this.tooLong) return; this.tooLong = true; this.onLineTooLong(); }
 
   private handle(line: string) {
     let m: any; try { m = JSON.parse(line); } catch { return; }

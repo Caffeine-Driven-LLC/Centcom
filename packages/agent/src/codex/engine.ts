@@ -42,6 +42,9 @@ class CodexSession implements EngineSession {
   private mode: PermissionMode; private model?: string;
   private signedIn = false; private ready = false; private closed = false; private running = false; private interrupted = false;
   private turnDone?: () => void;
+  private exitedResolve!: (v: { code?: number; signal?: string }) => void;
+  readonly exited = new Promise<{ code?: number; signal?: string }>((res) => { this.exitedResolve = res; });
+  signal(sig: 'SIGINT' | 'SIGTERM' | 'SIGKILL') { try { this.child?.kill(sig); } catch { /* already gone */ } }
 
   constructor(private o: EngineStartOptions, private deps: CodexEngineDeps) { this.agentId = o.agentId; this.mode = o.permissionMode ?? 'default'; this.model = o.model; }
   resumeToken() { return this.threadId; }
@@ -53,15 +56,16 @@ class CodexSession implements EngineSession {
   async init() {
     const spawnFn = this.deps.spawn ?? nodeSpawn;
     let child: ChildProcess;
-    try { child = spawnFn(this.deps.bin ?? 'codex', ['app-server', '--listen', 'stdio://'], { cwd: this.o.cwd, env: { ...process.env, ...this.deps.env, ...this.o.env }, stdio: ['pipe', 'pipe', 'pipe'] }); }
+    try { child = spawnFn(this.deps.bin ?? 'codex', ['app-server', '--listen', 'stdio://'], { cwd: this.o.cwd, env: this.o.envExact ? { ...this.o.env } : { ...process.env, ...this.deps.env, ...this.o.env }, stdio: ['pipe', 'pipe', 'pipe'] }); }
     catch (e) { return this.fail(e); }
     this.child = child;
     let err = ''; child.stderr?.setEncoding('utf8'); child.stderr?.on('data', (c: string) => { err = (err + c).slice(-8192); });
     child.on('error', (e) => this.fail(e));
     const rpc = this.rpc = new RpcClient(child);
+    rpc.onLineTooLong = () => { this.emit({ type: 'error', code: 'provider_protocol_error', tool_message: 'Codex sent a line that was too long to read, so the session was stopped.', fatal: true }); this.emit({ type: 'status', state: 'error' }); this.signal('SIGKILL'); };
     rpc.onNotification = (m, p) => this.onNotification(m, p);
     rpc.onServerRequest = (id, m, p) => void this.onServerRequest(id, m, p);
-    rpc.onClose = (code) => { this.ready = false; if (this.running && !this.closed) { this.emit({ type: 'error', code: 'provider_protocol_error', tool_message: redact(err.trim().split('\n').slice(-3).join('\n')) || `codex exited with code ${code}`, fatal: true }); this.finishTurn('error'); } };
+    rpc.onClose = (code) => { this.ready = false; if (!this.closed) this.exitedResolve(code === null ? { signal: 'unknown' } : { code }); if (this.running && !this.closed) { this.emit({ type: 'error', code: 'provider_protocol_error', tool_message: redact(err.trim().split('\n').slice(-3).join('\n')) || `codex exited with code ${code}`, fatal: true }); this.finishTurn('error'); } };
     try {
       await rpc.request('initialize', { clientInfo: { name: 'centcom', title: 'Centcom', version: '0.1.0' } }, 20_000);
       rpc.notify('initialized');
