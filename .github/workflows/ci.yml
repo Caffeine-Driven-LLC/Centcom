@@ -25,6 +25,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Generated protocol code matches contracts/
         run: pnpm --filter @centcom/protocol gen --check
+      - name: Agent states doc is up to date
+        run: pnpm exec tsx tools/docs/states-doc.ts --check
       - name: Typecheck
         run: pnpm typecheck
       - name: Tests
