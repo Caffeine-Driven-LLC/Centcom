@@ -6,6 +6,7 @@ import { detectColorTier } from '@centcom/theme';
 import { ClaudeCodeEngine, CodexEngine, DemoEngine, detectClaude, detectCodex, type AgentEngine, type PermissionMode } from '@centcom/agent';
 import { App, AppController, ClientConfig, SessionStore, initialSettings, settingsFromConfig } from '@centcom/tui';
 import type { FlatFlags } from '@centcom/config';
+import { createAppLogger } from '@centcom/net';
 import type { CentoColor } from '@centcom/mascot';
 import { buildPrompt, readStdin, runPrint } from './print.js';
 
@@ -37,6 +38,7 @@ Options
   --theme <dark|light>         Graphite (default) or Paper (for light terminals)
   --colors <truecolor|256|16|never>  force a colour tier (NO_COLOR is honoured)
   --demo-team                  with --demo: also show two pretend teammates (previews multiplayer)
+  --debug                      write detailed logs to ~/.centcom/logs/centcom.log
   --no-motion                  turn animation off (also CENTCOM_REDUCED_MOTION=1; the older CENTCOM_REDUCE_MOTION works too)
   -v, --version   -h, --help
 
@@ -53,6 +55,7 @@ function cliFlags(): FlatFlags {
   if (v('--mode') && v('--mode') !== 'bypassPermissions') f['client.permission_mode'] = v('--mode')!;
   if (v('--engine') === 'codex' || v('--engine') === 'claude-code') f['client.engine'] = v('--engine')!;
   if (has('--no-motion')) f['ui.reduced_motion'] = true;
+  if (has('--debug')) f['log.level'] = 'debug';
   return f;
 }
 
@@ -103,10 +106,12 @@ async function main() {
   const settings = { ...settingsFromConfig(cc.cfg), permissionMode: mode };
   if (arg('--engine') === 'codex' || arg('--engine') === 'claude-code') cc.set('client.engine', arg('--engine')!); // the agent you pick is the one you get next time
 
+  const { logger } = createAppLogger({ level: cc.cfg.log.level, maxBytes: cc.cfg.log.max_file_bytes, maxFiles: cc.cfg.log.max_files });
+  logger.info('app.start', { version: VERSION, engine: engine.id, demo, mode });
   let instance: ReturnType<typeof render> | undefined;
   const ctl = new AppController({
     engine, demo, cwd: process.cwd(), branch, version: VERSION, permissionMode: mode, dangerous: dangerous || mode === 'bypassPermissions', ghosts: has('--demo-team'),
-    settings, ...cc.options({ ...initialSettings(), ...settings }, { saveHistory: !has('--no-save') }),
+    logger, settings, ...cc.options({ ...initialSettings(), ...settings }, { saveHistory: !has('--no-save') }),
     sessions: has('--no-save') ? undefined : new SessionStore(),
     resume: has('-c') || has('--continue') ? 'last' : arg('--resume'),
     onExit: () => instance?.unmount(),

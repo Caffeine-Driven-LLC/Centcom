@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
-import { ClaudeCodeEngine, CodexEngine, DemoEngine, type AgentEngine } from '@centcom/agent';
+import { ClaudeCodeEngine, CodexEngine, DemoEngine, newId, type AgentEngine } from '@centcom/agent';
+import { appLogger } from './logger.js';
 import { AppController, ClientConfig, SessionStore, initialSettings, settingsFromConfig, type Item } from '@centcom/tui';
 import type { ServerMsg, WebState } from './protocol.js';
 
@@ -21,7 +22,8 @@ export class Workspace {
     const cc = await ClientConfig.load(dir); // this folder's project file counts too
     if (!demo) cc.set('client.engine', which); // remember the agent you picked
     const settings = settingsFromConfig(cc.cfg);
-    const ctl = new AppController({ engine, demo, cwd: dir, branch, version: '0.1.0', ghosts: false, permissionMode: settings.permissionMode, settings, ...cc.options({ ...initialSettings(), ...settings }, { saveHistory: !demo }), sessions: demo ? undefined : new SessionStore(), resume: demo ? undefined : resume });
+    const logger = appLogger(cc.cfg.log).child({ component: 'web', session_id: newId('ses') }); // one shared file sink for the whole server, one binding per workspace
+    const ctl = new AppController({ logger, engine, demo, cwd: dir, branch, version: '0.1.0', ghosts: false, permissionMode: settings.permissionMode, settings, ...cc.options({ ...initialSettings(), ...settings }, { saveHistory: !demo }), sessions: demo ? undefined : new SessionStore(), resume: demo ? undefined : resume });
     const ws = new Workspace(dir, ctl, cc);
     await ctl.start();
     for (const w of cc.warnings) ctl.notice('warn', 'Settings: ' + w);

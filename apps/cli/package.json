@@ -13,6 +13,7 @@
     "@centcom/agent": "workspace:*",
     "@centcom/theme": "workspace:*",
     "@centcom/mascot": "workspace:*",
-    "@centcom/config": "workspace:*"
+    "@centcom/config": "workspace:*",
+    "@centcom/net": "workspace:*"
   }
 }

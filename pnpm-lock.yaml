@@ -196,6 +196,9 @@ importers:
       '@centcom/mascot':
         specifier: workspace:*
         version: link:../../packages/mascot
+      '@centcom/net':
+        specifier: workspace:*
+        version: link:../../packages/net
       '@centcom/theme':
         specifier: workspace:*
         version: link:../../packages/theme
@@ -220,6 +223,9 @@ importers:
       '@centcom/mascot':
         specifier: workspace:*
         version: link:../../packages/mascot
+      '@centcom/net':
+        specifier: workspace:*
+        version: link:../../packages/net
       '@centcom/skills':
         specifier: workspace:*
         version: link:../../packages/skills
@@ -315,6 +321,9 @@ importers:
       '@centcom/mascot':
         specifier: workspace:*
         version: link:../mascot
+      '@centcom/net':
+        specifier: workspace:*
+        version: link:../net
       '@centcom/skills':
         specifier: workspace:*
         version: link:../skills

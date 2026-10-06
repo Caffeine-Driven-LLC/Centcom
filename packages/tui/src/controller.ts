@@ -4,6 +4,7 @@
  * The React tree only reads the store and calls the controller's methods.
  */
 import { CLAUDE_MODELS, modelLabel, newId } from '@centcom/agent';
+import type { Logger } from '@centcom/net';
 import { SessionStore, ago, titleFrom, type SessionMeta } from './sessions.js';
 import { MASTER_DIR, discover, injection, masterSkills, match, setEnabled, type Skill } from '@centcom/skills';
 import { MascotDriver, bakedByCategory, bakedCategories, getBaked, type CentoColor } from '@centcom/mascot';
@@ -25,6 +26,8 @@ export interface ControllerOptions {
   onPrefs?: (p: { settings: Settings; fleet: boolean }) => void;
   /** Text for /config: what is set and where each value came from. */
   describeConfig?: () => string;
+  /** Where to record what happened. Only ids and enums are logged, never message text, paths or commands. */
+  logger?: Logger;
   /** Called with every engine event, before the UI state changes (used by print mode and stream-json). */
   onEvent?: (ev: NormalisedEvent) => void;
   /** Continue a saved conversation: 'last' for the newest one in this folder, or a session id. */
@@ -164,6 +167,7 @@ export class AppController {
   /* ------------------------------------------------------------------ events -> state */
   apply(ev: NormalisedEvent) {
     this.o.onEvent?.(ev);
+    this.logEvent(ev);
     const me = this.me;
     switch (ev.type) {
       case 'session.started':
@@ -217,6 +221,23 @@ export class AppController {
       this.driver.setState(state === 'idle' && wasBusy ? 'idle' : state);
     }
     if (id === this.me) this.set({ busy: isBusyState(state) || this.state.busy });
+  }
+
+  private logEvent(ev: NormalisedEvent) {
+    const l = this.o.logger; if (!l) return;
+    switch (ev.type) {
+      case 'session.started': l.info('engine.session_started', { engine: ev.engine, model: ev.model, login_kind: ev.login_kind, cli_version: ev.cli_version }); break;
+      case 'turn.started': l.info('turn.started'); break;
+      case 'turn.done': l.info('turn.done', { outcome: ev.outcome, stop_reason: ev.stop_reason }); break;
+      case 'tool.requested': l.debug('tool.requested', { tool: ev.name, risk: ev.risk }); break;
+      case 'tool.result': l.debug('tool.result', { status: ev.status }); break;
+      case 'approval.requested': l.info('approval.requested', { risk: ev.risk }); break;
+      case 'approval.resolved': l.info('approval.resolved', { decision: ev.decision, scope: ev.scope, by: ev.by }); break;
+      case 'error': l.error('engine.error', { code: ev.code, fatal: ev.fatal }); break;
+      case 'engine.warning': l.warn('engine.warning', { code: ev.code }); break;
+      case 'limits.report': l.debug('limits.report', { windows: ev.windows.map((w) => ({ name: w.name, utilization: w.utilization })) }); break;
+      default: break;
+    }
   }
 
   /* ------------------------------------------------------------------ approvals (permission policy) */
@@ -315,7 +336,7 @@ export class AppController {
   /** Change how permissions are asked. Switching to bypass is explicit, loud and reversible. */
   setMode(m: PermissionMode) {
     const prev = this.state.settings.permissionMode; if (m === prev) return;
-    this.setSettings({ permissionMode: m }); this.session?.setPermissionMode?.(m);
+    this.setSettings({ permissionMode: m }); this.session?.setPermissionMode?.(m); this.o.logger?.info('permission_mode.changed', { from: prev, to: m });
     if (m === 'bypassPermissions') {
       this.addItem({ kind: 'notice', id: nid('n'), level: 'warn', text: 'Dangerously skip permissions is ON', detail: 'Cento will run commands and edit files without asking, including destructive ones. Use /mode default to turn approvals back on.' });
       this.driver.setState('warning');

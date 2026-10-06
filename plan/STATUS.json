@@ -184,6 +184,10 @@
   "C003": {
    "pct": 0.95,
    "note": "@centcom/protocol: types, tolerant/strict Ajv-standalone validators, errors, states, operations, IDs/time/b64u/text/version helpers; all fixtures pass; CI checks it is up to date. Not yet used by the engines or the TUI"
+  },
+  "C005": {
+   "pct": 0.95,
+   "note": "@centcom/net log: redacting JSON logger, rotating 0600 file sink, ring, stderr, diagnostics; wired into CLI and web; --debug; verified no content in real logs. `centcom doctor --bundle` still to do (C104)"
   }
  },
  "next": [

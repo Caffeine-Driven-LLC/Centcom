@@ -41,7 +41,6 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 
 | Lane | What | Size | Milestone |
 |---|---|---|---|
-| [C005](plan/client/C005.md) | Logging and diagnostics with redaction | S | M0 |
 | [C007](plan/client/C007.md) | Mock backend: REST from OpenAPI plus WebSocket relay simulator | L | M0 |
 | [C010](plan/client/C010.md) | Opt-in telemetry client | S | M0 |
 | [C043](plan/client/C043.md) | Task list and progress components | S | M1 |
