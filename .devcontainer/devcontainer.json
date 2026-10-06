@@ -1,0 +1,8 @@
+{
+  "name": "Centcom",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:22",
+  "features": { "ghcr.io/devcontainers/features/git:1": {} },
+  "postCreateCommand": "corepack enable && pnpm install --frozen-lockfile",
+  "forwardPorts": [8787],
+  "customizations": { "vscode": { "extensions": ["dbaeumer.vscode-eslint"] } }
+}

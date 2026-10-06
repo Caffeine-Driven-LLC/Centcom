@@ -1,0 +1,89 @@
+[
+ {
+  "workspace": "wsp_01JA3Z8K2M5N7P9Q0R1S2T0053",
+  "rev": 3,
+  "plan": "pro",
+  "status": "active",
+  "period": {
+   "start": "2026-10-01T00:00:00.000Z",
+   "end": "2026-11-01T00:00:00.000Z"
+  },
+  "limits": {
+   "relay_access": true,
+   "lan_multiplayer": true,
+   "max_seats": 1,
+   "max_session_members": 4,
+   "max_concurrent_sessions": 2,
+   "max_parallel_agents": 8,
+   "history_days": 7,
+   "queue_items_month": null,
+   "audit_log_days": 0,
+   "webhooks_max": 2,
+   "api_keys_max": 5,
+   "hosted_minutes_month": 6000
+  },
+  "usage": {
+   "hosted_minutes_month": 1200
+  },
+  "warnings": [],
+  "grace_until": null
+ },
+ {
+  "workspace": "wsp_01JA3Z8K2M5N7P9Q0R1S2T006A",
+  "rev": 5,
+  "plan": "team",
+  "status": "active",
+  "period": {
+   "start": "2026-10-01T00:00:00.000Z",
+   "end": "2026-11-01T00:00:00.000Z"
+  },
+  "limits": {
+   "relay_access": true,
+   "lan_multiplayer": true,
+   "max_seats": null,
+   "max_session_members": 8,
+   "max_concurrent_sessions": 10,
+   "max_parallel_agents": 32,
+   "history_days": 90,
+   "queue_items_month": null,
+   "audit_log_days": 90,
+   "webhooks_max": 20,
+   "api_keys_max": 50,
+   "hosted_minutes_month": 60000
+  },
+  "usage": {
+   "hosted_minutes_month": 8000
+  },
+  "warnings": [],
+  "grace_until": null
+ },
+ {
+  "workspace": "wsp_01JA3Z8K2M5N7P9Q0R1S2T007H",
+  "rev": 1,
+  "plan": "free",
+  "status": "active",
+  "period": {
+   "start": "2026-10-01T00:00:00.000Z",
+   "end": "2026-11-01T00:00:00.000Z"
+  },
+  "limits": {
+   "relay_access": false,
+   "lan_multiplayer": true,
+   "max_seats": 1,
+   "max_session_members": 2,
+   "max_concurrent_sessions": 1,
+   "max_parallel_agents": 2,
+   "history_days": 1,
+   "queue_items_month": 100,
+   "audit_log_days": 0,
+   "webhooks_max": 0,
+   "api_keys_max": 1,
+   "hosted_minutes_month": 0
+  },
+  "usage": {
+   "hosted_minutes_month": 0
+  },
+  "warnings": [],
+  "grace_until": null
+ }
+]

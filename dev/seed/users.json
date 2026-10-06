@@ -1,0 +1,34 @@
+[
+ {
+  "id": "usr_01JA3Z8K2M5N7P9Q0R1S2T0017",
+  "email": "ada@acme.test",
+  "display_name": "Ada Lovelace",
+  "locale": "en",
+  "telemetry": false,
+  "created_at": "2026-10-01T09:00:00.000Z"
+ },
+ {
+  "id": "usr_01JA3Z8K2M5N7P9Q0R1S2T002E",
+  "email": "ben@acme.test",
+  "display_name": "Ben Okafor",
+  "locale": "en",
+  "telemetry": false,
+  "created_at": "2026-10-01T09:00:00.000Z"
+ },
+ {
+  "id": "usr_01JA3Z8K2M5N7P9Q0R1S2T003N",
+  "email": "cy@acme.test",
+  "display_name": "Cy Tanaka",
+  "locale": "en",
+  "telemetry": false,
+  "created_at": "2026-10-01T09:00:00.000Z"
+ },
+ {
+  "id": "usr_01JA3Z8K2M5N7P9Q0R1S2T004W",
+  "email": "dee@acme.test",
+  "display_name": "Dee Marsh",
+  "locale": "en",
+  "telemetry": false,
+  "created_at": "2026-10-01T09:00:00.000Z"
+ }
+]

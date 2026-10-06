@@ -18,8 +18,8 @@
    "note": "theme + mascot packages (319 baked animations, runtime sprite engine)"
   },
   "C011": {
-   "pct": 0.1,
-   "note": "demo engine only; dev seed, mock launcher and fixture repo missing"
+   "pct": 0.85,
+   "note": "pnpm dev:mock (seed users, 3 workspaces on free/pro/team, 3 sessions, entitlements, notifications for all 15 categories) printing URLs and export lines; deterministic fixture repo script; example configs that load without warnings; dev README, dev-setup doc, devcontainer; tested; gap: the card says 14 notification categories, the contract has 15 (all 15 seeded)"
   },
   "C012": {
    "pct": 0.9,
