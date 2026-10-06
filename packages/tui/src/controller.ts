@@ -19,6 +19,12 @@ export interface ControllerOptions {
   skills?: Skill[]; // pass [] to disable discovery (tests)
   /** Where to save conversations; leave out to keep them in memory only. */
   sessions?: SessionStore;
+  /** Prompt history to start with, and a hook to save it when it changes. */
+  history?: string[]; onHistory?: (h: string[]) => void;
+  /** Called when a remembered setting or panel changes (the config layer decides what to write). */
+  onPrefs?: (p: { settings: Settings; fleet: boolean }) => void;
+  /** Text for /config: what is set and where each value came from. */
+  describeConfig?: () => string;
   /** Called with every engine event, before the UI state changes (used by print mode and stream-json). */
   onEvent?: (ev: NormalisedEvent) => void;
   /** Continue a saved conversation: 'last' for the newest one in this folder, or a session id. */
@@ -53,7 +59,7 @@ export class AppController {
     const settings = { ...initialSettings(), permissionMode: o.permissionMode ?? 'default', ...o.settings };
     const me: AgentView = { id: this.me, name: 'you', color: settings.color, mine: true, engine: o.engine.label, provider: o.engine.provider, model: '', loginKind: 'unknown', state: 'idle', mini: 'idle', busy: false, branch: o.branch ?? '', runsOn: 'you', cost: 0, inTok: 0, outTok: 0 };
     this.store = new Store<AppState>({
-      items: [], agents: [me], activeAgent: this.me, mode: 'chat', input: '', cursor: 0, history: [], histIdx: null, draft: '', scroll: 0, toasts: [], approvals: [], settings,
+      items: [], agents: [me], activeAgent: this.me, mode: 'chat', input: '', cursor: 0, history: o.history ?? [], histIdx: null, draft: '', scroll: 0, toasts: [], approvals: [], settings,
       busy: false, verb: this.verbs.next(), limits: [], cwd: o.cwd, branch: o.branch ?? '', engineId: o.engine.id, engineLabel: o.engine.label, demo: o.demo, fleet: true,
       slashSel: 0, palette: { query: '', sel: 0 }, modelSel: 0, gallery: { cat: 0, idx: 0, color: 0, query: '' }, version: o.version, sessionId: newId('ses'), sessions: [],
     });
@@ -86,6 +92,8 @@ export class AppController {
     this.refreshSessions();
     // save shortly after anything changes, never on every streamed token
     this.store.subscribe(() => this.schedulePersist());
+    let lastSettings = this.state.settings; let lastFleet = this.state.fleet;
+    this.store.subscribe(() => { const s = this.state; if (s.settings !== lastSettings || s.fleet !== lastFleet) { lastSettings = s.settings; lastFleet = s.fleet; this.o.onPrefs?.({ settings: s.settings, fleet: s.fleet }); } });
   }
 
   private async startEngine(resumeToken?: string) {
@@ -251,7 +259,8 @@ export class AppController {
   async submit(raw: string) {
     const text = raw.trim();
     if (!text) return;
-    this.set((s) => ({ history: [...s.history.filter((h) => h !== text), text].slice(-100), histIdx: null, draft: '', input: '', cursor: 0, scroll: 0, slashSel: 0 }));
+    this.set((s) => ({ history: [...s.history.filter((h) => h !== text), text].slice(-200), histIdx: null, draft: '', input: '', cursor: 0, scroll: 0, slashSel: 0 }));
+    this.o.onHistory?.(this.state.history);
     if (text.startsWith('/')) { await this.runCommand(text); return; }
     if (this.state.busy) { this.toast('warn', 'Cento is still working. Press Esc to interrupt, then send again.'); return; }
     this.addItem({ kind: 'user', id: nid('u'), text, ts: Date.now() });
@@ -346,6 +355,7 @@ export class AppController {
         if (m) this.setModel(m.id); else if (/^[\w.:-]{3,}$/.test(arg)) this.setModel(arg); else this.toast('warn', `No model called "${arg}"`);
         break;
       }
+      case 'config': this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: 'Settings in effect (where each value comes from)', detail: this.o.describeConfig?.() ?? 'Settings are not saved in this session.' }); break;
       case 'auto': {
         const on = arg ? arg === 'on' : !this.state.settings.autoSkills; this.setSettings({ autoSkills: on });
         this.toast('info', on ? `Auto skills on (${this.skills().length} found)` : 'Auto skills off'); break;

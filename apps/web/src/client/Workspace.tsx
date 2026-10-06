@@ -7,7 +7,7 @@ import { Icon, toolIcon } from './Icon.js';
 import { Diff, Markdown } from './Markdown.js';
 import { Popover } from './Popover.js';
 import { Gallery, Help, Palette, type PaletteItem } from './Overlays.js';
-import { getThemePref, setThemePref, type ThemePref } from './theme.js';
+import { fromServer, getThemePref, setThemePref, toServer, type ThemePref } from './theme.js';
 import type { Conn } from './net.js';
 
 type Mode = 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions';
@@ -88,12 +88,14 @@ export function Workspace({ c }: { c: Conn }) {
   const [stuck, setStuck] = useState(true); const [, tick] = useState(0);
   const [bannerOff, setBannerOff] = useState(false); const [apMin, setApMin] = useState(false);
   const [ov, setOv] = useState<null | { k: 'palette'; q?: string } | { k: 'help' } | { k: 'gallery'; name?: string }>(null);
-  const [side, setSide] = useState(() => { try { return localStorage.getItem('centcom.side') !== '0'; } catch { return true; } });
+  const [side, setSide] = useState(() => c.launcher?.prefs.side ?? (() => { try { return localStorage.getItem('centcom.side') !== '0'; } catch { return true; } })());
   const [theme, setTheme] = useState<ThemePref>(getThemePref);
-  const toggleSide = () => setSide((v) => { const n = !v; try { localStorage.setItem('centcom.side', n ? '1' : '0'); } catch { /* private mode */ } return n; });
-  const cycleTheme = () => { const n: ThemePref = theme === 'system' ? 'dark' : theme === 'dark' ? 'light' : 'system'; setTheme(n); setThemePref(n); };
+  const toggleSide = () => setSide((v) => { const n = !v; try { localStorage.setItem('centcom.side', n ? '1' : '0'); } catch { /* private mode */ } send({ t: 'pref', side: n }); return n; });
+  const cycleTheme = () => { const n: ThemePref = theme === 'system' ? 'dark' : theme === 'dark' ? 'light' : 'system'; setTheme(n); setThemePref(n); send({ t: 'pref', theme: toServer(n) }); };
   const feed = useRef<HTMLDivElement>(null); const box = useRef<HTMLTextAreaElement>(null);
   const history = useRef<string[]>([]); const hIdx = useRef(-1);
+  const seeded = useRef(false);
+  useEffect(() => { if (!seeded.current && c.state) { history.current = [...c.history]; seeded.current = true; } }, [c.state]);
 
   useEffect(() => { const i = setInterval(() => tick((x) => x + 1), 1000); return () => clearInterval(i); }, []);
   useEffect(() => { const el = feed.current; if (el && stuck) el.scrollTop = el.scrollHeight; }, [items, s?.approvals.length, stuck]);
@@ -126,7 +128,7 @@ export function Workspace({ c }: { c: Conn }) {
       case 'cento': setOv({ k: 'gallery', name: arg || undefined }); return true;
       case 'agents': toggleSide(); return true;
       case 'resume': if (!arg) { setOv({ k: 'palette', q: 'resume' }); return true; } return false;
-      case 'theme': { const n = (arg === 'dark' || arg === 'light' || arg === 'system' ? arg : null) as ThemePref | null; if (n) { setTheme(n); setThemePref(n); } else cycleTheme(); return true; }
+      case 'theme': { const n = (arg === 'dark' || arg === 'light' || arg === 'system' ? arg : null) as ThemePref | null; if (n) { setTheme(n); setThemePref(n); send({ t: 'pref', theme: toServer(n) }); } else cycleTheme(); return true; }
       case 'quit': send({ t: 'close' }); return true;
       default: return false;
     }

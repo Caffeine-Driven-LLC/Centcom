@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { ClaudeCodeEngine, CodexEngine, DemoEngine, type AgentEngine } from '@centcom/agent';
-import { AppController, SessionStore, type Item } from '@centcom/tui';
+import { AppController, ClientConfig, SessionStore, initialSettings, settingsFromConfig, type Item } from '@centcom/tui';
 import type { ServerMsg, WebState } from './protocol.js';
 
 /** One running agent session for one directory, shared by every browser tab or app window that opens it. */
@@ -10,7 +10,7 @@ export class Workspace {
   private sent = new Map<string, string>();
   private unsub: () => void;
 
-  private constructor(readonly dir: string, ctl: AppController) {
+  private constructor(readonly dir: string, ctl: AppController, private cc: ClientConfig) {
     this.ctl = ctl;
     this.unsub = ctl.store.subscribe(() => this.push());
   }
@@ -18,9 +18,14 @@ export class Workspace {
   static async open(dir: string, demo: boolean, which: 'claude-code' | 'codex' = 'claude-code', resume?: string): Promise<Workspace> {
     const engine: AgentEngine = demo ? new DemoEngine({ speed: 1 }) : which === 'codex' ? new CodexEngine() : new ClaudeCodeEngine();
     let branch = ''; try { branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { /* not a repo */ }
-    const ctl = new AppController({ engine, demo, cwd: dir, branch, version: '0.1.0', ghosts: false, permissionMode: 'default', sessions: demo ? undefined : new SessionStore(), resume: demo ? undefined : resume });
-    const ws = new Workspace(dir, ctl);
+    const cc = await ClientConfig.load(dir); // this folder's project file counts too
+    if (!demo) cc.set('client.engine', which); // remember the agent you picked
+    const settings = settingsFromConfig(cc.cfg);
+    const ctl = new AppController({ engine, demo, cwd: dir, branch, version: '0.1.0', ghosts: false, permissionMode: settings.permissionMode, settings, ...cc.options({ ...initialSettings(), ...settings }, { saveHistory: !demo }), sessions: demo ? undefined : new SessionStore(), resume: demo ? undefined : resume });
+    const ws = new Workspace(dir, ctl, cc);
     await ctl.start();
+    for (const w of cc.warnings) ctl.notice('warn', 'Settings: ' + w);
+    cc.onWarn = (w) => ctl.notice('warn', 'Settings: ' + w);
     return ws;
   }
 
@@ -29,10 +34,13 @@ export class Workspace {
     return () => { this.clients.delete(send); };
   }
 
+  /** Prompt history for a joining client: sent once with `opened`, never with every state push. */
+  history(): string[] { return [...this.ctl.state.history]; }
+
   private snapshot(): { state: WebState; items: Item[] } {
     const s = this.ctl.state;
-    const { items, approvals, input, cursor, history, histIdx, draft, scroll, palette, modelSel, gallery, slashSel, mode, ...rest } = s;
-    void input; void cursor; void history; void histIdx; void draft; void scroll; void palette; void modelSel; void gallery; void slashSel; void mode;
+    const { items, approvals, history, input, cursor, histIdx, draft, scroll, palette, modelSel, gallery, slashSel, mode, ...rest } = s;
+    void history; void input; void cursor; void histIdx; void draft; void scroll; void palette; void modelSel; void gallery; void slashSel; void mode;
     return { items, state: { ...rest, approvals: approvals.map((a) => ({ id: a.req.approval_id, tool: a.req.tool, summary: a.req.summary, risk: a.req.risk, path: a.req.path, command: a.req.command, diff: a.req.diff, agentName: a.agentName })) } };
   }
 
@@ -45,5 +53,5 @@ export class Workspace {
     for (const c of this.clients) c(msg);
   }
 
-  close() { this.unsub(); this.ctl.stop(); this.clients.clear(); }
+  close() { this.unsub(); this.ctl.stop(); this.cc.flush(); this.clients.clear(); }
 }

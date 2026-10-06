@@ -11,6 +11,7 @@
     "@centcom/theme": "workspace:*",
     "@centcom/mascot": "workspace:*",
     "@centcom/agent": "workspace:*",
-    "@centcom/skills": "workspace:*"
+    "@centcom/skills": "workspace:*",
+    "@centcom/config": "workspace:*"
   }
 }

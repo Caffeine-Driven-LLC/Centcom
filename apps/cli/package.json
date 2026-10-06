@@ -12,6 +12,7 @@
     "@centcom/tui": "workspace:*",
     "@centcom/agent": "workspace:*",
     "@centcom/theme": "workspace:*",
-    "@centcom/mascot": "workspace:*"
+    "@centcom/mascot": "workspace:*",
+    "@centcom/config": "workspace:*"
   }
 }

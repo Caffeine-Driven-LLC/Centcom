@@ -13,3 +13,7 @@ export function applyTheme(pref: ThemePref = getThemePref()) {
   document.documentElement.dataset.theme = mode;
 }
 export function setThemePref(pref: ThemePref) { safe(() => localStorage.setItem(KEY, pref), undefined); applyTheme(pref); }
+
+/** The server calls "follow the system" `auto`; the page calls it `system`. */
+export const fromServer = (t: 'auto' | 'dark' | 'light'): ThemePref => (t === 'auto' ? 'system' : t);
+export const toServer = (t: ThemePref): 'auto' | 'dark' | 'light' => (t === 'system' ? 'auto' : t);

@@ -187,6 +187,9 @@ importers:
       '@centcom/agent':
         specifier: workspace:*
         version: link:../../packages/agent
+      '@centcom/config':
+        specifier: workspace:*
+        version: link:../../packages/config
       '@centcom/mascot':
         specifier: workspace:*
         version: link:../../packages/mascot
@@ -208,6 +211,9 @@ importers:
       '@centcom/agent':
         specifier: workspace:*
         version: link:../../packages/agent
+      '@centcom/config':
+        specifier: workspace:*
+        version: link:../../packages/config
       '@centcom/mascot':
         specifier: workspace:*
         version: link:../../packages/mascot
@@ -257,6 +263,8 @@ importers:
 
   packages/agent: {}
 
+  packages/config: {}
+
   packages/mascot:
     dependencies:
       '@centcom/theme':
@@ -272,6 +280,9 @@ importers:
       '@centcom/agent':
         specifier: workspace:*
         version: link:../agent
+      '@centcom/config':
+        specifier: workspace:*
+        version: link:../config
       '@centcom/mascot':
         specifier: workspace:*
         version: link:../mascot
