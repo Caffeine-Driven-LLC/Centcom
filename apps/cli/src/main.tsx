@@ -5,7 +5,7 @@ import { render } from 'ink';
 import { detectColorTier } from '@centcom/theme';
 import { ClaudeCodeEngine, CodexEngine, DemoEngine, detectClaude, detectCodex, type AgentEngine, type PermissionMode } from '@centcom/agent';
 import { App, AppController, ClientConfig, FirstRun, SessionStore, buildRuntime, initialSettings, isFirstRun, markFirstRunDone, settingsFromConfig } from '@centcom/tui';
-import { join as pathJoin, resolve as pathResolve } from 'node:path';
+import { basename as pathBase, join as pathJoin, resolve as pathResolve } from 'node:path';
 import { homedir } from 'node:os';
 import { stateDir } from '@centcom/config';
 import type { FlatFlags } from '@centcom/config';
@@ -18,6 +18,9 @@ import { makeMemoryFiles, runMemoryCli } from './commands/memory/cli.js';
 import { appViews } from './views.js';
 import { runInitCli } from './commands/init.js';
 import { resolvedKeys, runKeys } from './commands/keys.js';
+import { CrashStore, installCrashHandlers, runCrash } from './crash/index.js';
+import { realDoctorContext, runDoctor } from './doctor/index.js';
+import { CONTRACT_VERSION } from '@centcom/protocol';
 import { makeTelemetry, runTelemetry } from './commands/telemetry.js';
 import { defaultDeps, loadConfig } from '@centcom/config';
 import { runMcpCli } from './commands/mcp/cli.js';
@@ -35,6 +38,8 @@ Usage
   centcom hooks list|add|remove|validate|templates   manage Claude Code hooks (the tool runs them, Centcom only edits the settings)
   centcom provider status|login|logout|doctor   check, sign in or out of Claude Code and Codex (the tools do the signing in)
   centcom telemetry status|on|off|reset   anonymous usage counts (off unless you turn them on)
+  centcom doctor [--json] [--bundle <file>]   check this computer (node, terminal, keychain, git, network, clock)
+  centcom crash list|show <id>|delete <id|--all>   crash reports kept on this computer (never sent)
 
 Scripting
   centcom -p "task"             run once, print the answer, exit (no screen). Piped input is added to the prompt.
@@ -97,8 +102,13 @@ async function main() {
   if (process.argv[2] === 'telemetry') process.exit(await runTelemetry(process.argv.slice(3), { out: (l) => console.log(l), err: (l) => console.error(l), version: VERSION }));
   // anonymous counts of which command ran, only when you turned telemetry on (docs/telemetry.md)
   const cfg0 = await loadConfig(defaultDeps()).catch(() => undefined); const tm = makeTelemetry({ enabled: !!cfg0?.telemetry.enabled, baseUrl: cfg0?.api.base_url ?? 'https://api.centcom.dev', version: VERSION });
-  const sub = ['provider', 'memory', 'mcp', 'hooks', 'init', 'keys'].includes(process.argv[2] ?? '') ? process.argv[2]! : has('-p') || has('--print') ? 'print' : 'tui'; tm.appStart(); tm.commandRun(sub);
+  const sub = ['provider', 'memory', 'mcp', 'hooks', 'init', 'keys', 'doctor', 'crash'].includes(process.argv[2] ?? '') ? process.argv[2]! : has('-p') || has('--print') ? 'print' : 'tui'; tm.appStart(); tm.commandRun(sub);
   const done = async (code: number) => { tm.appExit(); await tm.flush(2000); process.exit(code); };
+  // anything nobody caught is written (redacted) to ~/.centcom/crashes and never sent anywhere
+  const crashes = new CrashStore(stateDir(defaultDeps()));
+  installCrashHandlers({ store: crashes, proc: process as never, info: { version: VERSION, contract: CONTRACT_VERSION, platform: `${process.platform}-${process.arch}`, node: process.version, now: () => Date.now(), scrub: { home: homedir(), deny: [pathBase(process.cwd())] } }, recentLog: () => [], err: (l) => console.error(l), onCode: (code) => tm.errorShown(code as never) });
+  if (process.argv[2] === 'crash') await done(runCrash(process.argv.slice(3), crashes, { out: (l) => console.log(l), err: (l) => console.error(l) }));
+  if (process.argv[2] === 'doctor') await done(await runDoctor(process.argv.slice(3), realDoctorContext({ version: VERSION, contract: CONTRACT_VERSION, apiBase: cfg0?.api.base_url ?? 'https://api.centcom.dev', stateDir: stateDir(defaultDeps()) }), { out: (l) => console.log(l), err: (l) => console.error(l) }, { crashes }));
   if (process.argv[2] === 'provider') await done(await runProviderCli(process.argv.slice(3)));
   if (process.argv[2] === 'keys') await done(runKeys(process.argv.slice(3), { out: (l) => console.log(l), err: (l) => console.error(l) }));
   if (process.argv[2] === 'init') await done(await runInitCli(process.argv.slice(3)));

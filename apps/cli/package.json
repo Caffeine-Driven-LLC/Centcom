@@ -18,6 +18,7 @@
     "@centcom/protocol": "workspace:*"
   },
   "devDependencies": {
-    "@centcom/testkit": "workspace:*"
+    "@centcom/testkit": "workspace:*",
+    "ajv": "8.20.0"
   }
 }

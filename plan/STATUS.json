@@ -240,6 +240,10 @@
   "C051": {
    "pct": 0.9,
    "note": "HTTP client in @centcom/net: operation table generated from openapi.yaml with a CI drift check; typed call, listPage, paginate, revalidate, getStatus, getJwks; CT-ERR retries with full jitter and a 60 s sleep budget, idempotency keys, single-flight 401 refresh, ETag and If-Match, size guard, tolerant response checks, typed errors; all 93 operations pass against the mock. Gaps: responses are checked with generated shapes (types and required fields), not the C003 Ajv validators; no lane uses the client yet"
+  },
+  "C097": {
+   "pct": 0.85,
+   "note": "centcom doctor (9 checks in parallel with 3 s network limits, one next step per problem, exit codes 0/1/2, JSON schema, --check, --bundle tar.gz) and local crash reports (redaction corpus of 30, retention of 10, no egress, one error.shown code with telemetry on), centcom crash list/show/delete; gap: doctor does not yet check the relay upgrade or /v1/me, and recent log lines are not yet fed from the app logger"
   }
  },
  "next": [
