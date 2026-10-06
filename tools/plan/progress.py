@@ -58,29 +58,29 @@ def svg(title, overall, tot, plan_pct=1.0):
     rows = [m for m in ORDER if tot[m][1]]
     H = 118 + 20 * len(rows)
     o = [f'<svg xmlns="http://www.w3.org/2000/svg" width="760" height="{H}" viewBox="0 0 760 {H}" role="img" aria-label="{title}: {fmt(overall)} built">',
-         '<defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#3DF2C8"/></linearGradient>',
+         '<defs>',
          '<pattern id="s" width="24" height="24" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="12" height="24" fill="#fff" fill-opacity=".16"/></pattern>',
-         '<clipPath id="c"><rect x="24" y="52" width="712" height="26" rx="13"/></clipPath>',
-         '<linearGradient id="sh" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".35"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>',
-         '<style>@keyframes mv{to{transform:translateX(24px)}}@keyframes sh{from{transform:translateX(-200px)}to{transform:translateX(760px)}}@keyframes gl{50%{opacity:.78}}',
-         '.st{animation:mv .9s linear infinite}.sh{animation:sh 3.2s ease-in-out infinite}.gl{animation:gl 2.4s ease-in-out infinite}text{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}',
-         '@media (prefers-reduced-motion:reduce){.st,.sh,.gl{animation:none}}</style>',
-         f'<rect width="760" height="{H}" rx="16" fill="#101012"/><rect x=".5" y=".5" width="759" height="{H-1}" rx="15.5" fill="none" stroke="#34343B"/>',
+         '<clipPath id="c"><rect x="24" y="52" width="712" height="26" rx="2"/></clipPath>',
+         '</defs>',
+         '<style>@keyframes mv{to{transform:translateX(24px)}}',
+         '.st{animation:mv .9s linear infinite}text{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}',
+         '@media (prefers-reduced-motion:reduce){.st{animation:none}}</style>',
+         f'<rect width="760" height="{H}" rx="4" fill="#101012"/><rect x=".5" y=".5" width="759" height="{H-1}" rx="3.5" fill="none" stroke="#34343B"/>',
          f'<text x="24" y="34" fill="#ECECEF" font-size="16" font-weight="700">{title}</text>',
-         f'<text x="736" y="34" fill="#3DF2C8" font-size="16" font-weight="700" text-anchor="end">{fmt(overall)} built</text>',
-         '<rect x="24" y="52" width="712" height="26" rx="13" fill="#1B1B1F"/>']
+         f'<text x="736" y="34" fill="#ECECEF" font-size="16" font-weight="700" text-anchor="end">{fmt(overall)} built</text>',
+         '<rect x="24" y="52" width="712" height="26" rx="2" fill="#1B1B1F"/>']
     fw = max(0.0, 712 * overall)
     if fw > 0:
-        o.append(f'<g clip-path="url(#c)"><g class="gl"><rect x="24" y="52" width="{fw:.1f}" height="26" fill="url(#g)"/><rect x="24" y="52" width="{fw:.1f}" height="26" fill="url(#s)" class="st"/>'
-                 f'<rect x="24" y="52" width="160" height="26" fill="url(#sh)" class="sh" style="mix-blend-mode:screen"/></g></g>')
-        o.append(f'<rect x="{24 + fw - 2:.1f}" y="52" width="4" height="26" rx="2" fill="#fff" fill-opacity=".85" class="gl"/>')
+        o.append(f'<clipPath id="cf"><rect x="24" y="52" width="{fw:.1f}" height="26" rx="2"/></clipPath>'
+                 f'<g clip-path="url(#cf)"><rect x="24" y="52" width="{fw:.1f}" height="26" fill="#7C5CFF"/><rect x="0" y="52" width="{fw + 48:.1f}" height="26" fill="url(#s)" class="st"/></g>')
+        o.append(f'<rect x="{24 + fw - 2:.1f}" y="52" width="3" height="26" fill="#ECECEF"/>')
     o.append(f'<text x="24" y="100" fill="#B6B6BE" font-size="12">Plan and contracts {fmt(plan_pct)} · implementation by lane size · updated from plan/STATUS.json</text>')
     y = 114
     for m in rows:
         d, t, ld, ln = tot[m]; p = d / t if t else 0
         o.append(f'<text x="24" y="{y + 11}" fill="#B6B6BE" font-size="11">{m}</text><text x="64" y="{y + 11}" fill="#8A8A94" font-size="11">{NAMES[m]}</text>')
-        o.append(f'<rect x="270" y="{y + 3}" width="350" height="8" rx="4" fill="#1B1B1F"/>')
-        if p > 0: o.append(f'<rect x="270" y="{y + 3}" width="{350 * p:.1f}" height="8" rx="4" fill="url(#g)"/>')
+        o.append(f'<rect x="270" y="{y + 3}" width="350" height="8" rx="1" fill="#1B1B1F"/>')
+        if p > 0: o.append(f'<rect x="270" y="{y + 3}" width="{350 * p:.1f}" height="8" rx="1" fill="#7C5CFF"/>')
         o.append(f'<text x="736" y="{y + 11}" fill="#D4D4DA" font-size="11" text-anchor="end">{fmt(p)} · {ld}/{ln} lanes</text>')
         y += 20
     o.append('</svg>')
