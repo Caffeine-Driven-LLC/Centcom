@@ -9,13 +9,14 @@ import type { FlatFlags } from '@centcom/config';
 import { createAppLogger } from '@centcom/net';
 import type { CentoColor } from '@centcom/mascot';
 import { buildPrompt, readStdin, runPrint } from './print.js';
+import { runProviderCli } from './commands/provider/cli.js';
 
 const VERSION = '0.1.0';
 const HELP = `centcom ${VERSION}: command many hands
 
 Usage
   centcom [options]            start the terminal app in this directory
-  centcom provider status      show whether Claude Code and Codex are installed and signed in
+  centcom provider status|login|logout|doctor   check, sign in or out of Claude Code and Codex (the tools do the signing in)
 
 Scripting
   centcom -p "task"             run once, print the answer, exit (no screen). Piped input is added to the prompt.
@@ -74,13 +75,7 @@ async function pickEngine(preferred: 'claude-code' | 'codex' = 'claude-code'): P
 async function main() {
   if (has('-h') || has('--help')) { console.log(HELP); return; }
   if (has('-v') || has('--version')) { console.log(VERSION); return; }
-  if (process.argv[2] === 'provider') {
-    const cx = await detectCodex();
-    console.log(cx.installed ? `Codex ${cx.version ?? ''}  ${cx.signedIn === 'yes' ? `signed in (${cx.loginKind === 'subscription' ? 'ChatGPT' : cx.loginKind === 'api_key' ? 'API key' : 'unknown login type'}); a stale login only shows up when you send a message` : cx.signedIn === 'no' ? 'not signed in: run `codex login`' : 'sign-in status unknown'}` : 'Codex is not installed. See https://developers.openai.com/codex');
-    const st = await detectClaude();
-    console.log(st.installed ? `Claude Code ${st.version ?? ''}  ${st.signedIn === 'yes' ? `signed in (${st.loginKind === 'subscription' ? 'subscription' : st.loginKind === 'api_key' ? 'API key' : st.loginKind})` : st.signedIn === 'no' ? 'not signed in: run `claude auth login`' : 'sign-in status unknown'}` : 'Claude Code is not installed. See https://code.claude.com/docs');
-    return;
-  }
+  if (process.argv[2] === 'provider') process.exit(await runProviderCli(process.argv.slice(3)));
   if (has('-p') || has('--print')) {
     const i = Math.max(process.argv.indexOf('-p'), process.argv.indexOf('--print'));
     const next = process.argv[i + 1]; const text = next && !next.startsWith('-') ? next : undefined;

@@ -15,3 +15,4 @@ export * from './events/index.js';
 export * from './runner/index.js';
 export * from './state/index.js';
 export * from './engine/index.js';
+export * from './provider/index.js';
