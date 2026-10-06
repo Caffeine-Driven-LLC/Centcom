@@ -276,18 +276,18 @@ Raw palette values. **Components never use these directly**; they use semantic t
 
 | Step | Hex |
 |---|---|
-| 950 | `#07091A` |
-| 900 | `#0B1026` |
-| 850 | `#0F1632` |
-| 800 | `#141C3E` |
-| 700 | `#1C2650` |
-| 600 | `#2A3568` |
-| 500 | `#3D4A85` |
-| 400 | `#7384CC` |
-| 300 | `#A9B6E8` |
-| 200 | `#C9D2F5` |
-| 100 | `#E6EBFF` |
-| 50 | `#F3F6FF` |
+| 950 | `#0A0A0C` |
+| 900 | `#101012` |
+| 850 | `#151518` |
+| 800 | `#1B1B1F` |
+| 700 | `#26262B` |
+| 600 | `#34343B` |
+| 500 | `#4A4A53` |
+| 400 | `#8A8A94` |
+| 300 | `#B6B6BE` |
+| 200 | `#D4D4DA` |
+| 100 | `#ECECEF` |
+| 50 | `#F6F6F7` |
 
 **cento**
 
@@ -341,21 +341,21 @@ Components use these. Dark = **Abyss** (default), Light = **Shallows**.
 
 | Token | Abyss (dark) | Shallows (light) |
 |---|---|---|
-| `bg.base` | `#07091A` | `#F3F6FF` |
-| `bg.surface` | `#0B1026` | `#FFFFFF` |
-| `bg.raised` | `#0F1632` | `#FFFFFF` |
-| `bg.overlay` | `#141C3E` | `#FFFFFF` |
-| `bg.sunken` | `#050716` | `#E8EDFB` |
-| `bg.hover` | `#141C3E` | `#EAEFFF` |
-| `bg.selected` | `#1C2650` | `#DDE4FF` |
-| `border.subtle` | `#1C2650` | `#D5DCF5` |
-| `border.default` | `#2A3568` | `#B8C2EA` |
-| `border.strong` | `#3D4A85` | `#7E8CCB` |
-| `text.primary` | `#E6EBFF` | `#0B1026` |
-| `text.secondary` | `#A9B6E8` | `#3B4678` |
-| `text.muted` | `#7384CC` | `#56649F` |
-| `text.inverse` | `#07091A` | `#FFFFFF` |
-| `text.link` | `#7DBAFF` | `#1B5FB8` |
+| `bg.base` | `#0A0A0C` | `#F6F6F7` |
+| `bg.surface` | `#101012` | `#FFFFFF` |
+| `bg.raised` | `#151518` | `#FFFFFF` |
+| `bg.overlay` | `#1B1B1F` | `#FFFFFF` |
+| `bg.sunken` | `#070709` | `#EAEAEC` |
+| `bg.hover` | `#1B1B1F` | `#EFEFF1` |
+| `bg.selected` | `#26262B` | `#E4E4E8` |
+| `border.subtle` | `#26262B` | `#DDDDE1` |
+| `border.default` | `#34343B` | `#C2C2C9` |
+| `border.strong` | `#4A4A53` | `#8A8A94` |
+| `text.primary` | `#ECECEF` | `#101012` |
+| `text.secondary` | `#B6B6BE` | `#44444C` |
+| `text.muted` | `#8A8A94` | `#62626C` |
+| `text.inverse` | `#0A0A0C` | `#FFFFFF` |
+| `text.link` | `#A892FF` | `#5A3FD1` |
 | `accent.primary` | `#7C5CFF` | `#5A3FD1` |
 | `accent.fill` | `#6B49F0` | `#5A3FD1` |
 | `accent.hover` | `#8F74FF` | `#4A30B8` |
@@ -412,27 +412,27 @@ All pairs below are computed from the actual token values (WCAG 2.1). Targets: b
 
 | Pair | Dark | Light | Target | Note |
 |---|---|---|---|---|
-| `text.primary` on `bg.base` | 16.64 ✅ | 17.41 ✅ | ≥ 7 | body text |
-| `text.primary` on `bg.surface` | 15.85 ✅ | 18.81 ✅ | ≥ 7 | body text on cards |
-| `text.primary` on `bg.overlay` | 13.98 ✅ | 18.81 ✅ | ≥ 7 | body text in modals |
-| `text.secondary` on `bg.base` | 9.92 ✅ | 8.33 ✅ | ≥ 4.5 | secondary text |
-| `text.secondary` on `bg.surface` | 9.44 ✅ | 9.00 ✅ | ≥ 4.5 | secondary text on cards |
-| `text.muted` on `bg.base` | 5.55 ✅ | 5.23 ✅ | ≥ 4.5 | muted text / placeholders |
-| `text.muted` on `bg.surface` | 5.29 ✅ | 5.65 ✅ | ≥ 4.5 | muted text on cards |
-| `text.link` on `bg.base` | 9.73 ✅ | 5.76 ✅ | ≥ 4.5 | links |
+| `text.primary` on `bg.base` | 16.78 ✅ | 17.60 ✅ | ≥ 7 | body text |
+| `text.primary` on `bg.surface` | 16.12 ✅ | 19.01 ✅ | ≥ 7 | body text on cards |
+| `text.primary` on `bg.overlay` | 14.56 ✅ | 19.01 ✅ | ≥ 7 | body text in modals |
+| `text.secondary` on `bg.base` | 9.82 ✅ | 8.93 ✅ | ≥ 4.5 | secondary text |
+| `text.secondary` on `bg.surface` | 9.43 ✅ | 9.65 ✅ | ≥ 4.5 | secondary text on cards |
+| `text.muted` on `bg.base` | 5.79 ✅ | 5.58 ✅ | ≥ 4.5 | muted text / placeholders |
+| `text.muted` on `bg.surface` | 5.56 ✅ | 6.03 ✅ | ≥ 4.5 | muted text on cards |
+| `text.link` on `bg.base` | 7.74 ✅ | 6.34 ✅ | ≥ 4.5 | links |
 | `accent.on` on `accent.fill` | 5.47 ✅ | 6.85 ✅ | ≥ 4.5 | button label on filled accent |
 | `accent.fill` on `bg.base` | 3.61 ✅ | 6.34 ✅ | ≥ 3 | filled accent edge against the page |
 | `accent.primary` on `bg.base` | 4.55 ✅ | 6.34 ✅ | ≥ 3 | accent as UI edge / icon (non-text) |
-| `accent.hover` on `bg.base` | 5.75 ✅ | 8.08 ✅ | ≥ 3 | accent hover as UI edge |
-| `signal` on `bg.base` | 13.86 ✅ | 5.16 ✅ | ≥ 4.5 | signal text |
-| `status.success` on `bg.surface` | 10.80 ✅ | 5.93 ✅ | ≥ 4.5 | success text |
-| `status.warning` on `bg.surface` | 13.05 ✅ | 5.93 ✅ | ≥ 4.5 | warning text |
-| `status.danger` on `bg.surface` | 6.21 ✅ | 6.06 ✅ | ≥ 4.5 | danger text |
-| `status.info` on `bg.surface` | 7.66 ✅ | 6.22 ✅ | ≥ 4.5 | info text |
+| `accent.hover` on `bg.base` | 5.76 ✅ | 8.08 ✅ | ≥ 3 | accent hover as UI edge |
+| `signal` on `bg.base` | 13.88 ✅ | 5.16 ✅ | ≥ 4.5 | signal text |
+| `status.success` on `bg.surface` | 10.91 ✅ | 5.93 ✅ | ≥ 4.5 | success text |
+| `status.warning` on `bg.surface` | 13.18 ✅ | 5.93 ✅ | ≥ 4.5 | warning text |
+| `status.danger` on `bg.surface` | 6.28 ✅ | 6.06 ✅ | ≥ 4.5 | danger text |
+| `status.info` on `bg.surface` | 7.74 ✅ | 6.22 ✅ | ≥ 4.5 | info text |
 | `status.success` on `status.success.subtle` | 8.83 ✅ | 5.23 ✅ | ≥ 4.5 | success on its tint |
 | `status.danger` on `status.danger.subtle` | 5.58 ✅ | 4.90 ✅ | ≥ 4.5 | danger on its tint |
-| `focus.ring` on `bg.base` | 13.86 ✅ | 6.34 ✅ | ≥ 3 | focus ring |
-| `border.default` on `bg.base` | 1.70 ✅ | 1.63 ✅ | ≥ 1.5 | decorative border (not required) |
+| `focus.ring` on `bg.base` | 13.88 ✅ | 6.34 ✅ | ≥ 3 | focus ring |
+| `border.default` on `bg.base` | 1.60 ✅ | 1.64 ✅ | ≥ 1.5 | decorative border (not required) |
 
 If you add or change a token, run `python3 assets/theme/build_theme.py`; it prints any pair that fails.
 

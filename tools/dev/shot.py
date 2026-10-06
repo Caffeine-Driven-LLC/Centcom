@@ -11,7 +11,7 @@ FONT = next((p for p in ['/home/devlsx/.local/share/fonts/JetBrains/JetBrainsMon
 BOLD = FONT.replace('Regular', 'Bold') if FONT and os.path.exists(FONT.replace('Regular', 'Bold')) else FONT
 NAMED = {'black': '000000', 'red': 'cd3131', 'green': '0dbc79', 'brown': 'e5e510', 'blue': '2472c8', 'magenta': 'bc3fbc', 'cyan': '11a8cd', 'white': 'e5e5e5',
          'brightblack': '666666', 'brightred': 'f14c4c', 'brightgreen': '23d18b', 'brightbrown': 'f5f543', 'brightblue': '3b8eea', 'brightmagenta': 'd670d6', 'brightcyan': '29b8db', 'brightwhite': 'ffffff'}
-DEFAULT_BG, DEFAULT_FG = '07091a', 'e6ebff'
+DEFAULT_BG, DEFAULT_FG = '0a0a0c', 'ececef'
 
 def color(c, default):
     if c == 'default': return default

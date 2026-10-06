@@ -1,10 +1,10 @@
 {
-  "background": "#07091A",
-  "foreground": "#E6EBFF",
+  "background": "#0A0A0C",
+  "foreground": "#ECECEF",
   "cursor": "#3DF2C8",
-  "cursor_text": "#07091A",
-  "selection_bg": "#2A3568",
-  "selection_fg": "#F3F6FF",
+  "cursor_text": "#0A0A0C",
+  "selection_bg": "#34343B",
+  "selection_fg": "#F6F6F7",
   "normal": [
     "#0B1026",
     "#FF5C5C",

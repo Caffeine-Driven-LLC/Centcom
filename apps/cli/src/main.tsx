@@ -21,7 +21,7 @@ Options
   --dangerously-skip-permissions   never ask: run commands and edit files freely (alias: --yolo)
   --mascot <large|small|off>   Cento size (default: auto from terminal height)
   --cento-color <violet|red|yellow|green|brown>
-  --theme <dark|light>         Abyss (default) or Shallows (for light terminals)
+  --theme <dark|light>         Graphite (default) or Paper (for light terminals)
   --colors <truecolor|256|16|never>  force a colour tier (NO_COLOR is honoured)
   --no-motion                  turn animation off (also CENTCOM_REDUCE_MOTION=1)
   -v, --version   -h, --help

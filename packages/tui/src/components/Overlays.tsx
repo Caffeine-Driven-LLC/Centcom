@@ -13,7 +13,7 @@ export function paletteItems(query: string): PaletteItem[] {
   const cmds: PaletteItem[] = COMMANDS.map((c) => ({ id: 'c:' + c.name, label: '/' + c.name + (c.args ? ' ' + c.args : ''), hint: c.desc, run: '/' + c.name }));
   const anims: PaletteItem[] = q.length >= 2 ? bakedNames().filter((n) => n.includes(q.replace(/\s+/g, '_'))).slice(0, 40).map((n) => ({ id: 'a:' + n, label: 'cento ' + n, hint: getBaked(n)?.desc ?? '', run: '/cento ' + n })) : [];
   const extra: PaletteItem[] = [
-    { id: 'x:dark', label: 'Theme: Abyss (dark)', hint: 'default', run: '/theme dark' }, { id: 'x:light', label: 'Theme: Shallows (light)', hint: 'for light terminals', run: '/theme light' },
+    { id: 'x:dark', label: 'Theme: Graphite (dark)', hint: 'default', run: '/theme dark' }, { id: 'x:light', label: 'Theme: Paper (light)', hint: 'for light terminals', run: '/theme light' },
     { id: 'x:plan', label: 'Mode: plan (read-only)', hint: 'nothing is changed', run: '/mode plan' }, { id: 'x:accept', label: 'Mode: accept edits', hint: 'edits go through, commands ask', run: '/mode acceptEdits' }, { id: 'x:ask', label: 'Mode: ask first', hint: 'default', run: '/mode default' },
     ...CENTO_COLORS.map((c) => ({ id: 'col:' + c, label: 'Cento colour: ' + c, hint: '', run: '/color ' + c })),
   ];

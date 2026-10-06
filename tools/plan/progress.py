@@ -65,23 +65,23 @@ def svg(title, overall, tot, plan_pct=1.0):
          '<style>@keyframes mv{to{transform:translateX(24px)}}@keyframes sh{from{transform:translateX(-200px)}to{transform:translateX(760px)}}@keyframes gl{50%{opacity:.78}}',
          '.st{animation:mv .9s linear infinite}.sh{animation:sh 3.2s ease-in-out infinite}.gl{animation:gl 2.4s ease-in-out infinite}text{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}',
          '@media (prefers-reduced-motion:reduce){.st,.sh,.gl{animation:none}}</style>',
-         f'<rect width="760" height="{H}" rx="16" fill="#0B1026"/><rect x=".5" y=".5" width="759" height="{H-1}" rx="15.5" fill="none" stroke="#2A3568"/>',
-         f'<text x="24" y="34" fill="#E6EBFF" font-size="16" font-weight="700">{title}</text>',
+         f'<rect width="760" height="{H}" rx="16" fill="#101012"/><rect x=".5" y=".5" width="759" height="{H-1}" rx="15.5" fill="none" stroke="#34343B"/>',
+         f'<text x="24" y="34" fill="#ECECEF" font-size="16" font-weight="700">{title}</text>',
          f'<text x="736" y="34" fill="#3DF2C8" font-size="16" font-weight="700" text-anchor="end">{fmt(overall)} built</text>',
-         '<rect x="24" y="52" width="712" height="26" rx="13" fill="#141C3E"/>']
+         '<rect x="24" y="52" width="712" height="26" rx="13" fill="#1B1B1F"/>']
     fw = max(0.0, 712 * overall)
     if fw > 0:
         o.append(f'<g clip-path="url(#c)"><g class="gl"><rect x="24" y="52" width="{fw:.1f}" height="26" fill="url(#g)"/><rect x="24" y="52" width="{fw:.1f}" height="26" fill="url(#s)" class="st"/>'
                  f'<rect x="24" y="52" width="160" height="26" fill="url(#sh)" class="sh" style="mix-blend-mode:screen"/></g></g>')
         o.append(f'<rect x="{24 + fw - 2:.1f}" y="52" width="4" height="26" rx="2" fill="#fff" fill-opacity=".85" class="gl"/>')
-    o.append(f'<text x="24" y="100" fill="#A9B6E8" font-size="12">Plan and contracts {fmt(plan_pct)} · implementation by lane size · updated from plan/STATUS.json</text>')
+    o.append(f'<text x="24" y="100" fill="#B6B6BE" font-size="12">Plan and contracts {fmt(plan_pct)} · implementation by lane size · updated from plan/STATUS.json</text>')
     y = 114
     for m in rows:
         d, t, ld, ln = tot[m]; p = d / t if t else 0
-        o.append(f'<text x="24" y="{y + 11}" fill="#A9B6E8" font-size="11">{m}</text><text x="64" y="{y + 11}" fill="#7384CC" font-size="11">{NAMES[m]}</text>')
-        o.append(f'<rect x="270" y="{y + 3}" width="350" height="8" rx="4" fill="#141C3E"/>')
+        o.append(f'<text x="24" y="{y + 11}" fill="#B6B6BE" font-size="11">{m}</text><text x="64" y="{y + 11}" fill="#8A8A94" font-size="11">{NAMES[m]}</text>')
+        o.append(f'<rect x="270" y="{y + 3}" width="350" height="8" rx="4" fill="#1B1B1F"/>')
         if p > 0: o.append(f'<rect x="270" y="{y + 3}" width="{350 * p:.1f}" height="8" rx="4" fill="url(#g)"/>')
-        o.append(f'<text x="736" y="{y + 11}" fill="#C9D2F5" font-size="11" text-anchor="end">{fmt(p)} · {ld}/{ln} lanes</text>')
+        o.append(f'<text x="736" y="{y + 11}" fill="#D4D4DA" font-size="11" text-anchor="end">{fmt(p)} · {ld}/{ln} lanes</text>')
         y += 20
     o.append('</svg>')
     return '\n'.join(o) + '\n'

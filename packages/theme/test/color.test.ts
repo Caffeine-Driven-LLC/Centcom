@@ -44,8 +44,8 @@ describe('colour conversion', () => {
 
 describe('theme', () => {
   it('resolves semantic tokens per mode', () => {
-    expect(createTheme('dark', 'truecolor').c('bg.base')).toBe('#07091A');
-    expect(createTheme('light', 'truecolor').c('bg.base')).toBe('#F3F6FF');
+    expect(createTheme('dark', 'truecolor').c('bg.base')).toBe('#0A0A0C');
+    expect(createTheme('light', 'truecolor').c('bg.base')).toBe('#F6F6F7');
     expect(createTheme('dark', 'none').presence).toHaveLength(5);
   });
 });
