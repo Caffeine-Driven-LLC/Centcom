@@ -6,9 +6,10 @@ import type { Conn } from './net.js';
 const short = (p: string, home: string) => (p.startsWith(home) ? '~' + p.slice(home.length) : p);
 type Engine = 'claude-code' | 'codex';
 
-export function Launcher({ c, onStart }: { c: Conn; onStart: (dir: string, demo: boolean, mode: 'web' | 'app', engine: Engine) => void }) {
+export function Launcher({ c, onStart }: { c: Conn; onStart: (dir: string, demo: boolean, mode: 'web' | 'app', engine: Engine, resume?: string) => void }) {
   const { launcher: L, dir } = c;
   const [demo, setDemo] = useState(false); const [engine, setEngine] = useState<Engine>('claude-code');
+  const [cont, setCont] = useState(true);
   const [typed, setTyped] = useState(''); const [chosen, setChosen] = useState<string>();
   useEffect(() => { if (L && !dir) c.send({ t: 'browse', path: L.cwd }); }, [L, dir, c]);
   useEffect(() => { if (dir) setTyped(dir.path); }, [dir]);
@@ -20,7 +21,8 @@ export function Launcher({ c, onStart }: { c: Conn; onStart: (dir: string, demo:
   const status = !st.installed ? { cls: 'warn', text: `${name} was not found. You can still try the demo agent.` }
     : st.signedIn === 'no' ? { cls: 'warn', text: `Not signed in. Run ${engine === 'codex' ? 'codex login' : 'claude auth login'} in a terminal.` }
       : { cls: 'ok', text: `${name} ${st.version ?? ''} · ${st.kind === 'subscription' ? 'your subscription' : st.kind === 'api_key' ? 'your API key' : 'ready'}` };
-  const go2 = (mode: 'web' | 'app') => target && onStart(target, demo, mode, engine);
+  const saved = dir && target === dir.path ? dir.saved ?? 0 : 0;
+  const go2 = (mode: 'web' | 'app') => target && onStart(target, demo, mode, engine, saved > 0 && cont && !demo ? 'last' : undefined);
 
   return (
     <div className="launcher">
@@ -53,6 +55,7 @@ export function Launcher({ c, onStart }: { c: Conn; onStart: (dir: string, demo:
         </div>
         <footer className="foot">
           <div className="target"><small>Working in</small><b title={target}>{target ? short(target, L.home) : 'Nothing selected'}</b></div>
+          {saved > 0 && !demo && <label className="check inline"><input type="checkbox" checked={cont} onChange={(e) => setCont(e.target.checked)} /><span>Continue last conversation <small>{saved} saved</small></span></label>}
           <button className="btn" disabled={!target || !L.app} onClick={() => go2('app')} title={L.app ? 'Opens a window without browser chrome' : 'Needs Chrome, Chromium, Brave or Edge'}>Start as app</button>
           <button className="btn primary" disabled={!target} onClick={() => go2('web')}>Start on web</button>
         </footer>

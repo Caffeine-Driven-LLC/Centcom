@@ -1,5 +1,6 @@
 import type { ApprovalDecision, ApprovalRequest, EngineId, LoginKind, PermissionMode, Risk } from '@centcom/agent';
 import type { CentoColor, MiniState } from '@centcom/mascot';
+import type { SessionMeta } from '../sessions.js';
 
 export type Mode = 'chat' | 'palette' | 'help' | 'gallery' | 'fleet' | 'models';
 export type MascotSize = 'large' | 'small' | 'off';
@@ -43,6 +44,8 @@ export interface AppState {
   modelSel: number;
   gallery: { cat: number; idx: number; color: number; query: string };
   exitArmedAt?: number;
+  /** The saved conversation this one is written to, and recent saved ones in this folder. */
+  sessionId: string; sessions: SessionMeta[];
   version: string;
 }
 

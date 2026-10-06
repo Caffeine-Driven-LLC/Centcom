@@ -11,18 +11,17 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 
 ![Progress](docs/progress.svg)
 
-**29% built** (weighted by lane size across 105 lanes). Details and how this is computed: [`tools/plan/progress.py`](tools/plan/progress.py). Update [`plan/STATUS.json`](plan/STATUS.json) when you finish or advance a lane, then run `python3 tools/plan/progress.py`.
+**32% built** (weighted by lane size across 105 lanes). Details and how this is computed: [`tools/plan/progress.py`](tools/plan/progress.py). Update [`plan/STATUS.json`](plan/STATUS.json) when you finish or advance a lane, then run `python3 tools/plan/progress.py`.
 
 ## Next steps
 
-1. **Smoke-test the Codex adapter on a real turn** — it passes its tests against Codex's published protocol schema and the real handshake, but no real model turn has run yet (C103); this needs a fresh `codex login`
-2. **C002 CI pipeline** — nothing runs typecheck/tests automatically yet; add the contract-lock check and `progress.py --check`
+1. **Smoke-test the Codex adapter on a real turn** — it passes its tests against Codex's published protocol schema and the real handshake, but no real model turn has run yet (C103); needs a Codex account
+2. **Confirm the first CI run is green (C002)** — the workflow is written and every step passes locally, but GitHub has not run it yet
 3. **C003 generate protocol types from `contracts/`** — event and message shapes are hand-typed today (C101, C102, C103 depend on this)
-4. **C026 persist transcripts and resume sessions** — both engines already return resume tokens; restarting the app loses the conversation
-5. **C017 git worktree manager, then C024 agent fleet** — unlocks the multi-agent story; the fleet panel is only fed demo agents right now
-6. **C050 non-interactive mode (print / JSON)** — needed for scripting and for CI use
-7. **C007 mock backend, then the M2 LAN lanes (C074, C054-C056, C071-C076)** — starts multiplayer; none of M2 exists yet
-8. **Package the web launcher as a real desktop app** — "Start as app" opens a chromeless Chromium window (verified); a signed installable app (Electron or Tauri) is still to do
+4. **C017 git worktree manager** — lets one session run parallel agents on separate branches; a solo feature that also unlocks the team fleet later
+5. **C004 layered configuration and C005 logging** — settings are flags and in-memory today; there are no config files or logs to debug with
+6. **Package the web launcher as a real desktop app** — "Start as app" opens a chromeless Chromium window today; a signed installable app (Electron or Tauri) is still to do
+7. **Start multiplayer: C074 transport, C007 mock backend, then the M2 LAN lanes** — none of M2 exists yet; this is the product's main bet
 
 ### Started, not finished
 
@@ -30,14 +29,14 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 |---|---|--:|---|
 | [C102](plan/client/C102.md) | Claude Code engine: drive the user’s own claude binary (stream-json, resume, approvals bridge) | 90% | claude stream-json, approvals bridge, resume token, interrupt; no version-range check |
 | [C015](plan/client/C015.md) | Permission policy engine bridging engine approval requests | 85% | modes incl. dangerously-skip-permissions, session rules, real approval bridge; no persisted "always" rules |
+| [C026](plan/client/C026.md) | Local transcript persistence and engine session resume | 85% | conversations saved and resumed (-c, --resume, /resume, /new, web launcher and palette), verified with real Claude; Codex resume untested |
 | [C035](plan/client/C035.md) | Prompt input: multiline, history, paste, slash commands | 85% | multiline, history, paste, slash popup; no external editor |
 | [C081](plan/client/C081.md) | Web app scaffold: Vite, React, router, theme | 85% | Vite + React local web app with launcher, workspace, polished UI; no router |
 | [C101](plan/client/C101.md) | Engine abstraction: AgentEngine interface, capabilities and normalised event stream | 85% | AgentEngine + normalised events; not yet generated from contracts |
+| [C050](plan/client/C050.md) | Non-interactive mode: print, JSON output, pipes | 85% | centcom -p with text/json/stream-json, piped input, exit codes; verified with real Claude |
 | [C016](plan/client/C016.md) | Command risk classification and sandbox settings passed to the engines | 80% | command risk classes; Codex sandbox/approval policy per mode |
-| [C020](plan/client/C020.md) | Skills pack: install and manage Claude Code skills and Codex AGENTS.md guidance | 80% | auto skills + centcom-master (208 skills); no Codex AGENTS.md install |
-| [C029](plan/client/C029.md) | Usage and cost display from engine reports | 80% | tokens, estimated cost, 5h/7d limits |
 
-+19 more in [`plan/STATUS.json`](plan/STATUS.json).
++21 more in [`plan/STATUS.json`](plan/STATUS.json).
 
 ### Ready to pick up (all dependencies done)
 
@@ -93,6 +92,18 @@ pnpm web:app      # same, but opens it as a chromeless app window
 ```
 
 The launcher lets you pick a project folder, then **Start on web** (a browser tab) or **Start as app** (a window with no browser chrome, own profile). Both show the same workspace and share the same running agent. The server listens on 127.0.0.1 only, checks Host and Origin, and needs the token in `~/.centcom/token` (the first visit sets a cookie).
+
+## Scripting and saved conversations
+
+```sh
+centcom -p "summarise this repo"                   # run once, print the answer, exit
+cat error.log | centcom -p "what went wrong?"      # piped text is added to the prompt
+centcom -p "..." --output-format json              # result, usage, cost, session id as one JSON object
+centcom -c                                         # continue the last conversation in this folder
+centcom --resume ses_...                           # continue a specific one (list them with /resume)
+```
+
+Conversations are saved to `~/.centcom/sessions` (private files) and resumed through the agent's own session, so it remembers what was said. `/new` starts fresh and keeps the old one. Print mode declines anything that needs an approval and says so (exit code 3); allow it with `--mode acceptEdits` or `--dangerously-skip-permissions`. Exit codes: 0 done, 1 error, 2 bad usage, 3 an action was declined. Turn saving off with `--no-save`.
 
 ## Try the mascot
 

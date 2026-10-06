@@ -9,8 +9,8 @@ export type CodexStatusMsg = ClaudeStatus
 export type ClientMsg =
   | { t: 'hello' }
   | { t: 'browse'; path: string }
-  | { t: 'open'; dir: string; demo?: boolean; engine?: 'claude-code' | 'codex' }
-  | { t: 'launchApp'; dir?: string; demo?: boolean; engine?: 'claude-code' | 'codex' }
+  | { t: 'open'; dir: string; demo?: boolean; engine?: 'claude-code' | 'codex'; resume?: string }
+  | { t: 'launchApp'; dir?: string; demo?: boolean; engine?: 'claude-code' | 'codex'; resume?: string }
   | { t: 'close' }
   | { t: 'submit'; text: string }
   | { t: 'approve'; decision: 'approve' | 'deny'; scope?: 'once' | 'session' | 'always' }
@@ -27,7 +27,7 @@ export type WebState = Omit<AppState, 'items' | 'approvals' | 'input' | 'cursor'
 
 export type ServerMsg =
   | { t: 'launcher'; home: string; cwd: string; recent: RecentDir[]; claude: ClaudeStatus; codex: CodexStatusMsg; app: boolean }
-  | { t: 'dir'; path: string; parent: string | null; git: boolean; entries: DirEntry[]; error?: string }
+  | { t: 'dir'; path: string; parent: string | null; git: boolean; entries: DirEntry[]; error?: string; saved?: number }
   | { t: 'opened'; dir: string }
   | { t: 'closed' }
   | { t: 'state'; state: WebState; changed: Item[]; order: string[] }

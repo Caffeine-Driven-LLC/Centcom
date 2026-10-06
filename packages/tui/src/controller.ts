@@ -3,7 +3,8 @@
  * answers approvals through the permission policy, runs slash commands, and drives the mascot.
  * The React tree only reads the store and calls the controller's methods.
  */
-import { CLAUDE_MODELS, modelLabel } from '@centcom/agent';
+import { CLAUDE_MODELS, modelLabel, newId } from '@centcom/agent';
+import { SessionStore, ago, titleFrom, type SessionMeta } from './sessions.js';
 import { MASTER_DIR, discover, injection, masterSkills, match, setEnabled, type Skill } from '@centcom/skills';
 import { MascotDriver, bakedByCategory, bakedCategories, getBaked, type CentoColor } from '@centcom/mascot';
 import type { AgentEngine, ApprovalDecision, ApprovalRequest, EngineSession, NormalisedEvent, PermissionGate, PermissionMode } from '@centcom/agent';
@@ -16,6 +17,12 @@ export interface ControllerOptions {
   engine: AgentEngine; demo: boolean; cwd: string; branch?: string; version: string; permissionMode?: PermissionMode;
   onExit?: () => void; ghosts?: boolean; settings?: Partial<Settings>; verbs?: VerbRotator;
   skills?: Skill[]; // pass [] to disable discovery (tests)
+  /** Where to save conversations; leave out to keep them in memory only. */
+  sessions?: SessionStore;
+  /** Called with every engine event, before the UI state changes (used by print mode and stream-json). */
+  onEvent?: (ev: NormalisedEvent) => void;
+  /** Continue a saved conversation: 'last' for the newest one in this folder, or a session id. */
+  resume?: string;
   /** Started with --dangerously-skip-permissions: Shift+Tab can cycle into bypass. */
   dangerous?: boolean;
 }
@@ -48,7 +55,7 @@ export class AppController {
     this.store = new Store<AppState>({
       items: [], agents: [me], activeAgent: this.me, mode: 'chat', input: '', cursor: 0, history: [], histIdx: null, draft: '', scroll: 0, toasts: [], approvals: [], settings,
       busy: false, verb: this.verbs.next(), limits: [], cwd: o.cwd, branch: o.branch ?? '', engineId: o.engine.id, engineLabel: o.engine.label, demo: o.demo, fleet: true,
-      slashSel: 0, palette: { query: '', sel: 0 }, modelSel: 0, gallery: { cat: 0, idx: 0, color: 0, query: '' }, version: o.version,
+      slashSel: 0, palette: { query: '', sel: 0 }, modelSel: 0, gallery: { cat: 0, idx: 0, color: 0, query: '' }, version: o.version, sessionId: newId('ses'), sessions: [],
     });
     this.driver = new MascotDriver({ reducedMotion: settings.reducedMotion, color: settings.color });
   }
@@ -64,16 +71,80 @@ export class AppController {
   /* ------------------------------------------------------------------ lifecycle */
   async start() {
     this.driver.start();
-    this.driver.setState(this.o.demo ? 'ready' : 'ready');
-    const gate: PermissionGate = { decide: (r) => this.decide(r) };
-    this.session = await this.o.engine.start({ agentId: this.me, cwd: this.o.cwd, permissionMode: this.state.settings.permissionMode, model: this.state.settings.model || undefined, addDirs: this.o.demo ? undefined : [MASTER_DIR], approvalGate: gate });
-    void this.consume(this.session);
+    this.driver.setState('ready');
+    let resumeToken: string | undefined;
+    if (this.o.resume && this.o.sessions) {
+      const id = this.o.resume === 'last' ? this.o.sessions.list(this.o.cwd, 1)[0]?.id : this.o.resume;
+      const saved = id ? this.o.sessions.load(id) : undefined;
+      if (saved) { resumeToken = saved.meta.resumeToken; this.loadSaved(saved.meta, saved.items); }
+      else this.notice('warn', this.o.resume === 'last' ? 'No saved conversation in this folder yet, so this is a new one.' : 'Could not find that saved conversation, so this is a new one.');
+    }
+    await this.startEngine(resumeToken);
     if (this.o.ghosts) this.startGhosts();
     this.verbTimer = setInterval(() => { if (this.state.busy) this.set({ verb: this.verbs.next() }); }, 4200);
     this.verbTimer.unref?.();
+    this.refreshSessions();
+    // save shortly after anything changes, never on every streamed token
+    this.store.subscribe(() => this.schedulePersist());
+  }
+
+  private async startEngine(resumeToken?: string) {
+    const gate: PermissionGate = { decide: (r) => this.decide(r) };
+    this.session = await this.o.engine.start({ agentId: this.me, cwd: this.o.cwd, permissionMode: this.state.settings.permissionMode, model: this.state.settings.model || undefined, addDirs: this.o.demo ? undefined : [MASTER_DIR], approvalGate: gate, ...(resumeToken ? { resume: { engine_session_id: resumeToken } } : {}) });
+    void this.consume(this.session);
+  }
+
+  /* ------------------------------------------------------------------ saved conversations */
+  private persistTimer?: NodeJS.Timeout; private lastItems?: Item[]; private lastToken?: string; private lastSid = '';
+  private schedulePersist() {
+    if (!this.o.sessions || this.persistTimer) return;
+    this.persistTimer = setTimeout(() => { this.persistTimer = undefined; this.persist(); }, 600); this.persistTimer.unref?.();
+  }
+  persist() {
+    const st = this.o.sessions; const s = this.state; if (!st || !s.items.length) return;
+    const first = s.items.find((i) => i.kind === 'user');
+    const meta: SessionMeta = { id: s.sessionId, cwd: this.o.cwd, engine: this.o.engine.id, title: titleFrom(s.items), model: s.settings.model || undefined, resumeToken: this.session?.resumeToken(), createdAt: this.createdAt ?? (first && first.kind === 'user' ? first.ts : Date.now()), updatedAt: Date.now(), messages: s.items.filter((i) => i.kind === 'user').length };
+    this.createdAt = meta.createdAt;
+    // items are replaced (never mutated) on every change, so identity tells us whether anything new needs saving
+    if (s.items === this.lastItems && meta.resumeToken === this.lastToken && s.sessionId === this.lastSid) return;
+    this.lastItems = s.items; this.lastToken = meta.resumeToken; this.lastSid = s.sessionId;
+    try { st.save(meta, s.items); this.refreshSessions(); } catch (e) { this.toast('warn', 'Could not save this conversation: ' + String((e as Error).message ?? e)); }
+  }
+  private createdAt?: number;
+  private refreshSessions() { if (this.o.sessions) this.set({ sessions: this.o.sessions.list(this.o.cwd, 10) }); }
+  private loadSaved(meta: SessionMeta, items: Item[]) {
+    this.createdAt = meta.createdAt;
+    this.set({ sessionId: meta.id, items, scroll: 0, ...(meta.model !== undefined ? { settings: { ...this.state.settings, model: meta.model ?? '' } } : {}) });
+    this.addItem({ kind: 'notice', id: nid('n'), level: 'ok', text: `Continuing "${meta.title}"`, detail: `${meta.messages} message${meta.messages === 1 ? '' : 's'} · last used ${ago(meta.updatedAt)}` });
+  }
+  /** Start over with an empty context. The old conversation stays saved and can be resumed. */
+  async newSession() {
+    if (this.state.busy) { this.toast('warn', 'Cento is still working. Press Esc to interrupt, then try again.'); return; }
+    this.persist(); await this.session?.stop();
+    this.createdAt = undefined; this.lastItems = undefined;
+    this.set({ items: [], scroll: 0, sessionId: newId('ses'), approvals: [] });
+    await this.startEngine();
+  }
+  /** Switch to a saved conversation from this folder. `which` is a list number (1 = newest) or an id. */
+  async resumeSession(which: string) {
+    if (!this.o.sessions) { this.toast('info', 'Saving conversations is turned off.'); return; }
+    if (this.state.busy) { this.toast('warn', 'Cento is still working. Press Esc to interrupt, then try again.'); return; }
+    const list = this.o.sessions.list(this.o.cwd, 10);
+    const id = /^\d+$/.test(which) ? list[Number(which) - 1]?.id : which;
+    const saved = id ? this.o.sessions.load(id) : undefined;
+    if (!saved) { this.toast('warn', `No saved conversation "${which}". Type /resume to see the list.`); return; }
+    this.persist(); await this.session?.stop();
+    this.lastItems = undefined; this.set({ items: [], approvals: [] }); this.loadSaved(saved.meta, saved.items);
+    await this.startEngine(saved.meta.resumeToken);
+  }
+  private listSessions() {
+    const list = this.o.sessions?.list(this.o.cwd, 10) ?? [];
+    if (!list.length) { this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: 'No saved conversations in this folder yet.' }); return; }
+    this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: 'Saved conversations in this folder. Type /resume 1 (or another number) to continue one.', detail: list.map((m, i) => `${i + 1}${m.id === this.state.sessionId ? '*' : ' '} ${m.title}  ·  ${m.messages} msg  ·  ${ago(m.updatedAt)}`).join('\n') });
   }
 
   stop() {
+    this.persist();
     this.driver.stop(); this.ghostTimers.forEach(clearTimeout); if (this.verbTimer) clearInterval(this.verbTimer);
     this.toastTimers.forEach(clearTimeout);
     for (const a of this.state.approvals) a.resolve({ decision: 'deny', scope: 'once', reason: 'exit' });
@@ -84,6 +155,7 @@ export class AppController {
 
   /* ------------------------------------------------------------------ events -> state */
   apply(ev: NormalisedEvent) {
+    this.o.onEvent?.(ev);
     const me = this.me;
     switch (ev.type) {
       case 'session.started':
@@ -254,7 +326,8 @@ export class AppController {
     if (!known) { this.toast('warn', `Unknown command /${cmd}. Type / to see the list.`); return; }
     switch (cmd) {
       case 'help': this.set({ mode: 'help' }); break;
-      case 'clear': this.set({ items: [], scroll: 0 }); break;
+      case 'clear': case 'new': await this.newSession(); break;
+      case 'resume': if (arg) await this.resumeSession(arg); else this.listSessions(); break;
       case 'agents': this.set((s) => ({ fleet: !s.fleet })); break;
       case 'quit': this.o.onExit?.(); break;
       case 'interrupt': await this.interrupt(); break;

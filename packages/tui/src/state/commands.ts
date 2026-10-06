@@ -1,7 +1,9 @@
 export interface SlashCommand { name: string; args?: string; desc: string }
 export const COMMANDS: SlashCommand[] = [
   { name: 'help', desc: 'Show keys and commands' },
-  { name: 'clear', desc: 'Clear the transcript' },
+  { name: 'new', desc: 'Start a fresh conversation (the old one stays saved)' },
+  { name: 'clear', desc: 'Same as /new: start fresh with an empty context' },
+  { name: 'resume', args: '[number|id]', desc: 'Continue a saved conversation from this folder' },
   { name: 'agents', desc: 'Show or hide the fleet panel' },
   { name: 'mode', args: '[default|edits|plan|bypass]', desc: 'Set how permissions are asked (bypass = dangerously skip permissions)' },
   { name: 'mascot', args: '[large|small|off|auto]', desc: 'Change how big Cento is' },

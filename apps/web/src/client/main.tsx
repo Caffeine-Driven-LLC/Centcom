@@ -16,9 +16,9 @@ function App() {
   useEffect(() => {
     if (!c.launcher || c.opened) return;
     const q = new URLSearchParams(location.search); const dir = q.get('open');
-    if (dir) { history.replaceState(null, '', location.pathname); c.send({ t: 'open', dir, demo: q.get('demo') === '1', engine: q.get('engine') === 'codex' ? 'codex' : 'claude-code' }); }
+    if (dir) { history.replaceState(null, '', location.pathname); c.send({ t: 'open', dir, demo: q.get('demo') === '1', engine: q.get('engine') === 'codex' ? 'codex' : 'claude-code', resume: q.get('resume') ?? undefined }); }
   }, [c.launcher, c.opened, c]);
   if (c.opened) return <Workspace c={c} />;
-  return <Launcher c={c} onStart={(dir, demo, mode, engine) => { if (mode === 'app') { c.send({ t: 'launchApp', dir, demo, engine }); } else c.send({ t: 'open', dir, demo, engine }); }} />;
+  return <Launcher c={c} onStart={(dir, demo, mode, engine, resume) => { if (mode === 'app') { c.send({ t: 'launchApp', dir, demo, engine, resume }); } else c.send({ t: 'open', dir, demo, engine, resume }); }} />;
 }
 createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>);

@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { detectClaude, detectCodex } from '@centcom/agent';
 import { findAppBrowser, openAsApp, openInBrowser } from './browsers.js';
+import { SessionStore } from '@centcom/tui';
 import { Workspace } from './workspace.js';
 import type { ClientMsg, DirEntry, RecentDir, ServerMsg } from './protocol.js';
 
@@ -56,7 +57,7 @@ const server = createServer((req, res) => {
     'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer', 'cache-control': 'no-store',
   };
   const given = url.searchParams.get('t');
-  if (given && given === TOKEN) { res.writeHead(302, { ...headers, location: url.pathname + (url.searchParams.has('open') ? `?open=${encodeURIComponent(url.searchParams.get('open')!)}${url.searchParams.get('demo') === '1' ? '&demo=1' : ''}${url.searchParams.get('engine') === 'codex' ? '&engine=codex' : ''}` : ''), 'set-cookie': `centcom_t=${TOKEN}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000` }).end(); return; }
+  if (given && given === TOKEN) { res.writeHead(302, { ...headers, location: url.pathname + (url.searchParams.has('open') ? `?open=${encodeURIComponent(url.searchParams.get('open')!)}${url.searchParams.get('demo') === '1' ? '&demo=1' : ''}${url.searchParams.get('engine') === 'codex' ? '&engine=codex' : ''}${url.searchParams.get('resume') ? '&resume=' + encodeURIComponent(url.searchParams.get('resume')!) : ''}` : ''), 'set-cookie': `centcom_t=${TOKEN}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000` }).end(); return; }
   if (cookieTok(req.headers.cookie) !== TOKEN) { res.writeHead(401, { ...headers, 'content-type': 'text/plain; charset=utf-8' }).end('Open Centcom with the link it printed in your terminal (it includes ?t=…).'); return; }
   let file = resolve(DIST, '.' + decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname));
   if (file !== DIST && !file.startsWith(DIST + sep)) { res.writeHead(403, headers).end(); return; }
@@ -92,18 +93,18 @@ wss.on('connection', (ws: WebSocket) => {
           if (current) send({ t: 'opened', dir: current.dir });
           break;
         }
-        case 'browse': send({ t: 'dir', ...listDir(m.path) }); break;
+        case 'browse': { const d = listDir(m.path); send({ t: 'dir', ...d, saved: new SessionStore().list(d.path, 50).length }); break; }
         case 'open': {
-          const dir = resolve(m.dir); const key = `${dir}::${m.demo ? 'demo' : m.engine ?? 'claude-code'}`;
+          const dir = resolve(m.dir); const key = `${dir}::${m.demo ? 'demo' : m.engine ?? 'claude-code'}`; // a second tab joins the running session, so resume only applies to a fresh one
           if (!existsSync(dir) || !statSync(dir).isDirectory()) { send({ t: 'notice', level: 'error', text: 'That folder does not exist.' }); break; }
           detach();
           let w = workspaces.get(key);
-          if (!w) { w = await Workspace.open(dir, !!m.demo, m.engine === 'codex' ? 'codex' : 'claude-code'); workspaces.set(key, w); }
+          if (!w) { w = await Workspace.open(dir, !!m.demo, m.engine === 'codex' ? 'codex' : 'claude-code', m.resume); workspaces.set(key, w); }
           addRecent(dir); current = w; send({ t: 'opened', dir }); leave = w.join(send); // 'opened' first: the client resets its state on it, and join() sends the first snapshot
           break;
         }
         case 'launchApp': {
-          const target = `http://${HOST}:${PORT}/?t=${TOKEN}` + (m.dir ? `&open=${encodeURIComponent(m.dir)}${m.demo ? '&demo=1' : ''}${m.engine === 'codex' ? '&engine=codex' : ''}` : '');
+          const target = `http://${HOST}:${PORT}/?t=${TOKEN}` + (m.dir ? `&open=${encodeURIComponent(m.dir)}${m.demo ? '&demo=1' : ''}${m.engine === 'codex' ? '&engine=codex' : ''}${m.resume ? '&resume=' + encodeURIComponent(m.resume) : ''}` : '');
           if (!openAsApp(target)) send({ t: 'notice', level: 'warn', text: 'No Chrome, Chromium, Brave or Edge found for app mode. Opening in your browser instead.' }), openInBrowser(target);
           break;
         }

@@ -50,8 +50,8 @@
    "note": "external store with batched notifications"
   },
   "C026": {
-   "pct": 0.2,
-   "note": "engines expose resume tokens; nothing persisted yet"
+   "pct": 0.85,
+   "note": "conversations saved and resumed (-c, --resume, /resume, /new, web launcher and palette), verified with real Claude; Codex resume untested"
   },
   "C028": {
    "pct": 1,
@@ -168,40 +168,44 @@
   "C105": {
    "pct": 0.1,
    "note": "login kind shown; no policy table or gate"
+  },
+  "C002": {
+   "pct": 0.8,
+   "note": "GitHub Actions workflow (typecheck, tests, web build, plan and contract lock, progress check); first run not yet seen"
+  },
+  "C050": {
+   "pct": 0.85,
+   "note": "centcom -p with text/json/stream-json, piped input, exit codes; verified with real Claude"
   }
  },
  "next": [
   {
    "title": "Smoke-test the Codex adapter on a real turn",
-   "why": "it passes its tests against Codex's published protocol schema and the real handshake, but no real model turn has run yet (C103); this needs a fresh `codex login`"
+   "why": "it passes its tests against Codex's published protocol schema and the real handshake, but no real model turn has run yet (C103); needs a Codex account"
   },
   {
-   "title": "C002 CI pipeline",
-   "why": "nothing runs typecheck/tests automatically yet; add the contract-lock check and `progress.py --check`"
+   "title": "Confirm the first CI run is green (C002)",
+   "why": "the workflow is written and every step passes locally, but GitHub has not run it yet"
   },
   {
    "title": "C003 generate protocol types from `contracts/`",
    "why": "event and message shapes are hand-typed today (C101, C102, C103 depend on this)"
   },
   {
-   "title": "C026 persist transcripts and resume sessions",
-   "why": "both engines already return resume tokens; restarting the app loses the conversation"
+   "title": "C017 git worktree manager",
+   "why": "lets one session run parallel agents on separate branches; a solo feature that also unlocks the team fleet later"
   },
   {
-   "title": "C017 git worktree manager, then C024 agent fleet",
-   "why": "unlocks the multi-agent story; the fleet panel is only fed demo agents right now"
-  },
-  {
-   "title": "C050 non-interactive mode (print / JSON)",
-   "why": "needed for scripting and for CI use"
-  },
-  {
-   "title": "C007 mock backend, then the M2 LAN lanes (C074, C054-C056, C071-C076)",
-   "why": "starts multiplayer; none of M2 exists yet"
+   "title": "C004 layered configuration and C005 logging",
+   "why": "settings are flags and in-memory today; there are no config files or logs to debug with"
   },
   {
    "title": "Package the web launcher as a real desktop app",
-   "why": "\"Start as app\" opens a chromeless Chromium window (verified); a signed installable app (Electron or Tauri) is still to do"
+   "why": "\"Start as app\" opens a chromeless Chromium window today; a signed installable app (Electron or Tauri) is still to do"
+  },
+  {
+   "title": "Start multiplayer: C074 transport, C007 mock backend, then the M2 LAN lanes",
+   "why": "none of M2 exists yet; this is the product's main bet"
   }
  ]
 }

@@ -32,8 +32,8 @@ export function Help({ onClose }: { onClose: () => void }) {
 
 /* ----------------------------------------------------------------- palette */
 export interface PaletteItem { id: string; label: string; hint?: string; icon?: string; run: () => void; group: string }
-export function Palette({ items, onClose }: { items: PaletteItem[]; onClose: () => void }) {
-  const [q, setQ] = useState(''); const [sel, setSel] = useState(0); const list = useRef<HTMLDivElement>(null);
+export function Palette({ items, onClose, initialQuery = '' }: { items: PaletteItem[]; onClose: () => void; initialQuery?: string }) {
+  const [q, setQ] = useState(initialQuery); const [sel, setSel] = useState(0); const list = useRef<HTMLDivElement>(null);
   const shown = useMemo(() => { const w = q.toLowerCase().split(/\s+/).filter(Boolean); return items.filter((i) => w.every((t) => (i.label + ' ' + (i.hint ?? '') + ' ' + i.group).toLowerCase().includes(t))).slice(0, 40); }, [q, items]);
   useEffect(() => { setSel(0); }, [q]);
   useEffect(() => { list.current?.querySelector('[data-on="true"]')?.scrollIntoView({ block: 'nearest' }); }, [sel]);

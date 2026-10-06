@@ -21,6 +21,7 @@ const tok = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1
 const reset = (at: number, now = Date.now()) => { const t = Math.floor(at - now / 1000); if (!at) return ''; if (t <= 0) return 'now'; const d = Math.floor(t / 86400), h = Math.floor((t % 86400) / 3600), m = Math.floor((t % 3600) / 60); return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}m` : `${Math.max(1, m)}m`; };
 const winName = (n: string) => (n === 'five_hour' ? 'Session' : n === 'seven_day' ? 'Week' : n.replace(/_/g, ' '));
 const level = (pct: number) => (pct >= 90 ? 'bad' : pct >= 70 ? 'warn' : 'ok');
+const agoText = (ms: number) => { const m = Math.round((Date.now() - ms) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
 const spent = (ms: number) => { const s = Math.floor(ms / 1000); return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`; };
 
 const ToolCard = memo(function ToolCard({ it }: { it: Extract<Item, { kind: 'tool' }> }) {
@@ -86,7 +87,7 @@ export function Workspace({ c }: { c: Conn }) {
   const [menu, setMenu] = useState<'model' | 'mode' | null>(null); const [confirmBypass, setConfirmBypass] = useState(false);
   const [stuck, setStuck] = useState(true); const [, tick] = useState(0);
   const [bannerOff, setBannerOff] = useState(false); const [apMin, setApMin] = useState(false);
-  const [ov, setOv] = useState<null | { k: 'palette' } | { k: 'help' } | { k: 'gallery'; name?: string }>(null);
+  const [ov, setOv] = useState<null | { k: 'palette'; q?: string } | { k: 'help' } | { k: 'gallery'; name?: string }>(null);
   const [side, setSide] = useState(() => { try { return localStorage.getItem('centcom.side') !== '0'; } catch { return true; } });
   const [theme, setTheme] = useState<ThemePref>(getThemePref);
   const toggleSide = () => setSide((v) => { const n = !v; try { localStorage.setItem('centcom.side', n ? '1' : '0'); } catch { /* private mode */ } return n; });
@@ -124,6 +125,7 @@ export function Workspace({ c }: { c: Conn }) {
       case 'model': if (!arg) { setMenu('model'); return true; } return false;
       case 'cento': setOv({ k: 'gallery', name: arg || undefined }); return true;
       case 'agents': toggleSide(); return true;
+      case 'resume': if (!arg) { setOv({ k: 'palette', q: 'resume' }); return true; } return false;
       case 'theme': { const n = (arg === 'dark' || arg === 'light' || arg === 'system' ? arg : null) as ThemePref | null; if (n) { setTheme(n); setThemePref(n); } else cycleTheme(); return true; }
       case 'quit': send({ t: 'close' }); return true;
       default: return false;
@@ -149,6 +151,8 @@ export function Workspace({ c }: { c: Conn }) {
     { id: 'a:cento', group: 'View', icon: 'spark', label: 'Browse the Cento animations', hint: '/cento', run: () => setOv({ k: 'gallery' }) },
     { id: 'a:auto', group: 'Agent', icon: 'spark', label: `Auto skills: turn ${s.settings.autoSkills ? 'off' : 'on'}`, run: () => send({ t: 'auto', on: !s.settings.autoSkills }) },
     ...(s.busy ? [{ id: 'a:stop', group: 'Agent', icon: 'stop', label: 'Interrupt the agent', hint: 'Esc', run: () => send({ t: 'interrupt' }) }] : []),
+    { id: 's:new', group: 'Conversation', icon: 'spark', label: 'New conversation', hint: 'the current one stays saved', run: () => send({ t: 'submit', text: '/new' }) },
+    ...s.sessions.filter((m) => m.id !== s.sessionId).map((m) => ({ id: 's:' + m.id, group: 'Conversation', icon: 'file', label: `Resume: ${m.title}`, hint: `${m.messages} msg · ${agoText(m.updatedAt)}`, run: () => send({ t: 'submit', text: '/resume ' + m.id }) })),
     { id: 'a:back', group: 'Project', icon: 'back', label: 'Back to projects', run: () => send({ t: 'close' }) },
     ...MODES.map((m) => ({ id: 'm:' + m.id, group: 'Mode', icon: m.icon, label: `Mode: ${m.title}`, hint: m.desc, run: () => setMode(m.id) })),
     { id: 'm:bypass', group: 'Mode', icon: 'shieldOff', label: 'Mode: Dangerously skip permissions', hint: 'asks you to confirm', run: () => { setMenu('mode'); setConfirmBypass(true); } },
@@ -234,7 +238,7 @@ export function Workspace({ c }: { c: Conn }) {
         </aside>}
       </div>
       <StatusBar s={s} me={me} />
-      {ov?.k === 'palette' && <Palette items={cmds} onClose={() => setOv(null)} />}
+      {ov?.k === 'palette' && <Palette items={cmds} initialQuery={ov.q} onClose={() => setOv(null)} />}
       {ov?.k === 'help' && <Help onClose={() => setOv(null)} />}
       {ov?.k === 'gallery' && <Gallery initial={ov.name} onClose={() => setOv(null)} />}
     </div>

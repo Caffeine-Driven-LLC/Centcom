@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { ClaudeCodeEngine, CodexEngine, DemoEngine, type AgentEngine } from '@centcom/agent';
-import { AppController, type Item } from '@centcom/tui';
+import { AppController, SessionStore, type Item } from '@centcom/tui';
 import type { ServerMsg, WebState } from './protocol.js';
 
 /** One running agent session for one directory, shared by every browser tab or app window that opens it. */
@@ -15,10 +15,10 @@ export class Workspace {
     this.unsub = ctl.store.subscribe(() => this.push());
   }
 
-  static async open(dir: string, demo: boolean, which: 'claude-code' | 'codex' = 'claude-code'): Promise<Workspace> {
+  static async open(dir: string, demo: boolean, which: 'claude-code' | 'codex' = 'claude-code', resume?: string): Promise<Workspace> {
     const engine: AgentEngine = demo ? new DemoEngine({ speed: 1 }) : which === 'codex' ? new CodexEngine() : new ClaudeCodeEngine();
     let branch = ''; try { branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { /* not a repo */ }
-    const ctl = new AppController({ engine, demo, cwd: dir, branch, version: '0.1.0', ghosts: false, permissionMode: 'default' });
+    const ctl = new AppController({ engine, demo, cwd: dir, branch, version: '0.1.0', ghosts: false, permissionMode: 'default', sessions: demo ? undefined : new SessionStore(), resume: demo ? undefined : resume });
     const ws = new Workspace(dir, ctl);
     await ctl.start();
     return ws;
