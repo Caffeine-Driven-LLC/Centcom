@@ -1,0 +1,1 @@
+{ "id": "notify-on-approval", "title": "Notify when approval is needed", "description": "Runs `centcom notify` when Claude Code asks for your attention.", "event": "Notification", "command": "centcom notify --kind approval", "timeout_s": 10 }
