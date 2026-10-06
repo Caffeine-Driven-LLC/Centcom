@@ -44,7 +44,7 @@ export function Palette({ items, onClose, initialQuery = '' }: { items: PaletteI
         <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Type a command, model or setting" aria-label="Search commands" spellCheck={false}
           onKeyDown={(e) => { if (e.key === 'ArrowDown') { e.preventDefault(); setSel((x) => Math.min(shown.length - 1, x + 1)); } else if (e.key === 'ArrowUp') { e.preventDefault(); setSel((x) => Math.max(0, x - 1)); } else if (e.key === 'Enter') { e.preventDefault(); run(shown[sel]); } else if (e.key === 'Escape') onClose(); }} />
         <div className="plist" ref={list} role="listbox">
-          {shown.length === 0 && <div className="empty small"><b>Nothing matches</b><span>Try a shorter word.</span></div>}
+          {shown.length === 0 && <div className="empty small"><b>Nothing matches.</b><span>Try fewer words or check the spelling.</span></div>}
           {shown.map((i, n) => (
             <button key={i.id} role="option" aria-selected={n === sel} data-on={n === sel} className="pitem" onMouseMove={() => setSel(n)} onClick={() => run(i)}>
               <Icon name={i.icon ?? 'terminal'} size={15} /><span className="pl">{i.label}</span>{i.hint && <small>{i.hint}</small>}<span className="grow" /><small className="pg">{i.group}</small>

@@ -4,7 +4,10 @@ import { execFileSync } from 'node:child_process';
 import { render } from 'ink';
 import { detectColorTier } from '@centcom/theme';
 import { ClaudeCodeEngine, CodexEngine, DemoEngine, detectClaude, detectCodex, type AgentEngine, type PermissionMode } from '@centcom/agent';
-import { App, AppController, ClientConfig, SessionStore, buildRuntime, initialSettings, settingsFromConfig } from '@centcom/tui';
+import { App, AppController, ClientConfig, FirstRun, SessionStore, buildRuntime, initialSettings, isFirstRun, markFirstRunDone, settingsFromConfig } from '@centcom/tui';
+import { join as pathJoin } from 'node:path';
+import { homedir } from 'node:os';
+import { stateDir } from '@centcom/config';
 import type { FlatFlags } from '@centcom/config';
 import { createAppLogger } from '@centcom/net';
 import type { CentoColor } from '@centcom/mascot';
@@ -12,6 +15,7 @@ import { buildPrompt, readStdin, runPrint } from './print.js';
 import { runProviderCli } from './commands/provider/cli.js';
 import { makeMemoryFiles, runMemoryCli } from './commands/memory/cli.js';
 import { appViews } from './views.js';
+import { runInitCli } from './commands/init.js';
 import { makeTelemetry, runTelemetry } from './commands/telemetry.js';
 import { defaultDeps, loadConfig } from '@centcom/config';
 import { runMcpCli } from './commands/mcp/cli.js';
@@ -22,6 +26,7 @@ const HELP = `centcom ${VERSION}: command many hands
 
 Usage
   centcom [options]            start the terminal app in this directory
+  centcom init [--yes] [--force] [--dry-run]   set this project up (config, memory file, git exclude); safe to run again
   centcom memory show|add|edit|status|sync   edit CLAUDE.md and AGENTS.md (a line starting with "# " in the app adds a note)
   centcom mcp list|add|remove|status|test   manage MCP servers for Claude Code and Codex
   centcom hooks list|add|remove|validate|templates   manage Claude Code hooks (the tool runs them, Centcom only edits the settings)
@@ -89,9 +94,10 @@ async function main() {
   if (process.argv[2] === 'telemetry') process.exit(await runTelemetry(process.argv.slice(3), { out: (l) => console.log(l), err: (l) => console.error(l), version: VERSION }));
   // anonymous counts of which command ran, only when you turned telemetry on (docs/telemetry.md)
   const cfg0 = await loadConfig(defaultDeps()).catch(() => undefined); const tm = makeTelemetry({ enabled: !!cfg0?.telemetry.enabled, baseUrl: cfg0?.api.base_url ?? 'https://api.centcom.dev', version: VERSION });
-  const sub = ['provider', 'memory', 'mcp', 'hooks'].includes(process.argv[2] ?? '') ? process.argv[2]! : has('-p') || has('--print') ? 'print' : 'tui'; tm.appStart(); tm.commandRun(sub);
+  const sub = ['provider', 'memory', 'mcp', 'hooks', 'init'].includes(process.argv[2] ?? '') ? process.argv[2]! : has('-p') || has('--print') ? 'print' : 'tui'; tm.appStart(); tm.commandRun(sub);
   const done = async (code: number) => { tm.appExit(); await tm.flush(2000); process.exit(code); };
   if (process.argv[2] === 'provider') await done(await runProviderCli(process.argv.slice(3)));
+  if (process.argv[2] === 'init') await done(await runInitCli(process.argv.slice(3)));
   if (process.argv[2] === 'memory') await done(await runMemoryCli(process.argv.slice(3)));
   if (process.argv[2] === 'mcp') await done(await runMcpCli(process.argv.slice(3)));
   if (process.argv[2] === 'hooks') await done(await runHooksCli(process.argv.slice(3)));
@@ -136,12 +142,19 @@ async function main() {
     },
   });
   process.stdout.write('\x1b[?1049h\x1b[2J\x1b[H'); // alternate screen: the transcript never pollutes scrollback
+  // the one-time welcome, before anything else (never in print mode or without a terminal)
+  const firstRunFile = pathJoin(stateDir({ env: process.env, homedir: homedir() }), 'state.json'); let firstRunNote: string | undefined;
+  if (!has('--demo') && await isFirstRun({ stateFile: firstRunFile })) {
+    await new Promise<void>((done) => { const fr = render(<FirstRun onDone={() => { fr.unmount(); done(); }} width={process.stdout.columns ?? 80} height={process.stdout.rows ?? 24} tier={tier} mascotAllowed={settings.mascot !== 'off'} reducedMotion={settings.reducedMotion} color={settings.color} theme={settings.theme} />, { exitOnCtrlC: true, patchConsole: false }); });
+    const r = await markFirstRunDone({ stateFile: firstRunFile }); if (!r.ok) firstRunNote = r.message; process.stdout.write('\x1b[2J\x1b[H');
+  }
   const leave = () => process.stdout.write('\x1b[?1049l');
   process.on('exit', leave);
   rt.bind(ctl);
   await ctl.start();
   if (note) ctl.notice('warn', note);
   for (const w of rt.warnings) ctl.notice('warn', w);
+  if (firstRunNote) ctl.notice('warn', firstRunNote);
   for (const w of cc.warnings) { ctl.notice('warn', 'Settings: ' + w); process.stderr.write('centcom: settings: ' + w + '\n'); }
   cc.onWarn = (w) => ctl.notice('warn', 'Settings: ' + w);
   if (mode === 'bypassPermissions') ctl.notice('warn', 'Dangerously skip permissions is ON', 'Cento will run commands and edit files without asking. Use /mode default to turn approvals back on.');

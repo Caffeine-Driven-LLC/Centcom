@@ -57,7 +57,7 @@ export function createWorktreeManager(d: WorktreeDeps): WorktreeManager {
       if (r0.entries[o.agentId] && (await d.fs.exists(r0.entries[o.agentId]!.path))) throw new WorktreeError('duplicate_agent', 'That agent already has a worktree.');
       let base = o.baseRef; if (!base) { const cur = await git(['symbolic-ref', '--short', '-q', 'HEAD'], repo, T.read); base = cur.code === 0 && cur.stdout.trim() ? cur.stdout.trim() : 'HEAD'; } await checkRef(repo, base);
       const exclude = (await ok(['rev-parse', '--git-path', 'info/exclude'], repo)).trim(); const rel = portable(root).startsWith(portable(repo) + '/') ? '/' + portable(root).slice(portable(repo).length + 1) + '/' : undefined;
-      await d.fs.appendLineOnce(resolve(repo, exclude), '/.centcom/'); if (rel && !rel.startsWith('/.centcom/')) await d.fs.appendLineOnce(resolve(repo, exclude), rel);
+      await d.fs.appendLineOnce(resolve(repo, exclude), '/.centcom/*'); /* the contents, not the folder, so the shared project config can be re-included (centcom init) */ if (rel && !rel.startsWith('/.centcom/')) await d.fs.appendLineOnce(resolve(repo, exclude), rel);
       const owner = slug(o.ownerSlug, 'owner'); const agent = slug(o.label ?? o.agentId, 'agent', 56);
       for (let n = 1; n <= MAX_NAMES; n++) {
         const suffix = n === 1 ? '' : `-${n}`; const branch = `centcom/${owner}/${agent}${suffix}`; const path = join(root, `${owner}-${agent}${suffix}`);

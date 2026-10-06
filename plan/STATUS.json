@@ -130,8 +130,8 @@
    "note": "/theme /mascot /color /motion /mode"
   },
   "C048": {
-   "pct": 0.3,
-   "note": "welcome screen only; no init flow"
+   "pct": 1.0,
+   "note": "first-run screen (once, interactive only, Cento waving or ASCII, one sentence, one command), state.json, centcom init (config, memory file, exclude, idempotent, dry run, force with .bak, non-TTY rules), empty states in the app and web"
   },
   "C049": {
    "pct": 0.5,

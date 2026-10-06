@@ -39,7 +39,7 @@ export function createRuleStore(d: RuleStoreDeps): RuleStore {
       if (r.scope === 'session') { session.push(rule); return rule; }
       if (r.scope === 'user') { const next = [...user, rule]; await save(d.userRulesPath, next); user = next; return rule; }
       if (!root) throw new Error('a project rule needs a project folder'); const next = [...(project.get(root) ?? []), rule]; const text = await save(projectFile(root), next); project.set(root, next); untrusted.delete(root);
-      await d.trust.trust('project-rules', sha(text), 'permissions.local.json (written by Centcom)'); await d.fs.appendLineOnce(join(root, '.git', 'info', 'exclude'), '/.centcom/').catch(() => undefined); return rule;
+      await d.trust.trust('project-rules', sha(text), 'permissions.local.json (written by Centcom)'); await d.fs.appendLineOnce(join(root, '.git', 'info', 'exclude'), '/.centcom/*').catch(() => undefined); return rule;
     },
     async remove(id) {
       const s = session.findIndex((x) => x.id === id); if (s >= 0) { session.splice(s, 1); return true; }

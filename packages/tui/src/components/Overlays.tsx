@@ -1,3 +1,4 @@
+import { emptyText } from '../onboarding/copy.js';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Box } from 'ink';
 import { bakedByCategory, bakedCategories, bakedNames, getBaked, recolorBaked, CENTO_COLORS, type BakedAnimation } from '@centcom/mascot';
@@ -29,7 +30,7 @@ export function Palette({ query, sel, width }: { query: string; sel: number; wid
     <Box width={width} justifyContent="center"><Box flexDirection="column" width={w} borderStyle="round" borderColor={col('accent.primary')} paddingX={1}>
       <Rich line={[sp('› ', { c: 'accent.hover', b: true }), sp(query, { c: 'text.primary' }), sp('▏', { c: 'signal' }), ...(query ? [] : [sp('type to filter commands and animations', { c: 'text.muted' })])]} />
       <Box height={1} />
-      {items.length === 0 ? <Rich line={[sp('Nothing matches.', { c: 'text.muted' })]} /> : items.map((it, i) => {
+      {items.length === 0 ? <Rich line={[sp(emptyText('no-results', query), { c: 'text.muted' })]} /> : items.map((it, i) => {
         const on = i === sel % items.length;
         return <Rich key={it.id} line={[sp(on ? '▸ ' : '  ', { c: 'accent.hover', b: true }), sp(truncate(it.label, 36), { c: on ? 'text.primary' : 'text.secondary', b: on, bg: on ? 'bg.selected' : undefined }), sp('  ' + truncate(it.hint, w - 46), { c: 'text.muted' })]} />;
       })}

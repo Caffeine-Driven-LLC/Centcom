@@ -10,7 +10,7 @@ describe('create', () => {
   it('makes a folder under .centcom/worktrees and a centcom/ branch, leaves the main checkout clean, and excludes the root once', async () => {
     const repo = mkRepo(); const { w, r } = await make(repo); expect(w.path.startsWith(join(repo, '.centcom', 'worktrees'))).toBe(true); expect(existsSync(w.path)).toBe(true); expect(w.branch).toBe('centcom/ada/fix-login'); expect(w.baseRef).toBe('main');
     expect(sh(repo, 'worktree', 'list', '--porcelain')).toContain(w.path); expect(sh(repo, 'branch', '--list', w.branch)).toContain('centcom/ada/fix-login'); expect(sh(repo, 'status', '--porcelain')).toBe('');
-    await r.m.create({ repoRoot: repo, agentId: ID(2), ownerSlug: 'ada', label: 'other' }); expect(readFileSync(join(repo, '.git', 'info', 'exclude'), 'utf8').split('\n').filter((l) => l === '/.centcom/')).toHaveLength(1); expect(sh(repo, 'status', '--porcelain')).toBe('');
+    await r.m.create({ repoRoot: repo, agentId: ID(2), ownerSlug: 'ada', label: 'other' }); expect(readFileSync(join(repo, '.git', 'info', 'exclude'), 'utf8').split('\n').filter((l) => l === '/.centcom/*')).toHaveLength(1); expect(sh(repo, 'status', '--porcelain')).toBe('');
   });
   it('the worktree starts at the base ref and the registry records it', async () => {
     const repo = mkRepo(); sh(repo, 'branch', 'dev'); const { w } = await make(repo, 1, { baseRef: 'dev' }); expect(w.baseRef).toBe('dev'); const reg = JSON.parse(readFileSync(join(repo, '.centcom', 'worktrees.json'), 'utf8')); expect(reg.entries[ID(1)]).toMatchObject({ branch: w.branch, base_ref: 'dev' }); expect(reg.entries[ID(1)].created_at).toMatch(/Z$/);

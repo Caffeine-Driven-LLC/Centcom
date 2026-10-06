@@ -14,6 +14,7 @@ import type { AgentEngine, ApprovalDecision, ApprovalRequest, EngineSession, Nor
 import { Store } from './state/store.js';
 import { initialSettings, isBusyState, stateToMini, type AgentView, type AppState, type Item, type PendingApproval, type Settings } from './state/model.js';
 import { COMMANDS } from './state/commands.js';
+import { emptyText } from './onboarding/copy.js';
 import { VerbRotator } from './util/verbs.js';
 
 export interface ControllerOptions {
@@ -183,7 +184,7 @@ export class AppController {
   }
   private listSessions() {
     const list = this.o.sessions?.list(this.o.cwd, 10) ?? [];
-    if (!list.length) { this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: 'No saved conversations in this folder yet.' }); return; }
+    if (!list.length) { this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: emptyText('no-sessions') }); return; }
     this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: 'Saved conversations in this folder. Type /resume 1 (or another number) to continue one.', detail: list.map((m, i) => `${i + 1}${m.id === this.state.sessionId ? '*' : ' '} ${m.title}  ·  ${m.messages} msg  ·  ${ago(m.updatedAt)}`).join('\n') });
   }
 
