@@ -2,7 +2,52 @@
 
 Command many hands. A terminal-first, multiplayer platform for running coding agents (it drives your own Claude Code and Codex CLIs; we never touch your login): several people and several agents in one workspace, over LAN or a hosted relay. Mascot: **Cento** the octopus.
 
-> Status: planning complete, building starts at gate G0. See [`plan/`](plan/README.md).
+> Status: **building.** The terminal app (with Cento), the Claude Code and Codex engines, real approvals, the local web app and auto skills work today. Multiplayer, accounts and the backend are still plans. See [Progress](#progress) and [`plan/`](plan/README.md).
+
+
+<!-- progress:start -->
+
+## Progress
+
+![Progress](docs/progress.svg)
+
+**29% built** (weighted by lane size across 105 lanes). Details and how this is computed: [`tools/plan/progress.py`](tools/plan/progress.py). Update [`plan/STATUS.json`](plan/STATUS.json) when you finish or advance a lane, then run `python3 tools/plan/progress.py`.
+
+## Next steps
+
+1. **Run `codex login`, then smoke-test a real Codex turn** — the adapter is built from the real protocol schema and passes its tests, but your stored Codex token has expired so no real turn has run (C103)
+2. **C002 CI pipeline** — nothing runs typecheck/tests automatically yet; add the contract-lock check and `progress.py --check`
+3. **C003 generate protocol types from `contracts/`** — event and message shapes are hand-typed today (C101, C102, C103 depend on this)
+4. **C026 persist transcripts and resume sessions** — both engines already return resume tokens; restarting the app loses the conversation
+5. **C017 git worktree manager, then C024 agent fleet** — unlocks the multi-agent story; the fleet panel is only fed demo agents right now
+6. **C050 non-interactive mode (print / JSON)** — needed for scripting and for CI use
+7. **C007 mock backend, then the M2 LAN lanes (C074, C054-C056, C071-C076)** — starts multiplayer; none of M2 exists yet
+8. **Package the web launcher as a real desktop app** — "Start as app" opens a chromeless browser window today; it is also untested end to end
+
+### Started, not finished
+
+| Lane | What | Done | Note |
+|---|---|--:|---|
+| [C102](plan/client/C102.md) | Claude Code engine: drive the user’s own claude binary (stream-json, resume, approvals bridge) | 90% | claude stream-json, approvals bridge, resume token, interrupt; no version-range check |
+| [C035](plan/client/C035.md) | Prompt input: multiline, history, paste, slash commands | 85% | multiline, history, paste, slash popup; no external editor |
+| [C101](plan/client/C101.md) | Engine abstraction: AgentEngine interface, capabilities and normalised event stream | 85% | AgentEngine + normalised events; not yet generated from contracts |
+| [C016](plan/client/C016.md) | Command risk classification and sandbox settings passed to the engines | 80% | command risk classes; Codex sandbox/approval policy per mode |
+| [C020](plan/client/C020.md) | Skills pack: install and manage Claude Code skills and Codex AGENTS.md guidance | 80% | auto skills + centcom-master (208 skills); no Codex AGENTS.md install |
+| [C029](plan/client/C029.md) | Usage and cost display from engine reports | 80% | tokens, estimated cost, 5h/7d limits |
+| [C042](plan/client/C042.md) | Fleet panel: agent list, states, needs-you ordering | 80% | fleet panel with mini Cento; fed by demo ghosts only |
+| [C047](plan/client/C047.md) | Settings commands: theme, mascot, spinner, motion, density | 80% | /theme /mascot /color /motion /mode |
+
++19 more in [`plan/STATUS.json`](plan/STATUS.json).
+
+### Ready to pick up (all dependencies done)
+
+| Lane | What | Size | Milestone |
+|---|---|---|---|
+| [C043](plan/client/C043.md) | Task list and progress components | S | M1 |
+
+Each lane card lists its goal, contracts, acceptance criteria and tests. Read [`plan/START_HERE.md`](plan/START_HERE.md) first.
+
+<!-- progress:end -->
 
 ## What is in this repo
 

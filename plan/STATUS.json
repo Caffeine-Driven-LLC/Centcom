@@ -1,0 +1,207 @@
+{
+ "updated": "2026-10-06",
+ "lanes": {
+  "C001": {
+   "pct": 0.6,
+   "note": "pnpm workspaces, strict TS, vitest; no lint/dependency-direction rules yet"
+  },
+  "C006": {
+   "pct": 0.3,
+   "note": "ProviderError codes and friendly messages only"
+  },
+  "C008": {
+   "pct": 0.6,
+   "note": "vitest plus tools/dev/shot.py pty screenshots; no snapshot assertions yet"
+  },
+  "C009": {
+   "pct": 1,
+   "note": "theme + mascot packages (319 baked animations, runtime sprite engine)"
+  },
+  "C011": {
+   "pct": 0.3,
+   "note": "demo engine and fixtures; no one-command dev env"
+  },
+  "C013": {
+   "pct": 0.5,
+   "note": "engines run in-process, not as a daemon"
+  },
+  "C014": {
+   "pct": 0.6,
+   "note": "state names mapped in parsers and controller"
+  },
+  "C015": {
+   "pct": 0.7,
+   "note": "modes, session rules, real approval bridge; no persisted \"always\" rules"
+  },
+  "C016": {
+   "pct": 0.8,
+   "note": "command risk classes; Codex sandbox/approval policy per mode"
+  },
+  "C019": {
+   "pct": 0.6,
+   "note": "usage and context % shown; no compaction request"
+  },
+  "C020": {
+   "pct": 0.8,
+   "note": "auto skills + centcom-master (208 skills); no Codex AGENTS.md install"
+  },
+  "C025": {
+   "pct": 0.5,
+   "note": "external store with batched notifications"
+  },
+  "C026": {
+   "pct": 0.2,
+   "note": "engines expose resume tokens; nothing persisted yet"
+  },
+  "C028": {
+   "pct": 1,
+   "note": "ctrl+o and /model, web menu"
+  },
+  "C029": {
+   "pct": 0.8,
+   "note": "tokens, estimated cost, 5h/7d limits"
+  },
+  "C030": {
+   "pct": 1,
+   "note": "Esc / ctrl+c / Stop, both engines"
+  },
+  "C031": {
+   "pct": 1,
+   "note": "truecolor/256/16/none, NO_COLOR"
+  },
+  "C032": {
+   "pct": 1,
+   "note": "Abyss and Shallows themes"
+  },
+  "C033": {
+   "pct": 1,
+   "note": "half-block renderer, Cento component"
+  },
+  "C034": {
+   "pct": 1,
+   "note": "Ink shell, responsive layouts"
+  },
+  "C035": {
+   "pct": 0.85,
+   "note": "multiline, history, paste, slash popup; no external editor"
+  },
+  "C036": {
+   "pct": 0.7,
+   "note": "own wrapping and scroll anchoring; not virtualised yet"
+  },
+  "C037": {
+   "pct": 1,
+   "note": "unified diff view in transcript and approvals"
+  },
+  "C038": {
+   "pct": 1,
+   "note": "approval dialog with diff, risk and high-risk confirm"
+  },
+  "C039": {
+   "pct": 1,
+   "note": "status line"
+  },
+  "C040": {
+   "pct": 1,
+   "note": "spinner and verb rotation"
+  },
+  "C041": {
+   "pct": 1,
+   "note": "ctrl+k palette"
+  },
+  "C042": {
+   "pct": 0.8,
+   "note": "fleet panel with mini Cento; fed by demo ghosts only"
+  },
+  "C044": {
+   "pct": 1,
+   "note": "toasts"
+  },
+  "C045": {
+   "pct": 0.6,
+   "note": "help screen; no rebinding"
+  },
+  "C046": {
+   "pct": 1,
+   "note": "mascot driver with dwell, one-shot and reduced-motion rules"
+  },
+  "C047": {
+   "pct": 0.8,
+   "note": "/theme /mascot /color /motion /mode"
+  },
+  "C048": {
+   "pct": 0.3,
+   "note": "welcome screen only; no init flow"
+  },
+  "C049": {
+   "pct": 0.5,
+   "note": "reduced motion and NO_COLOR; no screen-reader mode"
+  },
+  "C081": {
+   "pct": 0.7,
+   "note": "Vite + React local web app; no router"
+  },
+  "C083": {
+   "pct": 0.4,
+   "note": "workspace view with approvals; single local session"
+  },
+  "C086": {
+   "pct": 1,
+   "note": "canvas Cento player"
+  },
+  "C101": {
+   "pct": 0.85,
+   "note": "AgentEngine + normalised events; not yet generated from contracts"
+  },
+  "C102": {
+   "pct": 0.9,
+   "note": "claude stream-json, approvals bridge, resume token, interrupt; no version-range check"
+  },
+  "C103": {
+   "pct": 0.75,
+   "note": "codex app-server engine tested against a protocol-faithful fake and the real handshake; no real turn yet"
+  },
+  "C104": {
+   "pct": 0.6,
+   "note": "detect and status for both; no login/logout/doctor"
+  },
+  "C105": {
+   "pct": 0.1,
+   "note": "login kind shown; no policy table or gate"
+  }
+ },
+ "next": [
+  {
+   "title": "Run `codex login`, then smoke-test a real Codex turn",
+   "why": "the adapter is built from the real protocol schema and passes its tests, but your stored Codex token has expired so no real turn has run (C103)"
+  },
+  {
+   "title": "C002 CI pipeline",
+   "why": "nothing runs typecheck/tests automatically yet; add the contract-lock check and `progress.py --check`"
+  },
+  {
+   "title": "C003 generate protocol types from `contracts/`",
+   "why": "event and message shapes are hand-typed today (C101, C102, C103 depend on this)"
+  },
+  {
+   "title": "C026 persist transcripts and resume sessions",
+   "why": "both engines already return resume tokens; restarting the app loses the conversation"
+  },
+  {
+   "title": "C017 git worktree manager, then C024 agent fleet",
+   "why": "unlocks the multi-agent story; the fleet panel is only fed demo agents right now"
+  },
+  {
+   "title": "C050 non-interactive mode (print / JSON)",
+   "why": "needed for scripting and for CI use"
+  },
+  {
+   "title": "C007 mock backend, then the M2 LAN lanes (C074, C054-C056, C071-C076)",
+   "why": "starts multiplayer; none of M2 exists yet"
+  },
+  {
+   "title": "Package the web launcher as a real desktop app",
+   "why": "\"Start as app\" opens a chromeless browser window today; it is also untested end to end"
+  }
+ ]
+}
