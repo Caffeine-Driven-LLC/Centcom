@@ -45,10 +45,11 @@ export function discover(opts: { cwd: string; home?: string }): Skill[] {
   return [...found.values()];
 }
 
-const STOP = new Set('a an the and or but of to in on at for with from by is are was were be been it this that these those i me my we our you your do does did can could should would will just please then than so as if into out up about make want need get let add use using how what when where why which who not no yes new'.split(' '));
+const STOP = new Set('a an the and or but of to in on at for with from by is are was were be been it this that these those i me my we our you your do does did can could should would will just please then set than so as if into out up about make want need get let add use using how what when where why which who not no yes new'.split(' '));
 const stem = (w: string) => w.replace(/(ing|ed|es|s)$/, (m, _x, off) => (off >= 3 ? '' : m)).replace(/([^aeiou])\1$/, '$1');
+const SYN: Record<string, string> = { fail: 'fail', failure: 'fail', failing: 'fail', failed: 'fail', broke: 'bug', broken: 'bug', crash: 'bug', crashes: 'bug', debug: 'bug', debugging: 'bug', bugs: 'bug', slow: 'perf', performance: 'perf', faster: 'perf', speed: 'perf', secure: 'security', vulnerability: 'security', vulnerabilities: 'security', ui: 'frontend', ux: 'frontend', css: 'frontend', layout: 'frontend' };
 export function tokens(text: string): string[] {
-  return text.toLowerCase().replace(/[^a-z0-9\s-]/g, ' ').split(/[\s-]+/).filter((w) => w.length > 2 && !STOP.has(w)).map(stem);
+  return text.toLowerCase().replace(/[^a-z0-9\s-]/g, ' ').split(/[\s-]+/).filter((w) => w.length > 2 && !STOP.has(w)).map((w) => SYN[w] ?? stem(w));
 }
 
 export interface MatchOptions { max?: number; minScore?: number }
@@ -84,6 +85,8 @@ export function match(prompt: string, skills: Skill[], opts: MatchOptions = {}):
 /** Text prepended to the prompt that goes to the engine. The transcript keeps the user's original words. */
 export function injection(picks: Pick[]): string {
   if (!picks.length) return '';
-  const lines = picks.map((p) => p.skill.kind === 'skill' ? `- Use the "${p.skill.name}" skill (Skill tool): ${p.skill.description.slice(0, 160)}` : `- Follow the instructions of the /${p.skill.name} command: ${p.skill.description.slice(0, 160)}`);
+  const lines = picks.map((p) => p.skill.source === 'master' ? `- Read ${p.skill.path} and follow it: ${p.skill.description.replace(/\s+/g, ' ').slice(0, 160)}` : p.skill.kind === 'skill' ? `- Use the "${p.skill.name}" skill (Skill tool): ${p.skill.description.slice(0, 160)}` : `- Follow the instructions of the /${p.skill.name} command: ${p.skill.description.slice(0, 160)}`);
   return `[Centcom auto skills: the user's tooling matched these to the request below. Apply them where they genuinely fit; ignore any that do not.]\n${lines.join('\n')}\n\n`;
 }
+
+export * from './master.js';

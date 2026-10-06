@@ -10,6 +10,7 @@
     "react": "^19.0.0",
     "@centcom/theme": "workspace:*",
     "@centcom/mascot": "workspace:*",
-    "@centcom/agent": "workspace:*"
+    "@centcom/agent": "workspace:*",
+    "@centcom/skills": "workspace:*"
   }
 }

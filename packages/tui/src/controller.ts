@@ -4,7 +4,7 @@
  * The React tree only reads the store and calls the controller's methods.
  */
 import { CLAUDE_MODELS, modelLabel } from '@centcom/agent';
-import { discover, injection, match, type Skill } from '@centcom/skills';
+import { MASTER_DIR, discover, injection, masterSkills, match, setEnabled, type Skill } from '@centcom/skills';
 import { MascotDriver, bakedByCategory, bakedCategories, getBaked, type CentoColor } from '@centcom/mascot';
 import type { AgentEngine, ApprovalDecision, ApprovalRequest, EngineSession, NormalisedEvent, PermissionGate, PermissionMode } from '@centcom/agent';
 import { Store } from './state/store.js';
@@ -64,7 +64,7 @@ export class AppController {
     this.driver.start();
     this.driver.setState(this.o.demo ? 'ready' : 'ready');
     const gate: PermissionGate = { decide: (r) => this.decide(r) };
-    this.session = await this.o.engine.start({ agentId: this.me, cwd: this.o.cwd, permissionMode: this.state.settings.permissionMode, model: this.state.settings.model || undefined, approvalGate: gate });
+    this.session = await this.o.engine.start({ agentId: this.me, cwd: this.o.cwd, permissionMode: this.state.settings.permissionMode, model: this.state.settings.model || undefined, addDirs: this.o.demo ? undefined : [MASTER_DIR], approvalGate: gate });
     void this.consume(this.session);
     if (this.o.ghosts) this.startGhosts();
     this.verbTimer = setInterval(() => { if (this.state.busy) this.set({ verb: this.verbs.next() }); }, 4200);
@@ -201,7 +201,12 @@ export class AppController {
   }
 
   private skillCache?: Skill[];
-  skills(): Skill[] { return (this.skillCache ??= this.o.skills ?? discover({ cwd: this.o.cwd })); }
+  /** Your own skills first; bundled ones fill in, skipping any you already have under the same name. */
+  private loadSkills(): Skill[] {
+    const own = discover({ cwd: this.o.cwd }); const have = new Set(own.map((k) => k.name.toLowerCase()));
+    return [...own, ...masterSkills().filter((k) => !have.has(k.name.split('--').slice(1).join('--').toLowerCase()))];
+  }
+  skills(): Skill[] { return (this.skillCache ??= this.o.skills ?? this.loadSkills()); }
 
   async interrupt() {
     if (!this.state.busy) return;
@@ -254,6 +259,8 @@ export class AppController {
         this.toast('info', on ? `Auto skills on (${this.skills().length} found)` : 'Auto skills off'); break;
       }
       case 'skills': {
+        const sub = /^(enable|disable)\s+(.+)$/i.exec(arg);
+        if (sub) { this.toast('info', setEnabled(sub[2]!.trim(), sub[1]!.toLowerCase() === 'enable')); this.skillCache = undefined; break; }
         const f = arg.toLowerCase(); const all = this.skills().filter((k) => !f || (k.name + ' ' + k.description).toLowerCase().includes(f));
         this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: `${all.length} skill${all.length === 1 ? '' : 's'} and commands${f ? ` matching "${f}"` : ''} · auto skills ${this.state.settings.autoSkills ? 'on' : 'off'}`, detail: all.slice(0, 14).map((k) => `${k.kind === 'command' ? '/' : ''}${k.name}  (${k.source})`).join('\n') + (all.length > 14 ? `\n+${all.length - 14} more` : '') });
         break;

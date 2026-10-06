@@ -1,0 +1,246 @@
+# skill	repo	flags   (flags: sub variant mcp cc ccx nosrc lowconf terse handoff budget). Source: the 243-skill list from the project owner, Oct 2026.
+frontend-design	anthropics/skills	
+web-design-guidelines	vercel-labs/agent-skills	
+vercel-react-best-practices	vercel-labs/agent-skills	
+vercel-composition-patterns	vercel-labs/agent-skills	
+vercel-react-native-skills	vercel-labs/agent-skills	
+vercel-react-view-transitions	vercel-labs/agent-skills	
+impeccable	pbakaus/impeccable	
+polish	pbakaus/impeccable	sub
+critique	pbakaus/impeccable	sub
+audit	pbakaus/impeccable	sub
+animate	pbakaus/impeccable	sub
+adapt	pbakaus/impeccable	sub
+clarify	pbakaus/impeccable	sub
+optimize	pbakaus/impeccable	sub
+colorize	pbakaus/impeccable	sub
+bolder	pbakaus/impeccable	sub
+delight	pbakaus/impeccable	sub
+distill	pbakaus/impeccable	sub
+quieter	pbakaus/impeccable	sub
+typeset	pbakaus/impeccable	sub
+overdrive	pbakaus/impeccable	sub
+normalize	pbakaus/impeccable	sub
+extract	pbakaus/impeccable	sub
+onboard	pbakaus/impeccable	sub
+harden	pbakaus/impeccable	sub
+teach-impeccable	pbakaus/impeccable	sub
+arrange	pbakaus/impeccable	sub
+shape	pbakaus/impeccable	sub
+layout	pbakaus/impeccable	sub
+ui-ux-pro-max	nextlevelbuilder/ui-ux-pro-max-skill	
+design-taste-frontend	leonxlnx/taste-skill	
+high-end-visual-design	leonxlnx/taste-skill	variant
+redesign-existing-projects	leonxlnx/taste-skill	variant
+minimalist-ui	leonxlnx/taste-skill	variant
+gpt-taste	leonxlnx/taste-skill	variant
+industrial-brutalist-ui	leonxlnx/taste-skill	variant
+stitch-design-taste	leonxlnx/taste-skill	variant
+brandkit	leonxlnx/taste-skill	variant
+image-to-code	leonxlnx/taste-skill	variant
+imagegen-frontend-web	leonxlnx/taste-skill	variant
+imagegen-frontend-mobile	leonxlnx/taste-skill	variant
+emil-design-eng	emilkowalski/skills	
+review-animations	emilkowalski/skills	
+animate	emilkowalski/skills	
+improve-animations	emilkowalski/skills	
+find-animation-opportunities	emilkowalski/skills	
+animate-expo	emilkowalski/skills	
+canvas-design	anthropics/skills	
+theme-factory	anthropics/skills	
+brand-guidelines	anthropics/skills	
+algorithmic-art	anthropics/skills	
+web-artifacts-builder	anthropics/skills	
+pptx	anthropics/skills	
+slack-gif-creator	anthropics/skills	
+figma-implement-design	figma/mcp-server-guide	mcp
+figma-use	figma/mcp-server-guide	mcp
+figma-generate-design	figma/mcp-server-guide	mcp
+figma-generate-library	figma/mcp-server-guide	mcp
+figma-code-connect	figma/mcp-server-guide	mcp
+figma-create-design-system-rules	figma/mcp-server-guide	mcp
+figma-generate-diagram	figma/mcp-server-guide	mcp
+figma-use-figjam	figma/mcp-server-guide	mcp
+figma-use-slides	figma/mcp-server-guide	mcp
+figma-swiftui	figma/mcp-server-guide	mcp
+figma-implement-motion	figma/mcp-server-guide	mcp
+figma-design-to-code	figma/mcp-server-guide	mcp
+shadcn	shadcn/ui	
+sleek-design-mobile-apps	sleekdotdesign/agent-skills	
+extract-design-system	arvindrk/extract-design-system	
+design-mobile-apps	designed-by-ai/skills	
+ui-taste	uizze.sh	nosrc
+ios-design	uizze.sh	nosrc
+tailwind-design-system	wshobson/agents	
+brand-landingpage	wshobson/agents	
+mobile-android-design	wshobson/agents	
+mobile-ios-design	wshobson/agents	
+responsive-design	wshobson/agents	
+react-native-design	wshobson/agents	
+design-system-patterns	wshobson/agents	
+kpi-dashboard-design	wshobson/agents	
+interaction-design	wshobson/agents	
+accessibility-compliance	wshobson/agents	
+web-component-design	wshobson/agents	
+visual-design-foundations	wshobson/agents	
+wcag-audit-patterns	wshobson/agents	
+screen-reader-testing	wshobson/agents	
+data-storytelling	wshobson/agents	
+nextjs-app-router-patterns	wshobson/agents	
+react-state-management	wshobson/agents	
+react-modernization	wshobson/agents	
+web-perf	cloudflare/skills	
+remotion-best-practices	remotion-dev/skills	
+motion-graphics	heygen-com/hyperframes	
+slideshow	heygen-com/hyperframes	
+ai-ui-patterns	patternsdev/skills	
+design-system-creation	secondsky/claude-skills	
+ui-craft	educlopez/ui-craft	
+ui-designer	mae616/design-skills	
+accessibility-engineer	mae616/design-skills	
+usability-psychologist	mae616/design-skills	
+improve-codebase-architecture	mattpocock/skills	
+codebase-design	mattpocock/skills	
+domain-modeling	mattpocock/skills	
+tdd	mattpocock/skills	
+diagnosing-bugs	mattpocock/skills	
+code-review	mattpocock/skills	
+design-an-interface	mattpocock/skills	
+request-refactor-plan	mattpocock/skills	
+qa	mattpocock/skills	
+setup-pre-commit	mattpocock/skills	
+git-guardrails-claude-code	mattpocock/skills	ccx
+resolving-merge-conflicts	mattpocock/skills	
+systematic-debugging	obra/superpowers	
+test-driven-development	obra/superpowers	
+requesting-code-review	obra/superpowers	
+receiving-code-review	obra/superpowers	
+verification-before-completion	obra/superpowers	
+using-git-worktrees	obra/superpowers	
+nodejs-backend-patterns	wshobson/agents	
+api-design-principles	wshobson/agents	
+code-review-excellence	wshobson/agents	
+postgresql-table-design	wshobson/agents	
+architecture-patterns	wshobson/agents	
+error-handling-patterns	wshobson/agents	
+fastapi-templates	wshobson/agents	
+e2e-testing-patterns	wshobson/agents	
+python-testing-patterns	wshobson/agents	
+javascript-testing-patterns	wshobson/agents	
+python-performance-optimization	wshobson/agents	
+sql-optimization-patterns	wshobson/agents	
+dotnet-backend-patterns	wshobson/agents	
+database-migration	wshobson/agents	
+async-python-patterns	wshobson/agents	
+rust-async-patterns	wshobson/agents	
+go-concurrency-patterns	wshobson/agents	
+github-actions-templates	wshobson/agents	
+gitlab-ci-patterns	wshobson/agents	
+deployment-pipeline-design	wshobson/agents	
+openapi-spec-generation	wshobson/agents	
+architecture-decision-records	wshobson/agents	
+microservices-patterns	wshobson/agents	
+cqrs-implementation	wshobson/agents	
+saga-orchestration	wshobson/agents	
+event-store-design	wshobson/agents	
+auth-implementation-patterns	wshobson/agents	
+secrets-management	wshobson/agents	
+stripe-integration	wshobson/agents	
+terraform-module-library	wshobson/agents	
+k8s-manifest-generator	wshobson/agents	
+helm-chart-scaffolding	wshobson/agents	
+k8s-security-policies	wshobson/agents	
+gitops-workflow	wshobson/agents	
+multi-cloud-architecture	wshobson/agents	
+distributed-tracing	wshobson/agents	
+prometheus-configuration	wshobson/agents	
+grafana-dashboards	wshobson/agents	
+slo-implementation	wshobson/agents	
+python-observability	wshobson/agents	
+incident-runbook-templates	wshobson/agents	
+workflow-orchestration-patterns	wshobson/agents	
+python-background-jobs	wshobson/agents	
+stride-analysis-patterns	wshobson/agents	
+gdpr-data-handling	wshobson/agents	
+pci-compliance	wshobson/agents	
+debugging-strategies	wshobson/agents	
+semgrep	trailofbits/skills	
+codeql	trailofbits/skills	
+differential-review	trailofbits/skills	
+supply-chain-risk-auditor	trailofbits/skills	
+insecure-defaults	trailofbits/skills	
+sharp-edges	trailofbits/skills	
+secure-workflow-guide	trailofbits/skills	
+property-based-testing	trailofbits/skills	
+modern-python	trailofbits/skills	
+openai-security-best-practices	trailofbits/skills-curated	
+openai-security-threat-model	trailofbits/skills-curated	
+openai-security-ownership-map	trailofbits/skills-curated	
+security-guidance	anthropics/claude-plugins-official	ccx
+webapp-testing	anthropics/skills	
+mcp-builder	anthropics/skills	
+claude-api	anthropics/skills	
+supabase-postgres-best-practices	supabase/agent-skills	
+supabase	supabase/agent-skills	
+prisma-database-setup	prisma/skills	
+prisma-client-api	prisma/skills	
+prisma-cli	prisma/skills	
+prisma-postgres	prisma/skills	
+prisma-upgrade-v7	prisma/skills	
+neon-postgres	neondatabase/agent-skills	
+neon-postgres-branches	neondatabase/agent-skills	
+mysql	planetscale/database-skills	
+stripe-best-practices	stripe/ai	
+cloudflare	cloudflare/skills	
+wrangler	cloudflare/skills	
+workers-best-practices	cloudflare/skills	
+durable-objects	cloudflare/skills	
+agents-sdk	cloudflare/skills	
+azure-kubernetes	microsoft/azure-skills	
+azure-compute	microsoft/azure-skills	
+agent-browser	vercel-labs/agent-browser	
+caveman	juliusbrussee/caveman	terse
+caveman-compress	juliusbrussee/caveman	
+caveman-commit	juliusbrussee/caveman	
+caveman-review	juliusbrussee/caveman	
+caveman-help	juliusbrussee/caveman	
+caveman-stats	juliusbrussee/caveman	cc
+cavecrew	juliusbrussee/caveman	cc
+caveman	mattpocock/skills	terse
+handoff	mattpocock/skills	handoff
+claude-handoff	mattpocock/skills	handoff,cc
+find-skills	vercel-labs/skills	
+skill-creator	anthropics/skills	
+writing-great-skills	mattpocock/skills	
+handing-off-context	corvin-dev1/handing-off-context	handoff,cc
+context-mode	mksglu/context-mode	cc,mcp
+ctx-doctor	mksglu/context-mode	cc,mcp
+ctx-stats	mksglu/context-mode	cc,mcp
+ctx-purge	mksglu/context-mode	cc,mcp
+session-guard	wshobson/agents	
+context-driven-development	wshobson/agents	
+context-compression	muratcankoylan/agent-skills-for-context-engineering	
+context-optimization	muratcankoylan/agent-skills-for-context-engineering	
+filesystem-context	muratcankoylan/agent-skills-for-context-engineering	
+memory-systems	muratcankoylan/agent-skills-for-context-engineering	
+context-budget	affaan-m/ECC	budget
+token-budget-advisor	affaan-m/ECC	
+context-budget	mohitagw15856/pm-claude-skills	budget
+ponytail	DietrichGebert/ponytail	terse
+terse-output	Kalmantic/jusTokenMax	terse
+token-compression	MerJingu/token-compression-skill	
+SimpleEnglish	AminBlg/SimpleEnglish	
+mem-search	thedotmack/claude-mem	ccx
+smart-explore	thedotmack/claude-mem	cc
+repomix-explorer	yamadashy/repomix	
+slicing-code-context	trailofbits/skills	
+planning-with-files	trailofbits/skills-curated	
+session-handoff	entireio/skills	handoff
+handoff	dEitY719/session-skills	handoff
+session-handoff	rohitg00/pro-workflow	handoff
+rtk-token-saver	X-Saikat-93/opencode-rtk-skill	
+rtk	akillness/oh-my-skills	
+model-hierarchy	zscole/model-hierarchy-skill	
+context-compress	christophacham/agent-skills-library	nosrc
+executing-plans	obra/superpowers	
+analyze-ci	benchflow-ai/skillsbench	lowconf

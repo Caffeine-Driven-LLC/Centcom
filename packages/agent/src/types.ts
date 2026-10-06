@@ -55,6 +55,8 @@ export interface EngineStartOptions {
   model?: string;
   resume?: { engine_session_id: string };
   systemPromptAppend?: string;
+  /** Extra directories the agent may read (e.g. the bundled skills). */
+  addDirs?: string[];
   allowedTools?: string[];
   env?: Record<string, string | undefined>;
   approvalGate?: PermissionGate;

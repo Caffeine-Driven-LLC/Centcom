@@ -12,7 +12,7 @@ export const COMMANDS: SlashCommand[] = [
   { name: 'demo', args: '[fix|search|delete|compact|ask|error|limit]', desc: 'Run a scripted demo story' },
   { name: 'model', args: '[name]', desc: 'Pick the model (ctrl+o)' },
   { name: 'auto', args: '[on|off]', desc: 'Auto skills: apply matching skills and commands to your prompts' },
-  { name: 'skills', args: '[filter]', desc: 'List the skills and commands Centcom can auto-apply' },
+  { name: 'skills', args: '[filter | enable <id> | disable <id>]', desc: 'List, enable or disable the skills Centcom can auto-apply' },
   { name: 'interrupt', desc: 'Stop the running agent' },
   { name: 'quit', desc: 'Leave Centcom' },
 ];

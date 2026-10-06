@@ -26,13 +26,14 @@ export class ClaudeCodeEngine implements AgentEngine {
   async start(o: EngineStartOptions): Promise<EngineSession> { return new ClaudeSession(o, this.deps); }
 }
 
-export function buildArgv(prompt: string, o: { resume?: string; permissionMode?: PermissionMode; model?: string; allowedTools?: string[]; systemPromptAppend?: string }): string[] {
+export function buildArgv(prompt: string, o: { resume?: string; permissionMode?: PermissionMode; model?: string; allowedTools?: string[]; systemPromptAppend?: string; addDirs?: string[] }): string[] {
   const a = ['-p', prompt, '--output-format', 'stream-json', '--verbose', '--include-partial-messages'];
   if (o.resume) a.push('--resume', o.resume);
   if (o.permissionMode && o.permissionMode !== 'default') a.push('--permission-mode', o.permissionMode);
   if (o.model) a.push('--model', o.model);
   if (o.allowedTools?.length) a.push('--allowedTools', ...o.allowedTools);
   if (o.systemPromptAppend) a.push('--append-system-prompt', o.systemPromptAppend);
+  for (const d of o.addDirs ?? []) a.push('--add-dir', d); // one flag per directory: the option is variadic and must not swallow later arguments
   return a;
 }
 
@@ -67,7 +68,7 @@ class ClaudeSession implements EngineSession {
     const turn = newId('trn'); this.turn = turn; this.sawResult = false;
     this.emit({ type: 'turn.started', turn_id: turn });
     this.emit({ type: 'status', state: 'prompt-received' });
-    const argv = buildArgv(prompt, { resume: this.sessionId, permissionMode: this.mode, model: this.model, allowedTools: this.o.allowedTools, systemPromptAppend: this.o.systemPromptAppend });
+    const argv = buildArgv(prompt, { resume: this.sessionId, permissionMode: this.mode, model: this.model, allowedTools: this.o.allowedTools, systemPromptAppend: this.o.systemPromptAppend, addDirs: this.o.addDirs });
     const parser = new ClaudeStreamParser();
     const spawnFn = this.deps.spawn ?? nodeSpawn;
     let child: ChildProcess;

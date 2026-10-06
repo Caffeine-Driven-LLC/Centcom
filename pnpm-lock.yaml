@@ -269,6 +269,9 @@ importers:
       '@centcom/mascot':
         specifier: workspace:*
         version: link:../mascot
+      '@centcom/skills':
+        specifier: workspace:*
+        version: link:../skills
       '@centcom/theme':
         specifier: workspace:*
         version: link:../theme
