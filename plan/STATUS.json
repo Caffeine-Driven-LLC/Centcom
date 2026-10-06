@@ -240,6 +240,10 @@
   "C051": {
    "pct": 0.9,
    "note": "HTTP client in @centcom/net: operation table generated from openapi.yaml with a CI drift check; typed call, listPage, paginate, revalidate, getStatus, getJwks; CT-ERR retries with full jitter and a 60 s sleep budget, idempotency keys, single-flight 401 refresh, ETag and If-Match, size guard, tolerant response checks, typed errors; all 93 operations pass against the mock. Gaps: responses are checked with generated shapes (types and required fields), not the C003 Ajv validators; no lane uses the client yet"
+  },
+  "C070": {
+   "pct": 0.8,
+   "note": "centcom audit list and export: cursor paging (<=200 per request, no offset), filters, RFC 3339 and relative times, sanitised table, exit 4 on no match, export with Idempotency-Key, 2/4/8/10 s polling and 5 minute limit, 0600 download with partial-file cleanup and no overwrite without --force, plan and role messages, no token or signed URL in output; gaps: not wired into main.tsx until the auth lane lands, not run against the mock backend audit data (tests use scripted answers)"
   }
  },
  "next": [
