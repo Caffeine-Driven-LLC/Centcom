@@ -14,10 +14,12 @@ export function HelpScreen({ actions, keymap, warnings, onClose, width, height }
 }
 export function HelpBody({ actions, keymap, warnings, width, height, filter }: { actions: ActionDef[]; keymap: Keymap; warnings: KeymapWarning[]; width: number; height: number; filter: string }) {
   const col = useCol(); const w = Math.min(width - 2, 118);
-  const lines: Line[] = []; for (const [g, rows] of grouped(helpRows(actions, keymap, filter))) { lines.push([sp(g, { c: 'text.secondary', b: true })]); for (const r of rows) lines.push([sp((r.keys.join(', ') || '(none)').padEnd(16).slice(0, 16), { c: 'text.primary', b: true }), sp(' ' + r.description, { c: 'text.secondary' })]); }
+  const rowsAll = helpRows(actions, keymap, filter); const kw = Math.min(16, Math.max(6, ...rowsAll.map((r) => (r.keys.join(', ') || '(none)').length), ...EDITING_KEYS.map(([k]) => k.length)));
+  const lines: Line[] = []; for (const [g, rows] of grouped(rowsAll)) { lines.push([sp(g, { c: 'text.secondary', b: true })]); for (const r of rows) lines.push([sp((r.keys.join(', ') || '(none)').padEnd(kw).slice(0, kw), { c: 'text.primary', b: true }), sp(' ' + r.description, { c: 'text.secondary' })]); }
   const room = Math.max(3, height - 5 - (warnings.length ? Math.min(3, warnings.length) + 1 : 0));
-  const editing: Line[] = [[sp('Editing', { c: 'text.secondary', b: true })], ...EDITING_KEYS.map(([k, d]): Line => [sp(k.padEnd(16), { c: 'text.primary', b: true }), sp(' ' + d, { c: 'text.secondary' })])];
-  if (!filter) { if (Math.ceil((lines.length + editing.length) / 2) <= room) lines.push(...editing); else lines.push([sp('Editing keys: centcom keys', { c: 'text.muted' })]); } /* the prompt's own keys only when there is room */ const twoCols = width >= 100 || lines.length > room; const perCol = twoCols ? Math.ceil(lines.length / 2) : lines.length; const colW = twoCols ? Math.floor((w - 4) / 2) : w - 4;
+  const editing: Line[] = [[sp('Editing', { c: 'text.secondary', b: true })], ...EDITING_KEYS.map(([k, d]): Line => [sp(k.padEnd(kw), { c: 'text.primary', b: true }), sp(' ' + d, { c: 'text.secondary' })])];
+  if (!filter) { if (Math.ceil((lines.length + editing.length) / 2) <= room) lines.push(...editing); else lines.push([sp('Editing keys: centcom keys', { c: 'text.muted' })]); } /* the prompt's own keys only when there is room */ const twoCols = lines.length > room || (width >= 100 && lines.length > 12); let perCol = twoCols ? Math.ceil(lines.length / 2) : lines.length;
+  if (twoCols && lines[perCol - 1]?.length === 1 && lines[perCol - 1]![0]!.b) perCol -= 1; /* a group heading never ends a column */ const colW = twoCols ? Math.floor((w - 4) / 2) : w - 4;
   const cut = (l: Line): Line => { let left = colW; return l.map((s) => { const t = s.t.slice(0, Math.max(0, left)); left -= t.length; return { ...s, t }; }); };
   const colA = lines.slice(0, perCol).map(cut); const colB = twoCols ? lines.slice(perCol).map(cut) : [];
   return (
