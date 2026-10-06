@@ -151,7 +151,7 @@ describe('ClaudeCodeEngine process handling', () => {
     const s = await new ClaudeCodeEngine({ spawn: f.spawn }).start({ agentId: 'a', cwd: '/', limits: { interrupt_grace_ms: 50 } });
     await s.send('long task');
     await expect(s.send('second')).rejects.toThrow(/already running/);
-    expect(await s.interrupt()).toEqual({ stopped: true });
+    expect(await s.interrupt()).toMatchObject({ stopped: true, method: 'sigint' });
     const evs = await collect(s.events, (e) => e.type === 'turn.done');
     expect(evs.at(-1)).toMatchObject({ type: 'turn.done', outcome: 'canceled' });
   });

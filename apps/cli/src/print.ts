@@ -6,6 +6,7 @@ import type { AgentEngine, NormalisedEvent, PermissionMode } from '@centcom/agen
 export interface PrintOptions {
   /** Where permissions.json lives (tests point it at a temp folder). */ configDir?: string;
   engine: AgentEngine; demo: boolean; cwd: string; branch: string; version: string; mode: PermissionMode; prompt: string;
+  /** Where ctrl+c comes from (tests pass an emitter). */ proc?: NodeJS.Process;
   format: 'text' | 'json' | 'stream-json'; save: boolean; resume?: string; model?: string; out?: NodeJS.WritableStream; err?: NodeJS.WritableStream;
 }
 
@@ -39,12 +40,17 @@ export async function runPrint(o: PrintOptions): Promise<number> {
   await ctl.start();
   // nobody is there to answer, so anything that still needs an approval is declined and reported
   const unsub = ctl.store.subscribe(() => { const a = ctl.state.approvals[0]; if (a) { declined.push(`${a.req.tool}: ${a.req.summary}`); ctl.answerApproval('deny'); } });
+  // ctrl+c stops the turn (exit 130); a second one within 1 s forces it
+  let stoppedBy: number | undefined; let forced: (() => void) | undefined;
+  const offSig = ctl.interrupts.onSignal(o.proc ?? process, { exit: (code) => { stoppedBy = code || 130; forced?.(); }, hint: () => undefined });
+  const offTurn = ctl.store.subscribe(() => { if (ctl.turnInterrupted()) stoppedBy ??= 130; });
   await ctl.submit(o.prompt);
   await new Promise<void>((resolve) => {
+    forced = resolve;
     const check = () => { if (!ctl.state.busy && ctl.state.approvals.length === 0) { unsub2(); resolve(); } };
     const unsub2 = ctl.store.subscribe(check); setTimeout(check, 50);
   });
-  unsub();
+  unsub(); offSig(); offTurn();
   const s = ctl.state; const me = s.agents.find((a) => a.mine)!;
   const answer = [...s.items].reverse().filter((i) => i.kind === 'assistant').map((i) => (i.kind === 'assistant' ? i.text : '')).slice(0, 1)[0] ?? '';
   const notice = [...s.items].reverse().find((i) => i.kind === 'notice' && i.level === 'error');
@@ -55,5 +61,6 @@ export async function runPrint(o: PrintOptions): Promise<number> {
   else if (o.format === 'text' && !failed && !answer) err.write('(no reply)\n');
   if (failed) err.write(`Error: ${failed}\n`);
   ctl.stop();
+  if (stoppedBy) { err.write('Interrupted.\n'); return stoppedBy; }
   return failed ? 1 : declined.length ? 3 : 0; // 1 = error, 3 = finished but something needed an approval nobody could give
 }

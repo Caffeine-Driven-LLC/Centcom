@@ -45,6 +45,7 @@ rl.on('line', (line) => {
   if (m.method === 'thread/start' || m.method === 'thread/resume') return out({ id: m.id, result: { thread: { id: 't1' }, model: 'gpt-fake', modelProvider: 'openai', cwd: '/w', approvalPolicy: m.params.approvalPolicy, sandbox: m.params.sandbox } });
   if (m.method === 'model/list') return out({ id: m.id, result: { data: [{ id: 'gpt-fake', model: 'gpt-fake', displayName: 'GPT Fake', description: 'for tests', hidden: false }, { id: 'old', model: 'old', displayName: 'Old', description: '', hidden: true }] } });
   if (m.method === 'turn/start') { const turn = 'u' + ++turnId; globalThis.lastTurnParams = m.params; out({ id: m.id, result: { turn: { id: turn, items: [], status: 'inProgress' } } }); const text = m.params.input[0].text; process.stderr.write('POLICY ' + JSON.stringify({ a: m.params.approvalPolicy, s: m.params.sandboxPolicy }) + '\n'); return setTimeout(() => runTurn(turn, text), 5); }
+  if (m.method === 'turn/interrupt' && process.env.FAKE_CODEX_IGNORE_INTERRUPT === '1') return; // a hung app-server: never answers, never stops
   if (m.method === 'turn/interrupt') { out({ id: m.id, result: {} }); clearTimeout(slowTimer); if (current) finish(current, 'interrupted'); return; }
   if (m.id !== undefined && m.method === undefined && pendingApproval && m.id === pendingApproval.id) {
     const { turn, kind } = pendingApproval; pendingApproval = undefined; const d = m.result.decision;

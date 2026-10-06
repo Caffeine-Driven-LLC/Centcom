@@ -1,0 +1,1 @@
+Small processes for the interrupt tests (lane C030): one that exits on SIGINT, one that traps SIGINT, one that ignores SIGTERM, one that starts a grandchild. The app-server that acknowledges or ignores `turn/interrupt` is `../fake-codex.mjs` (`FAKE_CODEX_IGNORE_INTERRUPT=1`).

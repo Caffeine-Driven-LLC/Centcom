@@ -1,5 +1,7 @@
 /** Drives the user's own `codex` CLI through `codex app-server` (JSON-RPC over stdio). Centcom never touches Codex credentials. */
 import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process';
+import { signalLadder, type LadderClock } from '../interrupt/ladder.js';
+import { sharedProcessRegistry, type Killed, type ProcessRegistry } from '../interrupt/procs.js';
 import { newId } from '../ids.js';
 import { AsyncQueue } from '../queue.js';
 import type { AgentEngine, ApprovalDecision, Capability, EngineSession, EngineStartOptions, EventBody, LoginKind, NormalisedEvent, PermissionMode } from '../types.js';
@@ -11,7 +13,9 @@ import type { ModelChoice } from '../models.js';
 
 const CAPS = new Set<Capability>(['streaming', 'approvals', 'resume', 'mcp', 'thinking', 'usage', 'interrupt', 'compact', 'models.list']);
 
-export interface CodexEngineDeps { bin?: string; spawn?: typeof nodeSpawn; now?: () => Date; env?: Record<string, string | undefined> }
+export interface CodexEngineDeps { bin?: string; spawn?: typeof nodeSpawn; now?: () => Date; env?: Record<string, string | undefined>; procs?: ProcessRegistry; clock?: LadderClock }
+/** The app-server leads its own process group (not on Windows), so stopping it stops the commands it started. */
+const GROUPS = process.platform !== 'win32';
 
 /** Centcom's four permission modes as Codex approval policy + sandbox. */
 export function policyFor(mode: PermissionMode): { approvalPolicy: string; sandboxPolicy: { type: string } } {
@@ -56,16 +60,17 @@ class CodexSession implements EngineSession {
   async init() {
     const spawnFn = this.deps.spawn ?? nodeSpawn;
     let child: ChildProcess;
-    try { child = spawnFn(this.deps.bin ?? 'codex', ['app-server', '--listen', 'stdio://'], { cwd: this.o.cwd, env: this.o.envExact ? { ...this.o.env } : { ...process.env, ...this.deps.env, ...this.o.env }, stdio: ['pipe', 'pipe', 'pipe'] }); }
+    try { child = spawnFn(this.deps.bin ?? 'codex', ['app-server', '--listen', 'stdio://'], { cwd: this.o.cwd, env: this.o.envExact ? { ...this.o.env } : { ...process.env, ...this.deps.env, ...this.o.env }, stdio: ['pipe', 'pipe', 'pipe'], detached: GROUPS }); }
     catch (e) { return this.fail(e); }
-    this.child = child;
+    this.child = child; const unreg = child.pid ? this.procs().register(this.agentId, child.pid, { group: GROUPS }) : () => undefined;
+    this.childExit = new Promise<void>((res) => { child.once('close', () => { unreg(); res(); }); child.once('error', () => { unreg(); res(); }); });
     let err = ''; child.stderr?.setEncoding('utf8'); child.stderr?.on('data', (c: string) => { err = (err + c).slice(-8192); });
     child.on('error', (e) => this.fail(e));
     const rpc = this.rpc = new RpcClient(child);
     rpc.onLineTooLong = () => { this.emit({ type: 'error', code: 'provider_protocol_error', tool_message: 'Codex sent a line that was too long to read, so the session was stopped.', fatal: true }); this.emit({ type: 'status', state: 'error' }); this.signal('SIGKILL'); };
     rpc.onNotification = (m, p) => this.onNotification(m, p);
     rpc.onServerRequest = (id, m, p) => void this.onServerRequest(id, m, p);
-    rpc.onClose = (code) => { this.ready = false; if (!this.closed) this.exitedResolve(code === null ? { signal: 'unknown' } : { code }); if (this.running && !this.closed) { this.emit({ type: 'error', code: 'provider_protocol_error', tool_message: redact(err.trim().split('\n').slice(-3).join('\n')) || `codex exited with code ${code}`, fatal: true }); this.finishTurn('error'); } };
+    rpc.onClose = (code) => { this.ready = false; if (this.killed) return; /* we stopped it ourselves; the next message starts it again */ if (!this.closed) this.exitedResolve(code === null ? { signal: 'unknown' } : { code }); if (this.running && !this.closed) { this.emit({ type: 'error', code: 'provider_protocol_error', tool_message: redact(err.trim().split('\n').slice(-3).join('\n')) || `codex exited with code ${code}`, fatal: true }); this.finishTurn('error'); } };
     try {
       await rpc.request('initialize', { clientInfo: { name: 'centcom', title: 'Centcom', version: '0.1.0' } }, 20_000);
       rpc.notify('initialized');
@@ -96,6 +101,7 @@ class CodexSession implements EngineSession {
     if (this.running) throw new Error('a turn is already running');
     const turn = newId('trn'); this.turn = turn;
     this.emit({ type: 'turn.started', turn_id: turn }); this.emit({ type: 'status', state: 'prompt-received' });
+    if (this.killed && !this.closed && this.threadId) { this.killed = false; this.o = { ...this.o, resume: { engine_session_id: this.threadId } }; this.turn = undefined; await this.init(); this.turn = turn; } // stopped by the ladder last time: start again on the same thread
     if (!this.ready || !this.rpc || !this.threadId) { this.emit({ type: 'status', state: 'error' }); this.emit({ type: 'turn.done', outcome: 'error', stop_reason: 'not_ready' }); return { turn_id: turn }; }
     if (!this.signedIn) {
       this.emit({ type: 'error', code: 'provider_not_signed_in', tool_message: 'Codex is not signed in, or the login has expired. Run `codex login` in a terminal, then try again.', fatal: true });
@@ -147,13 +153,22 @@ class CodexSession implements EngineSession {
     this.rpc?.respond(id, { decision });
   }
 
-  async interrupt(): Promise<{ stopped: boolean }> {
+  private childExit: Promise<void> = Promise.resolve(); private killed = false;
+  private procs(): ProcessRegistry { return this.deps.procs ?? sharedProcessRegistry(); }
+  /** `turn/interrupt` first; if Codex does not finish the turn within the grace time (3 s), the signal ladder stops the app-server, and the next message starts it again on the same thread. */
+  async interrupt(o: { hard?: boolean } = {}): Promise<{ stopped: boolean; method?: 'protocol' | 'sigint'; terminated?: Killed[] }> {
     if (!this.running || !this.rpc || !this.threadId) return { stopped: false };
-    this.interrupted = true;
-    try { if (this.codexTurn) await this.rpc.request('turn/interrupt', { threadId: this.threadId, turnId: this.codexTurn }, 5000); } catch { /* fall through to the timeout below */ }
-    await Promise.race([new Promise<void>((res) => { const prev = this.turnDone; this.turnDone = () => { prev?.(); res(); }; }), new Promise<void>((res) => setTimeout(res, this.o.limits?.interrupt_grace_ms ?? 3000).unref())]);
-    if (this.running) this.finishTurn('canceled');
-    return { stopped: true };
+    this.interrupted = true; const grace = this.o.limits?.interrupt_grace_ms ?? 3000; const clock = this.deps.clock ?? { setTimeout: (f: () => void, ms: number) => setTimeout(f, ms).unref(), clearTimeout: (h: unknown) => clearTimeout(h as NodeJS.Timeout) };
+    if (!o.hard) {
+      const finished = new Promise<boolean>((res) => { const prev = this.turnDone; this.turnDone = () => { prev?.(); res(true); }; const h = clock.setTimeout(() => res(false), grace); void this.childExit.then(() => { clock.clearTimeout(h); res(true); }); });
+      try { if (this.codexTurn) void this.rpc.request('turn/interrupt', { threadId: this.threadId, turnId: this.codexTurn }, grace).catch(() => undefined); } catch { /* the ladder below handles it */ }
+      if (await finished) { if (this.running) this.finishTurn('canceled'); return { stopped: true, method: 'protocol', terminated: [] }; }
+    }
+    this.killed = true; const child = this.child;
+    const r = child?.pid ? await signalLadder({ agentId: this.agentId, procs: this.procs(), exited: this.childExit, graceMs: grace, hard: o.hard, clock }) : { terminated: [] };
+    if (!child?.pid) { try { child?.kill('SIGKILL'); } catch { /* gone */ } }
+    this.ready = false; if (this.running) this.finishTurn('canceled');
+    return { stopped: true, method: 'sigint', terminated: r.terminated };
   }
 
   /** Models the signed-in account can use (model/list). */

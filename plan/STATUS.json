@@ -62,8 +62,8 @@
    "note": "ledger (reported cost only, running-total deltas, agent minutes, budget alerts, outbox with cap and drop order), /usage, wired into the app; gap: ledger replay from the golden transcripts of real CLIs"
   },
   "C030": {
-   "pct": 0.5,
-   "note": "interrupt works; card gaps: one interrupt controller, process groups, exit 130, agent.interrupted"
+   "pct": 0.85,
+   "note": "interrupt controller, 3 s/8 s signal ladder to whole process groups, registered pids only, Codex protocol-then-ladder with restart on the same thread, approvals denied and late ones refused, partial answer kept, ctrl+c semantics with exit 130 in the app and -p; gaps: turn timeout, interrupt receipt, stale index.lock cleanup"
   },
   "C031": {
    "pct": 0.3,

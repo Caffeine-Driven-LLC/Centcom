@@ -31,3 +31,11 @@ describe('print mode', () => {
     const s = new PassThrough(); s.end('hello'); expect(await readStdin(s)).toBe('hello');
   });
 });
+
+describe('ctrl+c in print mode (lane C030)', () => {
+  it('stops the turn and exits 130; the partial answer was printed', async () => {
+    const { EventEmitter } = await import('node:events'); const proc = new EventEmitter() as unknown as NodeJS.Process;
+    const p = run({ engine: new DemoEngine({ speed: 1 }), proc }); await new Promise((r) => setTimeout(r, 300)); proc.emit('SIGINT');
+    const r = await p; expect(r.code).toBe(130); expect(r.err).toContain('Interrupted.');
+  });
+});

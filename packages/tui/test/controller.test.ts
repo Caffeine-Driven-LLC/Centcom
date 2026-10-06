@@ -42,3 +42,18 @@ describe('approval queue', () => {
     d.cycleMode(); d.cycleMode(); d.cycleMode(); expect(d.state.settings.permissionMode).toBe('bypassPermissions');
   });
 });
+
+describe('interrupt (lane C030)', () => {
+  it('the partial answer is kept and marked, a late question from the stopped turn is refused, and the next turn asks normally', async () => {
+    const c = make(); const me = (c as any).me as string; (c as any).currentTurn = 'trn_1';
+    c.patch({ busy: true, items: [{ kind: 'assistant', id: 'a1', messageId: 'm', agentId: me, text: 'Half an ans', done: false }] }); await c.interrupt();
+    expect(c.state.items[0]).toMatchObject({ done: true, interrupted: true, text: 'Half an ans' }); expect(c.state.busy).toBe(false);
+    expect(await c.decide(req('late', { agent_id: me }))).toMatchObject({ decision: 'deny', reason: 'interrupt' }); expect(c.state.approvals).toHaveLength(0);
+    (c as any).currentTurn = 'trn_2'; void c.decide(req('next', { agent_id: me })); expect(c.state.approvals).toHaveLength(1);
+  });
+  it('ctrl+c twice during a turn quits with 130; idle, it asks first', async () => {
+    const exits: (number | undefined)[] = []; const c = new AppController({ engine: new DemoEngine({ speed: 100 }), demo: true, cwd: '/tmp', version: 't', skills: [], onExit: (code) => exits.push(code) });
+    c.ctrlC(); expect(exits).toEqual([]); c.ctrlC(); expect(exits).toEqual([0]);
+    c.patch({ busy: true }); c.ctrlC(); expect(exits).toEqual([0]); c.ctrlC(); expect(exits).toEqual([0, 130]);
+  });
+});

@@ -138,7 +138,7 @@ async function main() {
     logger, settings, ...cc.options({ ...initialSettings(), ...settings }, { saveHistory: !has('--no-save') }),
     sessions: has('--no-save') ? undefined : new SessionStore(),
     resume: has('-c') || has('--continue') ? 'last' : arg('--resume'),
-    onExit: () => instance?.unmount(),
+    onExit: (code) => { if (code) process.exitCode = code; instance?.unmount(); },
     onMemoryAdd: async (text) => { // a line starting with "# " is a note for this tool's memory file (CLAUDE.md or AGENTS.md), shown as a diff and confirmed
       try { const mf = makeMemoryFiles(process.cwd()); const plan = await mf.plan({ engine: engine.id === 'codex' ? 'codex' : 'claude-code', scope: 'project', quickAdd: text, root: process.cwd() });
         return { diff: plan.diff || '(already there)', apply: async () => { await mf.apply(plan, { accepted: true, planHash: plan.planHash }); return 'Added to memory.'; } }; } catch (e) { return { error: String((e as Error).message ?? e) }; }

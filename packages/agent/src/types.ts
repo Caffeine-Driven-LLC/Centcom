@@ -71,7 +71,8 @@ export interface EngineSession {
   readonly agentId: string;
   readonly events: AsyncIterable<NormalisedEvent>;
   send(prompt: string): Promise<{ turn_id: string }>;
-  interrupt(): Promise<{ stopped: boolean }>;
+  /** Ends the current turn. `hard` skips the grace time. Engines may say how (`method`) and which processes they signalled. */
+  interrupt(o?: { hard?: boolean }): Promise<{ stopped: boolean; method?: 'protocol' | 'sigint'; terminated?: { pid: number; signal: 'SIGINT' | 'SIGTERM' | 'SIGKILL' }[] }>;
   /** The card also allows reporting how the engine ended; engines that return nothing remain valid. */
   stop(): Promise<void | { exit_code: number | null; signal: string | null }>;
   resumeToken(): string | undefined;

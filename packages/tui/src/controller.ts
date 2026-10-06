@@ -4,7 +4,7 @@
  * The React tree only reads the store and calls the controller's methods.
  */
 import { CLAUDE_MODELS, createAgentBus, createCheckpointManager, createContextView, modelLabel, newId, nodeGit } from '@centcom/agent';
-import { usageTable } from '@centcom/agent';
+import { createInterruptController, usageTable, type InterruptController } from '@centcom/agent';
 import type { AgentBus, AgentId, FleetManager, FleetNode, Ledger, Checkpoint, CheckpointManager, ContextConfig, ContextView, EngineId, EngineStartOptions, GitRunner, PermissionEngine, PolicyMode, RewindMode } from '@centcom/agent';
 import type { PendingApproval as PolicyPending } from '@centcom/agent';
 import type { Logger } from '@centcom/net';
@@ -21,7 +21,7 @@ import { VerbRotator } from './util/verbs.js';
 
 export interface ControllerOptions {
   engine: AgentEngine; demo: boolean; cwd: string; branch?: string; version: string; permissionMode?: PermissionMode;
-  onExit?: () => void; ghosts?: boolean; settings?: Partial<Settings>; verbs?: VerbRotator;
+  /** `code` is the process exit code to use (130 after a forced interrupt). */ onExit?: (code?: number) => void; ghosts?: boolean; settings?: Partial<Settings>; verbs?: VerbRotator;
   skills?: Skill[]; // pass [] to disable discovery (tests)
   /** Where to save conversations; leave out to keep them in memory only. */
   sessions?: SessionStore;
@@ -79,7 +79,6 @@ export class AppController {
   private ghostTimers: NodeJS.Timeout[] = [];
   private toastTimers = new Map<string, NodeJS.Timeout>();
   private verbTimer?: NodeJS.Timeout;
-  private lastExitPress = 0;
   private readonly me = 'agt_you';
   private bus: AgentBus = createAgentBus({ onError: () => undefined });
   private ctxView?: ContextView; private cp?: CheckpointManager; private pendingReqs = new Map<string, ApprovalRequest>(); private lastEsc = 0;
@@ -222,6 +221,7 @@ export class AppController {
         this.updateAgent(me, () => ({ model: ev.model, loginKind: ev.login_kind, engine: this.o.engine.label }));
         break;
       case 'turn.started':
+        this.currentTurn = ev.turn_id;
         this.set({ busy: true, turnStartedAt: Date.now(), verb: this.verbs.next() }); this.updateAgent(me, () => ({ busy: true })); break;
       case 'status': this.setAgentState(me, ev.state); break;
       case 'text.delta': {
@@ -292,6 +292,7 @@ export class AppController {
   /* ------------------------------------------------------------------ approvals (permission policy) */
   private ruleKey(r: ApprovalRequest) { return `${r.tool}:${r.command ?? r.path ?? ''}`; }
   decide(r: ApprovalRequest): Promise<ApprovalDecision> {
+    if (r.agent_id === this.me && this.interrupts.cancelledTurn(this.currentTurn)) return Promise.resolve({ decision: 'deny', scope: 'once', reason: 'interrupt' }); // a late question from a stopped turn is never shown
     if (this.o.policy) return this.decideWithPolicy(r);
     const mode = this.state.settings.permissionMode;
     if (mode === 'bypassPermissions') return Promise.resolve({ decision: 'approve', scope: 'once' }); // the user turned approvals off
@@ -396,21 +397,28 @@ export class AppController {
   }
   skills(): Skill[] { return (this.skillCache ??= this.o.skills ?? this.loadSkills()); }
 
-  async interrupt() {
-    if (!this.state.busy) return;
-    for (const a of this.state.approvals) a.resolve({ decision: 'deny', scope: 'once', reason: 'interrupt' });
-    this.set({ approvals: [] });
-    await this.session?.interrupt();
-  }
+  /* ------------------------------------------------------------------ interrupt (lane C030) */
+  private currentTurn?: string;
+  /** One way to stop the agent, whatever the engine: its open approvals are denied, its processes stopped by the signal ladder, the partial answer kept and marked. */
+  readonly interrupts: InterruptController = createInterruptController({
+    targets: { get: (id) => (id === this.me ? { busy: () => this.state.busy, turnId: () => this.currentTurn, interrupt: (o) => (this.session ? this.session.interrupt(o) : Promise.resolve({ stopped: false })) } : undefined), busyIds: () => (this.state.busy ? [this.me] : []) },
+    approvals: { cancel: () => { const open = this.state.approvals; for (const a of open) a.resolve({ decision: 'deny', scope: 'once', reason: 'interrupt' }); if (open.length) this.set({ approvals: [] }); return open.length; } },
+    states: { interrupted: () => { this.set((s) => ({ busy: false, turnStartedAt: undefined, items: s.items.map((i) => (i.kind === 'assistant' && !i.done && i.agentId === this.me ? { ...i, done: true, interrupted: true } : i)) })); this.updateAgent(this.me, () => ({ busy: false })); this.setAgentState(this.me, 'idle'); } },
+    emit: (e) => this.o.logger?.info('agent.interrupted', { reason: e.reason, hard: e.hard, method: e.method }),
+  });
+  /** True when the latest turn was stopped by an interrupt. */
+  turnInterrupted(): boolean { return this.interrupts.cancelledTurn(this.currentTurn); }
+  async interrupt(hard = false) { if (!this.state.busy) return; await this.interrupts.interrupt(this.me, { mode: hard ? 'hard' : 'soft', reason: 'user' }); }
 
   /** Leave the app (the `app.quit` action). */
-  quit() { void this.o.ledger?.flush().catch(() => undefined); this.o.onExit?.(); }
-  /** Ctrl+C: interrupt if busy, otherwise press twice within 2 s to quit. */
+  quit(code = 0) { void this.o.ledger?.flush().catch(() => undefined); this.o.onExit?.(code); }
+  /** ctrl+c: during a turn, the first stops it and a second within 1 s stops it hard and exits 130; idle, press twice within 2 s to quit. */
   ctrlC() {
-    const now = Date.now();
-    if (this.state.busy) { void this.interrupt(); this.lastExitPress = now; this.toast('info', 'Interrupted. Press Ctrl+C again to quit.'); return; }
-    if (now - this.lastExitPress < 2000) { this.o.onExit?.(); return; }
-    this.lastExitPress = now; this.toast('info', 'Press Ctrl+C again to quit.');
+    const r = this.interrupts.ctrlC();
+    if (r === 'interrupted') this.toast('info', 'Stopping. Press ctrl+c again to force it and quit.');
+    else if (r === 'hard') this.quit(130);
+    else if (r === 'hint') this.toast('info', 'Press ctrl+c again to exit');
+    else this.quit(0);
   }
 
   cycleMode() {

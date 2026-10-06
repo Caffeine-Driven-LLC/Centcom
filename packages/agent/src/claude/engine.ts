@@ -5,13 +5,17 @@
 import { redact as redactSecrets } from '@centcom/protocol';
 import { ApprovalBridge } from './bridge.js';
 import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process';
+import { signalLadder, type LadderClock } from '../interrupt/ladder.js';
+import { sharedProcessRegistry, type Killed, type ProcessRegistry } from '../interrupt/procs.js';
 import { AsyncQueue } from '../queue.js';
 import { newId } from '../ids.js';
 import { ClaudeStreamParser } from './parse.js';
 import { ProviderError, type AgentEngine, type Capability, type EngineSession, type EngineStartOptions, type EventBody, type NormalisedEvent, type PermissionMode } from '../types.js';
 
-export interface ClaudeEngineDeps { bin?: string; spawn?: typeof nodeSpawn; now?: () => Date }
+export interface ClaudeEngineDeps { bin?: string; spawn?: typeof nodeSpawn; now?: () => Date; /** Where engine pids are registered for the interrupt ladder (default: the app-wide one). */ procs?: ProcessRegistry; clock?: LadderClock }
 
+/** Engine processes lead their own process group (not on Windows), so stopping one stops everything it started. */
+const GROUPS = process.platform !== 'win32';
 const CAPS = new Set<Capability>(['streaming', 'approvals', 'resume', 'subagents', 'mcp', 'skills', 'thinking', 'usage', 'interrupt', 'compact', 'models.list']);
 
 /** Strips credentials from text we may show or log. The patterns are the contract's (CT-PROVIDER rule 1), shared with the rest of the client. */
@@ -79,10 +83,10 @@ class ClaudeSession implements EngineSession {
     const parser = new ClaudeStreamParser();
     const spawnFn = this.deps.spawn ?? nodeSpawn;
     let child: ChildProcess;
-    try { child = spawnFn(this.deps.bin ?? 'claude', argv, { cwd: this.o.cwd, env: this.o.envExact ? { ...this.o.env } : { ...process.env, ...this.o.env }, stdio: ['ignore', 'pipe', 'pipe'] }); }
+    try { child = spawnFn(this.deps.bin ?? 'claude', argv, { cwd: this.o.cwd, env: this.o.envExact ? { ...this.o.env } : { ...process.env, ...this.o.env }, stdio: ['ignore', 'pipe', 'pipe'], detached: GROUPS }); }
     catch (e) { this.fail(e); return { turn_id: turn }; }
-    this.child = child;
-    this.exitWait = new Promise<void>((res) => { child.once('close', () => res()); child.once('error', () => res()); });
+    this.child = child; const unreg = child.pid ? this.procs().register(this.agentId, child.pid, { group: GROUPS }) : () => undefined; // its own process group: tools and the approval helper go with it
+    this.exitWait = new Promise<void>((res) => { child.once('close', () => { unreg(); res(); }); child.once('error', () => { unreg(); res(); }); });
     let buf = ''; let err = '';
     child.stdout?.setEncoding('utf8');
     child.stdout?.on('data', (chunk: string) => {
@@ -138,17 +142,15 @@ class ClaudeSession implements EngineSession {
     this.emit({ type: 'turn.done', outcome: 'error', stop_reason: String(code ?? 'spawn_failed') });
   }
 
-  async interrupt(): Promise<{ stopped: boolean }> {
+  private procs(): ProcessRegistry { return this.deps.procs ?? sharedProcessRegistry(); }
+  /** SIGINT ends Claude's turn; it gets 3 s, then SIGTERM, then SIGKILL at 8 s, each to its whole process group. `hard` kills at once. */
+  async interrupt(o: { hard?: boolean } = {}): Promise<{ stopped: boolean; method?: 'sigint'; terminated?: Killed[] }> {
     const c = this.child;
-    if (!c) return { stopped: false };
+    if (!c || this.sawResult) return { stopped: false };
     this.interrupted = true;
-    c.kill('SIGINT');
-    const grace = this.o.limits?.interrupt_grace_ms ?? 3000;
-    await new Promise<void>((res) => {
-      const t = setTimeout(() => { c.kill('SIGTERM'); setTimeout(() => { c.kill('SIGKILL'); res(); }, 5000).unref(); }, grace);
-      t.unref(); c.once('close', () => { clearTimeout(t); res(); });
-    });
-    return { stopped: true };
+    if (!c.pid) { c.kill(o.hard ? 'SIGKILL' : 'SIGINT'); await this.exitWait; return { stopped: true, method: 'sigint', terminated: [] }; }
+    const r = await signalLadder({ agentId: this.agentId, procs: this.procs(), exited: this.exitWait, graceMs: this.o.limits?.interrupt_grace_ms ?? 3000, hard: o.hard, clock: this.deps.clock });
+    return { stopped: true, method: 'sigint', terminated: r.terminated };
   }
 
   async stop() { this.closed = true; await this.interrupt(); this.bridge?.close(); this.events.close(); }
