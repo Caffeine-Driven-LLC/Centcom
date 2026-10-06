@@ -26,8 +26,8 @@
    "note": "runner, supervision, limits, restart, escalation, env allow-list, TrustStore, runnerd daemon over unix socket (auth, frame cap, lock, idle exit), FakeEngine, 1 MiB line cap in both engines. Not done: Windows named pipe; real Claude per-turn kill is a failed turn, not an agent crash"
   },
   "C014": {
-   "pct": 0.6,
-   "note": "state names mapped in parsers and controller"
+   "pct": 0.95,
+   "note": "state machine (pure reducer, EVENT_STATE_TABLE), emitter (dedupe, 2/s, coalescing, wire-only), attachStateMachine on the bus, timers, golden claude/codex transcripts; contract gap: prompt-received and sleeping are not in the agent-level list so they stay local. Nothing wires it into the TUI mascot yet (C046)"
   },
   "C015": {
    "pct": 0.85,

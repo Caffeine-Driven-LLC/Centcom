@@ -35,7 +35,7 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 | [C035](plan/client/C035.md) | Prompt input: multiline, history, paste, slash commands | 85% | multiline, history, paste, slash popup; no external editor |
 | [C081](plan/client/C081.md) | Web app scaffold: Vite, React, router, theme | 85% | Vite + React local web app with launcher, workspace, polished UI; no router |
 
-+20 more in [`plan/STATUS.json`](plan/STATUS.json).
++19 more in [`plan/STATUS.json`](plan/STATUS.json).
 
 ### Ready to pick up (all dependencies done)
 
