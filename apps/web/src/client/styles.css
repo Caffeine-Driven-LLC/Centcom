@@ -67,3 +67,5 @@ small { color: var(--text-muted); }
 .agent { display: flex; gap: 12px; align-items: center; padding: 8px; border-radius: 10px; } .agent.needs { background: color-mix(in srgb, var(--status-warning) 12%, transparent); outline: 1px solid var(--status-warning); }
 @media (max-width: 900px) { .launcher { grid-template-columns: 1fr; } .hero { display: none; } .body { grid-template-columns: 1fr; } .side { display: none; } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+.seg { display: inline-flex; margin: 10px 0 6px; border: 1px solid var(--border-strong); border-radius: 999px; padding: 2px; background: var(--bg-sunken); } .seg button { padding: 4px 14px; border-radius: 999px; } .seg button.on { background: var(--accent-fill); color: var(--accent-on); font-weight: 600; }

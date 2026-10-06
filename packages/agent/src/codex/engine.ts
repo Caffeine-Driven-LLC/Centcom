@@ -1,0 +1,166 @@
+/** Drives the user's own `codex` CLI through `codex app-server` (JSON-RPC over stdio). Centcom never touches Codex credentials. */
+import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process';
+import { newId } from '../ids.js';
+import { AsyncQueue } from '../queue.js';
+import type { AgentEngine, ApprovalDecision, Capability, EngineSession, EngineStartOptions, EventBody, LoginKind, NormalisedEvent, PermissionMode } from '../types.js';
+import { ProviderError } from '../types.js';
+import { redact } from '../claude/engine.js';
+import { CodexMapper } from './map.js';
+import { RpcClient } from './rpc.js';
+import type { ModelChoice } from '../models.js';
+
+const CAPS = new Set<Capability>(['streaming', 'approvals', 'resume', 'mcp', 'thinking', 'usage', 'interrupt', 'compact', 'models.list']);
+
+export interface CodexEngineDeps { bin?: string; spawn?: typeof nodeSpawn; now?: () => Date; env?: Record<string, string | undefined> }
+
+/** Centcom's four permission modes as Codex approval policy + sandbox. */
+export function policyFor(mode: PermissionMode): { approvalPolicy: string; sandboxPolicy: { type: string } } {
+  switch (mode) {
+    case 'acceptEdits': return { approvalPolicy: 'on-request', sandboxPolicy: { type: 'workspaceWrite' } };
+    case 'plan': return { approvalPolicy: 'on-request', sandboxPolicy: { type: 'readOnly' } };
+    case 'bypassPermissions': return { approvalPolicy: 'never', sandboxPolicy: { type: 'dangerFullAccess' } };
+    default: return { approvalPolicy: 'untrusted', sandboxPolicy: { type: 'workspaceWrite' } }; // ask first
+  }
+}
+export function loginKindFromAccount(a: { type?: string } | null | undefined): LoginKind {
+  if (!a) return 'unknown'; if (a.type === 'chatgpt') return 'subscription'; if (a.type === 'apiKey') return 'api_key'; if (a.type === 'amazonBedrock') return 'cloud'; return 'unknown';
+}
+
+export class CodexEngine implements AgentEngine {
+  readonly id = 'codex' as const; readonly provider = 'openai' as const; readonly label = 'Codex';
+  constructor(private deps: CodexEngineDeps = {}) {}
+  capabilities() { return CAPS; }
+  async start(o: EngineStartOptions): Promise<EngineSession> { const s = new CodexSession(o, this.deps); await s.init(); return s; }
+}
+
+class CodexSession implements EngineSession {
+  readonly agentId: string;
+  readonly events = new AsyncQueue<NormalisedEvent>();
+  private seq = 0; private turn?: string; private codexTurn?: string; private threadId?: string;
+  private rpc?: RpcClient; private child?: ChildProcess;
+  private mapper = new CodexMapper();
+  private mode: PermissionMode; private model?: string;
+  private signedIn = false; private ready = false; private closed = false; private running = false; private interrupted = false;
+  private turnDone?: () => void;
+
+  constructor(private o: EngineStartOptions, private deps: CodexEngineDeps) { this.agentId = o.agentId; this.mode = o.permissionMode ?? 'default'; this.model = o.model; }
+  resumeToken() { return this.threadId; }
+  setModel(m: string) { this.model = m || undefined; }
+  setPermissionMode(m: PermissionMode) { this.mode = m; }
+
+  private emit(b: EventBody) { this.events.push({ ...b, v: 1, seq: ++this.seq, ts: (this.deps.now?.() ?? new Date()).toISOString(), agent_id: this.agentId, ...(this.turn ? { turn_id: this.turn } : {}) } as NormalisedEvent); }
+
+  async init() {
+    const spawnFn = this.deps.spawn ?? nodeSpawn;
+    let child: ChildProcess;
+    try { child = spawnFn(this.deps.bin ?? 'codex', ['app-server', '--listen', 'stdio://'], { cwd: this.o.cwd, env: { ...process.env, ...this.deps.env, ...this.o.env }, stdio: ['pipe', 'pipe', 'pipe'] }); }
+    catch (e) { return this.fail(e); }
+    this.child = child;
+    let err = ''; child.stderr?.setEncoding('utf8'); child.stderr?.on('data', (c: string) => { err = (err + c).slice(-8192); });
+    child.on('error', (e) => this.fail(e));
+    const rpc = this.rpc = new RpcClient(child);
+    rpc.onNotification = (m, p) => this.onNotification(m, p);
+    rpc.onServerRequest = (id, m, p) => void this.onServerRequest(id, m, p);
+    rpc.onClose = (code) => { this.ready = false; if (this.running && !this.closed) { this.emit({ type: 'error', code: 'provider_protocol_error', tool_message: redact(err.trim().split('\n').slice(-3).join('\n')) || `codex exited with code ${code}`, fatal: true }); this.finishTurn('error'); } };
+    try {
+      await rpc.request('initialize', { clientInfo: { name: 'centcom', title: 'Centcom', version: '0.1.0' } }, 20_000);
+      rpc.notify('initialized');
+      const acc = await rpc.request('account/read', { refreshToken: false }, 15_000);
+      this.signedIn = !!acc?.account; const login = loginKindFromAccount(acc?.account);
+      const pol = policyFor(this.mode);
+      const sandbox = ({ readOnly: 'read-only', workspaceWrite: 'workspace-write', dangerFullAccess: 'danger-full-access' } as Record<string, string>)[pol.sandboxPolicy.type];
+      const params = { cwd: this.o.cwd, approvalPolicy: pol.approvalPolicy, sandbox, ...(this.model ? { model: this.model } : {}), ...(this.o.systemPromptAppend ? { developerInstructions: this.o.systemPromptAppend } : {}) };
+      const r = this.o.resume?.engine_session_id ? await rpc.request('thread/resume', { threadId: this.o.resume.engine_session_id, ...params }, 30_000) : await rpc.request('thread/start', params, 30_000);
+      this.threadId = r.thread?.id; this.ready = true;
+      this.emit({ type: 'session.started', engine: 'codex', engine_session_id: this.threadId ?? '', model: r.model ?? this.model ?? 'codex', tools: ['shell', 'apply_patch'], mcp_servers: [], capabilities: [...CAPS], login_kind: login });
+      if (!this.signedIn) this.emit({ type: 'engine.warning', code: 'provider_not_signed_in', text: 'Codex is not signed in, or the login has expired. Run `codex login`, then send your message again.' });
+    } catch (e) {
+      const hint = redact(err.trim().split('\n').slice(-2).join('\n'));
+      this.fail(e, hint);
+    }
+  }
+
+  private fail(e: unknown, hint = '') {
+    const notInstalled = (e as NodeJS.ErrnoException)?.code === 'ENOENT';
+    const perr = new ProviderError(notInstalled ? 'provider_not_installed' : 'provider_protocol_error', 'codex', notInstalled ? 'Codex is not installed' : String(e));
+    this.emit({ type: 'error', code: perr.code, tool_message: notInstalled ? 'Could not find the `codex` command. Install Codex (npm i -g @openai/codex), sign in with `codex login`, then try again.' : redact(`${String((e as Error)?.message ?? e)} ${hint}`.trim()), fatal: true });
+    this.emit({ type: 'status', state: 'error' });
+  }
+
+  async send(prompt: string): Promise<{ turn_id: string }> {
+    if (this.closed) throw new Error('session closed');
+    if (this.running) throw new Error('a turn is already running');
+    const turn = newId('trn'); this.turn = turn;
+    this.emit({ type: 'turn.started', turn_id: turn }); this.emit({ type: 'status', state: 'prompt-received' });
+    if (!this.ready || !this.rpc || !this.threadId) { this.emit({ type: 'status', state: 'error' }); this.emit({ type: 'turn.done', outcome: 'error', stop_reason: 'not_ready' }); return { turn_id: turn }; }
+    if (!this.signedIn) {
+      this.emit({ type: 'error', code: 'provider_not_signed_in', tool_message: 'Codex is not signed in, or the login has expired. Run `codex login` in a terminal, then try again.', fatal: true });
+      this.emit({ type: 'status', state: 'error' }); this.emit({ type: 'turn.done', outcome: 'error', stop_reason: 'not_signed_in' }); return { turn_id: turn };
+    }
+    this.running = true; this.interrupted = false; this.codexTurn = undefined;
+    const done = new Promise<void>((res) => { this.turnDone = res; });
+    try {
+      const r = await this.rpc.request('turn/start', { threadId: this.threadId, input: [{ type: 'text', text: prompt }], ...(this.model ? { model: this.model } : {}), ...policyFor(this.mode) }, 30_000);
+      this.codexTurn = r.turn?.id;
+    } catch (e) {
+      this.emit({ type: 'error', code: 'provider_protocol_error', tool_message: redact(String((e as Error).message ?? e)), fatal: true }); this.finishTurn('error'); return { turn_id: turn };
+    }
+    void done; return { turn_id: turn };
+  }
+
+  private finishTurn(outcome: 'ok' | 'error' | 'canceled') {
+    if (!this.running) return;
+    this.running = false; this.emit({ type: 'status', state: outcome === 'error' ? 'error' : 'idle' }); this.emit({ type: 'turn.done', outcome }); this.turnDone?.();
+  }
+
+  private onNotification(method: string, p: any) {
+    if (p?.turnId && this.codexTurn && p.turnId !== this.codexTurn && method !== 'account/rateLimits/updated') return; // another turn (e.g. a sub-thread)
+    const evs = this.mapper.notification(method, p ?? {});
+    for (const b of evs) {
+      if (b.type === 'turn.done') { if (!this.running) continue; this.running = false; this.turnDone?.(); }
+      if (b.type === 'error') b.tool_message = redact(b.tool_message);
+      if (b.type === 'tool.result') b.summary = redact(b.summary);
+      this.emit(b);
+    }
+  }
+
+  private async onServerRequest(id: number | string, method: string, p: any) {
+    if (method !== 'item/commandExecution/requestApproval' && method !== 'item/fileChange/requestApproval') {
+      // anything else (user-input, MCP elicitation, token refresh, legacy approvals): decline rather than hang the turn
+      if (method === 'applyPatchApproval' || method === 'execCommandApproval') this.rpc?.respond(id, { decision: 'denied' });
+      else this.rpc?.respondError(id, -32601, `Centcom does not handle ${method}`);
+      this.emit({ type: 'engine.warning', code: 'unhandled_server_request', text: `Codex asked for ${method}, which Centcom does not support yet. It was declined.` });
+      return;
+    }
+    const info = this.mapper.approval(method, p ?? {});
+    const approval = { approval_id: newId('apr'), agent_id: this.agentId, tool_id: info.tool_id, tool: info.tool, summary: info.summary, risk: info.risk, ...(info.cwd ? { cwd: info.cwd } : {}), ...(info.command ? { command: info.command } : {}), ...(info.path ? { path: info.path } : {}), ...(info.diff ? { diff: info.diff } : {}) };
+    this.emit({ type: 'approval.requested', approval_id: approval.approval_id, tool_id: approval.tool_id, summary: `${approval.tool}: ${approval.summary}`, risk: approval.risk, ...(approval.command ? { command: approval.command } : {}), ...(approval.cwd ? { cwd: approval.cwd } : {}), ...(approval.diff ? { diff: approval.diff } : {}), ...(approval.path ? { path: approval.path } : {}) });
+    this.emit({ type: 'status', state: 'awaiting-approval' });
+    let d: ApprovalDecision;
+    try { d = this.o.approvalGate ? await this.o.approvalGate.decide(approval) : { decision: 'deny', scope: 'once', reason: 'no approval gate' }; } catch { d = { decision: 'deny', scope: 'once', reason: 'error' }; }
+    this.emit({ type: 'approval.resolved', approval_id: approval.approval_id, decision: d.decision, scope: d.scope, by: d.reason === 'interrupt' ? 'interrupt' : 'user' });
+    const decision = d.decision === 'approve' ? (d.scope === 'once' ? 'accept' : 'acceptForSession') : d.reason === 'interrupt' ? 'cancel' : 'decline';
+    this.rpc?.respond(id, { decision });
+  }
+
+  async interrupt(): Promise<{ stopped: boolean }> {
+    if (!this.running || !this.rpc || !this.threadId) return { stopped: false };
+    this.interrupted = true;
+    try { if (this.codexTurn) await this.rpc.request('turn/interrupt', { threadId: this.threadId, turnId: this.codexTurn }, 5000); } catch { /* fall through to the timeout below */ }
+    await Promise.race([new Promise<void>((res) => { const prev = this.turnDone; this.turnDone = () => { prev?.(); res(); }; }), new Promise<void>((res) => setTimeout(res, this.o.limits?.interrupt_grace_ms ?? 3000).unref())]);
+    if (this.running) this.finishTurn('canceled');
+    return { stopped: true };
+  }
+
+  /** Models the signed-in account can use (model/list). */
+  async listModels(): Promise<ModelChoice[]> {
+    if (!this.rpc || !this.ready) return [];
+    const r = await this.rpc.request('model/list', {}, 15_000);
+    return (r.data ?? []).filter((m: any) => !m.hidden).map((m: any): ModelChoice => ({ id: m.model, label: m.displayName ?? m.model, note: String(m.description ?? '').slice(0, 80), provider: 'openai' }));
+  }
+
+  async stop() {
+    this.closed = true; await this.interrupt();
+    this.rpc?.closed || this.child?.kill('SIGTERM'); this.events.close();
+  }
+}

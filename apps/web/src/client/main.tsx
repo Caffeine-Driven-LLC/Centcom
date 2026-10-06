@@ -20,9 +20,9 @@ function App() {
   useEffect(() => {
     if (!c.launcher || c.opened) return;
     const q = new URLSearchParams(location.search); const dir = q.get('open');
-    if (dir) { history.replaceState(null, '', location.pathname); c.send({ t: 'open', dir, demo: q.get('demo') === '1' }); }
+    if (dir) { history.replaceState(null, '', location.pathname); c.send({ t: 'open', dir, demo: q.get('demo') === '1', engine: q.get('engine') === 'codex' ? 'codex' : 'claude-code' }); }
   }, [c.launcher, c.opened, c]);
   if (c.opened) return <Workspace c={c} />;
-  return <Launcher c={c} onStart={(dir, demo, mode) => { if (mode === 'app') { c.send({ t: 'launchApp', dir, demo }); } else c.send({ t: 'open', dir, demo }); }} />;
+  return <Launcher c={c} onStart={(dir, demo, mode, engine) => { if (mode === 'app') { c.send({ t: 'launchApp', dir, demo, engine }); } else c.send({ t: 'open', dir, demo, engine }); }} />;
 }
 createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>);

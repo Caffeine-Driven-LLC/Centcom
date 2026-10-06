@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { ClaudeCodeEngine, DemoEngine, type AgentEngine } from '@centcom/agent';
+import { ClaudeCodeEngine, CodexEngine, DemoEngine, type AgentEngine } from '@centcom/agent';
 import { AppController, type Item } from '@centcom/tui';
 import type { ServerMsg, WebState } from './protocol.js';
 
@@ -15,8 +15,8 @@ export class Workspace {
     this.unsub = ctl.store.subscribe(() => this.push());
   }
 
-  static async open(dir: string, demo: boolean): Promise<Workspace> {
-    const engine: AgentEngine = demo ? new DemoEngine({ speed: 1 }) : new ClaudeCodeEngine();
+  static async open(dir: string, demo: boolean, which: 'claude-code' | 'codex' = 'claude-code'): Promise<Workspace> {
+    const engine: AgentEngine = demo ? new DemoEngine({ speed: 1 }) : which === 'codex' ? new CodexEngine() : new ClaudeCodeEngine();
     let branch = ''; try { branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { /* not a repo */ }
     const ctl = new AppController({ engine, demo, cwd: dir, branch, version: '0.1.0', ghosts: demo, permissionMode: 'default' });
     const ws = new Workspace(dir, ctl);

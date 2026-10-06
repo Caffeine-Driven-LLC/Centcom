@@ -4,12 +4,13 @@ import type { AppState, Item } from '@centcom/tui';
 export interface DirEntry { name: string; git: boolean }
 export interface RecentDir { dir: string; at: number }
 export interface ClaudeStatus { installed: boolean; version?: string; signedIn: 'yes' | 'no' | 'unknown'; kind?: string }
+export type CodexStatusMsg = ClaudeStatus
 
 export type ClientMsg =
   | { t: 'hello' }
   | { t: 'browse'; path: string }
-  | { t: 'open'; dir: string; demo?: boolean }
-  | { t: 'launchApp'; dir?: string; demo?: boolean }
+  | { t: 'open'; dir: string; demo?: boolean; engine?: 'claude-code' | 'codex' }
+  | { t: 'launchApp'; dir?: string; demo?: boolean; engine?: 'claude-code' | 'codex' }
   | { t: 'close' }
   | { t: 'submit'; text: string }
   | { t: 'approve'; decision: 'approve' | 'deny'; scope?: 'once' | 'session' | 'always' }
@@ -24,7 +25,7 @@ export type WebState = Omit<AppState, 'items' | 'approvals' | 'input' | 'cursor'
 };
 
 export type ServerMsg =
-  | { t: 'launcher'; home: string; cwd: string; recent: RecentDir[]; claude: ClaudeStatus; app: boolean }
+  | { t: 'launcher'; home: string; cwd: string; recent: RecentDir[]; claude: ClaudeStatus; codex: CodexStatusMsg; app: boolean }
   | { t: 'dir'; path: string; parent: string | null; git: boolean; entries: DirEntry[]; error?: string }
   | { t: 'opened'; dir: string }
   | { t: 'closed' }

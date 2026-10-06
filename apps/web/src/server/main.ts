@@ -5,7 +5,7 @@ import { homedir } from 'node:os';
 import { dirname, extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { detectClaude } from '@centcom/agent';
+import { detectClaude, detectCodex } from '@centcom/agent';
 import { findAppBrowser, openAsApp, openInBrowser } from './browsers.js';
 import { Workspace } from './workspace.js';
 import type { ClientMsg, DirEntry, RecentDir, ServerMsg } from './protocol.js';
@@ -56,7 +56,7 @@ const server = createServer((req, res) => {
     'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer', 'cache-control': 'no-store',
   };
   const given = url.searchParams.get('t');
-  if (given && given === TOKEN) { res.writeHead(302, { ...headers, location: url.pathname + (url.searchParams.has('open') ? `?open=${encodeURIComponent(url.searchParams.get('open')!)}${url.searchParams.get('demo') === '1' ? '&demo=1' : ''}` : ''), 'set-cookie': `centcom_t=${TOKEN}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000` }).end(); return; }
+  if (given && given === TOKEN) { res.writeHead(302, { ...headers, location: url.pathname + (url.searchParams.has('open') ? `?open=${encodeURIComponent(url.searchParams.get('open')!)}${url.searchParams.get('demo') === '1' ? '&demo=1' : ''}${url.searchParams.get('engine') === 'codex' ? '&engine=codex' : ''}` : ''), 'set-cookie': `centcom_t=${TOKEN}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000` }).end(); return; }
   if (cookieTok(req.headers.cookie) !== TOKEN) { res.writeHead(401, { ...headers, 'content-type': 'text/plain; charset=utf-8' }).end('Open Centcom with the link it printed in your terminal (it includes ?t=…).'); return; }
   let file = resolve(DIST, '.' + decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname));
   if (file !== DIST && !file.startsWith(DIST + sep)) { res.writeHead(403, headers).end(); return; }
@@ -87,27 +87,27 @@ wss.on('connection', (ws: WebSocket) => {
     try {
       switch (m.t) {
         case 'hello': {
-          const st = await detectClaude();
-          send({ t: 'launcher', home: HOME, cwd: process.cwd(), recent: readRecent(), claude: { installed: st.installed, version: st.version, signedIn: st.signedIn, kind: st.loginKind }, app: !!findAppBrowser() });
+          const [st, cx] = await Promise.all([detectClaude(), detectCodex()]);
+          send({ t: 'launcher', home: HOME, cwd: process.cwd(), recent: readRecent(), claude: { installed: st.installed, version: st.version, signedIn: st.signedIn, kind: st.loginKind }, codex: { installed: cx.installed, version: cx.version, signedIn: cx.signedIn, kind: cx.loginKind }, app: !!findAppBrowser() });
           if (current) send({ t: 'opened', dir: current.dir });
           break;
         }
         case 'browse': send({ t: 'dir', ...listDir(m.path) }); break;
         case 'open': {
-          const dir = resolve(m.dir);
+          const dir = resolve(m.dir); const key = `${dir}::${m.demo ? 'demo' : m.engine ?? 'claude-code'}`;
           if (!existsSync(dir) || !statSync(dir).isDirectory()) { send({ t: 'notice', level: 'error', text: 'That folder does not exist.' }); break; }
           detach();
-          let w = workspaces.get(dir);
-          if (!w) { w = await Workspace.open(dir, !!m.demo); workspaces.set(dir, w); }
+          let w = workspaces.get(key);
+          if (!w) { w = await Workspace.open(dir, !!m.demo, m.engine === 'codex' ? 'codex' : 'claude-code'); workspaces.set(key, w); }
           addRecent(dir); current = w; leave = w.join(send); send({ t: 'opened', dir });
           break;
         }
         case 'launchApp': {
-          const target = `http://${HOST}:${PORT}/?t=${TOKEN}` + (m.dir ? `&open=${encodeURIComponent(m.dir)}${m.demo ? '&demo=1' : ''}` : '');
+          const target = `http://${HOST}:${PORT}/?t=${TOKEN}` + (m.dir ? `&open=${encodeURIComponent(m.dir)}${m.demo ? '&demo=1' : ''}${m.engine === 'codex' ? '&engine=codex' : ''}` : '');
           if (!openAsApp(target)) send({ t: 'notice', level: 'warn', text: 'No Chrome, Chromium, Brave or Edge found for app mode. Opening in your browser instead.' }), openInBrowser(target);
           break;
         }
-        case 'close': { if (current) { const d = current.dir; detach(); const w = workspaces.get(d); if (w) { w.close(); workspaces.delete(d); } } send({ t: 'closed' }); break; }
+        case 'close': { if (current) { const w = current; detach(); w.close(); for (const [k, v] of workspaces) if (v === w) workspaces.delete(k); } send({ t: 'closed' }); break; }
         case 'submit': void current?.ctl.submit(String(m.text ?? '').slice(0, 100_000)); break;
         case 'approve': current?.ctl.answerApproval(m.decision === 'approve' ? 'approve' : 'deny', m.scope ?? 'once'); break;
         case 'interrupt': void current?.ctl.interrupt(); break;

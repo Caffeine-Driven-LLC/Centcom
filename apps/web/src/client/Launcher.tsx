@@ -4,22 +4,23 @@ import type { Conn } from './net.js';
 
 const short = (p: string, home: string) => (p.startsWith(home) ? '~' + p.slice(home.length) : p);
 
-export function Launcher({ c, onStart }: { c: Conn; onStart: (dir: string, demo: boolean, mode: 'web' | 'app') => void }) {
+export function Launcher({ c, onStart }: { c: Conn; onStart: (dir: string, demo: boolean, mode: 'web' | 'app', engine: 'claude-code' | 'codex') => void }) {
   const { launcher: L, dir } = c;
   const [demo, setDemo] = useState(false);
+  const [engine, setEngine] = useState<'claude-code' | 'codex'>('claude-code');
   const [typed, setTyped] = useState('');
   const [chosen, setChosen] = useState<string>();
   useEffect(() => { if (L && !dir) c.send({ t: 'browse', path: L.cwd }); }, [L, dir, c]);
   useEffect(() => { if (dir && !chosen) { setChosen(dir.git ? dir.path : undefined); setTyped(dir.path); } }, [dir, chosen]);
-  useEffect(() => { if (L && L.claude.installed === false) setDemo(true); }, [L]);
+  useEffect(() => { if (L && !L.claude.installed && !L.codex.installed) setDemo(true); else if (L && !L.claude.installed && L.codex.installed) setEngine('codex'); }, [L]);
   if (!L) return <div className="center muted">{c.up ? 'Loading…' : 'Connecting to Centcom…'}</div>;
 
   const go = (p: string) => { setChosen(undefined); c.send({ t: 'browse', path: p }); };
   const target = chosen ?? dir?.path;
-  const claude = L.claude;
-  const status = !claude.installed ? { cls: 'warn', text: 'Claude Code was not found. You can still try the demo agent.' }
-    : claude.signedIn === 'no' ? { cls: 'warn', text: 'Claude Code is installed but not signed in. Run `claude auth login`.' }
-      : { cls: 'ok', text: `Claude Code ${claude.version ?? ''} ready${claude.kind ? ` · ${claude.kind === 'subscription' ? 'your subscription' : claude.kind === 'api_key' ? 'your API key' : claude.kind}` : ''}` };
+  const claude = engine === 'codex' ? L.codex : L.claude; const name = engine === 'codex' ? 'Codex' : 'Claude Code';
+  const status = !claude.installed ? { cls: 'warn', text: `${name} was not found. You can still try the demo agent.` }
+    : claude.signedIn === 'no' ? { cls: 'warn', text: `${name} is installed but not signed in. Run \`${engine === 'codex' ? 'codex login' : 'claude auth login'}\`.` }
+      : { cls: 'ok', text: `${name} ${claude.version ?? ''} ready${claude.kind ? ` · ${claude.kind === 'subscription' ? 'your subscription' : claude.kind === 'api_key' ? 'your API key' : claude.kind}` : ''}` };
 
   return (
     <div className="launcher">
@@ -27,6 +28,9 @@ export function Launcher({ c, onStart }: { c: Conn; onStart: (dir: string, demo:
         <Cento state="first-run" color="violet" px={9} reduced={false} />
         <h1>Centcom</h1>
         <p className="tag">Command many hands.</p>
+        <div className="seg" role="radiogroup" aria-label="Agent">
+          {(['claude-code', 'codex'] as const).map((e) => <button key={e} role="radio" aria-checked={engine === e} className={engine === e ? 'on' : ''} onClick={() => setEngine(e)}>{e === 'codex' ? 'Codex' : 'Claude Code'}</button>)}
+        </div>
         <div className={`pill ${status.cls}`}>{status.text}</div>
         {L.recent.length > 0 && (
           <div className="recent"><h3>Recent</h3>
@@ -54,8 +58,8 @@ export function Launcher({ c, onStart }: { c: Conn; onStart: (dir: string, demo:
           <div className="target"><small>Working in</small><strong>{target ? short(target, L.home) : '—'}</strong></div>
           <label className="check"><input type="checkbox" checked={demo} onChange={(e) => setDemo(e.target.checked)} /> Demo agent <small>(no login, scripted)</small></label>
           <div className="actions">
-            <button className="primary" disabled={!target} onClick={() => target && onStart(target, demo, 'web')}>Start on web</button>
-            <button className="secondary" disabled={!target || !L.app} title={L.app ? 'Opens a window without browser chrome' : 'Needs Chrome, Chromium, Brave or Edge'} onClick={() => target && onStart(target, demo, 'app')}>Start as app</button>
+            <button className="primary" disabled={!target} onClick={() => target && onStart(target, demo, 'web', engine)}>Start on web</button>
+            <button className="secondary" disabled={!target || !L.app} title={L.app ? 'Opens a window without browser chrome' : 'Needs Chrome, Chromium, Brave or Edge'} onClick={() => target && onStart(target, demo, 'app', engine)}>Start as app</button>
           </div>
         </div>
         {c.notice && <div className={`toast ${c.notice.level}`} key={c.notice.n}>{c.notice.text}</div>}
