@@ -39,7 +39,7 @@ export const EVENT_STATE_TABLE: readonly TableRow[] = [
   ...(Object.entries(TOOL_KIND_STATE) as [ToolKind, AgentWireState][]).map(([k, s]) => ({ input: `tool.requested (${k})`, state: s, note: k === 'other' ? 'also any unknown tool' : undefined })),
   { input: 'tool.result', state: '(previous open tool, else thinking)', note: 'tests-pass / tests-fail when the command was a test run' },
   { input: 'subagent.started', state: 'sub-agent' },
-  { input: 'approval.requested', state: 'awaiting-approval', note: 'stays until resolved' },
+  { input: 'approval.requested', state: 'awaiting-approval', note: 'stays until every open approval is resolved; no other event (warning, error, compaction, tool, text, merge-conflict, saving, a dwell timer) displaces it. Only approval.resolved, turn.done, interrupt and exit leave it' },
   { input: 'approval.resolved (approve)', state: 'approved', note: '800 ms, then back to work' },
   { input: 'approval.resolved (deny)', state: 'denied', note: '800 ms, then back to work' },
   { input: 'question.asked', state: 'asking-question', note: 'stays until the next work event' },
