@@ -1,0 +1,43 @@
+diff --git a/a.js b/a.js
+deleted file mode 100644
+index 4cb29ea..0000000
+--- a/a.js
++++ /dev/null
+@@ -1,3 +0,0 @@
+-one
+-two
+-three
+diff --git a/bin.dat b/bin.dat
+index c866266..5663091 100644
+Binary files a/bin.dat and b/bin.dat differ
+diff --git a/new-file.md b/new-file.md
+new file mode 100644
+index 0000000..4e73d37
+--- /dev/null
++++ b/new-file.md
+@@ -0,0 +1,2 @@
++# hello
++world
+diff --git a/old-name.txt b/new-name.txt
+similarity index 100%
+rename from old-name.txt
+rename to new-name.txt
+diff --git a/retry.ts b/retry.ts
+index 5fd66a6..dea8973 100644
+--- a/retry.ts
++++ b/retry.ts
+@@ -1,6 +1,6 @@
+-export const retryCount = 3;
++export const retryLimit = 3;
+ export function run() {
+-  return retryCount;
++  return retryLimit;
+ }
+ // filler
+ // filler
+@@ -62,4 +62,4 @@ export function run() {
+ // filler
+ // filler
+ // filler
+-export const end = 1;
++export const end = 2;

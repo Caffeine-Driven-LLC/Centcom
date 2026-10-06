@@ -94,8 +94,8 @@
    "note": "virtualised layout with per-block cache (10k blocks), follow tail with \"N new\" indicator, ctrl+home/end, resize anchor, 5,000-block cap, terminal sanitising of every string, session-event reducer (seq order, delta reorder/dedupe/gap) and member identity rendering; loadRange for older blocks waits for remote history"
   },
   "C037": {
-   "pct": 0.5,
-   "note": "diff rendering; card gaps: unified diff parser with files and hunks, word highlight, gap collapse, sanitising"
+   "pct": 0.75,
+   "note": "unified-diff parser with caps (2,000 lines, 200 files, 50k lines in <300 ms), two-string differ, camelCase-aware word highlights as reverse-video spans, row layout with numbered gutter, wrapping, gap folding/expansion, binary/rename rows, DiffView with focusable gaps, diff.share adapter; gap: transcript and approval prompt still use util/diff.ts"
   },
   "C038": {
    "pct": 0.6,
