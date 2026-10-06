@@ -23,6 +23,7 @@ Options
   --cento-color <violet|red|yellow|green|brown>
   --theme <dark|light>         Graphite (default) or Paper (for light terminals)
   --colors <truecolor|256|16|never>  force a colour tier (NO_COLOR is honoured)
+  --demo-team                  with --demo: also show two pretend teammates (previews multiplayer)
   --no-motion                  turn animation off (also CENTCOM_REDUCE_MOTION=1)
   -v, --version   -h, --help
 
@@ -59,7 +60,7 @@ async function main() {
 
   let instance: ReturnType<typeof render> | undefined;
   const ctl = new AppController({
-    engine, demo, cwd: process.cwd(), branch, version: VERSION, permissionMode: mode, dangerous: dangerous || mode === 'bypassPermissions', ghosts: demo,
+    engine, demo, cwd: process.cwd(), branch, version: VERSION, permissionMode: mode, dangerous: dangerous || mode === 'bypassPermissions', ghosts: has('--demo-team'),
     settings: { theme: arg('--theme') === 'light' ? 'light' : 'dark', reducedMotion: reduced, ...(arg('--mascot') ? { mascot: arg('--mascot') as 'large' } : {}), ...(arg('--cento-color') ? { color: arg('--cento-color') as CentoColor } : {}) },
     onExit: () => instance?.unmount(),
   });

@@ -30,7 +30,7 @@ export function App({ ctl, tier }: AppProps) {
   useEffect(() => { setConfirming(false); }, [pending?.req.approval_id]);
 
   /* ---- layout ---- */
-  const showFleet = s.fleet && cols >= 110 && s.mode === 'chat';
+  const showFleet = s.fleet && s.agents.length > 1 && cols >= 110 && s.mode === 'chat'; // a solo session has no fleet panel; it appears when others join
   const mainW = cols - (showFleet ? FLEET_W + 1 : 0);
   const mascot = s.settings.mascot === 'auto' ? (rows >= 34 ? 'large' : rows >= 22 ? 'small' : 'off') : s.settings.mascot;
   const welcome = s.items.length === 0 && !s.busy && s.mode === 'chat' && !pending;

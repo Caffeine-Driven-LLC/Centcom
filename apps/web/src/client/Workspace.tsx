@@ -143,7 +143,7 @@ export function Workspace({ c }: { c: Conn }) {
   };
 
   const cmds: PaletteItem[] = [
-    { id: 'a:side', group: 'View', icon: 'panel', label: side ? 'Hide the side panel' : 'Show the side panel', hint: 'Ctrl/Cmd+B', run: toggleSide },
+    { id: 'a:side', group: 'View', icon: 'panel', label: side ? 'Hide Cento' : 'Show Cento', hint: 'Ctrl/Cmd+B', run: toggleSide },
     { id: 'a:theme', group: 'View', icon: theme === 'light' ? 'sun' : 'moon', label: `Theme: ${theme === 'system' ? 'follows your system' : theme}`, hint: 'switch dark, light, system', run: cycleTheme },
     { id: 'a:help', group: 'View', icon: 'help', label: 'Show keyboard shortcuts', hint: '?', run: () => setOv({ k: 'help' }) },
     { id: 'a:cento', group: 'View', icon: 'spark', label: 'Browse the Cento animations', hint: '/cento', run: () => setOv({ k: 'gallery' }) },
@@ -173,7 +173,7 @@ export function Workspace({ c }: { c: Conn }) {
         <section className="main">
           <div className="feed" ref={feed} onScroll={(e) => { const el = e.currentTarget; setStuck(el.scrollHeight - el.scrollTop - el.clientHeight < 40); }}>
             {welcome ? (
-              <div className="welcome"><Cento state="first-run" color={s.settings.color} px={8} reduced={s.settings.reducedMotion} />
+              <div className="welcome">{!side && <Cento state="first-run" color={s.settings.color} px={8} reduced={s.settings.reducedMotion} />}
                 <h2>What should we build?</h2><p className="muted path">{c.opened}</p>
                 <div className="suggest">{(s.demo ? ['/demo fix', '/demo search', '/demo delete'] : ['Explain this codebase', 'Find and fix a failing test', 'Review my uncommitted changes']).map((t) => <button key={t} onClick={() => send({ t: 'submit', text: t })}>{t}</button>)}</div>
               </div>
@@ -224,13 +224,13 @@ export function Workspace({ c }: { c: Conn }) {
         </section>
 
         {side && <aside className="side">
-          <div className="cento-card"><Cento state={me.state} color={s.settings.color} px={6} reduced={s.settings.reducedMotion} /></div>
-          <h4>Agents</h4>
+          <div className="cento-card"><Cento state={me.state} color={s.settings.color} px={s.agents.length > 1 ? 6 : 8} reduced={s.settings.reducedMotion} /><div className="cstate"><b>{s.approvals.length ? 'Needs you' : s.busy ? me.state.replace(/-/g, ' ') : 'Ready'}</b><small>{me.model ? modelLabel(me.model) : s.engineLabel}</small></div></div>
+          {s.agents.length > 1 && <><h4>In this session</h4>
           {[...s.agents].sort((a, b) => Number(b.mine) - Number(a.mine)).map((a) => (
             <div key={a.id} className={`agent ${a.state === 'awaiting-approval' ? 'needs' : ''}`}>
               <Mini state={a.mini} color={a.color} busy={a.busy} />
               <div className="ainfo"><b>{a.name}{a.mine && a.name !== 'you' && <small> you</small>}</b><span className={`astate ${a.busy ? 'busy' : ''}`}>{a.state === 'awaiting-approval' ? 'Needs you' : a.state.replace(/-/g, ' ')}</span><small>{a.model ? modelLabel(a.model) : a.engine}{a.cost ? ' · ' + money(a.cost) : ''}</small></div>
-            </div>))}
+            </div>))}</>}
         </aside>}
       </div>
       <StatusBar s={s} me={me} />
