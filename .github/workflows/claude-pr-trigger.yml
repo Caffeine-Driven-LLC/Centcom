@@ -1,0 +1,27 @@
+# Relays PR events for opted-in PRs (label claude-automerge) to claude-pr.yml through workflow_run.
+# A pull_request run executes the PR's own copy of a workflow; a workflow_run run executes main's.
+# Relaying this way means a PR can never edit the pipeline that judges it. Runs nothing itself.
+name: claude-pr-trigger
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  relay:
+    # Skipped (and not billed) for PRs that are not opted in, and for forks.
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (contains(github.event.pull_request.labels.*.name, 'claude-automerge') ||
+       github.event.label.name == 'claude-automerge')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Relay
+        env:
+          EVENT: ${{ github.event.action }}
+          NUMBER: ${{ github.event.pull_request.number }}
+        run: echo "PR #$NUMBER $EVENT; claude-pr.yml takes it from here."

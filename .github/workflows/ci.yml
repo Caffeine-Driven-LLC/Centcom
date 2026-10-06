@@ -3,6 +3,7 @@ name: CI
 on:
   push: { branches: [main] }
   pull_request:
+  workflow_dispatch: # claude-pr.yml runs main's CI after a merge made with GITHUB_TOKEN
 
 concurrency:
   group: ci-${{ github.ref }}
