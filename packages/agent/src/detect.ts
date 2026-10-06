@@ -2,7 +2,7 @@
 import { spawn } from 'node:child_process';
 import type { LoginKind } from './types.js';
 
-export interface ProviderStatus {
+export interface ClaudeDetection {
   engine: 'claude-code'; installed: boolean; version?: string; signedIn: 'yes' | 'no' | 'unknown'; loginKind: LoginKind; authMethod?: string;
 }
 
@@ -29,7 +29,7 @@ export function classifyAuthMethod(m: string | undefined): LoginKind {
   return 'unknown';
 }
 
-export async function detectClaude(bin = 'claude'): Promise<ProviderStatus> {
+export async function detectClaude(bin = 'claude'): Promise<ClaudeDetection> {
   const v = await run(bin, ['--version']);
   if (v.missing || (v.code !== 0 && !v.out)) return { engine: 'claude-code', installed: false, signedIn: 'unknown', loginKind: 'unknown' };
   const version = /\d+\.\d+\.\d+/.exec(v.out)?.[0];

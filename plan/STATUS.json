@@ -162,8 +162,8 @@
    "note": "codex app-server engine tested against a protocol-faithful fake and the real handshake; no real turn yet"
   },
   "C104": {
-   "pct": 0.6,
-   "note": "detect and status for both; no login/logout/doctor"
+   "pct": 0.9,
+   "note": "provider detect (5 s probes, 15 s overall, 30 s cache), classify, redact, semver, login/logout handoff (inherit stdio, no shell, no TTY refusal), message table for all 9 codes, doctor checks, centcom provider status|login|logout|doctor. Not done: real login/logout tried against live vendor tools; supported ranges are placeholders; main help text"
   },
   "C105": {
    "pct": 0.1,
