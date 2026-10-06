@@ -2,8 +2,8 @@
 
 Centcom writes a structured log so problems can be diagnosed without exposing anything private.
 
-- **Where:** `~/.centcom/logs/centcom.log` (or `$CENTCOM_STATE_DIR/logs`). The folder is private (0700) and files are 0600. At 5 MiB the file rotates to `centcom.log.1`, `.2`, keeping 3 files.
-- **How much:** `log.level` in your config (`debug`, `info`, `warn`, `error`; default `info`), or `--debug` for a single run. See [configuration](configuration.md).
+- **Where:** `~/.centcom/logs/centcom.log` (or `$CENTCOM_STATE_DIR/logs`). The folder is private (0700) and files are 0600. At 5 MiB the file rotates to `centcom.log.1`, `.2`, keeping 3 files (`log.max_files`). With `log.max_files: 1` there is no history: the file is deleted at the size limit and starts again, so it never exceeds `log.max_file_bytes`.
+- **How much:** `log.level` in your config (`debug`, `info`, `warn`, `error`, `silent`; default `info`). `silent` writes nothing at all, not even errors (no records are built, so the `log.redaction_failed` record cannot appear either), or `--debug` for a single run. See [configuration](configuration.md).
 - **Format:** one JSON object per line: `{"ts":…,"level":…,"component":…,"msg":"http.retry", …}`. `msg` is a fixed event name; variable details are fields.
 
 ## What is never logged
@@ -22,3 +22,13 @@ Writes never block the app and errors are swallowed. If the folder cannot be cre
 ## Diagnostics
 
 `collectDiagnostics` gathers what a bug report needs: app and contract version, OS, Node, terminal color depth, your settings with where each came from (values of sensitive keys are hidden), and the last 500 log records. It returns data only; the `centcom doctor` command (a separate lane) writes it out.
+
+## Performance
+
+The file sink queues records on a promise chain, but each queued write is a synchronous `appendFileSync`, so every record blocks the main thread for one small write. At `info` and above the volume is low and this is not noticeable. At `debug` or `trace` the volume is high and the writes add up; use those levels for a single run (`--debug`), not as a permanent setting. Records below the level are dropped before any work is done.
+
+## Several apps, one file
+
+Each process has one app logger. The web server creates a single logger shared by every open folder (each workspace adds its own `session_id` binding), so folders do not rotate each other's output. The first folder opened decides the web server's `log.*` settings until it restarts.
+
+The CLI and the web server are separate processes that can write the same `centcom.log`. Appends are small and made in append mode, so lines do not interleave, and before rotating a sink re-reads the real file size so it does not rotate output another process just wrote. The remaining limit: two processes can still rotate at nearly the same moment, which can lose or reorder a rotated file, and with `max_files: 1` one process can delete the other's recent lines. Point them at different `CENTCOM_STATE_DIR` values if that matters.

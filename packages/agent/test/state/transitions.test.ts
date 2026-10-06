@@ -75,3 +75,49 @@ describe('contract parity', () => {
     for (const bad of ['offline', 'reconnecting', 'rate-limited', 'quota-reached', 'teammate-joins']) expect(seen.has(bad)).toBe(false); expect([...seen].some((s) => s.startsWith('provider-'))).toBe(false);
   });
 });
+
+describe('awaiting-approval persistence', () => {
+  const apr = (id = 'apr_1'): EventBody => ({ type: 'approval.requested', approval_id: id, tool_id: 't1', summary: '', risk: 'high' });
+  const resolve = (id = 'apr_1'): EventBody => ({ type: 'approval.resolved', approval_id: id, decision: 'approve', scope: 'once', by: 'user' });
+  const open = () => run([{ type: 'turn.started', turn_id: 't' }, tool('Bash', 't1', 'npm test'), apr()]).c;
+  it("the reviewer's sequence: warning then dwell tick still shows awaiting-approval", () => {
+    let c = open(); const w = step(c, { type: 'engine.warning', code: 'x', text: 'y' }); c = w.ctx;
+    expect(w.state).toBe('awaiting-approval');
+    const t = nextState(c, { type: 'tick', timer: 'dwell', gen: c.gen }, 2000); expect(t.state).toBe('awaiting-approval');
+  });
+  const noise: [string, EventBody | { type: string; [k: string]: unknown }][] = [
+    ['turn.started', { type: 'turn.started', turn_id: 't2' }], ['thinking.delta', { type: 'thinking.delta', message_id: 'm', text: '' }], ['text.delta', { type: 'text.delta', message_id: 'm', index: 0, text: 'x' }],
+    ['tool.requested', tool('Read', 'r')], ['tool.result', { type: 'tool.result', tool_id: 't1', status: 'ok', summary: '' }], ['subagent.started', { type: 'subagent.started', subagent_id: 's', name: 'n' } as never], ['subagent.done', { type: 'subagent.done', subagent_id: 's' } as never],
+    ['question.asked', { type: 'question.asked', question_id: 'q', text: 'x' }], ['compaction.started', { type: 'compaction.started' }], ['compaction.ended', { type: 'compaction.ended' }],
+    ['engine.warning', { type: 'engine.warning', code: 'x', text: 'y' }], ['error (non-fatal)', { type: 'error', code: 'oops', tool_message: '', fatal: false }], ['error (fatal)', { type: 'error', code: 'oops', tool_message: '', fatal: true }],
+    ['error (rate limited)', { type: 'error', code: 'provider_rate_limited', tool_message: '', fatal: false }], ['usage', { type: 'usage' } as never], ['merge_conflict', { type: 'merge_conflict' }], ['saving', { type: 'saving' }],
+    ['tick dwell', { type: 'tick', timer: 'dwell', gen: -1 }], ['tick hard', { type: 'tick', timer: 'hard', gen: -1 }], ['tick sleep', { type: 'tick', timer: 'sleep', gen: -1 }],
+  ];
+  it.each(noise)('%s does not leave awaiting-approval', (_n, b) => {
+    const c = open(); const input = b.type === 'tick' ? { ...b, gen: c.gen } as never : null;
+    expect((input ? nextState(c, input, 1000) : step(c, b, 1000)).state).toBe('awaiting-approval');
+  });
+  it('any sequence of the events above (and their ticks) keeps awaiting-approval', () => {
+    let seed = 7; const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+    for (let round = 0; round < 200; round++) {
+      let c = open();
+      for (let i = 0; i < 30; i++) {
+        const [, b] = noise[Math.floor(rnd() * noise.length)]!; const s = b.type === 'tick' ? nextState(c, { ...b, gen: c.gen } as never, i * 100) : step(c, b, i * 100); c = s.ctx;
+        expect(s.state).toBe('awaiting-approval');
+      }
+    }
+  });
+  it.each([['approval.resolved', resolve(), 'approved'], ['turn.done', { type: 'turn.done', outcome: 'ok' } as EventBody, 'success']] as const)('%s leaves it', (_n, b, to) => { expect(step(open(), b).state).toBe(to); });
+  it('interrupt and exit leave it, and clear the approvals', () => {
+    const i = nextState(open(), { type: 'interrupt' }, 0); expect(i.state).toBe('idle'); expect(i.ctx.approvals).toEqual([]);
+    const x = nextState(open(), { type: 'exited', outcome: 'crash' }, 0); expect(x.state).toBe('crash'); expect(x.ctx.approvals).toEqual([]);
+  });
+  it('with two approvals open the state stays until both are resolved', () => {
+    let c = open(); c = step(c, apr('apr_2')).ctx;
+    const one = step(c, resolve('apr_1')); expect(one.state).toBe('awaiting-approval');
+    expect(step(one.ctx, resolve('apr_2')).state).toBe('approved');
+  });
+  it('after approval the dwell returns to the open tool, not to awaiting-approval', () => {
+    const r = step(open(), resolve()); expect(nextState(r.ctx, { type: 'tick', timer: 'dwell', gen: r.ctx.gen }, 900).state).toBe('running-command');
+  });
+});

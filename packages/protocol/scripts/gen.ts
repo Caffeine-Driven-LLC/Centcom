@@ -157,7 +157,7 @@ async function main() {
   let stale = 0;
   for (const [name, content] of Object.entries(files)) {
     const p = join(outDir, name); const cur = existsSync(p) ? readFileSync(p, 'utf8') : null;
-    if (check) { if (cur !== content) { stale++; console.error('STALE', name); } continue; }
+    if (check) { if (cur === null || cur.replace(/\r\n/g, '\n') !== content) { stale++; console.error('STALE', name); } continue; }
     mkdirSync(outDir, { recursive: true }); writeFileSync(p, content);
   }
   if (check) { if (stale) { console.error(`${stale} generated file(s) differ from contracts/. Run: pnpm --filter @centcom/protocol gen`); process.exit(1); } console.log('generated output is up to date'); return; }

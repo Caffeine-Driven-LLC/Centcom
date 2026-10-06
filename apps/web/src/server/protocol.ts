@@ -24,14 +24,14 @@ export type ClientMsg =
   | { t: 'auto'; on: boolean };
 
 /** AppState without the parts that only make sense in a terminal or cannot be serialised. */
-export type WebState = Omit<AppState, 'items' | 'approvals' | 'input' | 'cursor' | 'histIdx' | 'draft' | 'scroll' | 'palette' | 'modelSel' | 'gallery' | 'slashSel' | 'mode'> & {
+export type WebState = Omit<AppState, 'items' | 'approvals' | 'input' | 'cursor' | 'histIdx' | 'draft' | 'scroll' | 'palette' | 'modelSel' | 'gallery' | 'slashSel' | 'mode' | 'history'> & {
   approvals: { id: string; tool: string; summary: string; risk: string; path?: string; command?: string; diff?: string; agentName: string }[];
 };
 
 export type ServerMsg =
   | { t: 'launcher'; home: string; cwd: string; recent: RecentDir[]; claude: ClaudeStatus; codex: CodexStatusMsg; app: boolean; prefs: Prefs }
   | { t: 'dir'; path: string; parent: string | null; git: boolean; entries: DirEntry[]; error?: string; saved?: number }
-  | { t: 'opened'; dir: string }
+  | { t: 'opened'; dir: string; history: string[] } // prompt history rides along once here, not in every state push
   | { t: 'closed' }
   | { t: 'state'; state: WebState; changed: Item[]; order: string[] }
   | { t: 'notice'; level: 'info' | 'warn' | 'error'; text: string };

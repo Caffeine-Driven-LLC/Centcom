@@ -1,5 +1,4 @@
 /** Normalised engine events -> session wire events (CT-WS-SESSION-EVENTS). Pure. Model names, engine ids, versions and paths never go in a clear part. */
-import { AGENT_WIRE_STATES } from '@centcom/protocol';
 import type { NormalisedEvent, Risk } from '../types.js';
 
 export interface WireOut { k: string; p?: Record<string, unknown>; ct?: Record<string, unknown> }
@@ -12,7 +11,6 @@ export interface WireContext {
   debug?(msg: string, ctx?: Record<string, unknown>): void;
 }
 export interface EngineExit { agent_id: string; outcome: 'ok' | 'error' | 'canceled'; error_code?: string }
-const AGENT_LEVEL: ReadonlySet<string> = new Set(AGENT_WIRE_STATES);
 
 export function toSessionWire(ev: NormalisedEvent, c: WireContext): WireOut[] {
   switch (ev.type) {
@@ -23,15 +21,10 @@ export function toSessionWire(ev: NormalisedEvent, c: WireContext): WireOut[] {
     // a timeout or an interrupt is answered locally (the tool result says denied); only a person or a policy decision is a wire event
     case 'approval.resolved': return ev.by === 'user' || ev.by === 'policy' ? [{ k: 'approval.decision', p: { approval_id: ev.approval_id, decision: ev.decision, scope: ev.scope } }] : [];
     case 'tool.result': return [{ k: 'tool.result', ct: { agent_id: c.agentId, tool_id: ev.tool_id, status: ev.status, summary: ev.summary } }];
-    case 'status': {
-      if (ev.state.startsWith('provider-')) return []; // client-local, never sent
-      let state = ev.state; if (!AGENT_LEVEL.has(state)) { c.debug?.('wire.unknown_state'); state = 'thinking'; }
-      return [{ k: 'agent.state', p: { agent_id: c.agentId, state, since: c.now().toISOString() } }];
-    }
     case 'error': return [{ k: 'message.system', ct: { level: 'error', text: `provider_error:${ev.code}` } }];
     case 'model.changed': return [{ k: 'message.system', ct: { level: 'info', text: `model_changed:${ev.model}` } }];
-    case 'subagent.started': return [{ k: 'agent.state', p: { agent_id: c.agentId, state: 'sub-agent', since: c.now().toISOString() } }];
-    default: return []; // session.started, thinking.delta, usage.report, turn.*, subagent.text/done, warnings, questions: local only
+    // `agent.state` is NOT produced here: the state machine's emitter (C014) is its only owner (de-duplication, 2/s cap)
+    default: return []; // status, subagent.started, session.started, thinking.delta, usage.report, turn.*, subagent.text/done, warnings, questions: local only
   }
 }
 export const exitToWire = (x: EngineExit): WireOut => ({ k: 'agent.exit', p: { agent_id: x.agent_id, outcome: x.outcome, ...(x.error_code ? { error_code: x.error_code.slice(0, 200) } : {}) } });

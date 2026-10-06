@@ -20,7 +20,7 @@ const outs = (b: EventBody) => toSessionWire(mk(b, 1), ctx());
 const valid = (o: WireOut) => { if (o.p) expect(parseEventPayload(o.k, o.p).ok, `${o.k} clear part ${JSON.stringify(o.p)}`).toBe(true); if (o.ct) expect(parseSecretPayload(o.k, o.ct).ok, `${o.k} secret part ${JSON.stringify(o.ct)}`).toBe(true); };
 
 describe('toSessionWire', () => {
-  it('every produced clear part and secret part validates against the contract schema', () => { let n = 0; for (const b of ALL) for (const o of outs(b)) { valid(o); n++; } expect(n).toBeGreaterThan(10); });
+  it('every produced clear part and secret part validates against the contract schema', () => { let n = 0; for (const b of ALL) for (const o of outs(b)) { valid(o); n++; } expect(n).toBeGreaterThan(8); });
   it('an encrypted kind never carries a clear part, and a clear kind never carries a secret part', () => {
     for (const b of ALL) for (const o of outs(b)) { const mode = (EVENT_MODES as Record<string, string>)[o.k]; expect(mode, o.k).toBeDefined(); if (mode === 'encrypted') expect(o.p, o.k).toBeUndefined(); if (mode === 'clear') expect(o.ct, o.k).toBeUndefined(); if (mode === 'hybrid') expect(o.p, o.k).toBeTruthy(); if (o.k === 'approval.request') expect(o.ct).toBeTruthy(); }
   });
@@ -29,22 +29,18 @@ describe('toSessionWire', () => {
     expect(outs(ALL[3]!)[0]).toMatchObject({ k: 'message.assistant.done', ct: { input_tokens: 3, output_tokens: 2 } }); expect(outs(ALL[5]!)).toEqual([{ k: 'tool.request', ct: { agent_id: AGT, tool_id: 'tu_1', name: 'Bash', input_summary: 'npm test', risk: 'medium' } }]);
     expect(outs(ALL[6]!)[0]).toMatchObject({ k: 'approval.request', p: { approval_id: APR, agent_id: AGT, risk: 'high', approver: 'host', expires_at: '2026-10-06T12:10:00.000Z' }, ct: { summary: 'run tests', command: 'npm test', cwd: '/home/u/proj' } });
     expect(outs(ALL[7]!)).toEqual([{ k: 'approval.decision', p: { approval_id: APR, decision: 'approve', scope: 'once' } }]); expect(outs(ALL[8]!)).toHaveLength(1); expect(outs(ALL[9]!)).toEqual([]); expect(outs(ALL[10]!)).toEqual([]);
-    expect(outs(ALL[11]!)[0]).toMatchObject({ k: 'tool.result', ct: { status: 'ok' } }); expect(outs(ALL[13]!)[0]).toMatchObject({ k: 'agent.state', p: { state: 'sub-agent' } }); expect(outs(ALL[14]!)).toEqual([]); expect(outs(ALL[15]!)).toEqual([]);
+    expect(outs(ALL[11]!)[0]).toMatchObject({ k: 'tool.result', ct: { status: 'ok' } }); expect(outs(ALL[14]!)).toEqual([]); expect(outs(ALL[15]!)).toEqual([]);
     expect(outs(ALL[17]!)[0]).toMatchObject({ k: 'message.system', ct: { level: 'info' } }); expect(outs(ALL[22]!)[0]).toEqual({ k: 'message.system', ct: { level: 'error', text: 'provider_error:provider_rate_limited' } });
   });
-  it('local-only events produce nothing', () => { for (const i of [0, 1, 4, 14, 15, 16, 23, 24, 25]) expect(outs(ALL[i]!), String(ALL[i]!.type)).toEqual([]); });
-  it('provider-* states stay local; agent-level states pass; others become thinking (and are logged at debug)', () => {
-    const logs: string[] = []; const c = ctx({ debug: (m) => logs.push(m) }); const st = (s: string) => toSessionWire(mk({ type: 'status', state: s }, 1), c);
-    expect(st('provider-cap-reached')).toEqual([]); expect(st('editing-file')[0]!.p).toMatchObject({ state: 'editing-file' }); expect(st('prompt-received')[0]!.p).toMatchObject({ state: 'thinking' }); expect(st('future-state')[0]!.p).toMatchObject({ state: 'thinking' }); expect(logs).toHaveLength(2);
-  });
+  it('local-only events produce nothing', () => { for (const i of [0, 1, 4, 13, 14, 15, 16, 18, 19, 20, 21, 23, 24, 25]) expect(outs(ALL[i]!), String(ALL[i]!.type)).toEqual([]); });
   it('model names, engine ids, versions and paths never appear in a clear part', () => {
     const clear = JSON.stringify(ALL.flatMap((b) => outs(b).map((o) => o.p ?? {}))); for (const s of ['claude-x', 'claude-y', 'claude-code', '2.1.0', '/secret/path', '/home/u/proj', 'npm test']) expect(clear, s).not.toContain(s);
   });
   it('the same engine message id always maps to the same wire id', () => { const c = ctx(); const a = toSessionWire(mk({ type: 'text.delta', message_id: 'zz', index: 0, text: 'a' }, 1), c)[0]!.ct!.message_id; const b = toSessionWire(mk({ type: 'text.done', message_id: 'zz' }, 2), c)[0]!.ct!.message_id; expect(a).toBe(b); expect(a).not.toBe(MSG); });
   it('exitToWire builds agent.exit and validates', () => { const o = exitToWire({ agent_id: AGT, outcome: 'error', error_code: 'provider_protocol_error' }); expect(o).toEqual({ k: 'agent.exit', p: { agent_id: AGT, outcome: 'error', error_code: 'provider_protocol_error' } }); valid(o); expect(exitToWire({ agent_id: AGT, outcome: 'ok' }).p).toEqual({ agent_id: AGT, outcome: 'ok' }); });
-  it('property: random status sequences never produce an agent.state outside the agent-level list', () => {
-    fc.assert(fc.property(fc.array(fc.oneof(fc.constantFrom(...AGENT_WIRE_STATES, 'prompt-received', 'sleeping', 'provider-auth-required', 'offline', 'x'), fc.string()), { maxLength: 40 }), (states) => {
-      for (const s of states) for (const o of toSessionWire(mk({ type: 'status', state: s }, 1), ctx())) { expect(o.k).toBe('agent.state'); expect((AGENT_WIRE_STATES as readonly string[]).includes(o.p!.state as string)).toBe(true); valid(o); }
+  it('property: toSessionWire never produces agent.state (C014 owns it), whatever the events', () => {
+    fc.assert(fc.property(fc.array(fc.oneof(fc.constantFrom(...ALL), fc.string().map((state): EventBody => ({ type: 'status', state })), fc.constantFrom(...AGENT_WIRE_STATES).map((state): EventBody => ({ type: 'status', state }))), { maxLength: 40 }), (bodies) => {
+      for (const b of bodies) for (const o of toSessionWire(mk(b, 1), ctx())) expect(o.k).not.toBe('agent.state');
     }), { numRuns: 200 });
   });
 });

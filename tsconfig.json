@@ -14,9 +14,6 @@
       "@centcom/mascot": [
         "./packages/mascot/src/index.ts"
       ],
-      "@centcom/agent/events": [
-        "./packages/agent/src/events/index.ts"
-      ],
       "@centcom/agent": [
         "./packages/agent/src/index.ts"
       ],

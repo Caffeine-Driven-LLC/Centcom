@@ -7,7 +7,7 @@ const WIRE: ReadonlySet<string> = new Set(AGENT_WIRE_STATES);
 export const MIN_GAP_MS = 500; // at most 2 frames per agent per second
 
 export interface WirePayload { agent_id: AgentId; state: AgentWireState; since: string }
-export interface StateEmitter { push(agentId: AgentId, s: MachineState): void; dispose(): void }
+export interface StateEmitter { push(agentId: AgentId, s: MachineState): void; /** Drops everything kept for an agent (after it exited); a pending send is still delivered first. */ forget(agentId: AgentId): void; /** Number of agents with kept records. */ size(): number; dispose(): void }
 export interface EmitterDeps { clock: RunnerClock; send: (p: WirePayload) => void; /** States that are real but not agent-level (prompt-received, sleeping): for the UI, never sent. */ onLocal?: (agentId: AgentId, s: MachineState) => void }
 
 interface Rec { last?: string; lastSentAt: number; pending?: { state: AgentWireState; since: number }; timer?: unknown; since: number }
@@ -29,6 +29,12 @@ export function createStateEmitter(d: EmitterDeps): StateEmitter {
       const wait = r.lastSentAt + MIN_GAP_MS - now;
       if (wait <= 0) fire(id, r); else r.timer = d.clock.setTimeout(() => fire(id, r), wait);
     },
+    forget(id) {
+      const r = recs.get(id); if (!r) return;
+      if (r.timer !== undefined) { d.clock.clearTimeout(r.timer as never); r.timer = undefined; fire(id, r); } // deliver the last state (e.g. the crash) instead of losing it
+      recs.delete(id);
+    },
+    size: () => recs.size,
     dispose() { disposed = true; for (const r of recs.values()) if (r.timer !== undefined) d.clock.clearTimeout(r.timer as never); recs.clear(); },
   };
 }

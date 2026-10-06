@@ -11,6 +11,12 @@ Generated from `contracts/errors.json` and `packages/net/src/errors/messages.en.
 - What people see comes from the message table below, never from raw server text. A short, safe server explanation is added only if it contains no credentials or URL query strings. A support reference (`Ref: req_...`) is shown whenever there is a request id.
 - Errors never block local or LAN work; these helpers only describe what happened.
 
+## Known contract conflict
+
+`contracts/errors.json` marks six codes `retryable: true` that the normative status table in `00-foundations.md` says never to retry: 400 `authorization_pending`, 400 `slow_down`, 409 `session_paused`, 409 `lock_denied`, 409 `key_required` and 409 `export_not_ready`.
+
+`retryDecision` follows the status table: it decides on the HTTP status, so 400 and 409 are never retried automatically, whatever the `retryable` column below says for these six. A test pins this. Changing it needs a contract decision (device-login polling will need its own path in any case).
+
 ## Codes
 
 | Code | Status | Retryable | Shown as | Hint |

@@ -4,7 +4,8 @@ import { VirtualClock } from '@centcom/testkit';
 import { parseEventPayload } from '@centcom/protocol';
 import { AGENT_WIRE_STATES } from '@centcom/protocol';
 import { createStateEmitter, type WirePayload } from '../../src/index.js';
-import { AGT, WIRE } from './helpers.js';
+import { AGT, WIRE, ev, harness } from './helpers.js';
+import type { AgentId } from '../../src/index.js';
 
 const mk = () => { const clock = new VirtualClock(); const sends: (WirePayload & { at: number })[] = []; const local: string[] = []; const e = createStateEmitter({ clock, send: (p) => sends.push({ ...p, at: clock.now() }), onLocal: (_a, s) => local.push(s) }); return { clock, sends, local, e }; };
 
@@ -38,5 +39,15 @@ describe('emitter', () => {
       for (let i = 2; i < sends.length; i++) expect(sends[i]!.at - sends[i - 2]!.at).toBeGreaterThanOrEqual(1000); for (let i = 1; i < sends.length; i++) expect(sends[i]!.state).not.toBe(sends[i - 1]!.state); expect(sends.every((s) => WIRE.has(s.state))).toBe(true);
       if (latestWire !== undefined) expect(sends.at(-1)?.state ?? latestWire).toBe(latestWire);
     }), { numRuns: 150 });
+  });
+});
+
+describe('no per-agent growth', () => {
+  it('forget drops the emitter record, and exited agents leave nothing behind in the machine or the emitter', async () => {
+    const h = harness();
+    for (let i = 0; i < 300; i++) { const id = `agt_01JTEST${String(i).padStart(19, '0')}` as AgentId; h.bus.emit('agent:event', { agent_id: id, seq: 1, event: { ...ev({ type: 'turn.started', turn_id: 't' }), agent_id: id } }); h.bus.emit('agent:exited', { agent_id: id, outcome: 'ok' }); }
+    await h.settle(5000);
+    expect(h.att.size()).toBe(0);
+    expect(h.emitter.size()).toBe(0);
   });
 });
