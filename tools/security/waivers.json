@@ -1,0 +1,8 @@
+[
+  {
+    "id": "pinning",
+    "issue": "https://github.com/Caffeine-Driven-LLC/Centcom/blob/main/plan/client/C001.md",
+    "expires": "2026-12-31",
+    "reason": "28 dependency ranges still use ^; exact pinning comes with the tooling lane C001"
+  }
+]

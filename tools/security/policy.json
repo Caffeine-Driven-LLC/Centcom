@@ -1,0 +1,76 @@
+{
+  "licences": {
+    "allow": [
+      "MIT",
+      "Apache-2.0",
+      "BSD-2-Clause",
+      "BSD-3-Clause",
+      "ISC"
+    ],
+    "exceptions": [
+      {
+        "package": "caniuse-lite",
+        "licence": "CC-BY-4.0",
+        "reason": "browser support data used only at build time, not shipped"
+      },
+      {
+        "package": "@fontsource-variable/inter",
+        "licence": "OFL-1.1",
+        "reason": "font files; the OFL permits bundling and redistribution with the app"
+      },
+      {
+        "package": "@fontsource-variable/jetbrains-mono",
+        "licence": "OFL-1.1",
+        "reason": "font files; the OFL permits bundling and redistribution with the app"
+      },
+      {
+        "package": "argparse",
+        "licence": "Python-2.0",
+        "reason": "permissive PSF licence, build-time tooling dependency"
+      }
+    ]
+  },
+  "actions": {
+    "allowOwners": [
+      "actions",
+      "pnpm"
+    ],
+    "allowActions": []
+  },
+  "secrets": {
+    "allow": [
+      {
+        "path": "contracts/fixtures/providers/secret-patterns.json",
+        "reason": "labelled test values for the redaction tests (not real secrets)"
+      },
+      {
+        "path": "packages/agent/test/mcp/safety.test.ts",
+        "reason": "labelled test values for the redaction tests (not real secrets)"
+      },
+      {
+        "path": "packages/agent/test/memory/memory.test.ts",
+        "reason": "labelled test values for the redaction tests (not real secrets)"
+      },
+      {
+        "path": "packages/net/test/errors.test.ts",
+        "reason": "labelled test values for the redaction tests (not real secrets)"
+      },
+      {
+        "path": "packages/net/test/log.test.ts",
+        "reason": "labelled test values for the redaction tests (not real secrets)"
+      },
+      {
+        "path": "packages/protocol/test/redact.test.ts",
+        "reason": "labelled test values for the redaction tests (not real secrets)"
+      },
+      {
+        "path": "plan/client/C023.md",
+        "reason": "the lane card quotes the PEM header as text"
+      },
+      {
+        "path": "plan/lanes/client/C023.json",
+        "reason": "the lane card quotes the PEM header as text"
+      }
+    ]
+  }
+}

@@ -10,3 +10,7 @@ apps/web/dist
 /dist
 /artifacts
 *.key
+security-report.json
+conformance-report.json
+release-gate-report.json
+release-gate-inputs/

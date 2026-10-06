@@ -1,0 +1,20 @@
+{
+  "$comment": "The parts of the CycloneDX 1.5 JSON schema that Centcom's SBOM uses, with the same names, enums and patterns. It is a subset, not the full schema.",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["bomFormat", "specVersion", "serialNumber", "version", "metadata", "components"],
+  "additionalProperties": true,
+  "properties": {
+    "bomFormat": { "const": "CycloneDX" },
+    "specVersion": { "const": "1.5" },
+    "serialNumber": { "type": "string", "pattern": "^urn:uuid:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$" },
+    "version": { "type": "integer", "minimum": 1 },
+    "metadata": { "type": "object", "required": ["timestamp", "component"], "properties": { "timestamp": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$" }, "component": { "$ref": "#/definitions/component" } } },
+    "components": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/component" } },
+    "dependencies": { "type": "array", "items": { "type": "object", "required": ["ref"], "properties": { "ref": { "type": "string" }, "dependsOn": { "type": "array", "items": { "type": "string" } } } } }
+  },
+  "definitions": {
+    "hash": { "type": "object", "required": ["alg", "content"], "properties": { "alg": { "enum": ["MD5", "SHA-1", "SHA-256", "SHA-384", "SHA-512", "SHA3-256", "SHA3-384", "SHA3-512", "BLAKE2b-256", "BLAKE2b-384", "BLAKE2b-512", "BLAKE3"] }, "content": { "type": "string", "pattern": "^([a-fA-F0-9]{32}|[a-fA-F0-9]{40}|[a-fA-F0-9]{64}|[a-fA-F0-9]{96}|[a-fA-F0-9]{128})$" } } },
+    "component": { "type": "object", "required": ["type", "name"], "properties": { "type": { "enum": ["application", "framework", "library", "container", "platform", "operating-system", "device", "device-driver", "firmware", "file", "machine-learning-model", "data"] }, "bom-ref": { "type": "string" }, "name": { "type": "string", "minLength": 1 }, "version": { "type": "string" }, "purl": { "type": "string", "pattern": "^pkg:[a-z]+/.+" }, "scope": { "enum": ["required", "optional", "excluded"] }, "hashes": { "type": "array", "items": { "$ref": "#/definitions/hash" } } } }
+  }
+}

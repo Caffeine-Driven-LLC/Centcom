@@ -19,15 +19,19 @@
     "web:app": "pnpm web:build && tsx apps/web/src/server/main.ts --app",
     "skills:sync": "tsx tools/skills/sync.ts",
     "changeset": "changeset",
-    "release:meta": "node tools/release/build-meta.mjs"
+    "release:meta": "node tools/release/build-meta.mjs",
+    "security:check": "tsx tools/security/run.ts",
+    "sbom": "tsx tools/security/sbom-cli.ts"
   },
   "devDependencies": {
+    "@changesets/cli": "3.0.3",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
+    "ajv": "8.20.0",
+    "fast-check": "^3.23.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0",
-    "fast-check": "^3.23.0",
-    "@changesets/cli": "3.0.3"
+    "yaml": "2.9.1"
   }
 }

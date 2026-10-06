@@ -1,0 +1,15 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":pinAllExceptPeerDependencies", "helpers:pinGitHubActionDigests"],
+  "schedule": ["before 6am on monday"],
+  "timezone": "Europe/Berlin",
+  "rangeStrategy": "pin",
+  "prConcurrentLimit": 5,
+  "packageRules": [
+    { "matchUpdateTypes": ["minor", "patch"], "groupName": "weekly non-major updates" },
+    { "matchUpdateTypes": ["major"], "minimumReleaseAge": "7 days", "dependencyDashboardApproval": false },
+    { "matchManagers": ["github-actions"], "groupName": "github actions", "pinDigests": true }
+  ],
+  "vulnerabilityAlerts": { "labels": ["security"], "minimumReleaseAge": null },
+  "ignoreScripts": true
+}

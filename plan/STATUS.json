@@ -240,6 +240,10 @@
   "C051": {
    "pct": 0.9,
    "note": "HTTP client in @centcom/net: operation table generated from openapi.yaml with a CI drift check; typed call, listPage, paginate, revalidate, getStatus, getJwks; CT-ERR retries with full jitter and a 60 s sleep budget, idempotency keys, single-flight 401 refresh, ETag and If-Match, size guard, tolerant response checks, typed errors; all 93 operations pass against the mock. Gaps: responses are checked with generated shapes (types and required fields), not the C003 Ajv validators; no lane uses the client yet"
+  },
+  "C099": {
+   "pct": 0.7,
+   "note": "security baseline: pnpm security:check (secret scan, install scripts, exact pinning [waived to 2026-12-31 until C001], lockfile integrity, workflow lint, licence allow-list, audit with 3 retries, fails closed), waivers with issue URL and 90-day expiry, CycloneDX 1.5 SBOM per artifact (pnpm sbom, validated against a schema subset), keystore scan, redaction fuzz, Renovate config, threat model, checklist, review log; ci.yml pinned by SHA; gaps: SBOM not attached to a real release, full CycloneDX schema, keystore scan not yet run after a real login flow (C052 PR), web CSP review, runner env review"
   }
  },
  "next": [
