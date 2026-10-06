@@ -102,8 +102,8 @@
    "note": "approval prompt with y/n/a and high-risk confirm; card gaps: layout details, session scope, edit, type-ahead guard, expiry"
   },
   "C039": {
-   "pct": 0.4,
-   "note": "header and status line; card gaps: status fields/layout API, quota chip, banner, cost format"
+   "pct": 0.7,
+   "note": "status fields and layout with the drop order constant, branch cut, quota/role/connectivity chips as words, cost format, service banner from a local table, statusText sentence, StatusHeader/Footer/ServiceBanner; gap: the app still draws its own header/status line; status.showCost not read from config"
   },
   "C040": {
    "pct": 0.5,
