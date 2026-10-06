@@ -5,7 +5,7 @@ import { Rich } from './ui.js';
 import { formatCost, formatTokens, fit, lineWidth, sp, type Line } from '../util/text.js';
 
 const MODE: Record<string, [string, 'accent.hover' | 'status.warning' | 'status.info' | 'status.danger']> = {
-  default: ['ask first', 'accent.hover'], acceptEdits: ['accept edits', 'status.warning'], plan: ['plan · read-only', 'status.info'], bypassPermissions: ['bypass', 'status.danger'],
+  default: ['ask first', 'accent.hover'], acceptEdits: ['accept edits', 'status.warning'], plan: ['plan · read-only', 'status.info'], bypassPermissions: ['⚠ NO APPROVALS', 'status.danger'],
 };
 
 export function StatusLine({ s, width }: { s: AppState; width: number }) {

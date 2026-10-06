@@ -16,6 +16,8 @@ export interface ControllerOptions {
   engine: AgentEngine; demo: boolean; cwd: string; branch?: string; version: string; permissionMode?: PermissionMode;
   onExit?: () => void; ghosts?: boolean; settings?: Partial<Settings>; verbs?: VerbRotator;
   skills?: Skill[]; // pass [] to disable discovery (tests)
+  /** Started with --dangerously-skip-permissions: Shift+Tab can cycle into bypass. */
+  dangerous?: boolean;
 }
 
 let uid = 0;
@@ -141,11 +143,11 @@ export class AppController {
   private ruleKey(r: ApprovalRequest) { return `${r.tool}:${r.command ?? r.path ?? ''}`; }
   decide(r: ApprovalRequest): Promise<ApprovalDecision> {
     const mode = this.state.settings.permissionMode;
+    if (mode === 'bypassPermissions') return Promise.resolve({ decision: 'approve', scope: 'once' }); // the user turned approvals off
     const write = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit'].includes(r.tool);
     if (this.sessionRules.has(this.ruleKey(r)) && r.risk !== 'high') return Promise.resolve({ decision: 'approve', scope: 'session' });
     if (mode === 'plan' && (write || r.tool === 'Bash') && r.risk !== 'low') return Promise.resolve({ decision: 'deny', scope: 'once', reason: 'plan mode is read-only' });
     if (r.risk === 'low') return Promise.resolve({ decision: 'approve', scope: 'once' });
-    if (mode === 'bypassPermissions' && r.risk !== 'high') return Promise.resolve({ decision: 'approve', scope: 'once' });
     if (mode === 'acceptEdits' && write && r.risk !== 'high') return Promise.resolve({ decision: 'approve', scope: 'once' });
     return new Promise((resolve) => {
       const me = this.state.agents.find((a) => a.id === r.agent_id);
@@ -224,8 +226,20 @@ export class AppController {
   }
 
   cycleMode() {
-    const cur = this.state.settings.permissionMode; const next = MODES[(MODES.indexOf(cur) + 1) % MODES.length]!;
-    this.setSettings({ permissionMode: next }); this.session?.setPermissionMode?.(next); this.toast('info', modeLabel(next));
+    const cur = this.state.settings.permissionMode;
+    const order: PermissionMode[] = this.o.dangerous || cur === 'bypassPermissions' ? [...MODES, 'bypassPermissions'] : MODES;
+    this.setMode(order[(order.indexOf(cur) + 1) % order.length]!);
+  }
+
+  /** Change how permissions are asked. Switching to bypass is explicit, loud and reversible. */
+  setMode(m: PermissionMode) {
+    const prev = this.state.settings.permissionMode; if (m === prev) return;
+    this.setSettings({ permissionMode: m }); this.session?.setPermissionMode?.(m);
+    if (m === 'bypassPermissions') {
+      this.addItem({ kind: 'notice', id: nid('n'), level: 'warn', text: 'Dangerously skip permissions is ON', detail: 'Cento will run commands and edit files without asking, including destructive ones. Use /mode default to turn approvals back on.' });
+      this.driver.setState('warning');
+    } else if (prev === 'bypassPermissions') this.toast('ok', `Approvals are back on (${modeLabel(m)})`);
+    else this.toast('info', modeLabel(m));
   }
 
   setSettings(p: Partial<Settings>) {
@@ -244,7 +258,12 @@ export class AppController {
       case 'agents': this.set((s) => ({ fleet: !s.fleet })); break;
       case 'quit': this.o.onExit?.(); break;
       case 'interrupt': await this.interrupt(); break;
-      case 'mode': { const m = arg as PermissionMode; if (MODES.concat('bypassPermissions').includes(m)) { this.setSettings({ permissionMode: m }); this.session?.setPermissionMode?.(m); this.toast('info', modeLabel(m)); } else this.toast('info', `Mode: ${modeLabel(this.state.settings.permissionMode)}. Try /mode plan`); break; }
+      case 'mode': {
+        const alias: Record<string, PermissionMode> = { bypass: 'bypassPermissions', yolo: 'bypassPermissions', skip: 'bypassPermissions', dangerous: 'bypassPermissions', ask: 'default', edits: 'acceptEdits', accept: 'acceptEdits' };
+        const m = (alias[arg.toLowerCase()] ?? arg) as PermissionMode;
+        if (MODES.concat('bypassPermissions').includes(m)) this.setMode(m); else this.toast('info', `Mode: ${modeLabel(this.state.settings.permissionMode)}. Try /mode plan, /mode edits or /mode bypass`);
+        break;
+      }
       case 'mascot': if (['large', 'small', 'off', 'auto'].includes(arg)) this.setSettings({ mascot: arg as Settings['mascot'] }); else this.toast('info', 'Try /mascot large, small, off or auto'); break;
       case 'color': if (['violet', 'red', 'yellow', 'green', 'brown'].includes(arg)) this.setSettings({ color: arg as CentoColor }); else this.toast('info', 'Colours: violet red yellow green brown'); break;
       case 'theme': if (arg === 'dark' || arg === 'light') this.setSettings({ theme: arg }); else this.toast('info', 'Try /theme dark or /theme light'); break;

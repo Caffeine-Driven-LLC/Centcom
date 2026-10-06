@@ -10,8 +10,8 @@
 <text x="24" y="34" fill="#E6EBFF" font-size="16" font-weight="700">Centcom client</text>
 <text x="736" y="34" fill="#3DF2C8" font-size="16" font-weight="700" text-anchor="end">29% built</text>
 <rect x="24" y="52" width="712" height="26" rx="13" fill="#141C3E"/>
-<g clip-path="url(#c)"><g class="gl"><rect x="24" y="52" width="203.2" height="26" fill="url(#g)"/><rect x="24" y="52" width="203.2" height="26" fill="url(#s)" class="st"/><rect x="24" y="52" width="160" height="26" fill="url(#sh)" class="sh" style="mix-blend-mode:screen"/></g></g>
-<rect x="225.2" y="52" width="4" height="26" rx="2" fill="#fff" fill-opacity=".85" class="gl"/>
+<g clip-path="url(#c)"><g class="gl"><rect x="24" y="52" width="207.3" height="26" fill="url(#g)"/><rect x="24" y="52" width="207.3" height="26" fill="url(#s)" class="st"/><rect x="24" y="52" width="160" height="26" fill="url(#sh)" class="sh" style="mix-blend-mode:screen"/></g></g>
+<rect x="229.3" y="52" width="4" height="26" rx="2" fill="#fff" fill-opacity=".85" class="gl"/>
 <text x="24" y="100" fill="#A9B6E8" font-size="12">Plan and contracts 100% · implementation by lane size · updated from plan/STATUS.json</text>
 <text x="24" y="125" fill="#A9B6E8" font-size="11">M0</text><text x="64" y="125" fill="#7384CC" font-size="11">Contracts and scaffolding</text>
 <rect x="270" y="117" width="350" height="8" rx="4" fill="#141C3E"/>
@@ -19,8 +19,8 @@
 <text x="736" y="125" fill="#C9D2F5" font-size="11" text-anchor="end">28% · 1/12 lanes</text>
 <text x="24" y="145" fill="#A9B6E8" font-size="11">M1</text><text x="64" y="145" fill="#7384CC" font-size="11">Solo agent in the terminal</text>
 <rect x="270" y="137" width="350" height="8" rx="4" fill="#141C3E"/>
-<rect x="270" y="137" width="228.8" height="8" rx="4" fill="url(#g)"/>
-<text x="736" y="145" fill="#C9D2F5" font-size="11" text-anchor="end">65% · 13/39 lanes</text>
+<rect x="270" y="137" width="231.2" height="8" rx="4" fill="url(#g)"/>
+<text x="736" y="145" fill="#C9D2F5" font-size="11" text-anchor="end">66% · 13/39 lanes</text>
 <text x="24" y="165" fill="#A9B6E8" font-size="11">M2</text><text x="64" y="165" fill="#7384CC" font-size="11">LAN multiplayer</text>
 <rect x="270" y="157" width="350" height="8" rx="4" fill="#141C3E"/>
 <rect x="270" y="157" width="1.8" height="8" rx="4" fill="url(#g)"/>
@@ -30,8 +30,8 @@
 <text x="736" y="185" fill="#C9D2F5" font-size="11" text-anchor="end">0% · 0/3 lanes</text>
 <text x="24" y="205" fill="#A9B6E8" font-size="11">M4</text><text x="64" y="205" fill="#7384CC" font-size="11">Teams and money</text>
 <rect x="270" y="197" width="350" height="8" rx="4" fill="#141C3E"/>
-<rect x="270" y="197" width="54.1" height="8" rx="4" fill="url(#g)"/>
-<text x="736" y="205" fill="#C9D2F5" font-size="11" text-anchor="end">15% · 1/11 lanes</text>
+<rect x="270" y="197" width="64.2" height="8" rx="4" fill="url(#g)"/>
+<text x="736" y="205" fill="#C9D2F5" font-size="11" text-anchor="end">18% · 1/11 lanes</text>
 <text x="24" y="225" fill="#A9B6E8" font-size="11">M5</text><text x="64" y="225" fill="#7384CC" font-size="11">Fleet and polish</text>
 <rect x="270" y="217" width="350" height="8" rx="4" fill="#141C3E"/>
 <text x="736" y="225" fill="#C9D2F5" font-size="11" text-anchor="end">0% · 0/14 lanes</text>

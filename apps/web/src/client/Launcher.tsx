@@ -1,68 +1,62 @@
 import { useEffect, useState } from 'react';
 import { Cento } from './Cento.js';
+import { Icon } from './Icon.js';
 import type { Conn } from './net.js';
 
 const short = (p: string, home: string) => (p.startsWith(home) ? '~' + p.slice(home.length) : p);
+type Engine = 'claude-code' | 'codex';
 
-export function Launcher({ c, onStart }: { c: Conn; onStart: (dir: string, demo: boolean, mode: 'web' | 'app', engine: 'claude-code' | 'codex') => void }) {
+export function Launcher({ c, onStart }: { c: Conn; onStart: (dir: string, demo: boolean, mode: 'web' | 'app', engine: Engine) => void }) {
   const { launcher: L, dir } = c;
-  const [demo, setDemo] = useState(false);
-  const [engine, setEngine] = useState<'claude-code' | 'codex'>('claude-code');
-  const [typed, setTyped] = useState('');
-  const [chosen, setChosen] = useState<string>();
+  const [demo, setDemo] = useState(false); const [engine, setEngine] = useState<Engine>('claude-code');
+  const [typed, setTyped] = useState(''); const [chosen, setChosen] = useState<string>();
   useEffect(() => { if (L && !dir) c.send({ t: 'browse', path: L.cwd }); }, [L, dir, c]);
-  useEffect(() => { if (dir && !chosen) { setChosen(dir.git ? dir.path : undefined); setTyped(dir.path); } }, [dir, chosen]);
+  useEffect(() => { if (dir) setTyped(dir.path); }, [dir]);
   useEffect(() => { if (L && !L.claude.installed && !L.codex.installed) setDemo(true); else if (L && !L.claude.installed && L.codex.installed) setEngine('codex'); }, [L]);
-  if (!L) return <div className="center muted">{c.up ? 'Loading…' : 'Connecting to Centcom…'}</div>;
+  if (!L) return <div className="center"><div className="boot"><Cento state="thinking" color="violet" px={5} reduced={false} /><span>{c.up ? 'Loading…' : 'Connecting to Centcom…'}</span></div></div>;
 
   const go = (p: string) => { setChosen(undefined); c.send({ t: 'browse', path: p }); };
-  const target = chosen ?? dir?.path;
-  const claude = engine === 'codex' ? L.codex : L.claude; const name = engine === 'codex' ? 'Codex' : 'Claude Code';
-  const status = !claude.installed ? { cls: 'warn', text: `${name} was not found. You can still try the demo agent.` }
-    : claude.signedIn === 'no' ? { cls: 'warn', text: `${name} is installed but not signed in. Run \`${engine === 'codex' ? 'codex login' : 'claude auth login'}\`.` }
-      : { cls: 'ok', text: `${name} ${claude.version ?? ''} ready${claude.kind ? ` · ${claude.kind === 'subscription' ? 'your subscription' : claude.kind === 'api_key' ? 'your API key' : claude.kind}` : ''}` };
+  const target = chosen ?? dir?.path; const st = engine === 'codex' ? L.codex : L.claude; const name = engine === 'codex' ? 'Codex' : 'Claude Code';
+  const status = !st.installed ? { cls: 'warn', text: `${name} was not found. You can still try the demo agent.` }
+    : st.signedIn === 'no' ? { cls: 'warn', text: `Not signed in. Run ${engine === 'codex' ? 'codex login' : 'claude auth login'} in a terminal.` }
+      : { cls: 'ok', text: `${name} ${st.version ?? ''} · ${st.kind === 'subscription' ? 'your subscription' : st.kind === 'api_key' ? 'your API key' : 'ready'}` };
+  const go2 = (mode: 'web' | 'app') => target && onStart(target, demo, mode, engine);
 
   return (
     <div className="launcher">
       <aside className="hero">
-        <Cento state="first-run" color="violet" px={9} reduced={false} />
-        <h1>Centcom</h1>
-        <p className="tag">Command many hands.</p>
-        <div className="seg" role="radiogroup" aria-label="Agent">
-          {(['claude-code', 'codex'] as const).map((e) => <button key={e} role="radio" aria-checked={engine === e} className={engine === e ? 'on' : ''} onClick={() => setEngine(e)}>{e === 'codex' ? 'Codex' : 'Claude Code'}</button>)}
+        <div className="brand"><Cento state="first-run" color="violet" px={7} reduced={false} /><h1>Centcom</h1><p>Command many hands.</p></div>
+        <div className="field"><label>Agent</label>
+          <div className="seg" role="radiogroup" aria-label="Agent">{(['claude-code', 'codex'] as const).map((e) => <button key={e} role="radio" aria-checked={engine === e} className={engine === e ? 'on' : ''} onClick={() => setEngine(e)}>{e === 'codex' ? 'Codex' : 'Claude Code'}</button>)}</div>
+          <div className={`status ${status.cls}`}><i />{status.text}</div>
+          <label className="check"><input type="checkbox" checked={demo} onChange={(e) => setDemo(e.target.checked)} /><span>Use the demo agent <small>No login, scripted</small></span></label>
         </div>
-        <div className={`pill ${status.cls}`}>{status.text}</div>
-        {L.recent.length > 0 && (
-          <div className="recent"><h3>Recent</h3>
-            {L.recent.slice(0, 6).map((r) => <button key={r.dir} className="row" onClick={() => { setChosen(r.dir); setTyped(r.dir); c.send({ t: 'browse', path: r.dir }); }}><span>{r.dir.split('/').pop() || r.dir}</span><small>{short(r.dir, L.home)}</small></button>)}
-          </div>)}
+        {L.recent.length > 0 && <div className="field"><label>Recent</label><div className="recent">
+          {L.recent.slice(0, 5).map((r) => <button key={r.dir} className="rrow" onClick={() => { setChosen(r.dir); c.send({ t: 'browse', path: r.dir }); }}><Icon name="folder" size={15} /><span><b>{r.dir.split('/').pop() || r.dir}</b><small>{short(r.dir, L.home)}</small></span></button>)}</div></div>}
+        <p className="legal">Centcom drives your own CLI. It never sees your login. A product of Caffeine Driven.</p>
       </aside>
 
       <main className="picker">
-        <h2>Pick a project folder</h2>
+        <div className="phead"><h2>Choose a project</h2><p>Pick the folder Cento should work in.</p></div>
         <form className="pathbar" onSubmit={(e) => { e.preventDefault(); go(typed); }}>
-          <button type="button" className="icon" title="Up one level" disabled={!dir?.parent} onClick={() => dir?.parent && go(dir.parent)}>↑</button>
-          <input value={typed} onChange={(e) => setTyped(e.target.value)} spellCheck={false} aria-label="Folder path" />
-          <button type="button" className="icon" title="Home" onClick={() => go(L.home)}>⌂</button>
+          <button type="button" className="iconbtn" title="Parent folder" aria-label="Parent folder" disabled={!dir?.parent} onClick={() => dir?.parent && go(dir.parent)}><Icon name="up" /></button>
+          <button type="button" className="iconbtn" title="Home folder" aria-label="Home folder" onClick={() => go(L.home)}><Icon name="home" /></button>
+          <input value={typed} onChange={(e) => setTyped(e.target.value)} spellCheck={false} aria-label="Folder path" placeholder="/path/to/project" />
         </form>
         <div className="list" role="listbox" aria-label="Folders">
-          {dir?.error && <div className="muted pad">{dir.error}</div>}
-          {dir && !dir.error && dir.entries.length === 0 && <div className="muted pad">No sub-folders here.</div>}
-          {dir?.entries.map((e) => (
-            <button key={e.name} className="row" role="option" onDoubleClick={() => go(`${dir.path}/${e.name}`)} onClick={() => { setChosen(`${dir.path}/${e.name}`); setTyped(`${dir.path}/${e.name}`); }}
-              aria-selected={chosen === `${dir.path}/${e.name}`} data-sel={chosen === `${dir.path}/${e.name}`}>
-              <span>📁 {e.name}</span>{e.git && <small className="git">git</small>}
-            </button>))}
+          {dir?.error && <div className="empty"><Icon name="lock" size={20} /><b>{dir.error}</b><small>Choose another folder or go up a level.</small></div>}
+          {dir && !dir.error && dir.entries.length === 0 && <div className="empty"><Icon name="folder" size={20} /><b>No sub-folders here</b><small>You can start in this folder.</small></div>}
+          {dir?.entries.map((e) => { const p = `${dir.path}/${e.name}`; const on = chosen === p; return (
+            <button key={e.name} className="frow" role="option" aria-selected={on} data-sel={on} onClick={() => { setChosen(p); setTyped(p); }} onDoubleClick={() => go(p)}>
+              <Icon name="folder" size={16} /><span>{e.name}</span>{e.git && <span className="tag"><Icon name="git" size={11} />git</span>}<Icon name="chevron" size={14} className="go" onClick={(ev) => { ev.stopPropagation(); go(p); }} />
+            </button>); })}
         </div>
-        <div className="foot">
-          <div className="target"><small>Working in</small><strong>{target ? short(target, L.home) : '—'}</strong></div>
-          <label className="check"><input type="checkbox" checked={demo} onChange={(e) => setDemo(e.target.checked)} /> Demo agent <small>(no login, scripted)</small></label>
-          <div className="actions">
-            <button className="primary" disabled={!target} onClick={() => target && onStart(target, demo, 'web', engine)}>Start on web</button>
-            <button className="secondary" disabled={!target || !L.app} title={L.app ? 'Opens a window without browser chrome' : 'Needs Chrome, Chromium, Brave or Edge'} onClick={() => target && onStart(target, demo, 'app', engine)}>Start as app</button>
-          </div>
-        </div>
-        {c.notice && <div className={`toast ${c.notice.level}`} key={c.notice.n}>{c.notice.text}</div>}
+        <footer className="foot">
+          <div className="target"><small>Working in</small><b title={target}>{target ? short(target, L.home) : 'Nothing selected'}</b></div>
+          <button className="btn" disabled={!target || !L.app} onClick={() => go2('app')} title={L.app ? 'Opens a window without browser chrome' : 'Needs Chrome, Chromium, Brave or Edge'}>Start as app</button>
+          <button className="btn primary" disabled={!target} onClick={() => go2('web')}>Start on web</button>
+        </footer>
+        {c.notice && <div className={`toast ${c.notice.level}`} key={c.notice.n} role="status">{c.notice.text}</div>}
       </main>
     </div>
   );

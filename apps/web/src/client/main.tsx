@@ -4,6 +4,8 @@ import { createTheme } from '@centcom/theme';
 import { Launcher } from './Launcher.js';
 import { Workspace } from './Workspace.js';
 import { useConnection } from './net.js';
+import '@fontsource-variable/inter';
+import '@fontsource-variable/jetbrains-mono';
 import './styles.css';
 
 const TOKENS = ['bg.base', 'bg.surface', 'bg.raised', 'bg.overlay', 'bg.sunken', 'bg.hover', 'bg.selected', 'border.subtle', 'border.default', 'border.strong', 'text.primary', 'text.secondary', 'text.muted', 'text.link', 'accent.primary', 'accent.fill', 'accent.hover', 'accent.on', 'signal', 'status.success', 'status.warning', 'status.danger', 'status.info'] as const;

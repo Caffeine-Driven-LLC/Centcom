@@ -31,7 +31,7 @@ function toolLines(it: Extract<Item, { kind: 'tool' }>, width: number): Line[] {
   if (it.status === 'denied') out.push([sp(IND + '└ ', { c: 'text.muted' }), sp(result[0] ?? 'declined', { c: 'status.warning' })]);
   else if (result.length) {
     const colour = it.status === 'error' ? 'status.danger' : 'text.muted';
-    const stats = it.diff ? diffStats(parseDiff(it.diff)) : undefined;
+    const stats = it.diff && it.status === 'ok' ? diffStats(parseDiff(it.diff)) : undefined; // a declined change never happened: no +/- counts
     result.slice(0, 4).forEach((r, i) => out.push([sp(i === 0 ? IND + '└ ' : IND + '  ', { c: 'text.muted' }), sp(truncate(r, width - 6), { c: colour }), ...(i === 0 && stats ? [sp(`  +${stats.add} -${stats.del}`, { c: 'text.muted' })] : [])]));
   }
   if (it.diff && (it.status === 'ok' || it.approval === 'approved')) for (const l of renderDiff(it.diff, width - 4, 12)) out.push([sp(IND + '  '), ...l]);

@@ -22,20 +22,20 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 5. **C017 git worktree manager, then C024 agent fleet** — unlocks the multi-agent story; the fleet panel is only fed demo agents right now
 6. **C050 non-interactive mode (print / JSON)** — needed for scripting and for CI use
 7. **C007 mock backend, then the M2 LAN lanes (C074, C054-C056, C071-C076)** — starts multiplayer; none of M2 exists yet
-8. **Package the web launcher as a real desktop app** — "Start as app" opens a chromeless browser window today; it is also untested end to end
+8. **Package the web launcher as a real desktop app** — "Start as app" opens a chromeless Chromium window (verified); a signed installable app (Electron or Tauri) is still to do
 
 ### Started, not finished
 
 | Lane | What | Done | Note |
 |---|---|--:|---|
 | [C102](plan/client/C102.md) | Claude Code engine: drive the user’s own claude binary (stream-json, resume, approvals bridge) | 90% | claude stream-json, approvals bridge, resume token, interrupt; no version-range check |
+| [C015](plan/client/C015.md) | Permission policy engine bridging engine approval requests | 85% | modes incl. dangerously-skip-permissions, session rules, real approval bridge; no persisted "always" rules |
 | [C035](plan/client/C035.md) | Prompt input: multiline, history, paste, slash commands | 85% | multiline, history, paste, slash popup; no external editor |
+| [C081](plan/client/C081.md) | Web app scaffold: Vite, React, router, theme | 85% | Vite + React local web app with launcher, workspace, polished UI; no router |
 | [C101](plan/client/C101.md) | Engine abstraction: AgentEngine interface, capabilities and normalised event stream | 85% | AgentEngine + normalised events; not yet generated from contracts |
 | [C016](plan/client/C016.md) | Command risk classification and sandbox settings passed to the engines | 80% | command risk classes; Codex sandbox/approval policy per mode |
 | [C020](plan/client/C020.md) | Skills pack: install and manage Claude Code skills and Codex AGENTS.md guidance | 80% | auto skills + centcom-master (208 skills); no Codex AGENTS.md install |
 | [C029](plan/client/C029.md) | Usage and cost display from engine reports | 80% | tokens, estimated cost, 5h/7d limits |
-| [C042](plan/client/C042.md) | Fleet panel: agent list, states, needs-you ordering | 80% | fleet panel with mini Cento; fed by demo ghosts only |
-| [C047](plan/client/C047.md) | Settings commands: theme, mascot, spinner, motion, density | 80% | /theme /mascot /color /motion /mode |
 
 +19 more in [`plan/STATUS.json`](plan/STATUS.json).
 

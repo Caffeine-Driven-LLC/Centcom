@@ -17,7 +17,8 @@ Usage
 Options
   --demo                       scripted demo agent (no login, no model)
   --engine <claude-code|codex|demo>  choose the agent engine (default: claude-code if installed)
-  --mode <default|plan|acceptEdits>  start in a permission mode
+  --mode <default|plan|acceptEdits|bypassPermissions>  start in a permission mode
+  --dangerously-skip-permissions   never ask: run commands and edit files freely (alias: --yolo)
   --mascot <large|small|off>   Cento size (default: auto from terminal height)
   --cento-color <violet|red|yellow|green|brown>
   --theme <dark|light>         Abyss (default) or Shallows (for light terminals)
@@ -52,12 +53,13 @@ async function main() {
   }
   engine = demo ? new DemoEngine({ speed: 1 }) : wantCodex ? new CodexEngine() : new ClaudeCodeEngine();
   let branch = ''; try { branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { /* not a git repo */ }
-  const mode = (arg('--mode') as PermissionMode | undefined) ?? 'default';
+  const dangerous = has('--dangerously-skip-permissions') || has('--yolo');
+  const mode: PermissionMode = dangerous ? 'bypassPermissions' : (arg('--mode') as PermissionMode | undefined) ?? 'default';
   const reduced = has('--no-motion') || process.env.CENTCOM_REDUCE_MOTION === '1';
 
   let instance: ReturnType<typeof render> | undefined;
   const ctl = new AppController({
-    engine, demo, cwd: process.cwd(), branch, version: VERSION, permissionMode: mode, ghosts: demo,
+    engine, demo, cwd: process.cwd(), branch, version: VERSION, permissionMode: mode, dangerous: dangerous || mode === 'bypassPermissions', ghosts: demo,
     settings: { theme: arg('--theme') === 'light' ? 'light' : 'dark', reducedMotion: reduced, ...(arg('--mascot') ? { mascot: arg('--mascot') as 'large' } : {}), ...(arg('--cento-color') ? { color: arg('--cento-color') as CentoColor } : {}) },
     onExit: () => instance?.unmount(),
   });
@@ -66,6 +68,7 @@ async function main() {
   process.on('exit', leave);
   await ctl.start();
   if (note) ctl.notice('warn', note);
+  if (mode === 'bypassPermissions') ctl.notice('warn', 'Dangerously skip permissions is ON', 'Cento will run commands and edit files without asking. Use /mode default to turn approvals back on.');
   instance = render(<App ctl={ctl} tier={tier} />, { exitOnCtrlC: false, patchConsole: false, maxFps: 30 });
   await instance.waitUntilExit();
   ctl.stop();

@@ -3,7 +3,7 @@ export const COMMANDS: SlashCommand[] = [
   { name: 'help', desc: 'Show keys and commands' },
   { name: 'clear', desc: 'Clear the transcript' },
   { name: 'agents', desc: 'Show or hide the fleet panel' },
-  { name: 'mode', args: '[default|plan|acceptEdits|bypassPermissions]', desc: 'Set how permissions are asked' },
+  { name: 'mode', args: '[default|edits|plan|bypass]', desc: 'Set how permissions are asked (bypass = dangerously skip permissions)' },
   { name: 'mascot', args: '[large|small|off|auto]', desc: 'Change how big Cento is' },
   { name: 'color', args: '[violet|red|yellow|green|brown]', desc: 'Change Cento\'s colour' },
   { name: 'theme', args: '[dark|light]', desc: 'Switch Abyss / Shallows' },

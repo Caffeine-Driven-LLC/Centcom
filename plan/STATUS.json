@@ -30,8 +30,8 @@
    "note": "state names mapped in parsers and controller"
   },
   "C015": {
-   "pct": 0.7,
-   "note": "modes, session rules, real approval bridge; no persisted \"always\" rules"
+   "pct": 0.85,
+   "note": "modes incl. dangerously-skip-permissions, session rules, real approval bridge; no persisted \"always\" rules"
   },
   "C016": {
    "pct": 0.8,
@@ -138,11 +138,11 @@
    "note": "reduced motion and NO_COLOR; no screen-reader mode"
   },
   "C081": {
-   "pct": 0.7,
-   "note": "Vite + React local web app; no router"
+   "pct": 0.85,
+   "note": "Vite + React local web app with launcher, workspace, polished UI; no router"
   },
   "C083": {
-   "pct": 0.4,
+   "pct": 0.5,
    "note": "workspace view with approvals; single local session"
   },
   "C086": {
@@ -201,7 +201,7 @@
   },
   {
    "title": "Package the web launcher as a real desktop app",
-   "why": "\"Start as app\" opens a chromeless browser window today; it is also untested end to end"
+   "why": "\"Start as app\" opens a chromeless Chromium window (verified); a signed installable app (Electron or Tauri) is still to do"
   }
  ]
 }

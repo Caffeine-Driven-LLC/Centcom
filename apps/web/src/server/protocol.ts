@@ -17,6 +17,7 @@ export type ClientMsg =
   | { t: 'interrupt' }
   | { t: 'setModel'; id: string }
   | { t: 'cycleMode' }
+  | { t: 'setMode'; mode: 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions' }
   | { t: 'auto'; on: boolean };
 
 /** AppState without the parts that only make sense in a terminal or cannot be serialised. */

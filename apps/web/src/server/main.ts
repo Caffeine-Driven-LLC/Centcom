@@ -99,7 +99,7 @@ wss.on('connection', (ws: WebSocket) => {
           detach();
           let w = workspaces.get(key);
           if (!w) { w = await Workspace.open(dir, !!m.demo, m.engine === 'codex' ? 'codex' : 'claude-code'); workspaces.set(key, w); }
-          addRecent(dir); current = w; leave = w.join(send); send({ t: 'opened', dir });
+          addRecent(dir); current = w; send({ t: 'opened', dir }); leave = w.join(send); // 'opened' first: the client resets its state on it, and join() sends the first snapshot
           break;
         }
         case 'launchApp': {
@@ -113,6 +113,7 @@ wss.on('connection', (ws: WebSocket) => {
         case 'interrupt': void current?.ctl.interrupt(); break;
         case 'setModel': current?.ctl.setModel(String(m.id ?? '')); break;
         case 'cycleMode': current?.ctl.cycleMode(); break;
+        case 'setMode': if (['default', 'acceptEdits', 'plan', 'bypassPermissions'].includes(m.mode)) current?.ctl.setMode(m.mode); break;
         case 'auto': current?.ctl.setSettings({ autoSkills: !!m.on }); break;
       }
     } catch (e) { send({ t: 'notice', level: 'error', text: e instanceof Error ? e.message : String(e) }); }
