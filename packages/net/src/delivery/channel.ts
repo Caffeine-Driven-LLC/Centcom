@@ -71,6 +71,8 @@ export class ReliableChannel extends TypedEmitter<ChannelEvents> {
     try { const v = await this.o.seqStore.load(this.sid); if (this.inbox.lastSeq === null && int(v) && v >= 0) this.inbox.setLastSeq(v); } catch { this.log?.warn('delivery.seq_load_failed'); }
   }
 
+  /** Stop waiting for one frame's echo and fail it with `err` (the relay answered it with something other than an echo, such as a lock denial). */
+  refuse(id: string, err: unknown): boolean { if (!this.outbox.list().some((e) => e.id === id)) return false; this.outbox.fail(id, err); this.checkDrain(); return true; }
   /** The relay refused a frame (a sys.error says so without naming it): the oldest frame still waiting for its echo is the one, because the relay answers in order. Returns whether there was one. */
   refuseOldest(err: unknown): boolean { const e = this.outbox.list()[0]; if (!e) return false; this.outbox.fail(e.id, err); this.checkDrain(); return true; }
   /** Send an ack for everything processed now (and so save the position): used before leaving. */

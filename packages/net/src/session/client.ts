@@ -5,6 +5,7 @@ import type { DeviceKeyStore } from '../crypto/device-keys.js';
 import { inviteSecretFromFragment, openInviteBundle } from '../crypto/bundle.js';
 import type { Keychain } from '../crypto/keychain.js';
 import { KeyRing, epochOf, type KeyRingStore } from '../crypto/keyring.js';
+import { pathHmac } from '../crypto/path-mac.js';
 import type { TrustStore } from '../crypto/trust-store.js';
 import { b64, sodium, unb64 } from '../crypto/sodium.js';
 import { ReliableChannel } from '../delivery/channel.js';
@@ -52,12 +53,16 @@ export interface SessionHandle {
   history: { fetch(afterSeq: number): Promise<number> };
   /** accept the new keys of a device whose keys changed (after the person compared fingerprints) */
   trustDevice(device: string): Promise<void>;
+  /** the keyed hash of a path under the current session key (what other members see instead of the path) */
+  pathMac(path: string): string;
+  /** give up on a frame that was sent but will never be echoed (the relay answered it another way); its promise fails with `reason` */
+  abandon(frameId: string, reason: Error): void;
   /** a link to give to a view-only guest: the web address plus `#k=<key>` */
   createShareLink(): Promise<{ token: string; url: string; expires_at: string; fragment: string }>;
 }
 const realClock: RelayClock = { now: () => Date.now(), setTimeout: (fn, ms) => setTimeout(fn, ms), clearTimeout: (h) => clearTimeout(h as unknown as ReturnType<typeof setTimeout>) };
 /** sys.error codes that mean the relay refused the frame we just sent (it does not say which, so the oldest unechoed one). */
-const FRAME_REFUSALS = new Set<string>(['queue_full', 'queue_item_gone', 'queue_not_allowed', 'forbidden', 'role_insufficient', 'muted', 'session_locked', 'host_required', 'frame_too_large', 'invalid_frame', 'lock_denied']);
+const FRAME_REFUSALS = new Set<string>(['queue_full', 'queue_item_gone', 'queue_not_allowed', 'forbidden', 'role_insufficient', 'muted', 'session_locked', 'host_required', 'frame_too_large', 'invalid_frame', 'lock_denied', 'quota_exceeded', 'entitlement_required']);
 const RECENT_EVENTS = 500; const KEY_WAIT_MS = 10_000; const MAX_PENDING = 1000;
 
 class Connection implements SessionHandle {
@@ -204,6 +209,8 @@ class Connection implements SessionHandle {
     } finally { this.catchingUp = false; }
   }
 
+  abandon(frameId: string, reason: Error): void { this.channel.refuse(frameId, reason); }
+  pathMac(path: string): string { const { kid } = this.ring.current(); return pathHmac(this.ring, kid, path); }
   async createShareLink(): Promise<{ token: string; url: string; expires_at: string; fragment: string }> {
     if (this.me.role !== 'host') throw new SessionError('not_host', 'Only the host can make a share link.'); const l = await this.rest.createShareLink(this.id); const { kid, key } = this.ring.current();
     return { ...l, fragment: `#k=${b64(key)}&kid=${kid}` };

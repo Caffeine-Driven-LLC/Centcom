@@ -50,7 +50,7 @@ export class Peer {
     return this;
   }
 }
-export async function rig(o: { relay?: { replayFrames?: number } } = {}) {
+export async function rig(o: { relay?: { replayFrames?: number; maxParallelAgents?: number } } = {}) {
   const m = await startMockBackend({ clock: 'virtual', seed: 7, ...(o.relay ? { relay: o.relay } : {}) }); const reg = newRegistry();
   const mk = (name: string, role: 'host' | 'editor', sub?: string, register = true) => new Peer(name, sub, m, reg, role, register);
   return { m, reg, host: await mk('Host', 'host').init(), guest: await mk('Guest', 'editor', 'usr_01JA3Z8K2M5N7P9Q0R1S2T3V4X').init(), mk, async stop() { await m.stop(); } };

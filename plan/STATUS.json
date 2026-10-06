@@ -260,6 +260,10 @@
   "C061": {
    "pct": 0.8,
    "note": "approval router: request (apr_ id reused as frame id, clear part only the five routing fields, ttl clamped to 10 min, deny on any failure), answer, authorize matrix by live roster (host, delegated approvers, any_editor, owner via supplied set, never viewer or the requester), first decision wins, dedupe and pending() across reconnects, sink with scopes, awaiting/resolved events; session client gains onAny replay; gaps: owner needs workspace roles from outside, not wired to the permission engine or the fleet panel"
+  },
+  "C062": {
+   "pct": 0.8,
+   "note": "fleet sync: publishers (spawn with plan-limit error, state with map validation, local-only states refused, 2/s per agent and no repeats, exit, encrypted branch.update, conflicts), lock arbitration through the relay with keyed path hashes (grant, deny, release, expire, reconnect re-ask), pure fleet model (replay deterministic, sender owns the agent, unknown states generic), bus bridge; three members on the mock relay incl. a lock clash and a conflict; mock relay gained lock arbitration and an agent limit; gaps: not wired to the real LockClient and fleet panel, state map has 64 names (card says 60)"
   }
  },
  "next": [
