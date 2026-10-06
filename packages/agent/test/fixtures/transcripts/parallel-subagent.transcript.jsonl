@@ -1,0 +1,20 @@
+{"transcript": 1, "engine": "fake", "recorded_with": "hand-written for C101, modelled on claude-code 2.1 and codex 0.5 output"}
+{"at_ms": 0, "event": {"type": "session.started", "engine": "fake", "engine_session_id": "sess-1", "model": "fake-model", "cli_version": "0.0.0", "tools": ["Read", "Edit", "Bash"], "mcp_servers": [], "capabilities": ["streaming", "approvals", "resume", "interrupt"], "login_kind": "unknown"}}
+{"expect": "send", "prompt": "review the repo"}
+{"at_ms": 0, "event": {"type": "turn.started", "turn_id": "trn_01JTEST0000000000000000001"}}
+{"at_ms": 20, "event": {"type": "thinking.delta", "message_id": "msg_01JTEST0000000000000000001", "text": "plan"}}
+{"at_ms": 60, "event": {"type": "tool.requested", "tool_id": "toolu_1", "name": "Read", "input_summary": "package.json", "risk": "low"}}
+{"at_ms": 60, "event": {"type": "tool.requested", "tool_id": "toolu_2", "name": "Grep", "input_summary": "TODO", "risk": "low"}}
+{"at_ms": 20, "event": {"type": "subagent.started", "subagent_id": "sub_1", "parent_tool_id": "toolu_2", "label": "search"}}
+{"at_ms": 30, "event": {"type": "subagent.text", "subagent_id": "sub_1", "text": "found 3"}}
+{"at_ms": 10, "event": {"type": "subagent.done", "subagent_id": "sub_1", "status": "ok"}}
+{"at_ms": 120, "event": {"type": "tool.result", "tool_id": "toolu_2", "status": "ok", "summary": "3 matches"}}
+{"at_ms": 120, "event": {"type": "tool.result", "tool_id": "toolu_1", "status": "ok", "summary": "read"}}
+{"at_ms": 40, "event": {"type": "text.delta", "message_id": "msg_01JTEST0000000000000000002", "index": 0, "text": "Looks fine."}}
+{"at_ms": 5, "event": {"type": "text.done", "message_id": "msg_01JTEST0000000000000000002"}}
+{"at_ms": 10, "event": {"type": "turn.done", "outcome": "ok"}}
+{"expect": "send", "prompt": "and the tests?"}
+{"at_ms": 0, "event": {"type": "turn.started", "turn_id": "trn_01JTEST0000000000000000002"}}
+{"at_ms": 40, "event": {"type": "text.delta", "message_id": "msg_01JTEST0000000000000000003", "index": 0, "text": "All green."}}
+{"at_ms": 5, "event": {"type": "text.done", "message_id": "msg_01JTEST0000000000000000003"}}
+{"at_ms": 10, "event": {"type": "turn.done", "outcome": "ok"}}

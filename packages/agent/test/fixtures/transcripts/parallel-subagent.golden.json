@@ -1,0 +1,173 @@
+[
+ {
+  "type": "session.started",
+  "engine": "fake",
+  "engine_session_id": "sess-1",
+  "model": "fake-model",
+  "cli_version": "0.0.0",
+  "tools": [
+   "Read",
+   "Edit",
+   "Bash"
+  ],
+  "mcp_servers": [],
+  "capabilities": [
+   "streaming",
+   "approvals",
+   "resume",
+   "interrupt"
+  ],
+  "login_kind": "unknown",
+  "v": 1,
+  "seq": 1,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "turn.started",
+  "turn_id": "trn_01JTEST0000000000000000001",
+  "v": 1,
+  "seq": 2,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "thinking.delta",
+  "message_id": "msg_01JTEST0000000000000000001",
+  "text": "plan",
+  "v": 1,
+  "seq": 3,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "tool.requested",
+  "tool_id": "toolu_1",
+  "name": "Read",
+  "input_summary": "package.json",
+  "risk": "low",
+  "v": 1,
+  "seq": 4,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "tool.requested",
+  "tool_id": "toolu_2",
+  "name": "Grep",
+  "input_summary": "TODO",
+  "risk": "low",
+  "v": 1,
+  "seq": 5,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "subagent.started",
+  "subagent_id": "sub_1",
+  "parent_tool_id": "toolu_2",
+  "label": "search",
+  "v": 1,
+  "seq": 6,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "subagent.text",
+  "subagent_id": "sub_1",
+  "text": "found 3",
+  "v": 1,
+  "seq": 7,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "subagent.done",
+  "subagent_id": "sub_1",
+  "status": "ok",
+  "v": 1,
+  "seq": 8,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "tool.result",
+  "tool_id": "toolu_2",
+  "status": "ok",
+  "summary": "3 matches",
+  "v": 1,
+  "seq": 9,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "tool.result",
+  "tool_id": "toolu_1",
+  "status": "ok",
+  "summary": "read",
+  "v": 1,
+  "seq": 10,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_01JTEST0000000000000000002",
+  "index": 0,
+  "text": "Looks fine.",
+  "v": 1,
+  "seq": 11,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "text.done",
+  "message_id": "msg_01JTEST0000000000000000002",
+  "v": 1,
+  "seq": 12,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "turn.done",
+  "outcome": "ok",
+  "v": 1,
+  "seq": 13,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "turn.started",
+  "turn_id": "trn_01JTEST0000000000000000002",
+  "v": 1,
+  "seq": 14,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_01JTEST0000000000000000003",
+  "index": 0,
+  "text": "All green.",
+  "v": 1,
+  "seq": 15,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "text.done",
+  "message_id": "msg_01JTEST0000000000000000003",
+  "v": 1,
+  "seq": 16,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "turn.done",
+  "outcome": "ok",
+  "v": 1,
+  "seq": 17,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ }
+]

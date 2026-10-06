@@ -150,8 +150,8 @@
    "note": "canvas Cento player"
   },
   "C101": {
-   "pct": 0.85,
-   "note": "AgentEngine + normalised events; not yet generated from contracts"
+   "pct": 0.8,
+   "note": "engine layer: validator, registry, capabilities, delta coalescer, toSessionWire (schema-validated), fake engine + transcript replay + 6 golden transcripts. Not done: stalled-consumer delta coalescing buffer; real adapters do not yet satisfy the validator on interrupt (C102/C103)"
   },
   "C102": {
    "pct": 0.9,

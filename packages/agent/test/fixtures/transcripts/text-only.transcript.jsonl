@@ -1,0 +1,12 @@
+{"transcript": 1, "engine": "fake", "recorded_with": "hand-written for C101, modelled on claude-code 2.1 and codex 0.5 output"}
+{"at_ms": 0, "event": {"type": "session.started", "engine": "fake", "engine_session_id": "sess-1", "model": "fake-model", "cli_version": "0.0.0", "tools": ["Read", "Edit", "Bash"], "mcp_servers": [], "capabilities": ["streaming", "approvals", "resume", "interrupt"], "login_kind": "unknown"}}
+{"expect": "send", "prompt": "say hello"}
+{"at_ms": 0, "event": {"type": "turn.started", "turn_id": "trn_01JTEST0000000000000000001"}}
+{"at_ms": 20, "event": {"type": "status", "state": "thinking"}}
+{"at_ms": 30, "event": {"type": "thinking.delta", "message_id": "msg_01JTEST0000000000000000001", "text": "A greeting."}}
+{"at_ms": 40, "event": {"type": "text.delta", "message_id": "msg_01JTEST0000000000000000002", "index": 0, "text": "Hello"}}
+{"at_ms": 40, "event": {"type": "text.delta", "message_id": "msg_01JTEST0000000000000000002", "index": 1, "text": ", "}}
+{"at_ms": 40, "event": {"type": "text.delta", "message_id": "msg_01JTEST0000000000000000002", "index": 2, "text": "world!"}}
+{"at_ms": 20, "event": {"type": "text.done", "message_id": "msg_01JTEST0000000000000000002", "text": "Hello, world!", "input_tokens": 12, "output_tokens": 4}}
+{"at_ms": 5, "event": {"type": "usage.report", "input_tokens": 12, "output_tokens": 4, "cost_is_estimate": true}}
+{"at_ms": 10, "event": {"type": "turn.done", "outcome": "ok", "stop_reason": "end_turn"}}

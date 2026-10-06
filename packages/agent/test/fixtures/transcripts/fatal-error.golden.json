@@ -1,0 +1,61 @@
+[
+ {
+  "type": "session.started",
+  "engine": "fake",
+  "engine_session_id": "sess-1",
+  "model": "fake-model",
+  "cli_version": "0.0.0",
+  "tools": [
+   "Read",
+   "Edit",
+   "Bash"
+  ],
+  "mcp_servers": [],
+  "capabilities": [
+   "streaming",
+   "approvals",
+   "resume",
+   "interrupt"
+  ],
+  "login_kind": "unknown",
+  "v": 1,
+  "seq": 1,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "turn.started",
+  "turn_id": "trn_01JTEST0000000000000000001",
+  "v": 1,
+  "seq": 2,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "error",
+  "code": "provider_protocol_error",
+  "tool_message": "The CLI sent something unreadable.",
+  "fatal": true,
+  "v": 1,
+  "seq": 3,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "status",
+  "state": "error",
+  "v": 1,
+  "seq": 4,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "turn.done",
+  "outcome": "error",
+  "stop_reason": "protocol_error",
+  "v": 1,
+  "seq": 5,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ }
+]

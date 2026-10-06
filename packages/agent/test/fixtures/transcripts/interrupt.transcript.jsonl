@@ -1,0 +1,8 @@
+{"transcript": 1, "engine": "fake", "recorded_with": "hand-written for C101, modelled on claude-code 2.1 and codex 0.5 output"}
+{"at_ms": 0, "event": {"type": "session.started", "engine": "fake", "engine_session_id": "sess-1", "model": "fake-model", "cli_version": "0.0.0", "tools": ["Read", "Edit", "Bash"], "mcp_servers": [], "capabilities": ["streaming", "approvals", "resume", "interrupt"], "login_kind": "unknown"}}
+{"expect": "send", "prompt": "run the long build"}
+{"at_ms": 0, "event": {"type": "turn.started", "turn_id": "trn_01JTEST0000000000000000001"}}
+{"at_ms": 60, "event": {"type": "tool.requested", "tool_id": "toolu_1", "name": "Bash", "input_summary": "npm run build", "risk": "medium", "command": "npm run build"}}
+{"at_ms": 30, "event": {"type": "approval.requested", "approval_id": "apr_01JTEST0000000000000000001", "tool_id": "toolu_1", "summary": "Run npm run build", "command": "npm run build", "cwd": "/work/app", "risk": "medium"}}
+{"expect": "interrupt"}
+{"at_ms": 10, "event": {"type": "text.delta", "message_id": "msg_01JTEST0000000000000000009", "index": 0, "text": "never reached"}}

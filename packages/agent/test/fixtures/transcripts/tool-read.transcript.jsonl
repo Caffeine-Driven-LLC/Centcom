@@ -1,0 +1,10 @@
+{"transcript": 1, "engine": "fake", "recorded_with": "hand-written for C101, modelled on claude-code 2.1 and codex 0.5 output"}
+{"at_ms": 0, "event": {"type": "session.started", "engine": "fake", "engine_session_id": "sess-1", "model": "fake-model", "cli_version": "0.0.0", "tools": ["Read", "Edit", "Bash"], "mcp_servers": [], "capabilities": ["streaming", "approvals", "resume", "interrupt"], "login_kind": "unknown"}}
+{"expect": "send", "prompt": "what is in the readme?"}
+{"at_ms": 0, "event": {"type": "turn.started", "turn_id": "trn_01JTEST0000000000000000001"}}
+{"at_ms": 10, "event": {"type": "status", "state": "thinking"}}
+{"at_ms": 60, "event": {"type": "tool.requested", "tool_id": "toolu_1", "name": "Read", "input_summary": "README.md", "risk": "low", "path": "README.md"}}
+{"at_ms": 120, "event": {"type": "tool.result", "tool_id": "toolu_1", "status": "ok", "summary": "read 24 lines"}}
+{"at_ms": 40, "event": {"type": "text.delta", "message_id": "msg_01JTEST0000000000000000001", "index": 0, "text": "The readme describes the project."}}
+{"at_ms": 10, "event": {"type": "text.done", "message_id": "msg_01JTEST0000000000000000001", "input_tokens": 50, "output_tokens": 9}}
+{"at_ms": 10, "event": {"type": "turn.done", "outcome": "ok"}}

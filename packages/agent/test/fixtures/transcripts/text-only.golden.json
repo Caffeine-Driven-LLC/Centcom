@@ -1,0 +1,111 @@
+[
+ {
+  "type": "session.started",
+  "engine": "fake",
+  "engine_session_id": "sess-1",
+  "model": "fake-model",
+  "cli_version": "0.0.0",
+  "tools": [
+   "Read",
+   "Edit",
+   "Bash"
+  ],
+  "mcp_servers": [],
+  "capabilities": [
+   "streaming",
+   "approvals",
+   "resume",
+   "interrupt"
+  ],
+  "login_kind": "unknown",
+  "v": 1,
+  "seq": 1,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "turn.started",
+  "turn_id": "trn_01JTEST0000000000000000001",
+  "v": 1,
+  "seq": 2,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "status",
+  "state": "thinking",
+  "v": 1,
+  "seq": 3,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "thinking.delta",
+  "message_id": "msg_01JTEST0000000000000000001",
+  "text": "A greeting.",
+  "v": 1,
+  "seq": 4,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_01JTEST0000000000000000002",
+  "index": 0,
+  "text": "Hello",
+  "v": 1,
+  "seq": 5,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_01JTEST0000000000000000002",
+  "index": 1,
+  "text": ", ",
+  "v": 1,
+  "seq": 6,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_01JTEST0000000000000000002",
+  "index": 2,
+  "text": "world!",
+  "v": 1,
+  "seq": 7,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "text.done",
+  "message_id": "msg_01JTEST0000000000000000002",
+  "text": "Hello, world!",
+  "input_tokens": 12,
+  "output_tokens": 4,
+  "v": 1,
+  "seq": 8,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "usage.report",
+  "input_tokens": 12,
+  "output_tokens": 4,
+  "cost_is_estimate": true,
+  "v": 1,
+  "seq": 9,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "turn.done",
+  "outcome": "ok",
+  "stop_reason": "end_turn",
+  "v": 1,
+  "seq": 10,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ }
+]
