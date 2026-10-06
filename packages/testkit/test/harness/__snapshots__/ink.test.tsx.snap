@@ -1,0 +1,7 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`renderInk (acceptance 5) > expectScreen compares the plain text with a stored snapshot 1`] = `
+"ok
+hex
+hello world"
+`;
