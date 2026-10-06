@@ -192,6 +192,10 @@
   "C007": {
    "pct": 0.9,
    "note": "@centcom/testkit mock backend: all 93 REST operations (validated, schema-generated), device login/refresh rotation, pagination, idempotency, error injection, ws relay simulator, virtual clock, control plane, scenarios, CLI. Not covered: signature/encryption checks, stateful non-session resources"
+  },
+  "C010": {
+   "pct": 0.9,
+   "note": "telemetry client: gate (config + DO_NOT_TRACK + CENTCOM_TELEMETRY), allow-list sanitiser per event, bounded buffer, batching (100 events, 64 KiB, 1/min on a monotonic clock), silent sender with one re-queue, install id (0600, reset), tested against the mock backend. Not wired into the app: opt-in prompt, centcom telemetry command, emit calls (other lanes)"
   }
  },
  "next": [

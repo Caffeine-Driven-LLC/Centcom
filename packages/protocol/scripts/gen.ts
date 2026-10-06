@@ -133,7 +133,7 @@ async function emitOpenApi(): Promise<{ ts: string; json: string; ops: string }>
   const text = readFileSync(join(CONTRACTS, 'openapi.yaml'), 'utf8'); const doc = parseYaml(text) as J;
   const types = astToString(await openapiTS(doc as never));
   const ops: Record<string, J> = {};
-  for (const [path, item] of Object.entries<J>(doc.paths)) for (const [method, op] of Object.entries<J>(item)) if (op && typeof op === 'object' && op.operationId) ops[op.operationId] = { method: method.toUpperCase(), path, tags: op.tags ?? [], public: Array.isArray(op.security) && op.security.length === 0 };
+  for (const [path, item] of Object.entries<J>(doc.paths)) for (const [method, op] of Object.entries<J>(item)) if (op && typeof op === 'object' && op.operationId) ops[op.operationId] = { method: method.toUpperCase(), path, tags: op.tags ?? [], public: Array.isArray(op.security) && (op.security.length === 0 || op.security.some((r: J) => r && typeof r === 'object' && Object.keys(r).length === 0)) }; // no security at all, or `{}` among the alternatives (optional auth): anonymous callers are allowed
   const sorted = Object.fromEntries(Object.keys(ops).sort().map((k) => [k, ops[k]]));
   return { ts: `${banner}${types}`, json: JSON.stringify(sortKeys(doc)), ops: `${banner}export const OPERATIONS = ${JSON.stringify(sorted, null, 2)} as const;\nexport type OperationId = keyof typeof OPERATIONS;\nexport interface OpenApiOperation { method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'; path: string; tags: readonly string[]; public: boolean }\n` };
 }

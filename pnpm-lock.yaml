@@ -293,6 +293,10 @@ importers:
       '@centcom/protocol':
         specifier: workspace:*
         version: link:../protocol
+    devDependencies:
+      '@centcom/testkit':
+        specifier: workspace:*
+        version: link:../testkit
 
   packages/protocol:
     dependencies:
