@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.base.json",
+  "include": ["apps/*/src", "packages/*/src", "packages/*/test", "apps/*/test"],
+  "compilerOptions": {
+    "paths": {
+      "@centcom/theme": ["./packages/theme/src/index.ts"],
+      "@centcom/mascot": ["./packages/mascot/src/index.ts"],
+      "@centcom/agent": ["./packages/agent/src/index.ts"],
+      "@centcom/tui": ["./packages/tui/src/index.ts"]
+    }
+  }
+}

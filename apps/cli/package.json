@@ -1,0 +1,17 @@
+{
+  "name": "@centcom/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "centcom": "./src/main.tsx"
+  },
+  "dependencies": {
+    "ink": "^8.0.0",
+    "react": "^19.0.0",
+    "@centcom/tui": "workspace:*",
+    "@centcom/agent": "workspace:*",
+    "@centcom/theme": "workspace:*",
+    "@centcom/mascot": "workspace:*"
+  }
+}

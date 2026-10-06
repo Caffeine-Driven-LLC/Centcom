@@ -1,0 +1,2 @@
+{"type": "system", "subtype": "init", "session_id": "99999999-8888-7777-6666-555555555555", "model": "m", "apiKeySource": "none", "claude_code_version": "2.1.289", "tools": [], "mcp_servers": []}
+{"type": "result", "subtype": "success", "is_error": true, "result": "Not logged in \u00b7 Please run /login", "api_error_status": 401, "session_id": "99999999-8888-7777-6666-555555555555", "total_cost_usd": 0, "usage": {}}

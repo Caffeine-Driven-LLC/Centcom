@@ -1,0 +1,23 @@
+{
+  "name": "centcom",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Centcom: command many hands. Terminal-first multiplayer for your own Claude Code and Codex.",
+  "type": "module",
+  "packageManager": "pnpm@12.9.1",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "centcom": "tsx apps/cli/src/main.tsx",
+    "dev": "tsx apps/cli/src/main.tsx --demo",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "plan:check": "python3 tools/plan/validate_plan.py && python3 tools/plan/validate_contracts.py && python3 tools/plan/lock.py --check"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}
