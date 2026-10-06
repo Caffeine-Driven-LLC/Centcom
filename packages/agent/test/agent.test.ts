@@ -71,10 +71,12 @@ describe('tool flow', () => {
 
 describe('argv, ids, risk, redaction', () => {
   it('builds documented flags only', () => {
-    expect(buildArgv('hi', {})).toEqual(['-p', 'hi', '--output-format', 'stream-json', '--verbose', '--include-partial-messages']);
+    expect(buildArgv('hi', {})).toEqual(['-p', 'hi', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--permission-mode', 'manual']);
     const a = buildArgv('x', { resume: 'sid', permissionMode: 'plan', model: 'sonnet', allowedTools: ['Read', 'Bash(git diff *)'] });
     expect(a).toEqual(expect.arrayContaining(['--resume', 'sid', '--permission-mode', 'plan', '--model', 'sonnet', '--allowedTools', 'Read']));
-    expect(buildArgv('x', { permissionMode: 'default' })).not.toContain('--permission-mode');
+    // "ask first" must be explicit so the user's own defaultMode (e.g. auto) cannot silently approve things
+    expect(buildArgv('x', { permissionMode: 'default' }).join(' ')).toContain('--permission-mode manual');
+    expect(buildArgv('x', { extra: ['--permission-prompt-tool', 'mcp__centcom__approve'], addDirs: ['/a'] }).slice(-4)).toEqual(['--permission-prompt-tool', 'mcp__centcom__approve', '--add-dir', '/a']);
     expect(buildArgv('x', {})).not.toContain('--bare');
   });
   it('makes monotonic prefixed ULIDs', () => {

@@ -45,7 +45,7 @@ export function discover(opts: { cwd: string; home?: string }): Skill[] {
   return [...found.values()];
 }
 
-const STOP = new Set('a an the and or but of to in on at for with from by is are was were be been it this that these those i me my we our you your do does did can could should would will just please then set than so as if into out up about make want need get let add use using how what when where why which who not no yes new'.split(' '));
+const STOP = new Set('a an the and or but of to in on at for with from by is are was were be been it this that these those i me my we our you your do does did can could should would will just please then set file files name named create write word words thing line lines than so as if into out up about make want need get let add use using how what when where why which who not no yes new'.split(' '));
 const stem = (w: string) => w.replace(/(ing|ed|es|s)$/, (m, _x, off) => (off >= 3 ? '' : m)).replace(/([^aeiou])\1$/, '$1');
 const SYN: Record<string, string> = { fail: 'fail', failure: 'fail', failing: 'fail', failed: 'fail', broke: 'bug', broken: 'bug', crash: 'bug', crashes: 'bug', debug: 'bug', debugging: 'bug', bugs: 'bug', slow: 'perf', performance: 'perf', faster: 'perf', speed: 'perf', secure: 'security', vulnerability: 'security', vulnerabilities: 'security', ui: 'frontend', ux: 'frontend', css: 'frontend', layout: 'frontend' };
 export function tokens(text: string): string[] {
@@ -72,7 +72,7 @@ export function match(prompt: string, skills: Skill[], opts: MatchOptions = {}):
     // quoted example phrases in the description, e.g. "find a skill for X"
     for (const m of d.s.description.matchAll(/"([^"]{6,80})"/g)) {
       const phrase = m[1]!.toLowerCase().replace(/\b(x|y)\b/g, '').replace(/[.…]+$/g, '').trim();
-      if (phrase.length >= 6 && lower.includes(phrase)) { score += 6; explicit = true; why.push(`"${phrase}"`); }
+      if (phrase.length >= 6 && /\s/.test(phrase) && lower.includes(phrase)) { score += 6; explicit = true; why.push(`"${phrase}"`); }
     }
     if (lower.includes(d.s.name.toLowerCase()) && d.s.name.length > 3) { score += 8; explicit = true; why.push(d.s.name); }
     if (d.s.kind === 'command') score *= 0.7; // commands run things; only auto-pick them on strong evidence

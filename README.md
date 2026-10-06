@@ -26,6 +26,8 @@ pnpm dev                 # scripted demo agent, no login needed
 pnpm centcom             # drives your own Claude Code (must be installed and signed in)
 ```
 
+Approvals work with real Claude Code: Centcom runs `claude` with `--permission-mode manual` and a tiny MCP tool (`--permission-prompt-tool`) that asks the app over a private local socket, so the dialog with the diff appears for every Write/Edit/Bash that needs one. If the app is unreachable the answer is always deny.
+
 Try `/demo fix`, `/demo search` and `/demo delete` in demo mode, `ctrl+k` for the palette, `/cento` for the 319-animation gallery, `?` for keys.
 Flags: `--mode plan|acceptEdits`, `--mascot large|small|off`, `--cento-color red|yellow|green|brown`, `--theme light`, `--colors 256|16|never`, `--no-motion`.
 

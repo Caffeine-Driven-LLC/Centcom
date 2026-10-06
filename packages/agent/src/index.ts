@@ -8,3 +8,4 @@ export { ClaudeCodeEngine, buildArgv, redact } from './claude/engine.js';
 export { ClaudeStreamParser, loginKindFrom } from './claude/parse.js';
 export { editDiff } from './claude/diff.js';
 export * from './models.js';
+export { ApprovalBridge, describeTool, PERMISSION_TOOL } from './claude/bridge.js';

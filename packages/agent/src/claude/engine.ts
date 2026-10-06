@@ -2,6 +2,7 @@
  * Claude Code engine (lane C102): drives the user's own, unmodified `claude` binary, one `claude -p` process per
  * turn, continuing with --resume. Never reads credentials; auth is whatever the user's `claude` is signed in with.
  */
+import { ApprovalBridge } from './bridge.js';
 import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process';
 import { AsyncQueue } from '../queue.js';
 import { newId } from '../ids.js';
@@ -10,7 +11,7 @@ import { ProviderError, type AgentEngine, type Capability, type EngineSession, t
 
 export interface ClaudeEngineDeps { bin?: string; spawn?: typeof nodeSpawn; now?: () => Date }
 
-const CAPS = new Set<Capability>(['streaming', 'resume', 'subagents', 'mcp', 'skills', 'thinking', 'usage', 'interrupt', 'compact', 'models.list']);
+const CAPS = new Set<Capability>(['streaming', 'approvals', 'resume', 'subagents', 'mcp', 'skills', 'thinking', 'usage', 'interrupt', 'compact', 'models.list']);
 
 /** Strips things that look like credentials from text we may show or log (CT-PROVIDER rule 2). */
 export function redact(s: string): string {
@@ -26,13 +27,15 @@ export class ClaudeCodeEngine implements AgentEngine {
   async start(o: EngineStartOptions): Promise<EngineSession> { return new ClaudeSession(o, this.deps); }
 }
 
-export function buildArgv(prompt: string, o: { resume?: string; permissionMode?: PermissionMode; model?: string; allowedTools?: string[]; systemPromptAppend?: string; addDirs?: string[] }): string[] {
+export function buildArgv(prompt: string, o: { resume?: string; permissionMode?: PermissionMode; model?: string; allowedTools?: string[]; systemPromptAppend?: string; addDirs?: string[]; extra?: string[] }): string[] {
   const a = ['-p', prompt, '--output-format', 'stream-json', '--verbose', '--include-partial-messages'];
   if (o.resume) a.push('--resume', o.resume);
-  if (o.permissionMode && o.permissionMode !== 'default') a.push('--permission-mode', o.permissionMode);
+  // 'default' is Centcom's "ask first"; say so explicitly, otherwise the user's own claude settings (e.g. defaultMode: auto) decide silently
+  a.push('--permission-mode', !o.permissionMode || o.permissionMode === 'default' ? 'manual' : o.permissionMode);
   if (o.model) a.push('--model', o.model);
   if (o.allowedTools?.length) a.push('--allowedTools', ...o.allowedTools);
   if (o.systemPromptAppend) a.push('--append-system-prompt', o.systemPromptAppend);
+  a.push(...(o.extra ?? []));
   for (const d of o.addDirs ?? []) a.push('--add-dir', d); // one flag per directory: the option is variadic and must not swallow later arguments
   return a;
 }
@@ -48,6 +51,7 @@ class ClaudeSession implements EngineSession {
   private model?: string;
   private closed = false;
   private sawResult = false;
+  private bridge?: ApprovalBridge;
 
   constructor(private o: EngineStartOptions, private deps: ClaudeEngineDeps) {
     this.agentId = o.agentId; this.sessionId = o.resume?.engine_session_id; this.mode = o.permissionMode ?? 'default'; this.model = o.model;
@@ -65,10 +69,11 @@ class ClaudeSession implements EngineSession {
     if (this.closed) throw new Error('session closed');
     if (this.child && !this.sawResult) throw new Error('a turn is already running');
     if (this.child) await this.exitWait; // the previous turn already reported its result; let the process finish exiting
+    if (this.o.approvalGate && !this.bridge) { this.bridge = new ApprovalBridge({ agentId: this.agentId, cwd: this.o.cwd, gate: this.o.approvalGate, emit: (b) => this.emit(b) }); try { await this.bridge.start(); } catch (e) { this.bridge = undefined; this.emit({ type: 'engine.warning', code: 'approval_bridge_failed', text: `Approvals could not be bridged (${String(e)}). Claude will use its own permission mode.` }); } }
     const turn = newId('trn'); this.turn = turn; this.sawResult = false;
     this.emit({ type: 'turn.started', turn_id: turn });
     this.emit({ type: 'status', state: 'prompt-received' });
-    const argv = buildArgv(prompt, { resume: this.sessionId, permissionMode: this.mode, model: this.model, allowedTools: this.o.allowedTools, systemPromptAppend: this.o.systemPromptAppend, addDirs: this.o.addDirs });
+    const argv = buildArgv(prompt, { resume: this.sessionId, permissionMode: this.mode, model: this.model, allowedTools: this.o.allowedTools, systemPromptAppend: this.o.systemPromptAppend, addDirs: this.o.addDirs, extra: this.bridge?.argv() });
     const parser = new ClaudeStreamParser();
     const spawnFn = this.deps.spawn ?? nodeSpawn;
     let child: ChildProcess;
@@ -135,5 +140,5 @@ class ClaudeSession implements EngineSession {
     return { stopped: true };
   }
 
-  async stop() { this.closed = true; await this.interrupt(); this.events.close(); }
+  async stop() { this.closed = true; await this.interrupt(); this.bridge?.close(); this.events.close(); }
 }
