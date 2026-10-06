@@ -32,6 +32,8 @@ export type EventBody =
   | { type: 'limits.report'; windows: { name: string; utilization: number; resets_at: number }[] }
   | { type: 'model.changed'; model: string; reason: 'user' | 'fallback' | 'engine' }
   | { type: 'status'; state: string; detail?: string }
+  /** The agent's own plan (Claude Code's TodoWrite, Codex's plan updates): the whole list each time. */
+  | { type: 'tasks.updated'; tasks: { id: string; text: string; status: 'pending' | 'in_progress' | 'completed' }[] }
   | { type: 'compaction.started' } | { type: 'compaction.ended'; tokens_before?: number; tokens_after?: number }
   | { type: 'question.asked'; question_id: string; text: string; options?: string[] }
   | { type: 'engine.warning'; code: string; text: string }

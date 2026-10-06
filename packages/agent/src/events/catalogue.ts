@@ -38,6 +38,8 @@ export type AgentEventMap = {
   /** A node of the fleet tree appeared or changed. Local only: it holds labels and branch names. */
   'fleet:node': { node: FleetNode };
   'fleet:branch_ready': BranchReady;
+  /** Something long-running that a progress bar can follow (`total` 0 or missing with no value: unknown). */
+  'progress': { id: string; value: number; total?: number; label: string };
   /** The MCP servers one tool reports, as the manager understands them. */
   'mcp:status': { engine: 'claude-code' | 'codex'; servers: { name: string; state: string; tools?: number; error?: string; builtin?: boolean }[] };
   'subagent:spawned': { agent_id: AgentId; parent_id: AgentId; role?: string };

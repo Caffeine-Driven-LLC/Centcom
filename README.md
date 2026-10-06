@@ -41,7 +41,6 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 
 | Lane | What | Size | Milestone |
 |---|---|---|---|
-| [C043](plan/client/C043.md) | Task list and progress components | S | M1 |
 | [C056](plan/client/C056.md) | End-to-end crypto module: keys, frames, grants, rotation | L | M2 |
 | [C071](plan/client/C071.md) | LAN discovery over mDNS | M | M2 |
 | [C096](plan/client/C096.md) | Documentation site, README, man pages, built-in help | M | M6 |

@@ -224,6 +224,10 @@
   "C018": {
    "pct": 0.95,
    "note": "local advisory locks wired into the app: two agents changing the same file are warned their branches will conflict; remote file.lock events wait for the session layer"
+  },
+  "C043": {
+   "pct": 1.0,
+   "note": "TaskList, ProgressBar (determinate, indeterminate, reduced motion, ASCII), reduceTasks, useProgress; engines send their plans (Claude TodoWrite, Codex plan updates) as tasks.updated; task panel above the prompt on ctrl+t, saved with the conversation"
   }
  },
  "next": [

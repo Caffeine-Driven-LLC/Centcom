@@ -16,6 +16,11 @@ export function loginKindFrom(apiKeySource: unknown): LoginKind {
   return 'api_key';
 }
 
+/** Claude Code's TodoWrite carries the agent's whole plan: `{ todos: [{ content, status, activeForm?, id? }] }`. */
+export function todosFrom(input: J): EventBody | undefined {
+  const list = (input as { todos?: unknown }).todos; if (!Array.isArray(list)) return undefined;
+  return { type: 'tasks.updated', tasks: list.slice(0, 200).map((t, i) => { const o = (t ?? {}) as Record<string, unknown>; const st = String(o.status ?? ''); return { id: String(o.id ?? i + 1), text: String(o.content ?? o.activeForm ?? ''), status: st === 'in_progress' ? 'in_progress' : st === 'completed' ? 'completed' : 'pending' }; }) };
+}
 function summarise(name: string, input: J): { text: string; path?: string; command?: string } {
   const path = (input.file_path ?? input.path ?? input.notebook_path) as string | undefined;
   if (name === 'Bash') return { text: String(input.command ?? '').slice(0, 300), command: String(input.command ?? '') };
@@ -131,6 +136,7 @@ export class ClaudeStreamParser {
           this.tools.set(id, { name, input });
           const s = summarise(name, input);
           if (parent) out.push(...this.sub(parent));
+          if (name === 'TodoWrite' && !parent) { const t = todosFrom(input); if (t) out.push(t); }
           out.push({ type: 'tool.requested', tool_id: id, name, input_summary: s.text, risk: classifyTool(name, input), ...(s.path ? { path: s.path } : {}), ...(s.command ? { command: s.command } : {}), ...(parent ? { parent_tool_id: parent } : {}) });
         }
         break;
@@ -160,6 +166,7 @@ export class ClaudeStreamParser {
       if (b.type === 'text' && b.text) { out.push({ type: 'status', state: 'streaming' }, { type: 'text.delta', message_id: String(m.id), index: 0, text: String(b.text) }, { type: 'text.done', message_id: String(m.id) }); }
       if (b.type === 'tool_use') {
         const input = (b.input ?? {}) as J; this.tools.set(String(b.id), { name: String(b.name), input }); const s = summarise(String(b.name), input);
+        if (b.name === 'TodoWrite') { const t = todosFrom(input); if (t) out.push(t); }
         out.push({ type: 'status', state: stateForTool(String(b.name)) }, { type: 'tool.requested', tool_id: String(b.id), name: String(b.name), input_summary: s.text, risk: classifyTool(String(b.name), input), ...(s.path ? { path: s.path } : {}), ...(s.command ? { command: s.command } : {}) });
       }
     }

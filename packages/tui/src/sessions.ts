@@ -9,6 +9,8 @@ export interface SessionMeta {
   id: string; cwd: string; engine: string; title: string; model?: string;
   /** What the engine needs to continue the same conversation (claude --resume id, codex thread id). */
   resumeToken?: string; createdAt: number; updatedAt: number; messages: number;
+  /** The agent's last plan and whether its panel was open (ctrl+t), so a resumed conversation looks the same. */
+  tasks?: { id: string; text: string; status: 'pending' | 'in_progress' | 'completed' }[]; tasksOpen?: boolean;
 }
 
 const MAX_RESULT = 4000, MAX_DIFF = 20000, MAX_ITEMS = 2000;

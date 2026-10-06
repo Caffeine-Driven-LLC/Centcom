@@ -37,6 +37,7 @@ export class CodexMapper {
   /** Called with the params of a notification; returns zero or more events. */
   notification(method: string, p: J): EventBody[] {
     switch (method) {
+      case 'turn/plan/updated': { const plan = Array.isArray(p.plan) ? p.plan : []; return [{ type: 'tasks.updated', tasks: plan.slice(0, 200).map((x: J, i: number) => ({ id: String(i + 1), text: String(x.step ?? ''), status: x.status === 'inProgress' || x.status === 'in_progress' ? 'in_progress' : x.status === 'completed' ? 'completed' : 'pending' })) }]; }
       case 'item/started': return this.itemStarted(p.item ?? {});
       case 'item/completed': return this.itemCompleted(p.item ?? {});
       case 'item/agentMessage/delta': { const i = this.deltaIndex.get(p.itemId) ?? 0; this.deltaIndex.set(p.itemId, i + 1); return [{ type: 'text.delta', message_id: p.itemId, index: i, text: String(p.delta ?? '') }]; }

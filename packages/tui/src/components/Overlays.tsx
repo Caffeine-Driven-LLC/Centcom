@@ -43,7 +43,7 @@ export function Palette({ query, sel, width }: { query: string; sel: number; wid
 /* --------------------------------------------------------------- help */
 const KEYS: [string, string][] = [
   ['Enter', 'send'], ['ctrl+j  or  \\ Enter', 'new line'], ['Esc', 'interrupt the agent / close'], ['ctrl+c', 'interrupt; twice to quit'],
-  ['shift+tab', 'cycle permission mode'], ['ctrl+k', 'command palette'], ['ctrl+o', 'choose the model'], ['ctrl+t', 'show or hide the fleet'], ['?', 'this help (empty prompt)'],
+  ['shift+tab', 'cycle permission mode'], ['ctrl+k', 'command palette'], ['ctrl+o', 'choose the model'], ['ctrl+t', 'show or hide the task list'], ['ctrl+b', 'show or hide the fleet'], ['?', 'this help (empty prompt)'],
   ['PageUp / PageDown', 'scroll the transcript'], ['shift+↑ / shift+↓', 'scroll 3 lines'], ['End', 'jump to the latest'], ['↑ / ↓', 'prompt history'],
   ['ctrl+a / ctrl+e', 'line start / end'], ['ctrl+w', 'delete word'], ['ctrl+u', 'delete to line start'], ['alt+b / alt+f', 'word left / right'],
 ];

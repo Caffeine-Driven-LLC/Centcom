@@ -5,6 +5,7 @@ import { bakedCategories } from '@centcom/mascot';
 import { CLAUDE_MODELS } from '@centcom/agent';
 import type { AppController } from './controller.js';
 import { ThemeCtx, useStore } from './components/ui.js';
+import { TaskList } from './tasks/TaskList.js';
 import { Header } from './components/Header.js';
 import { Welcome } from './components/Welcome.js';
 import { LiveStrip, LARGE_H } from './components/LiveStrip.js';
@@ -42,7 +43,9 @@ export function App({ ctl, tier }: AppProps) {
   const inputRows = promptRows(s.input, s.cursor, mainW);
   const promptH = inputRows + 2;
   const maxDiff = Math.max(3, Math.min(10, rows - 20));
-  const bottomH = pending ? approvalHeight(pending, mainW, maxDiff) : promptH + popupH;
+  const showTasks = s.tasksOpen && s.tasks.length > 0 && !pending && s.mode === 'chat';
+  const tasksH = showTasks ? Math.min(s.tasks.length, rows >= 34 ? 10 : 5) + 1 + (s.tasks.length > (rows >= 34 ? 10 : 5) ? 1 : 0) : 0;
+  const bottomH = pending ? approvalHeight(pending, mainW, maxDiff) : promptH + popupH + tasksH;
   const bodyH = Math.max(3, rows - 2 - stripH - bottomH);
   const lines = useTranscriptLines(s.items, mainW - 2);
   const total = lines.length;
@@ -111,7 +114,8 @@ export function App({ ctl, tier }: AppProps) {
     /* chat */
     if (key.ctrl && input === 'o') { const i = CLAUDE_MODELS.findIndex((m) => m.id === s.settings.model); ctl.patch({ mode: 'models', modelSel: Math.max(0, i) }); return; }
     if (key.ctrl && input === 'k') { ctl.patch({ mode: 'palette', palette: { query: '', sel: 0 } }); return; }
-    if (key.ctrl && input === 't') { ctl.patch({ fleet: !s.fleet }); return; }
+    if (key.ctrl && input === 't') { ctl.patch({ tasksOpen: !s.tasksOpen }); return; }
+    if (key.ctrl && input === 'b') { ctl.patch({ fleet: !s.fleet }); return; }
     if (key.ctrl && input === 'l') { setScroll(0); return; }
     if (key.tab && key.shift) { ctl.cycleMode(); return; }
     if (key.escape) { if (s.busy) void ctl.interrupt(); else if (s.input) ctl.patch({ input: '', cursor: 0 }); else ctl.escIdle(); return; }
@@ -176,6 +180,7 @@ export function App({ ctl, tier }: AppProps) {
             {stripH > 0 ? <Box paddingX={1} height={stripH}><LiveStrip s={s} driver={ctl.driver} width={mainW - 2} size={stripSize as 'large' | 'small' | 'off'} /></Box> : null}
             {pending ? <Approval a={pending} width={mainW} confirming={confirming} maxDiff={maxDiff} /> : (
               <>
+                {showTasks ? <Box paddingX={1} height={tasksH}><TaskList items={s.tasks} maxRows={rows >= 34 ? 10 : 5} width={mainW - 2} unicode={tier !== 'none'} /></Box> : null}
                 {popupH ? <SlashPopup matches={matches} sel={s.slashSel} width={mainW} /> : null}
                 <Prompt text={s.input} cursor={s.cursor} busy={s.busy} width={mainW} active={s.mode === 'chat'} placeholder={placeholder} />
               </>

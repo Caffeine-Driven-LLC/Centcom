@@ -15,6 +15,7 @@ import { Store } from './state/store.js';
 import { initialSettings, isBusyState, stateToMini, type AgentView, type AppState, type Item, type PendingApproval, type Settings } from './state/model.js';
 import { COMMANDS } from './state/commands.js';
 import { emptyText } from './onboarding/copy.js';
+import { reduceTasks } from './tasks/model.js';
 import { VerbRotator } from './util/verbs.js';
 
 export interface ControllerOptions {
@@ -86,7 +87,7 @@ export class AppController {
     const me: AgentView = { id: this.me, name: 'you', color: settings.color, mine: true, engine: o.engine.label, provider: o.engine.provider, model: '', loginKind: 'unknown', state: 'idle', mini: 'idle', busy: false, branch: o.branch ?? '', runsOn: 'you', cost: 0, inTok: 0, outTok: 0 };
     this.store = new Store<AppState>({
       items: [], agents: [me], activeAgent: this.me, mode: 'chat', input: '', cursor: 0, history: o.history ?? [], histIdx: null, draft: '', scroll: 0, toasts: [], approvals: [], settings,
-      busy: false, verb: this.verbs.next(), limits: [], cwd: o.cwd, branch: o.branch ?? '', engineId: o.engine.id, engineLabel: o.engine.label, demo: o.demo, fleet: true,
+      busy: false, verb: this.verbs.next(), limits: [], cwd: o.cwd, branch: o.branch ?? '', engineId: o.engine.id, engineLabel: o.engine.label, demo: o.demo, fleet: true, tasks: [], tasksOpen: true,
       slashSel: 0, palette: { query: '', sel: 0 }, modelSel: 0, gallery: { cat: 0, idx: 0, color: 0, query: '' }, version: o.version, sessionId: newId('ses'), sessions: [],
     });
     this.driver = new MascotDriver({ reducedMotion: settings.reducedMotion, color: settings.color });
@@ -148,18 +149,18 @@ export class AppController {
   persist() {
     const st = this.o.sessions; const s = this.state; if (!st || !s.items.length) return;
     const first = s.items.find((i) => i.kind === 'user');
-    const meta: SessionMeta = { id: s.sessionId, cwd: this.o.cwd, engine: this.o.engine.id, title: titleFrom(s.items), model: s.settings.model || undefined, resumeToken: this.session?.resumeToken(), createdAt: this.createdAt ?? (first && first.kind === 'user' ? first.ts : Date.now()), updatedAt: Date.now(), messages: s.items.filter((i) => i.kind === 'user').length };
+    const meta: SessionMeta = { id: s.sessionId, cwd: this.o.cwd, engine: this.o.engine.id, title: titleFrom(s.items), model: s.settings.model || undefined, resumeToken: this.session?.resumeToken(), createdAt: this.createdAt ?? (first && first.kind === 'user' ? first.ts : Date.now()), updatedAt: Date.now(), messages: s.items.filter((i) => i.kind === 'user').length, ...(s.tasks.length ? { tasks: s.tasks } : {}), tasksOpen: s.tasksOpen };
     this.createdAt = meta.createdAt;
     // items are replaced (never mutated) on every change, so identity tells us whether anything new needs saving
-    if (s.items === this.lastItems && meta.resumeToken === this.lastToken && s.sessionId === this.lastSid) return;
-    this.lastItems = s.items; this.lastToken = meta.resumeToken; this.lastSid = s.sessionId;
+    if (s.items === this.lastItems && meta.resumeToken === this.lastToken && s.sessionId === this.lastSid && s.tasks === this.lastTasks && s.tasksOpen === this.lastTasksOpen) return;
+    this.lastItems = s.items; this.lastTasks = s.tasks; this.lastTasksOpen = s.tasksOpen; this.lastToken = meta.resumeToken; this.lastSid = s.sessionId;
     try { st.save(meta, s.items); this.refreshSessions(); } catch (e) { this.toast('warn', 'Could not save this conversation: ' + String((e as Error).message ?? e)); }
   }
-  private createdAt?: number;
+  private createdAt?: number; private lastTasks?: unknown; private lastTasksOpen?: boolean;
   private refreshSessions() { if (this.o.sessions) this.set({ sessions: this.o.sessions.list(this.o.cwd, 10) }); }
   private loadSaved(meta: SessionMeta, items: Item[]) {
     this.createdAt = meta.createdAt;
-    this.set({ sessionId: meta.id, items, scroll: 0, ...(meta.model !== undefined ? { settings: { ...this.state.settings, model: meta.model ?? '' } } : {}) });
+    this.set({ sessionId: meta.id, items, scroll: 0, tasks: meta.tasks ?? [], tasksOpen: meta.tasksOpen ?? true, ...(meta.model !== undefined ? { settings: { ...this.state.settings, model: meta.model ?? '' } } : {}) });
     this.addItem({ kind: 'notice', id: nid('n'), level: 'ok', text: `Continuing "${meta.title}"`, detail: `${meta.messages} message${meta.messages === 1 ? '' : 's'} · last used ${ago(meta.updatedAt)}` });
   }
   /** Start over with an empty context. The old conversation stays saved and can be resumed. */
@@ -167,7 +168,7 @@ export class AppController {
     if (this.state.busy) { this.toast('warn', 'Cento is still working. Press Esc to interrupt, then try again.'); return; }
     this.persist(); await this.session?.stop();
     this.createdAt = undefined; this.lastItems = undefined;
-    this.set({ items: [], scroll: 0, sessionId: newId('ses'), approvals: [] });
+    this.set({ items: [], scroll: 0, sessionId: newId('ses'), approvals: [], tasks: [] });
     await this.startEngine();
   }
   /** Switch to a saved conversation from this folder. `which` is a list number (1 = newest) or an id. */
@@ -238,6 +239,7 @@ export class AppController {
       case 'tool.result': this.patchItem((i) => i.kind === 'tool' && i.toolId === ev.tool_id, (i) => (i.kind === 'tool' ? { ...i, status: ev.status, result: ev.summary, diff: ev.diff ?? i.diff } : i)); break;
       case 'usage.report': this.updateAgent(me, () => ({ cost: ev.cost_usd ?? 0, inTok: ev.input_tokens, outTok: ev.output_tokens, ...(ev.context_used_pct !== undefined ? { ctxPct: ev.context_used_pct, ctxTokens: ev.context_tokens, ctxWindow: ev.context_window } : {}) })); break;
       case 'limits.report': this.set({ limits: ev.windows }); break;
+      case 'tasks.updated': this.set((st) => ({ tasks: reduceTasks({ items: st.tasks }, { tasks: ev.tasks }).items })); break;
       case 'compaction.ended': this.notice('info', `Compacted the context${ev.tokens_before ? ` (${Math.round(ev.tokens_before / 1000)}k → ${Math.round((ev.tokens_after ?? 0) / 1000)}k tokens)` : ''}.`); break;
       case 'question.asked': this.notice('info', ev.text, ev.options?.join('  ·  ')); break;
       case 'engine.warning': this.notice('warn', ev.text); break;

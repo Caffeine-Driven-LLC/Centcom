@@ -39,6 +39,8 @@ export interface AppState {
   cwd: string; branch: string;
   engineId: EngineId; engineLabel: string; demo: boolean;
   fleet: boolean;
+  /** The agent's plan (TodoWrite / Codex plan) and whether the panel above the prompt is open (ctrl+t). */
+  tasks: import('../tasks/model.js').TaskItem[]; tasksOpen: boolean;
   slashSel: number;
   palette: { query: string; sel: number };
   modelSel: number;
