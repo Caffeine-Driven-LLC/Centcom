@@ -70,8 +70,8 @@
    "note": "interrupt controller, 3 s/8 s signal ladder to whole process groups, registered pids only, Codex protocol-then-ladder with restart on the same thread, approvals denied and late ones refused, partial answer kept, ctrl+c semantics with exit 130 in the app and -p; gaps: turn timeout, interrupt receipt, stale index.lock cleanup"
   },
   "C031": {
-   "pct": 0.3,
-   "note": "colour tier detection only; card gaps: capabilities, background query, layout class, CENTO_* env"
+   "pct": 0.7,
+   "note": "terminal capability module (tier matrix, unicode, half-block, hyperlink/paste flags, typed CENTO_* env with warnings, OSC 11 background query with 150 ms bound, layout class, mascotAllowed, debounced watchSize) with 32 tests; gap: app start-up and theme still use the older detectColorTier, not yet switched over"
   },
   "C032": {
    "pct": 0.5,
