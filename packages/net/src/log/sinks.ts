@@ -21,14 +21,21 @@ export interface FileSinkOptions { dir: string; maxBytes: number; maxFiles: numb
 export function createFileSink(o: FileSinkOptions): Sink {
   const base = `${o.dir}/${o.file ?? 'centcom.log'}`; let size = 0; let ready = false; let dead = false; let dropped = 0; let chain: Promise<void> = Promise.resolve();
   const init = () => { try { o.fs.mkdir(o.dir, 0o700); size = o.fs.exists(base) ? o.fs.size(base) : 0; ready = true; } catch (e) { dead = true; o.onUnavailable?.(String((e as Error).message)); } };
-  const rotate = () => { for (let i = o.maxFiles - 1; i >= 1; i--) { const from = i === 1 ? base : `${base}.${i - 1}`; const to = `${base}.${i}`; if (o.fs.exists(to) && i === o.maxFiles - 1) o.fs.remove(to); if (o.fs.exists(from)) o.fs.rename(from, to); } size = 0; };
+  const rotate = () => {
+    if (o.maxFiles <= 1) { o.fs.remove(base); size = 0; return; } // a single file cannot rotate: drop it so the size bound still holds
+    for (let i = o.maxFiles - 1; i >= 1; i--) { const from = i === 1 ? base : `${base}.${i - 1}`; const to = `${base}.${i}`; if (o.fs.exists(to) && i === o.maxFiles - 1) o.fs.remove(to); if (o.fs.exists(from)) o.fs.rename(from, to); } size = 0;
+  };
   return {
     write(line) {
       if (dead) return; if (!ready) { init(); if (dead) return; }
       const data = line + '\n'; const len = Buffer.byteLength(data);
       chain = chain.then(async () => {
         try {
-          if (size > 0 && size + len > o.maxBytes) rotate();
+          if (size > 0 && size + len > o.maxBytes) {
+            // another sink or process may have rotated or grown the file since we last looked: trust the disk, not our counter
+            try { size = o.fs.exists(base) ? o.fs.size(base) : 0; } catch { /* keep the counter */ }
+            if (size > 0 && size + len > o.maxBytes) rotate();
+          }
           if (dropped > 0) { const note = JSON.stringify({ ts: new Date().toISOString(), level: 'warn', msg: 'log.dropped', count: dropped }) + '\n'; await o.fs.append(base, note, 0o600); size += Buffer.byteLength(note); dropped = 0; }
           await o.fs.append(base, data, 0o600); size += len;
         } catch { dropped++; } // disk full or unwritable: drop, count, and say so when it works again

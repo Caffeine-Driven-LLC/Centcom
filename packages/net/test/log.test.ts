@@ -45,7 +45,8 @@ describe('redaction (acceptance 1 to 3)', () => {
 describe('safety limits (acceptance 4)', () => {
   it('survives a circular object and a 5 MB string, within 16 KiB', () => {
     const { logger, lines } = log(); const o: Record<string, unknown> = { a: 1 }; o.self = o; logger.info('weird', { o, big: 'word '.repeat(1_000_000), blob: 'x'.repeat(5_000_000), many: Array.from({ length: 500 }, (_, i) => i) });
-    expect(lines).toHaveLength(1); expect(lines[0]!.length).toBeLessThanOrEqual(16 * 1024); const r = JSON.parse(lines[0]!); expect(r.o.self).toBe('[circular]'); expect(r.big).toContain('[truncated'); expect(r.blob).toBe('[redacted]'); // a 5 MB opaque run looks like a key, so it is removed expect(r.many).toHaveLength(51);
+    expect(lines).toHaveLength(1); expect(lines[0]!.length).toBeLessThanOrEqual(16 * 1024); const r = JSON.parse(lines[0]!); expect(r.o.self).toBe('[circular]'); expect(r.big).toContain('[truncated'); expect(r.blob).toBe('[redacted]'); // a 5 MB opaque run looks like a key, so it is removed
+    expect(r.many).toHaveLength(51);
   });
   it('caps depth at 6 and never throws on getters, bigints and symbols', () => {
     const deep: Record<string, unknown> = {}; let cur = deep; for (let i = 0; i < 20; i++) { cur.next = {}; cur = cur.next as Record<string, unknown>; }
@@ -80,6 +81,18 @@ describe('file sink (acceptance 5)', () => {
     expect([...fs.files.keys()].sort()).toEqual(['/logs/centcom.log', '/logs/centcom.log.1', '/logs/centcom.log.2']);
     for (const [p, c] of fs.files) { expect(Buffer.byteLength(c), p).toBeLessThanOrEqual(MAX + line.length + 1); expect(fs.modes.get(p), p).toBe(0o600); } expect(fs.dirs.get('/logs')).toBe(0o700);
   });
+  it('max_files 1 keeps the file bounded: the base file is dropped instead of growing forever', async () => {
+    const fs = memFs(); const sink = createFileSink({ dir: '/logs', maxBytes: 1000, maxFiles: 1, fs }); const line = 'x'.repeat(99);
+    for (let i = 0; i < 100; i++) { sink.write(line, {} as LogRecord); await sink.flush!(); expect(Buffer.byteLength(fs.files.get('/logs/centcom.log') ?? ''), `after ${i}`).toBeLessThanOrEqual(1000); }
+    expect([...fs.files.keys()]).toEqual(['/logs/centcom.log']);
+  });
+  it('re-reads the real size before rotating, so a second sink on the same file does not rotate fresh output', async () => {
+    const fs = memFs(); const a = createFileSink({ dir: '/logs', maxBytes: 1000, maxFiles: 3, fs }); const b = createFileSink({ dir: '/logs', maxBytes: 1000, maxFiles: 3, fs }); const line = 'y'.repeat(99);
+    for (let i = 0; i < 10; i++) { a.write(line, {} as LogRecord); await a.flush!(); } // a believes the file is 1000 bytes
+    for (let i = 0; i < 2; i++) { b.write(line, {} as LogRecord); await b.flush!(); } // b rotates; the file now holds only b's fresh records
+    a.write(line, {} as LogRecord); await a.flush!(); // a's counter says 1000 but the disk says 200: no rotation
+    expect(fs.files.get('/logs/centcom.log.1')).toBeDefined(); expect(fs.files.has('/logs/centcom.log.2')).toBe(false); expect(Buffer.byteLength(fs.files.get('/logs/centcom.log')!)).toBe(3 * 100);
+  });
   it('drops records when the disk is full, counts them, and says so when space returns', async () => {
     let full = true; const fs = memFs({ full: () => full }); const sink = createFileSink({ dir: '/logs', maxBytes: 1e6, maxFiles: 3, fs });
     for (let i = 0; i < 5; i++) sink.write('{"msg":"a"}', {} as LogRecord); await sink.flush!(); expect(fs.files.get('/logs/centcom.log')).toBeUndefined();
@@ -90,6 +103,11 @@ describe('file sink (acceptance 5)', () => {
     let said = ''; const fs = { ...memFs(), mkdir() { throw new Error('EACCES'); } }; const sink = createFileSink({ dir: '/nope', maxBytes: 1e6, maxFiles: 3, fs, onUnavailable: (r) => { said = r; } }); expect(() => sink.write('{}', {} as LogRecord)).not.toThrow(); await sink.flush!(); expect(said).toContain('EACCES');
   });
   it('keeps order even if the clock goes backwards', () => { let t = 5000; const m = mem(); const l = createLogger({ level: 'info', sinks: [m.sink], clock: () => t }); l.info('first'); t = 1000; l.info('second'); expect(m.lines.map((x) => JSON.parse(x).msg)).toEqual(['first', 'second']); });
+});
+
+describe('silent level', () => {
+  it('writes nothing at all, not even errors', () => { const { logger, lines } = log('info', { level: 'silent' }); logger.error('boom', { a: 1 }); logger.warn('w'); logger.info('i'); logger.trace('t'); expect(lines).toEqual([]); });
+  it('does not even run the redactor, so no log.redaction_failed record can appear', () => { const { logger, lines } = log('info', { level: 'silent', redactor: () => { throw new Error('bug'); } }); logger.error('x', { secret: 'v' }); expect(lines).toEqual([]); });
 });
 
 describe('ring sink and diagnostics (acceptance 7)', () => {

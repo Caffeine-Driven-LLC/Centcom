@@ -105,7 +105,7 @@ async function main() {
   const settings = { ...settingsFromConfig(cc.cfg), permissionMode: mode };
   if (arg('--engine') === 'codex' || arg('--engine') === 'claude-code') cc.set('client.engine', arg('--engine')!); // the agent you pick is the one you get next time
 
-  const { logger } = createAppLogger({ level: cc.cfg.log.level === 'silent' ? 'error' : cc.cfg.log.level, maxBytes: cc.cfg.log.max_file_bytes, maxFiles: cc.cfg.log.max_files });
+  const { logger } = createAppLogger({ level: cc.cfg.log.level, maxBytes: cc.cfg.log.max_file_bytes, maxFiles: cc.cfg.log.max_files });
   logger.info('app.start', { version: VERSION, engine: engine.id, demo, mode });
   let instance: ReturnType<typeof render> | undefined;
   const ctl = new AppController({
