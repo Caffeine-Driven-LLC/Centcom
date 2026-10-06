@@ -3,7 +3,7 @@
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { EXIT, classify } from './claude-pr-wait.mjs';
+import { EXIT, classify, fingerprint } from './claude-pr-wait.mjs';
 
 /** @typedef {import('./claude-pr-wait.mjs').WatchedPr} WatchedPr */
 
@@ -52,16 +52,41 @@ describe('classify', () => {
       outcome: 'handoff',
       detail: 'AlexanderGese requested changes',
     });
+    const replied = [...reviews, { author: { login: 'AlexanderGese' }, state: 'COMMENTED' }];
+    expect(classify(pr({ reviews: replied })).outcome).toBe('handoff');
     const resolved = [...reviews, { author: { login: 'AlexanderGese' }, state: 'APPROVED' }];
     expect(classify(pr({ reviews: resolved })).outcome).toBe('pending');
   });
 
-  it('reports a PR without the opt-in label instead of waiting on it', () => {
+  it('reports a PR that never had the opt-in label instead of waiting on it', () => {
     expect(classify(pr({ labels: [] })).outcome).toBe('not-opted-in');
+  });
+
+  it('treats the opt-in label disappearing after it was seen as a human taking over', () => {
+    expect(classify(pr({ labels: [] }), true)).toEqual({
+      outcome: 'handoff',
+      detail: 'claude-automerge was removed: a human took the PR over',
+    });
   });
 
   it('keeps the documented exit codes', () => {
     expect(EXIT).toEqual({ merged: 0, handoff: 2, closed: 3, timeout: 4, 'not-opted-in': 5 });
+  });
+});
+
+describe('fingerprint', () => {
+  it('counts a finished check or a new claude-review status as activity', () => {
+    const running = pr({ statusCheckRollup: [{ name: 'test', status: 'IN_PROGRESS' }] });
+    const done = pr({
+      statusCheckRollup: [{ name: 'test', status: 'COMPLETED', conclusion: 'SUCCESS' }],
+    });
+    const approved = pr({
+      statusCheckRollup: [
+        { name: 'test', status: 'COMPLETED', conclusion: 'SUCCESS' },
+        { context: 'claude-review', state: 'SUCCESS' },
+      ],
+    });
+    expect(new Set([running, done, approved].map(fingerprint)).size).toBe(3);
   });
 });
 

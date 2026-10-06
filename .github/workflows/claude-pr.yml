@@ -1,15 +1,15 @@
-# Claude PR pipeline: reviews, fixes and merges lane PRs that carry the `claude-automerge` label,
-# so PRs from an unattended local Claude Code session can land overnight. Every trigger re-reads
-# the PR's current state, and tools/ci/claude-pr-state.mjs picks the one next step: review, fix CI,
-# update from main, merge, or hand off to a human. Claude edits and pushes; only that script
-# decides a merge. Pause everything with the repository variable CLAUDE_AUTOMERGE=off.
+# Claude PR pipeline: reviews, fixes and merges lane PRs labelled `claude-automerge`, so PRs from an
+# unattended local Claude Code session can land overnight. Every trigger re-reads the PR, and
+# tools/ci/claude-pr-state.mjs picks one step: review, fix CI, update from main, merge, or hand off.
+# Claude edits and pushes; only the script decides a merge, and only the record job, which runs no
+# PR code, writes the claude-review status. PR events arrive through claude-pr-trigger.yml, so this
+# file always runs as it is on main. Pause with the repository variable CLAUDE_AUTOMERGE=off.
+# Setup, costs and recovery: CLAUDE.md.
 name: claude-pr
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
   workflow_run:
-    workflows: [CI]
+    workflows: [claude-pr-trigger, CI]
     types: [completed]
   workflow_dispatch:
     inputs:
@@ -17,7 +17,11 @@ on:
         description: Pull request number
         required: true
   schedule:
-    - cron: '*/30 * * * *' # safety net for events lost to concurrency or GitHub hiccups
+    # Safety net for lost events. Rare on purpose: Actions minutes are capped on this plan, and a
+    # local waiter (tools/ci/claude-pr-wait.mjs) re-dispatches its own PR when it goes quiet.
+    - cron: '17 */4 * * *'
+  push:
+    branches: [main] # tripwire only
 
 permissions:
   contents: read
@@ -25,11 +29,11 @@ permissions:
 # One run per PR at a time, queued rather than cancelled: a queued run re-plans from the PR's
 # state when it starts, so dropping an older queued run loses nothing.
 concurrency:
-  group: claude-pr-${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || inputs.pr || github.run_id }}
+  group: claude-pr-${{ github.event.workflow_run.pull_requests[0].number || inputs.pr || github.run_id }}
   cancel-in-progress: false
 
 env:
-  PR: ${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || inputs.pr }}
+  PR: ${{ github.event.workflow_run.pull_requests[0].number || inputs.pr }}
 
 jobs:
   sweep:
@@ -40,21 +44,48 @@ jobs:
       actions: write
       pull-requests: read
     steps:
-      - name: Re-plan every opted-in PR
+      - name: Re-plan every actionable opted-in PR
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          for n in $(gh pr list --label claude-automerge --json number --jq '.[].number'); do
+          gh pr list --label claude-automerge --limit 1000 \
+            --search 'draft:false -label:claude-needs-human -label:do-not-merge' \
+            --json number --jq '.[].number' | sort -n | while read -r n; do
             gh workflow run claude-pr.yml -f pr="$n"
           done
 
+  tripwire:
+    # Merges by this pipeline use GITHUB_TOKEN and start no push runs, so a push to main by the
+    # Claude App means something pushed past the merge gate.
+    if: github.event_name == 'push' && github.actor == 'claude[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Raise the alarm
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh issue create --title "Claude App pushed to main directly ($GITHUB_SHA)" \
+            --body "A push to main by claude[bot] bypassed the Claude PR pipeline's merge gate. Review commit $GITHUB_SHA and pause the pipeline (CLAUDE_AUTOMERGE=off) until it is understood."
+          echo "::error::claude[bot] pushed to main directly"
+          exit 1
+
   plan:
+    # workflow_run: only runs started by a PR, not cancelled or skipped, and either the relay of an
+    # opted-in PR's event or a CI run on a lane branch.
     if: >-
-      github.event_name != 'schedule' &&
-      (github.event_name != 'pull_request' ||
-       contains(github.event.pull_request.labels.*.name, 'claude-automerge') ||
-       github.event.label.name == 'claude-automerge')
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.event == 'pull_request' &&
+       github.event.workflow_run.pull_requests[0].number &&
+       github.event.workflow_run.conclusion != 'cancelled' &&
+       github.event.workflow_run.conclusion != 'skipped' &&
+       (github.event.workflow_run.name == 'claude-pr-trigger' ||
+        startsWith(github.event.workflow_run.head_branch, 'lane/')))
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -62,6 +93,7 @@ jobs:
       pull-requests: read
       checks: read
       statuses: read
+      actions: read # gh's statusCheckRollup reads workflow runs
     outputs:
       action: ${{ steps.plan.outputs.action }}
       reason: ${{ steps.plan.outputs.reason }}
@@ -69,6 +101,7 @@ jobs:
       head_ref: ${{ steps.plan.outputs.head_ref }}
       review: ${{ steps.plan.outputs.review }}
       prompt: ${{ steps.plan.outputs.prompt }}
+      tools: ${{ steps.plan.outputs.tools }}
     steps:
       # The state script and prompts come from main, never from the PR.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -82,114 +115,147 @@ jobs:
           package-manager-cache: false
       - name: Pick the next step
         id: plan
-        if: env.PR != ''
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           CLAUDE_AUTOMERGE: ${{ vars.CLAUDE_AUTOMERGE }}
+          HAS_CLAUDE_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
         run: node tools/ci/claude-pr-state.mjs "$PR"
 
   claude:
     needs: plan
     if: contains(fromJSON('["review","fix-ci","update"]'), needs.plan.outputs.action)
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
+    # No statuses or pull-requests scope: this job may run PR code (fix-ci, conflict resolution).
     permissions:
-      contents: read # Claude pushes with its GitHub App token, not this one
-      pull-requests: write
-      statuses: write
+      contents: read # Claude pushes with the Claude App token
       actions: read # CI logs, for fix-ci
-      id-token: write # OIDC exchange for the Claude GitHub App token
+      id-token: write # OIDC exchange for the Claude App token
+    outputs:
+      local: ${{ steps.final.outputs.local }}
+      outcome: ${{ steps.claude.outcome }}
+      verdict: ${{ fromJSON(steps.claude.outputs.structured_output || '{}').verdict }}
+      summary: ${{ fromJSON(steps.claude.outputs.structured_output || '{}').summary }}
     env:
       ACTION: ${{ needs.plan.outputs.action }}
-      PLANNED: ${{ needs.plan.outputs.head }}
+      CLAUDE_BOT_ID: '209825114' # claude[bot]
     steps:
       # Check out the planned SHA, then name the branch: if the PR moved since planning, Claude's
-      # push is not a fast-forward and fails, and the next run re-plans.
+      # push is not a fast-forward and fails, and the record job hands off or re-plans.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.plan.outputs.head }}
-          fetch-depth: 0
+          fetch-depth: 0 # also fetches origin/main for the update step
           persist-credentials: false
       - name: Branch at the planned head
         env:
           HEAD_REF: ${{ needs.plan.outputs.head_ref }}
         run: git checkout -B "$HEAD_REF"
 
+      # Before touching the tree: will Claude have to resolve conflicts beyond the progress files?
+      # Then it needs dependencies, installed now while package.json and the lockfile are valid.
+      - name: Predict merge conflicts
+        id: probe
+        if: env.ACTION == 'update'
+        run: |
+          needs=false
+          if ! out="$(git merge-tree --write-tree --name-only --no-messages HEAD origin/main)"; then
+            others="$(printf '%s\n' "$out" | tail -n +2 \
+              | grep -vxF -e plan/STATUS.json -e README.md -e docs/progress.svg || true)"
+            [ -n "$others" ] && needs=true
+          fi
+          echo "claude_resolves=$needs" >> "$GITHUB_OUTPUT"
+
+      # No cache: this job runs on main's ref, and a cache it saved would be restored by main's CI.
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        if: env.ACTION == 'fix-ci' || steps.probe.outputs.claude_resolves == 'true'
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: env.ACTION == 'fix-ci' || steps.probe.outputs.claude_resolves == 'true'
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - name: Install (frozen lockfile)
+        if: env.ACTION == 'fix-ci' || steps.probe.outputs.claude_resolves == 'true'
+        run: pnpm install --frozen-lockfile
+
+      # main's copy of the bookkeeping helper resolves progress-file conflicts and regenerates them.
       - name: Merge main
-        id: premerge
         if: env.ACTION == 'update'
         run: |
           git config user.name 'claude[bot]'
-          git config user.email '41898282+claude[bot]@users.noreply.github.com'
-          git fetch -q origin main
-          if git merge --no-edit origin/main; then
-            echo "clean=true" >> "$GITHUB_OUTPUT"
-            echo "merged=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          git config user.email "${CLAUDE_BOT_ID}+claude[bot]@users.noreply.github.com"
+          git show origin/main:tools/ci/claude-pr-bookkeeping.mjs > "$RUNNER_TEMP/bookkeeping.mjs"
+          if git merge --no-ff --no-edit origin/main; then
+            node "$RUNNER_TEMP/bookkeeping.mjs" refresh
           else
-            echo "clean=false" >> "$GITHUB_OUTPUT"
+            node "$RUNNER_TEMP/bookkeeping.mjs" resolve
           fi
-
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-        if: steps.premerge.outputs.clean != 'true'
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        if: steps.premerge.outputs.clean != 'true'
-        with:
-          node-version-file: .node-version
-          cache: pnpm
-      - name: Install (frozen lockfile)
-        if: steps.premerge.outputs.clean != 'true'
-        run: pnpm install --frozen-lockfile
 
       - name: Claude
         id: claude
+        timeout-minutes: 25 # a step timeout fails the step; the record job still runs and hands off
         uses: anthropics/claude-code-action@58985842b834ed26087302ba27d07bc24ca8697a # v1.0.244
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: ${{ needs.plan.outputs.prompt }}
           # Runs started by Claude's own pushes or by this workflow's dispatches.
           allowed_bots: 'claude[bot],github-actions[bot]'
+          bot_id: ${{ env.CLAUDE_BOT_ID }}
+          bot_name: 'claude[bot]'
           additional_permissions: |
             actions: read
+          # --setting-sources user: the repo's CLAUDE.md is for local sessions, and a PR's .claude/
+          # must never configure this run. The tool list comes from main's claude-pr-state.mjs.
           claude_args: |
             --model claude-sonnet-5-5
             --max-turns 60
-            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(pnpm install --frozen-lockfile),Bash(pnpm install --lockfile-only),Bash(git checkout origin/main -- pnpm-lock.yaml),Bash(git checkout --ours:*),Bash(git checkout --theirs:*),Bash(python3 tools/plan/progress.py),Bash(bash tools/ci/gates.sh),Bash(pnpm typecheck),Bash(pnpm test),Bash(pnpm test:*),Bash(pnpm web:build),Bash(git status),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git add:*),Bash(git commit:*),Bash(git merge --abort),Bash(git push origin HEAD),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr checks:*),Bash(gh pr comment:*),Bash(gh run view:*),mcp__github_inline_comment__create_inline_comment"
+            --setting-sources user
+            --strict-mcp-config
+            --allowedTools "${{ needs.plan.outputs.tools }}"
+            --disallowedTools "Bash(git add -A:*),Bash(git add --all:*),Bash(git add .:*),Bash(git commit -a:*),Bash(git commit -am:*)"
             --json-schema '{"type":"object","properties":{"verdict":{"enum":["approve","fixed","needs_human"]},"summary":{"type":"string"}},"required":["verdict","summary"]}'
 
-      # Git decides the outcome, not Claude's claim: a status goes only on the SHA this job ended
-      # at, and only if the PR head is still there. A commit Claude pushed is never approved by the
-      # run that wrote it; the next run reviews it, except a clean merge of main, which keeps the
-      # approval the reviewed head already had.
+      - name: Final head
+        id: final
+        if: always()
+        run: echo "local=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  record:
+    # Runs no PR code and trusts the claude job's outputs only as far as claude-pr-state.mjs
+    # --record explains: an approval needs a review run (no PR code) on an unchanged head.
+    needs: [plan, claude]
+    if: always() && contains(fromJSON('["review","fix-ci","update"]'), needs.plan.outputs.action)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write # create the handoff label if it is missing
+      statuses: write
+      actions: write # re-plan after an approval
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0 # the carry-over check compares the PR's commits with main
+          sparse-checkout: tools/ci
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          package-manager-cache: false
       - name: Record the outcome
-        if: ${{ !cancelled() }}
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ACTION: ${{ needs.plan.outputs.action }}
+          PLANNED: ${{ needs.plan.outputs.head }}
           REVIEW: ${{ needs.plan.outputs.review }}
-          CLEAN: ${{ steps.premerge.outputs.clean }}
-          MERGED: ${{ steps.premerge.outputs.merged }}
-          VERDICT: ${{ fromJSON(steps.claude.outputs.structured_output || '{}').verdict }}
-          SUMMARY: ${{ fromJSON(steps.claude.outputs.structured_output || '{}').summary }}
-        run: |
-          local="$(git rev-parse HEAD)"
-          remote="$(gh pr view "$PR" --json headRefOid -q .headRefOid)"
-          status() {
-            gh api "repos/$GITHUB_REPOSITORY/statuses/$remote" \
-              -f state="$1" -f context=claude-review -f description="$2" > /dev/null
-          }
-          if [ "$remote" != "$local" ]; then
-            echo "PR head is $remote, not this job's $local; the next run re-plans."
-          elif [ "$local" != "$PLANNED" ]; then
-            if [ "$ACTION" = update ] && [ "$CLEAN" = true ] && [ "$local" = "$MERGED" ] && [ "$REVIEW" = SUCCESS ]; then
-              status success "Carried over from ${PLANNED:0:7}: clean merge of main"
-            fi
-          elif [ "$ACTION" = review ] && [ "$VERDICT" = approve ]; then
-            status success "Claude approved this SHA"
-          else
-            status failure "Claude handed this PR to a human"
-            gh pr edit "$PR" --add-label claude-needs-human
-            gh pr comment "$PR" --body "Claude handed this PR to a human (step: $ACTION). ${SUMMARY:-The Claude step failed; see the workflow run.}"
-          fi
+          LOCAL: ${{ needs.claude.outputs.local }}
+          VERDICT: ${{ needs.claude.outputs.verdict }}
+          SUMMARY: ${{ needs.claude.outputs.summary }}
+          CLAUDE_OUTCOME: ${{ needs.claude.outputs.outcome || needs.claude.result }}
+        run: node tools/ci/claude-pr-state.mjs "$PR" --record
 
   handoff:
     needs: plan
@@ -198,42 +264,45 @@ jobs:
     timeout-minutes: 5
     permissions:
       pull-requests: write
+      issues: write # create the handoff label if it is missing
     steps:
-      - name: Label and explain
+      - name: Explain and label
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           REASON: ${{ needs.plan.outputs.reason }}
+        # The comment goes first, so the reason is on the PR even if labelling fails.
         run: |
-          gh pr edit "$PR" --add-label claude-needs-human
           gh pr comment "$PR" --body "Claude handed this PR to a human: $REASON."
+          gh label create claude-needs-human --force --color D93F0B \
+            --description 'Claude PR pipeline handed this PR to a human'
+          gh pr edit "$PR" --add-label claude-needs-human
 
   merge:
     needs: plan
     if: needs.plan.outputs.action == 'merge'
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     # One merge at a time across all PRs; the script re-checks the PR inside this lock.
     concurrency:
       group: claude-pr-merge
       cancel-in-progress: false
     permissions:
-      contents: write
+      contents: write # the merge, and the progress commit on main
       pull-requests: write
       checks: read
       statuses: read
       actions: write # dispatch main's checks and re-plan the other PRs
     steps:
+      # main only: the progress commit is generated here by main's tools/plan/progress.py.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
-          persist-credentials: false
-          sparse-checkout: tools/ci
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           package-manager-cache: false
-      - name: Merge if still ready
+      - name: Merge if still ready, then record the lanes
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
