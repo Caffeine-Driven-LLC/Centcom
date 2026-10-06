@@ -87,7 +87,8 @@ Check, and fix what fails:
 - the header shows Codex and your login kind; a first message streams an answer;
 - a request to edit a file shows Centcom's approval prompt with the diff; **y** applies it, **n** declines it and Codex carries on;
 - a request to run a command shows the command and its risk; denial works;
-- **esc** during a long answer stops it within a few seconds, and the next message works;
+- **esc** during a long answer stops it within a few seconds, and the next message works. Centcom first sends `turn/interrupt`; if Codex finishes the turn within 3 s nothing is killed (`agent.interrupted` in the log says `method: protocol`). Only if it does not, the app-server's process group gets SIGINT, SIGTERM at 3 s, SIGKILL at 8 s, and the next message starts the app-server again on the same thread (`thread/resume`). Check that real Codex takes the first path, and that **ctrl+c** twice quickly exits with code 130;
+- saved conversations: `pnpm centcom --engine codex -c` continues the Codex thread itself (the log at `~/.centcom/sessions/<id>/log.jsonl` has an `engine.session` row with the thread id); continuing a Claude conversation with Codex starts fresh from a summary and says so;
 - the context and usage numbers move after each turn (they come from `thread/tokenUsage/updated`);
 - `pnpm centcom --engine codex -c` resumes the last conversation, and it is remembered;
 - `pnpm centcom --engine codex -p "say hi"` prints the answer and exits 0;
