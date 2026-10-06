@@ -9,3 +9,4 @@ export { ClientConfig, settingsFromConfig } from './clientConfig.js';
 export { buildRuntime, type Runtime, type RuntimeOptions } from './runtime.js';
 export * from './onboarding/index.js';
 export * from './tasks/index.js';
+export * from './keys/index.js';

@@ -6,7 +6,7 @@ import { defaultDeps, loadConfig, stateDir, writeUserConfig, type LoadDeps } fro
 import { createTelemetry, fetchPost, nodeStateFs, telemetryEnabled, type Telemetry } from '@centcom/net';
 import { CONTRACT_VERSION } from '@centcom/protocol';
 
-export const CLI_COMMANDS = new Set(['tui', 'print', 'provider', 'mcp', 'hooks', 'memory', 'telemetry', 'init', 'rewind', 'fleet']);
+export const CLI_COMMANDS = new Set(['tui', 'print', 'provider', 'mcp', 'hooks', 'memory', 'telemetry', 'init', 'rewind', 'fleet', 'keys']);
 const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 const ulid = () => { let t = Date.now(); let time = ''; for (let i = 0; i < 10; i++) { time = CROCKFORD[t % 32] + time; t = Math.floor(t / 32); } const r = randomBytes(16); let rand = ''; for (let i = 0; i < 16; i++) rand += CROCKFORD[r[i]! % 32]; return time + rand; };
 

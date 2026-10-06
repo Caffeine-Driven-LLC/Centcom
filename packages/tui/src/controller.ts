@@ -396,6 +396,8 @@ export class AppController {
     await this.session?.interrupt();
   }
 
+  /** Leave the app (the `app.quit` action). */
+  quit() { this.o.onExit?.(); }
   /** Ctrl+C: interrupt if busy, otherwise press twice within 2 s to quit. */
   ctrlC() {
     const now = Date.now();

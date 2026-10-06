@@ -6,6 +6,7 @@ import { CLAUDE_MODELS } from '@centcom/agent';
 import type { AppController } from './controller.js';
 import { ThemeCtx, useStore } from './components/ui.js';
 import { TaskList } from './tasks/TaskList.js';
+import { actions as allActions, createDispatcher, defaultKeymap, fromInk, HelpScreen, type KeyContext, type Keymap, type KeymapWarning } from './keys/index.js';
 import { Header } from './components/Header.js';
 import { Welcome } from './components/Welcome.js';
 import { LiveStrip, LARGE_H } from './components/LiveStrip.js';
@@ -14,18 +15,20 @@ import { Prompt, SlashPopup, promptRows, slashMatches } from './components/Promp
 import { StatusLine } from './components/StatusLine.js';
 import { FleetPanel, FLEET_W } from './components/FleetPanel.js';
 import { Transcript, useTranscriptLines } from './components/Transcript.js';
-import { Palette, Help, Gallery, ModelPicker, galleryList, paletteItems } from './components/Overlays.js';
+import { Palette, Gallery, ModelPicker, galleryList, paletteItems } from './components/Overlays.js';
 import { Toasts } from './components/Toasts.js';
 import { COMMANDS } from './state/commands.js';
 import * as ed from './util/editor.js';
 
-export interface AppProps { ctl: AppController; tier: ColorTier }
+export interface AppProps { ctl: AppController; tier: ColorTier; /** The resolved keymap (defaults plus keybindings.json) and what was wrong with the file. */ keys?: { keymap: Keymap; warnings: KeymapWarning[] } }
 
-export function App({ ctl, tier }: AppProps) {
+export function App({ ctl, tier, keys }: AppProps) {
   const s = useStore(ctl.store);
   const win = useWindowSize();
   const cols = win.columns; const rows = Math.max(1, win.rows - 1); // Ink clears the whole screen every frame when output is as tall as the terminal; stay one row short
   const theme = useMemo(() => createTheme(s.settings.theme, tier), [s.settings.theme, tier]);
+  const keymap = useMemo(() => keys?.keymap ?? defaultKeymap(allActions()), [keys]); const focusRef = useRef<KeyContext[]>(['prompt']);
+  const dispatcher = useMemo(() => createDispatcher({ keymap, focus: () => focusRef.current, clock: { now: () => Date.now() } }), [keymap]);
   const [confirming, setConfirming] = useState(false);
   const pending = s.approvals[0];
   useEffect(() => { setConfirming(false); }, [pending?.req.approval_id]);
@@ -72,16 +75,19 @@ export function App({ ctl, tier }: AppProps) {
     if (key.ctrl && input === 'c') { ctl.ctrlC(); return; }
     /* approvals */
     if (pending) {
-      const high = pending.req.risk === 'high';
-      if (key.escape || input === 'n' || input === 'N') { ctl.answerApproval('deny'); return; }
-      if (confirming) { if (key.return) ctl.answerApproval('approve'); return; }
-      if (input === 'y' || input === 'Y') { if (high) setConfirming(true); else ctl.answerApproval('approve'); return; }
-      if ((input === 'a' || input === 'A') && !high) { ctl.answerApproval('approve', 'session'); return; }
-      if (key.pageUp) setScroll(s.scroll + Math.floor(bodyH / 2)); if (key.pageDown) setScroll(s.scroll - Math.floor(bodyH / 2));
+      focusRef.current = ['permission']; const high = pending.req.risk === 'high'; const step = fromInk(input, key);
+      if (confirming) { if (key.return) ctl.answerApproval('approve'); else if (step && dispatcher.handle(step).kind === 'action' && key.escape) ctl.answerApproval('deny'); return; }
+      const d = step ? dispatcher.handle(step) : { kind: 'none' as const };
+      if (d.kind === 'action') {
+        if (d.action === 'approval.deny') { ctl.answerApproval('deny'); return; }
+        if (d.action === 'approval.approve') { if (high) setConfirming(true); else ctl.answerApproval('approve'); return; }
+        if (d.action === 'approval.always' && !high) { ctl.answerApproval('approve', 'always'); return; }
+        if (d.action === 'transcript.page_up') { setScroll(s.scroll + Math.floor(bodyH / 2)); return; } if (d.action === 'transcript.page_down') { setScroll(s.scroll - Math.floor(bodyH / 2)); return; }
+      }
       return;
     }
     /* overlays */
-    if (s.mode === 'help') { ctl.patch({ mode: 'chat' }); return; }
+    if (s.mode === 'help') return; // the help screen reads its own keys (filter, esc)
     if (s.mode === 'palette') {
       if (key.escape) { ctl.patch({ mode: 'chat' }); return; }
       const items = paletteItems(s.palette.query);
@@ -93,7 +99,7 @@ export function App({ ctl, tier }: AppProps) {
       return;
     }
     if (s.mode === 'models') {
-      if (key.escape || input === 'q') { ctl.patch({ mode: 'chat' }); return; }
+      focusRef.current = ['overlay']; { const st = fromInk(input, key); if (st && dispatcher.handle(st).kind === 'action' && (key.escape || input === 'q')) { ctl.patch({ mode: 'chat' }); return; } }
       if (key.upArrow) ctl.patch({ modelSel: (s.modelSel + CLAUDE_MODELS.length - 1) % CLAUDE_MODELS.length });
       else if (key.downArrow) ctl.patch({ modelSel: (s.modelSel + 1) % CLAUDE_MODELS.length });
       else if (key.return) { ctl.patch({ mode: 'chat' }); ctl.setModel(CLAUDE_MODELS[s.modelSel]!.id); }
@@ -111,20 +117,31 @@ export function App({ ctl, tier }: AppProps) {
       else if (input === 'c') ctl.patch({ gallery: { ...g, color: g.color + 1 } });
       return;
     }
-    /* chat */
-    if (key.ctrl && input === 'o') { const i = CLAUDE_MODELS.findIndex((m) => m.id === s.settings.model); ctl.patch({ mode: 'models', modelSel: Math.max(0, i) }); return; }
-    if (key.ctrl && input === 'k') { ctl.patch({ mode: 'palette', palette: { query: '', sel: 0 } }); return; }
-    if (key.ctrl && input === 't') { ctl.patch({ tasksOpen: !s.tasksOpen }); return; }
-    if (key.ctrl && input === 'b') { ctl.patch({ fleet: !s.fleet }); return; }
-    if (key.ctrl && input === 'l') { setScroll(0); return; }
-    if (key.tab && key.shift) { ctl.cycleMode(); return; }
-    if (key.escape) { if (s.busy) void ctl.interrupt(); else if (s.input) ctl.patch({ input: '', cursor: 0 }); else ctl.escIdle(); return; }
-    if (key.pageUp) { setScroll(s.scroll + Math.max(3, Math.floor(bodyH / 2))); return; }
-    if (key.pageDown) { setScroll(s.scroll - Math.max(3, Math.floor(bodyH / 2))); return; }
-    if (key.shift && key.upArrow) { setScroll(s.scroll + 3); return; }
-    if (key.shift && key.downArrow) { setScroll(s.scroll - 3); return; }
+    /* chat: shortcuts are actions in the keymap; anything else is editing */
+    focusRef.current = ['prompt', 'transcript']; const step = fromInk(input, key);
+    const typingQuestion = input === '?' && !!s.input; // `?` types itself unless the prompt is empty
+    const d = step && !typingQuestion ? dispatcher.handle(step) : { kind: 'none' as const };
+    if (d.kind === 'pending') return;
+    if (d.kind === 'action') {
+      const page = Math.max(3, Math.floor(bodyH / 2));
+      switch (d.action) {
+        case 'help.open': ctl.patch({ mode: 'help' }); return;
+        case 'app.quit': if (!s.input) { ctl.quit(); return; } break;
+        case 'palette.open': ctl.patch({ mode: 'palette', palette: { query: '', sel: 0 } }); return;
+        case 'models.open': { const i = CLAUDE_MODELS.findIndex((m) => m.id === s.settings.model); ctl.patch({ mode: 'models', modelSel: Math.max(0, i) }); return; }
+        case 'mode.cycle': ctl.cycleMode(); return;
+        case 'agent.interrupt': if (s.busy) void ctl.interrupt(); else if (s.input) ctl.patch({ input: '', cursor: 0 }); else ctl.escIdle(); return;
+        case 'tasks.toggle': ctl.patch({ tasksOpen: !s.tasksOpen }); return;
+        case 'fleet.toggle': ctl.patch({ fleet: !s.fleet }); return;
+        case 'transcript.bottom': setScroll(0); return;
+        case 'transcript.page_up': setScroll(s.scroll + page); return;
+        case 'transcript.page_down': setScroll(s.scroll - page); return;
+        case 'transcript.line_up': setScroll(s.scroll + 3); return;
+        case 'transcript.line_down': setScroll(s.scroll - 3); return;
+        default: break;
+      }
+    }
     if (key.end && !s.input) { setScroll(0); return; }
-    if (input === '?' && !s.input) { ctl.patch({ mode: 'help' }); return; }
     if (key.return) {
       if (matches.length) {
         const m = matches[s.slashSel % matches.length]!;
@@ -172,7 +189,7 @@ export function App({ ctl, tier }: AppProps) {
             <Box height={bodyH} width={mainW} flexDirection="column">
               {s.mode === 'models' ? <ModelPicker sel={s.modelSel} current={s.settings.model} width={mainW} />
                 : s.mode === 'palette' ? <Palette query={s.palette.query} sel={s.palette.sel} width={mainW} />
-                : s.mode === 'help' ? <Help width={mainW} />
+                : s.mode === 'help' ? <HelpScreen actions={allActions()} keymap={keymap} warnings={keys?.warnings ?? []} onClose={() => ctl.patch({ mode: 'chat' })} width={mainW} height={bodyH} />
                   : s.mode === 'gallery' ? <Gallery cat={s.gallery.cat} idx={s.gallery.idx} color={s.gallery.color} width={mainW} height={gallerySize} reduced={s.settings.reducedMotion} />
                     : welcome ? <Welcome s={s} width={mainW} height={bodyH} color={s.settings.color} reduced={s.settings.reducedMotion} />
                       : <Box paddingX={1}><Transcript lines={lines} width={mainW - 2} height={bodyH} scroll={s.scroll} /></Box>}

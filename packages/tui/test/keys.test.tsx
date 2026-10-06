@@ -1,0 +1,39 @@
+import React from 'react';
+import fc from 'fast-check';
+import { renderToString } from 'ink';
+import { describe, expect, it } from 'vitest';
+import { actions, bindingsOf, createDispatcher, decodeRaw, defaultKeymap, formatKey, fromInk, helpRows, HelpBody, KeyParseError, loadKeymap, NAMED, parseKey, type KeyContext } from '../src/index.js';
+
+const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '');
+const km = () => defaultKeymap(actions());
+const load = (file: unknown) => loadKeymap({ defaults: km(), userFile: 'kb.json', actions: actions(), fs: { read: () => (typeof file === 'string' ? file : JSON.stringify(file)) } });
+describe('parse (acceptance 1)', () => {
+  it('modifiers, named keys, chords and errors', () => { expect(parseKey('ctrl+shift+p')).toEqual([{ ctrl: true, alt: false, shift: true, meta: false, key: 'p' }]); expect(parseKey('ctrl+x ctrl+s')).toHaveLength(2); expect(parseKey('banana+x')).toBeInstanceOf(KeyParseError); expect(parseKey('ctrl+')).toBeInstanceOf(KeyParseError); expect(parseKey('a b c')).toBeInstanceOf(KeyParseError); expect(parseKey('Escape')).toEqual([{ ctrl: false, alt: false, shift: false, meta: false, key: 'esc' }]); expect(parseKey('?')).toEqual([{ ctrl: false, alt: false, shift: false, meta: false, key: '?' }]); expect(parseKey('ctrl++')).toEqual([{ ctrl: true, alt: false, shift: false, meta: false, key: '+' }]); });
+  it('formatKey(parseKey(k)) round-trips (property)', () => { const step = fc.record({ ctrl: fc.boolean(), alt: fc.boolean(), shift: fc.boolean(), meta: fc.boolean(), key: fc.oneof(fc.constantFrom(...NAMED), fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789?/.,;[]-=')) }); fc.assert(fc.property(fc.array(step, { minLength: 1, maxLength: 2 }), (c) => { const s = formatKey(c); const back = parseKey(s); expect(back).not.toBeInstanceOf(KeyParseError); expect(formatKey(back as never)).toBe(s); }), { numRuns: 100 }); });
+});
+describe('decode', () => {
+  it('raw bytes: legacy control, ESC alt, CSI u, arrows with modifiers, shift+tab, F keys', () => { expect(formatKey([decodeRaw('\x0b')!])).toBe('ctrl+k'); expect(formatKey([decodeRaw('\x1bb')!])).toBe('alt+b'); expect(formatKey([decodeRaw('\x1b[107;5u')!])).toBe('ctrl+k'); expect(formatKey([decodeRaw('\x1b[13;2u')!])).toBe('shift+enter'); expect(formatKey([decodeRaw('\x1b[1;2A')!])).toBe('shift+up'); expect(formatKey([decodeRaw('\x1b[Z')!])).toBe('shift+tab'); expect(formatKey([decodeRaw('\x1bOP')!])).toBe('f1'); expect(formatKey([decodeRaw('\x1b[5~')!])).toBe('pageup'); expect(decodeRaw('\x1b[99;9X')).toBeUndefined(); });
+  it('Ink events', () => { expect(formatKey([fromInk('k', { ctrl: true })!])).toBe('ctrl+k'); expect(formatKey([fromInk('', { tab: true, shift: true })!])).toBe('shift+tab'); expect(formatKey([fromInk('?', {})!])).toBe('?'); expect(formatKey([fromInk('', { pageUp: true })!])).toBe('pageup'); expect(fromInk('', {})).toBeUndefined(); });
+});
+describe('dispatcher and chords (acceptance 2, 3)', () => {
+  const chordMap = () => { const m = km(); m.get('global')!.set('ctrl+x ctrl+s', 'transcript.bottom'); return m; };
+  it('ctrl+k opens the palette from the prompt; overlay and permission keys win over global', () => { let t = 0; const d = createDispatcher({ keymap: km(), focus: () => ['prompt'], clock: { now: () => t } }); expect(d.handle(parseKey('ctrl+k')[0 as never] as never)).toEqual({ kind: 'action', action: 'palette.open' }); const p = createDispatcher({ keymap: km(), focus: () => ['permission'], clock: { now: () => t } }); expect(p.handle((parseKey('esc') as never)[0])).toEqual({ kind: 'action', action: 'approval.deny' }); void t; });
+  it('a chord waits for its second key, times out after 1 s, and a wrong second key counts on its own', () => {
+    let t = 0; const d = createDispatcher({ keymap: chordMap(), focus: () => ['prompt'], clock: { now: () => t } }); const k = (s: string) => (parseKey(s) as never as never[])[0]!;
+    expect(d.handle(k('ctrl+x'))).toEqual({ kind: 'pending' }); t += 500; expect(d.handle(k('ctrl+s'))).toEqual({ kind: 'action', action: 'transcript.bottom' });
+    d.handle(k('ctrl+x')); t += 1051; expect(d.pending()).toBe(false); expect(d.handle(k('ctrl+s'))).toEqual({ kind: 'none' });
+    d.handle(k('ctrl+x')); t += 100; expect(d.handle(k('ctrl+k'))).toEqual({ kind: 'action', action: 'palette.open' });
+  });
+});
+describe('user keybindings (acceptance 3, 4, 5)', () => {
+  it('unbind ctrl+k and bind ctrl+o to the palette', () => { const { keymap, warnings } = load({ unbind: ['ctrl+k'], bindings: [{ key: 'ctrl+o', action: 'palette.open', context: 'global' }] }); expect(keymap.get('global')!.get('ctrl+k')).toBeUndefined(); expect(warnings.filter((w) => w.code === 'conflict')).toHaveLength(1); const o = load({ unbind: ['ctrl+k', 'ctrl+o'], bindings: [{ key: 'ctrl+o', action: 'palette.open' }] }); expect(o.keymap.get('global')!.get('ctrl+o')).toBe('palette.open'); expect(o.warnings).toEqual([]); });
+  it('a key taken in the same context is a conflict naming both; another context is fine', () => { const { keymap, warnings } = load({ bindings: [{ key: 'ctrl+t', action: 'fleet.toggle' }, { key: 'ctrl+t', action: 'fleet.toggle', context: 'prompt' }] }); expect(warnings[0]!.message).toMatch(/tasks\.toggle[\s\S]*fleet\.toggle/); expect(keymap.get('global')!.get('ctrl+t')).toBe('tasks.toggle'); expect(keymap.get('prompt')!.get('ctrl+t')).toBe('fleet.toggle'); });
+  it('quit and help can never lose their last key', () => { const { keymap, warnings } = load({ unbind: ['ctrl+d', '?', 'f1'] }); expect(bindingsOf(keymap, 'app.quit').length).toBeGreaterThan(0); expect(bindingsOf(keymap, 'help.open').length).toBeGreaterThan(0); expect(warnings.filter((w) => w.code === 'protected')).toHaveLength(2); });
+  it('bad files and entries are skipped with warnings, never thrown; ctrl+c is reserved', () => { expect(load('{nope').warnings[0]!.code).toBe('invalid_file'); expect(load([1, 2]).warnings[0]!.code).toBe('invalid_file'); expect(load({ evil: 'process.exit()' }).warnings[0]!.code).toBe('invalid_file'); const r = load({ bindings: [{ key: 'banana+x', action: 'palette.open' }, { key: 'ctrl+y', action: 'no.such' }, { key: 'ctrl+y' }, { key: 'ctrl+c', action: 'palette.open' }, { key: 'ctrl+y', action: 'palette.open', context: 'moon' }], unbind: [7] }); expect(r.warnings.map((w) => w.code).sort()).toEqual(['bad_entry', 'bad_entry', 'bad_entry', 'bad_key', 'reserved', 'unknown_action']); });
+});
+describe('help screen (acceptance 7)', () => {
+  const help = (w: number, h: number, filter = '', ctx?: KeyContext) => strip(renderToString(<HelpBody actions={actions()} keymap={km()} warnings={[]} width={w} height={h} filter={filter} />, { columns: w })); void ([] as KeyContext[]);
+  it('fits 80x24, groups and key names shown; two columns from 100 wide', () => { const out = help(80, 22).split('\n'); expect(out.length).toBeLessThanOrEqual(24); expect(out.join('\n')).toContain('ctrl+k'); expect(out.join('\n')).toContain('Approvals'); const wide = help(120, 40); expect(wide.split('\n').some((l) => /General.*\S+\s{2,}\S/.test(l) || l.match(/│.*│/))).toBe(true); });
+  it('typing pal filters to the palette action', () => { const rows = helpRows(actions(), km(), 'pal'); expect(rows.map((r) => r.id)).toEqual(['palette.open']); expect(help(80, 22, 'pal')).toContain('Open the command palette'); expect(help(80, 22, 'pal')).not.toContain('Approve this once'); });
+  it('30 actions still fit at 80x24', () => { const many = [...actions(), ...Array.from({ length: 30 - actions().length }, (_, i) => ({ id: `x.a${i}`, group: 'Extra', description: `extra action ${i}`, defaults: [] }))]; const out = strip(renderToString(<HelpBody actions={many} keymap={km()} warnings={[]} width={80} height={22} filter="" />, { columns: 80 })).split('\n'); expect(out.length).toBeLessThanOrEqual(24); });
+});

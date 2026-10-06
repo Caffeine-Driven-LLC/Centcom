@@ -24,7 +24,7 @@ function approvalBody(a: PendingApproval, width: number, confirming: boolean, ma
   if (r.diff) for (const l of renderDiff(r.diff, inner, maxDiff)) out.push(l);
   out.push([sp(a.agentName === 'you' ? 'runs on your account' : `runs on ${a.agentName}'s account`, { c: 'text.muted', d: true })]);
   if (r.risk === 'high') out.push([sp(confirming ? 'Press Enter to confirm, or n to cancel.' : 'This looks destructive. Press y, then Enter to confirm.', { c: 'status.danger', b: true })]);
-  out.push([sp('[y]', { c: 'status.success', b: true }), sp(' yes   ', { c: 'text.secondary' }), ...(r.risk === 'high' ? [] : [sp('[a]', { c: 'accent.hover', b: true }), sp(' always this session   ', { c: 'text.secondary' })]), sp('[n]', { c: 'status.danger', b: true }), sp(' no   ', { c: 'text.secondary' }), sp('esc', { c: 'text.muted' }), sp(' = no', { c: 'text.muted' })]);
+  out.push([sp('[y]', { c: 'status.success', b: true }), sp(' yes   ', { c: 'text.secondary' }), ...(r.risk === 'high' ? [] : [sp('[a]', { c: 'accent.hover', b: true }), sp(' always (this project)   ', { c: 'text.secondary' })]), sp('[n]', { c: 'status.danger', b: true }), sp(' no   ', { c: 'text.secondary' }), sp('esc', { c: 'text.muted' }), sp(' = no', { c: 'text.muted' })]);
   return out;
 }
 

@@ -118,8 +118,8 @@
    "note": "toasts"
   },
   "C045": {
-   "pct": 0.7,
-   "note": "help screens in both UIs; no rebinding yet"
+   "pct": 1.0,
+   "note": "keymap of named actions with contexts and chords, keybindings.json overrides (validated, unbind, conflicts, protected quit/help, ctrl+c reserved), raw and Ink key decoding, dispatcher wired into the app, live help screen with filter, centcom keys [--json]"
   },
   "C046": {
    "pct": 1,
