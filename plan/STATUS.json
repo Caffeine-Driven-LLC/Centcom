@@ -172,8 +172,8 @@
  },
  "next": [
   {
-   "title": "Run `codex login`, then smoke-test a real Codex turn",
-   "why": "the adapter is built from the real protocol schema and passes its tests, but your stored Codex token has expired so no real turn has run (C103)"
+   "title": "Smoke-test the Codex adapter on a real turn",
+   "why": "it passes its tests against Codex's published protocol schema and the real handshake, but no real model turn has run yet (C103); this needs a fresh `codex login`"
   },
   {
    "title": "C002 CI pipeline",

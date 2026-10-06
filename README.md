@@ -15,7 +15,7 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 
 ## Next steps
 
-1. **Run `codex login`, then smoke-test a real Codex turn** — the adapter is built from the real protocol schema and passes its tests, but your stored Codex token has expired so no real turn has run (C103)
+1. **Smoke-test the Codex adapter on a real turn** — it passes its tests against Codex's published protocol schema and the real handshake, but no real model turn has run yet (C103); this needs a fresh `codex login`
 2. **C002 CI pipeline** — nothing runs typecheck/tests automatically yet; add the contract-lock check and `progress.py --check`
 3. **C003 generate protocol types from `contracts/`** — event and message shapes are hand-typed today (C101, C102, C103 depend on this)
 4. **C026 persist transcripts and resume sessions** — both engines already return resume tokens; restarting the app loses the conversation
