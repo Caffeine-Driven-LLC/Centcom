@@ -200,6 +200,10 @@
   "C027": {
    "pct": 0.8,
    "note": "checkpoints on shadow refs (temporary index, nothing of the user touched), end markers to tell agent and user edits apart, preview/rewind (files, conversation, both), safety checkpoint and undo ref, cap 100, merge/rebase refusal, non-git handling, event bus wiring, rewind command logic. Not yet: /rewind slash, esc-esc action and picker (TUI lanes), real C026 transcript store adapter"
+  },
+  "C024": {
+   "pct": 0.8,
+   "note": "fleet manager: worktree and branch per agent, plan/config limit with fair FIFO queue (32), per-engine stagger and pause on provider limits, stop/stopAll/wall clock, cleanup (branch ready, needs attention, orphans, merge preview), native subagent nodes, spawn/exit payloads. centcom fleet command logic. Not yet: wiring to the real engine registry in the app, TUI fleet view"
   }
  },
  "next": [

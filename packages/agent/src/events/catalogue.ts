@@ -2,6 +2,7 @@
  *  Fields marked `wire-safe` hold only ids, enums, numbers and timestamps; everything else may hold local text or paths and must never be forwarded as is. */
 import type { Id, StateName } from '@centcom/protocol';
 import type { NormalisedEvent, Risk } from '../types.js';
+import type { BranchReady, FleetNode } from '../fleet/types.js';
 
 export type AgentId = Id<'agt'>;
 export type ApprovalId = Id<'apr'>;
@@ -31,6 +32,9 @@ export type AgentEventMap = {
   'worktree:removed': { agent_id: AgentId; path: string };
   'lock:changed': { agent_id: AgentId; path: string; action: 'acquire' | 'release' | 'expire'; ttl_ms?: number };
   'lock:conflict': { agent_id: AgentId; other_agent_id: AgentId; path: string };
+  /** A node of the fleet tree appeared or changed. Local only: it holds labels and branch names. */
+  'fleet:node': { node: FleetNode };
+  'fleet:branch_ready': BranchReady;
   'subagent:spawned': { agent_id: AgentId; parent_id: AgentId; role?: string };
   'subagent:finished': { agent_id: AgentId; parent_id: AgentId; ok: boolean };
 };

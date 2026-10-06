@@ -25,7 +25,7 @@ export function createRunner(deps: RunnerDeps): AgentRunner {
     private pending = new Map<string, (d: ApprovalDecision) => void>(); private forced?: { outcome: ExitOutcome; reason?: string };
     cwdKey = ''; private halting?: Promise<void>; private open = new Set<string>(); // approval ids the engine is waiting on, whichever gate answers them
 
-    constructor(readonly spec: AgentSpec) { this.id = deps.ids.next('agt'); this.engine = spec.engine; this.since = new Date(clock.now()).toISOString(); }
+    constructor(readonly spec: AgentSpec) { this.id = spec.id ?? deps.ids.next('agt'); this.engine = spec.engine; this.since = new Date(clock.now()).toISOString(); }
     status() { return this.state; }
     info(): AgentInfo { return { id: this.id, engine: this.engine, status: this.state, since: this.since, ...(this.spec.parentAgentId ? { parent: this.spec.parentAgentId } : {}), turns: this.turns, queued: this.queue.length, ...(this.outcome ? { outcome: this.outcome } : {}) }; }
 
@@ -196,6 +196,7 @@ export function createRunner(deps: RunnerDeps): AgentRunner {
     async start(spec) {
       if (deps.providerEnabled && !deps.providerEnabled(spec.engine)) throw new ProviderError('provider_method_disabled', spec.engine, 'This way of using the provider is turned off.');
       if (!deps.engines.get(spec.engine)) throw new RunnerError('engine_unknown', `No engine named ${spec.engine}.`);
+      if (spec.id !== undefined && (!/^agt_[0-9A-HJKMNP-TV-Z]{26}$/.test(spec.id) || agents.has(spec.id))) throw new RunnerError('cwd_invalid', 'That agent id is not usable.');
       const key = await cwdKey(spec.cwd); // resolved before the checks below, which must run with no await until the agent is counted
       if (liveAgents().length + starting.size >= cfg.maxParallel) throw new RunnerBusy(cfg.maxParallel);
       if (!spec.allowSharedCwd && [...liveAgents(), ...starting].some((a) => a.cwdKey === key)) throw new RunnerError('cwd_in_use', 'Another agent is already working in that folder.');

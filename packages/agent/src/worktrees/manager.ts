@@ -13,6 +13,7 @@ export interface WorktreeManager {
   create(o: { repoRoot: string; agentId: AgentId; ownerSlug: string; baseRef?: string; label?: string }): Promise<Worktree>;
   list(repoRoot: string): Promise<Worktree[]>; status(w: Worktree): Promise<WorktreeStatus>; remove(w: Worktree, o?: { force?: boolean }): Promise<void>;
   prune(repoRoot: string): Promise<number>; detectConflict(w: Worktree, otherRef: string): Promise<string[]>;
+  /** Files changed on the worktree's branch since it left its base (names only, at most 200). */ changedFiles(w: Worktree): Promise<string[]>;
 }
 const T = { read: 10_000, write: 30_000, merge: 30_000 } as const; const MAX_BYTES = 4 * 1024 * 1024; const MAX_NAMES = 20;
 interface Entry { path: string; branch: string; base_ref: string; created_at: string }
@@ -57,7 +58,7 @@ export function createWorktreeManager(d: WorktreeDeps): WorktreeManager {
       let base = o.baseRef; if (!base) { const cur = await git(['symbolic-ref', '--short', '-q', 'HEAD'], repo, T.read); base = cur.code === 0 && cur.stdout.trim() ? cur.stdout.trim() : 'HEAD'; } await checkRef(repo, base);
       const exclude = (await ok(['rev-parse', '--git-path', 'info/exclude'], repo)).trim(); const rel = portable(root).startsWith(portable(repo) + '/') ? '/' + portable(root).slice(portable(repo).length + 1) + '/' : undefined;
       await d.fs.appendLineOnce(resolve(repo, exclude), '/.centcom/'); if (rel && !rel.startsWith('/.centcom/')) await d.fs.appendLineOnce(resolve(repo, exclude), rel);
-      const owner = slug(o.ownerSlug, 'owner'); const agent = slug(o.label ?? o.agentId, 'agent');
+      const owner = slug(o.ownerSlug, 'owner'); const agent = slug(o.label ?? o.agentId, 'agent', 56);
       for (let n = 1; n <= MAX_NAMES; n++) {
         const suffix = n === 1 ? '' : `-${n}`; const branch = `centcom/${owner}/${agent}${suffix}`; const path = join(root, `${owner}-${agent}${suffix}`);
         if (!(await validBranch(repo, branch)) || (await branchExists(repo, branch)) || (await d.fs.exists(path))) continue;
@@ -92,6 +93,7 @@ export function createWorktreeManager(d: WorktreeDeps): WorktreeManager {
       await git(['worktree', 'prune'], repo, T.read); if (await branchExists(repo, e.branch)) await git(['branch', o.force ? '-D' : '-d', '--', e.branch], repo, T.read);
       delete r.entries[w.agentId]; await save(repo, r); d.bus.emit('worktree:removed', { agent_id: w.agentId, path: e.path }); d.log?.info('worktree.removed', { agent_id: w.agentId });
     },
+    async changedFiles(w) { const r = await git(['diff', '--name-only', '-z', `${w.baseRef}...HEAD`], w.path, T.read); return r.code === 0 ? r.stdout.split('\0').filter(Boolean).slice(0, 200) : []; },
     async prune(repoRoot) {
       const repo = await repoTop(repoRoot); const r = await load(repo); let n = 0; await git(['worktree', 'prune'], repo, T.read);
       for (const [id, e] of Object.entries(r.entries)) if (!(await d.fs.exists(e.path))) { delete r.entries[id]; n++; if (await branchExists(repo, e.branch)) await git(['branch', '-D', '--', e.branch], repo, T.read); }
