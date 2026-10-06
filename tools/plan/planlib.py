@@ -9,6 +9,17 @@ PREFIX = {'backend': 'B', 'client': 'C'}
 def load_skeleton():
     return json.load(open(os.path.join(PLAN, 'skeleton.json')))
 
+def load_milestones():
+    return json.load(open(os.path.join(PLAN, 'milestones.json')))
+
+def load_milestone_meta():
+    return json.load(open(os.path.join(PLAN, 'milestones_meta.json')))
+
+def load_features():
+    return json.load(open(os.path.join(PLAN, 'features.json')))
+
+MS_ORDER = ['M0', 'M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'Later']
+
 def load_index():
     return json.load(open(os.path.join(ROOT, 'contracts', 'index.json')))
 

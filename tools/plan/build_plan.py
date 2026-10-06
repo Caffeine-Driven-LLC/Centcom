@@ -7,7 +7,7 @@ from planlib import *
 def bullets(items): return '\n'.join(f'- {x}' for x in items) if items else '- none'
 def code_list(items): return ', '.join(f'`{x}`' for x in items) if items else 'none'
 
-def card_md(c, unblocks, titles):
+def card_md(c, unblocks, titles, ms='-'):
     deps = ', '.join(f'[{d}]({d}.md) {titles[d]}' for d in c['depends_on']) or 'none (can start immediately)'
     unb = ', '.join(f'[{d}]({d}.md)' for d in unblocks) or 'none'
     gate = c.get('unblocks_gate') or '-'
@@ -16,6 +16,7 @@ def card_md(c, unblocks, titles):
 | | |
 |---|---|
 | **Plan** | {c['plan']} |
+| **Milestone** | {ms} |
 | **Phase** | {c['phase']} |
 | **Size** | {c['size']} ({SIZE_DAYS[c['size']]} day{'s' if SIZE_DAYS[c['size']] > 1 else ''} max) |
 | **Role** | {c['role']} |
@@ -64,6 +65,7 @@ Everything in [GUIDELINES §8](../GUIDELINES.md) plus every acceptance item abov
 def main():
     skel, index = load_skeleton(), load_index()
     all_cards = {p: load_cards(p) for p in PLANS}
+    MS = load_milestones(); META = load_milestone_meta()
     stats = {}
     for plan in PLANS:
         lanes = skel[plan]; cards = all_cards[plan]
@@ -76,7 +78,7 @@ def main():
             if fn.endswith('.md'): os.remove(os.path.join(outdir, fn))
         for l in lanes:
             c = cards.get(l['id'])
-            if c: open(os.path.join(outdir, l['id'] + '.md'), 'w').write(card_md(c, rev[l['id']], titles))
+            if c: open(os.path.join(outdir, l['id'] + '.md'), 'w').write(card_md(c, rev[l['id']], titles, MS.get(l['id'], '-')))
         layers = topo_layers({l['id']: l['depends_on'] for l in lanes})
         days, path = critical_path(lanes)
         total = sum(SIZE_DAYS[l['size']] for l in lanes)
@@ -86,10 +88,10 @@ def main():
             if l['phase'] not in phases: phases.append(l['phase'])
         rows = []
         for ph in phases:
-            rows.append(f'\n### {ph}\n\n| ID | Lane | Size | Role | Depends on | Implements | Gate |\n|---|---|:-:|---|---|---|:-:|')
+            rows.append(f'\n### {ph}\n\n| ID | Lane | M | Size | Role | Depends on | Implements | Gate |\n|---|---|:-:|:-:|---|---|---|:-:|')
             for l in [x for x in lanes if x['phase'] == ph]:
                 c = cards.get(l['id'], {})
-                rows.append(f"| [{l['id']}]({l['id']}.md) | {l['title']} | {l['size']} | {l['role']} | {', '.join(l['depends_on']) or '-'} | {', '.join(c.get('implements', [])) or '-'} | {c.get('unblocks_gate') or '-'} |")
+                rows.append(f"| [{l['id']}]({l['id']}.md) | {l['title']} | {MS.get(l['id'], '-')} | {l['size']} | {l['role']} | {', '.join(l['depends_on']) or '-'} | {', '.join(c.get('implements', [])) or '-'} | {c.get('unblocks_gate') or '-'} |")
         name = 'Backend' if plan == 'backend' else 'Client'
         repo = 'Centcom-backend' if plan == 'backend' else 'Centcom'
         sizes = {s: sum(1 for l in lanes if l['size'] == s) for s in 'SML'}
@@ -137,6 +139,62 @@ Repo: `{repo}` · Rules: [`plan/GUIDELINES.md`](../GUIDELINES.md) · Format: [`p
             cells += [', '.join(im) or '-', ', '.join(co) or '-']
         m.append(f"| `{c['id']}` | {c['kind']} | {cells[0]} | {cells[1]} | {cells[2]} | {cells[3]} |")
     open(os.path.join(PLAN, 'CONTRACT_MATRIX.md'), 'w').write('\n'.join(m) + '\n')
+    # roadmap (milestones) and feature map
+    order = MS_ORDER
+    byid = {l['id']: l for p in PLANS for l in skel[p]}
+    def mstats(m, plan):
+        ids = [i for i in byid if MS.get(i) == m and byid[i]['plan'] == plan]
+        days = sum(SIZE_DAYS[byid[i]['size']] for i in ids)
+        # longest dependency chain inside the milestone
+        memo = {}
+        def best(i):
+            if i in memo: return memo[i]
+            d = [best(x) for x in byid[i]['depends_on'] if x in ids]
+            memo[i] = SIZE_DAYS[byid[i]['size']] + (max(d) if d else 0); return memo[i]
+        return ids, days, (max((best(i) for i in ids), default=0))
+    rm = ['# Roadmap\n', 'What ships, in what order. A **milestone** is something a person can demo. Both sides work **in parallel**: the backend track starts at M0 and is ready by the time the client reaches M3, so M1 and M2 (the free, client-only product) can ship and be tested while the server is being built.\n',
+          '```', 'time ->   M0 ───► M1 ───► M2 ───► M3 ───► M4 ───► M5 ───► M6', 'client    scaffold  solo    LAN      accounts teams    fleet    launch', '          + mocks   agent   multi-   + relay  + money  + polish', '                    in TUI  player   client   + web', 'backend   scaffold  ·······················build the server in parallel·········', '          + mocks   (identity, relay, billing lanes run alongside M1-M2)', '```\n',
+          '**Recommended first release: M1 + M2** (client only, no server, no accounts). It proves the core idea (several people and agents on one project) before any backend or billing exists.\n',
+          '| Milestone | What ships | Lanes (client / backend) | Person-days (client / backend) | Gate |', '|---|---|---|---|---|']
+    for m in order:
+        ci, cd, cc = mstats(m, 'client'); bi, bd, bc = mstats(m, 'backend')
+        rm.append(f"| **{m}** {META[m]['name']} | {META[m]['goal']} | {len(ci)} / {len(bi)} | {cd} / {bd} | {META[m]['gate']} |")
+    def cum(m, plan):
+        upto = order[:order.index(m) + 1]
+        ids = [i for i in byid if MS.get(i) in upto and byid[i]['plan'] == plan]
+        days = sum(SIZE_DAYS[byid[i]['size']] for i in ids)
+        memo = {}
+        def best(i):
+            if i in memo: return memo[i]
+            d = [best(x) for x in byid[i]['depends_on'] if x in ids]
+            memo[i] = SIZE_DAYS[byid[i]['size']] + (max(d) if d else 0); return memo[i]
+        return days, max((best(i) for i in ids), default=0)
+    rm += ['\n## How long will it take?\n', 'Rough calendar time to reach a milestone, per side, from the lane sizes: `weeks = max(longest dependency chain, person-days / (people x 0.8)) / 5`. The 0.8 allows for review, meetings and context switching. These are planning numbers, not promises.\n',
+           '| Reach | Side | Person-days | Longest chain (days) | 2 people | 3 people | 4 people |', '|---|---|--:|--:|--:|--:|--:|']
+    for m in ('M2', 'M3', 'M4', 'M6'):
+        for plan in ('client', 'backend'):
+            d, ch = cum(m, plan)
+            if d == 0: continue
+            w = lambda n: max(ch, d / (n * 0.8)) / 5
+            rm.append(f"| {m} | {plan} | {d} | {ch} | {w(2):.0f} wk | {w(3):.0f} wk | {w(4):.0f} wk |")
+    rm.append('')
+    for m in order:
+        ci, cd, cc = mstats(m, 'client'); bi, bd, bc = mstats(m, 'backend')
+        rm += [f"\n## {m} · {META[m]['name']}", f"\n{META[m]['goal']}\n", f"- **Who:** {META[m]['who']}  ·  **Gate:** {META[m]['gate']}", f"- **Demo:** {META[m]['demo']}"]
+        if META[m]['exit']:
+            rm.append('- **Done when:**'); rm += [f'  - {x}' for x in META[m]['exit']]
+        rm.append(f"- **Effort:** client {cd} person-days (longest chain {cc} d) · backend {bd} person-days (longest chain {bc} d)")
+        for plan, ids in (('client', ci), ('backend', bi)):
+            if ids:
+                rm.append(f"\n**{plan.capitalize()} lanes ({len(ids)}):**\n")
+                rm += [f"- [{i}]({plan}/{i}.md) {byid[i]['title']} ({byid[i]['size']})" for i in ids]
+    open(os.path.join(PLAN, 'ROADMAP.md'), 'w').write('\n'.join(rm) + '\n')
+    feats = load_features()
+    ft = ['# Feature map\n', 'The same product feature seen from both sides: which backend lanes, which client lanes, which contracts connect them, and when it ships. Use this to find who to talk to.\n', '| Feature | M | Backend lanes | Client lanes | Contracts |', '|---|:-:|---|---|---|']
+    link = lambda ids, plan: ', '.join(f'[{i}]({plan}/{i}.md)' for i in ids) or '-'
+    for f in sorted(feats, key=lambda f: (order.index(f['milestone']), f['name'])):
+        ft.append(f"| **{f['name']}**<br><sub>{f['what']}</sub> | {f['milestone']} | {link(f['backend'], 'backend')} | {link(f['client'], 'client')} | {', '.join('`'+c+'`' for c in f['contracts']) or '-'} |")
+    open(os.path.join(PLAN, 'FEATURES.md'), 'w').write('\n'.join(ft) + '\n')
     # integration gates
     gates = {'G0': ('Contract freeze', 'Contracts reviewed and locked; `tools/plan/validate_contracts.py` passes; both repos hold identical contracts (`lock.py --compare`).'),
              'G1': ('Hello', 'Client authenticates via the device flow against the real API and fetches `/v1/me`.'),

@@ -1,0 +1,568 @@
+[
+ {
+  "name": "Run an agent on my machine (Claude Code / Codex)",
+  "what": "Start, steer and stop agents by driving the user's own CLIs; many in parallel in git worktrees.",
+  "milestone": "M1",
+  "backend": [],
+  "client": [
+   "C013",
+   "C014",
+   "C017",
+   "C101",
+   "C102",
+   "C103",
+   "C104"
+  ],
+  "contracts": [
+   "CT-PROVIDER",
+   "CT-STATE-MAP"
+  ]
+ },
+ {
+  "name": "The terminal UI",
+  "what": "Prompt, transcript, diff view, status line, command palette, spinner, keybindings, settings, onboarding.",
+  "milestone": "M1",
+  "backend": [],
+  "client": [
+   "C031",
+   "C032",
+   "C034",
+   "C035",
+   "C036",
+   "C037",
+   "C039",
+   "C040",
+   "C041",
+   "C043",
+   "C044",
+   "C045",
+   "C047",
+   "C048",
+   "C050"
+  ],
+  "contracts": []
+ },
+ {
+  "name": "Approvals and permissions",
+  "what": "One policy engine and one prompt for both CLIs; remote approvals for teammates.",
+  "milestone": "M1",
+  "backend": [
+   "B060"
+  ],
+  "client": [
+   "C015",
+   "C016",
+   "C038",
+   "C061"
+  ],
+  "contracts": [
+   "CT-WS-SESSION-EVENTS"
+  ]
+ },
+ {
+  "name": "Mascot and theme",
+  "what": "Cento in the terminal and on the web, the Abyss/Shallows theme, mascot state rules.",
+  "milestone": "M1",
+  "backend": [],
+  "client": [
+   "C009",
+   "C032",
+   "C033",
+   "C046",
+   "C049",
+   "C086"
+  ],
+  "contracts": [
+   "CT-STATE-MAP"
+  ]
+ },
+ {
+  "name": "Skills, MCP, hooks, memory",
+  "what": "Configure and display the CLIs' own skills, MCP servers, hooks and CLAUDE.md/AGENTS.md.",
+  "milestone": "M1",
+  "backend": [],
+  "client": [
+   "C020",
+   "C021",
+   "C022",
+   "C023"
+  ],
+  "contracts": []
+ },
+ {
+  "name": "Provider sign-in and who-pays",
+  "what": "Detect the user's CLIs, hand off to their own login, show whose account runs what, block shared subscription use by default.",
+  "milestone": "M2",
+  "backend": [
+   "B101"
+  ],
+  "client": [
+   "C104",
+   "C105"
+  ],
+  "contracts": [
+   "CT-PROVIDER"
+  ]
+ },
+ {
+  "name": "LAN multiplayer",
+  "what": "Discover, pair with a code, host and join a session on the same network with no backend.",
+  "milestone": "M2",
+  "backend": [],
+  "client": [
+   "C071",
+   "C072",
+   "C073",
+   "C074",
+   "C075",
+   "C076"
+  ],
+  "contracts": [
+   "CT-LAN"
+  ]
+ },
+ {
+  "name": "End-to-end encryption",
+  "what": "Per-session keys, key grants, rotation; the relay only sees ciphertext and a small metadata set.",
+  "milestone": "M2",
+  "backend": [
+   "B049",
+   "B050"
+  ],
+  "client": [
+   "C056",
+   "C073"
+  ],
+  "contracts": [
+   "CT-CRYPTO"
+  ]
+ },
+ {
+  "name": "The command-post queue",
+  "what": "Guests queue prompts, the host approves, reorders and runs them.",
+  "milestone": "M2",
+  "backend": [
+   "B052"
+  ],
+  "client": [
+   "C058",
+   "C075",
+   "C076"
+  ],
+  "contracts": [
+   "CT-WS-QUEUE"
+  ]
+ },
+ {
+  "name": "Host controls",
+  "what": "Kick, mute, change roles, transfer host, end session, session policy.",
+  "milestone": "M2",
+  "backend": [
+   "B051"
+  ],
+  "client": [
+   "C060",
+   "C075"
+  ],
+  "contracts": [
+   "CT-WS-CONTROL"
+  ]
+ },
+ {
+  "name": "Presence, typing and cursors",
+  "what": "Who is here, what they are doing, shared cursors.",
+  "milestone": "M2",
+  "backend": [
+   "B047",
+   "B048",
+   "B067"
+  ],
+  "client": [
+   "C059",
+   "C077",
+   "C085"
+  ],
+  "contracts": [
+   "CT-WS-PRESENCE"
+  ]
+ },
+ {
+  "name": "Reliable realtime connection",
+  "what": "Handshake, heartbeat, sequencing, acks, resume, snapshots, backpressure, reconnect.",
+  "milestone": "M3",
+  "backend": [
+   "B037",
+   "B038",
+   "B039",
+   "B040",
+   "B041",
+   "B042",
+   "B044",
+   "B045",
+   "B046",
+   "B055",
+   "B056"
+  ],
+  "client": [
+   "C054",
+   "C055",
+   "C063"
+  ],
+  "contracts": [
+   "CT-WS-ENVELOPE",
+   "CT-RESUME"
+  ]
+ },
+ {
+  "name": "Sign in to Centcom",
+  "what": "Device flow in the terminal, PKCE in the browser, tokens, refresh, revoke.",
+  "milestone": "M3",
+  "backend": [
+   "B013",
+   "B014",
+   "B015",
+   "B016",
+   "B017",
+   "B018",
+   "B022",
+   "B026"
+  ],
+  "client": [
+   "C052",
+   "C053",
+   "C082"
+  ],
+  "contracts": [
+   "CT-AUTH"
+  ]
+ },
+ {
+  "name": "Devices and API keys",
+  "what": "Register devices with their public keys, revoke them, manage API keys.",
+  "milestone": "M3",
+  "backend": [
+   "B019",
+   "B020"
+  ],
+  "client": [
+   "C053"
+  ],
+  "contracts": [
+   "CT-API-ACCOUNTS"
+  ]
+ },
+ {
+  "name": "Hosted sessions",
+  "what": "Create, join, pause, end and claim host on the relay; share links for viewers.",
+  "milestone": "M3",
+  "backend": [
+   "B043",
+   "B053",
+   "B054",
+   "B068"
+  ],
+  "client": [
+   "C057"
+  ],
+  "contracts": [
+   "CT-API-SESSIONS"
+  ]
+ },
+ {
+  "name": "Workspaces, members and roles",
+  "what": "Teams, roles, permissions, projects, policies.",
+  "milestone": "M3",
+  "backend": [
+   "B021",
+   "B027",
+   "B028",
+   "B031",
+   "B034",
+   "B035"
+  ],
+  "client": [
+   "C087"
+  ],
+  "contracts": [
+   "CT-RBAC",
+   "CT-API-WORKSPACES"
+  ]
+ },
+ {
+  "name": "Invites and join links",
+  "what": "Email or link invites, deep links, key bundles for offline joins.",
+  "milestone": "M4",
+  "backend": [
+   "B029",
+   "B033"
+  ],
+  "client": [
+   "C088"
+  ],
+  "contracts": [
+   "CT-DEEPLINK"
+  ]
+ },
+ {
+  "name": "Plans, seats and checkout",
+  "what": "Free/Pro/Team, Stripe checkout and portal, seat changes, invoices, trials, dunning.",
+  "milestone": "M4",
+  "backend": [
+   "B030",
+   "B069",
+   "B070",
+   "B071",
+   "B072",
+   "B073",
+   "B077",
+   "B078",
+   "B079"
+  ],
+  "client": [
+   "C064",
+   "C089"
+  ],
+  "contracts": [
+   "CT-API-BILLING",
+   "CT-ENTITLEMENTS"
+  ]
+ },
+ {
+  "name": "Usage and quotas",
+  "what": "Server-side relay metering, warnings at 80% and 100%, informational client usage display.",
+  "milestone": "M4",
+  "backend": [
+   "B074",
+   "B075",
+   "B076",
+   "B080"
+  ],
+  "client": [
+   "C029",
+   "C039",
+   "C065"
+  ],
+  "contracts": [
+   "CT-API-USAGE",
+   "CT-ENTITLEMENTS"
+  ]
+ },
+ {
+  "name": "Notifications",
+  "what": "Inbox, push, preferences, quiet hours, OS notifications.",
+  "milestone": "M4",
+  "backend": [
+   "B063",
+   "B064",
+   "B065",
+   "B066"
+  ],
+  "client": [
+   "C066",
+   "C090"
+  ],
+  "contracts": [
+   "CT-API-NOTIFY",
+   "CT-NOTIF-PAYLOAD"
+  ]
+ },
+ {
+  "name": "Branch-mode fleet",
+  "what": "Everyone runs agents on their own branches and sees each other's state.",
+  "milestone": "M5",
+  "backend": [
+   "B057",
+   "B058",
+   "B061"
+  ],
+  "client": [
+   "C024",
+   "C042",
+   "C062",
+   "C084"
+  ],
+  "contracts": [
+   "CT-WS-SESSION-EVENTS",
+   "CT-STATE-MAP"
+  ]
+ },
+ {
+  "name": "File locks and conflicts",
+  "what": "Advisory locks, conflict signals, resolution UX.",
+  "milestone": "M5",
+  "backend": [
+   "B059"
+  ],
+  "client": [
+   "C018",
+   "C078"
+  ],
+  "contracts": [
+   "CT-WS-SESSION-EVENTS"
+  ]
+ },
+ {
+  "name": "Handoff, pair mode, reactions",
+  "what": "Pass work between people, pair on one agent, react and comment.",
+  "milestone": "M5",
+  "backend": [
+   "B062"
+  ],
+  "client": [
+   "C079",
+   "C080"
+  ],
+  "contracts": [
+   "CT-WS-SESSION-EVENTS"
+  ]
+ },
+ {
+  "name": "Webhooks",
+  "what": "Outgoing signed webhooks with retries; management commands.",
+  "milestone": "M5",
+  "backend": [
+   "B081"
+  ],
+  "client": [
+   "C069"
+  ],
+  "contracts": [
+   "CT-API-WEBHOOKS",
+   "CT-WEBHOOKS"
+  ]
+ },
+ {
+  "name": "Audit log",
+  "what": "Who did what, export, retention by plan.",
+  "milestone": "M5",
+  "backend": [
+   "B036",
+   "B082"
+  ],
+  "client": [
+   "C070"
+  ],
+  "contracts": [
+   "CT-API-AUDIT"
+  ]
+ },
+ {
+  "name": "Feature flags and kill switches",
+  "what": "Remote config, including the provider kill switches.",
+  "milestone": "M3",
+  "backend": [
+   "B083"
+  ],
+  "client": [
+   "C067",
+   "C105"
+  ],
+  "contracts": [
+   "CT-API-FLAGS"
+  ]
+ },
+ {
+  "name": "Updates and releases",
+  "what": "Release channels, signed artifacts, auto-update.",
+  "milestone": "M5",
+  "backend": [
+   "B084"
+  ],
+  "client": [
+   "C068",
+   "C094",
+   "C095"
+  ],
+  "contracts": [
+   "CT-API-RELEASES"
+  ]
+ },
+ {
+  "name": "Opt-in telemetry and crash help",
+  "what": "Anonymous, content-free product telemetry; local crash reports.",
+  "milestone": "M5",
+  "backend": [
+   "B085"
+  ],
+  "client": [
+   "C010",
+   "C097"
+  ],
+  "contracts": [
+   "CT-TELEMETRY"
+  ]
+ },
+ {
+  "name": "Web app",
+  "what": "Login, session view, fleet, roster, members, invites, billing, settings, accessibility, e2e tests.",
+  "milestone": "M4",
+  "backend": [],
+  "client": [
+   "C081",
+   "C082",
+   "C083",
+   "C084",
+   "C085",
+   "C086",
+   "C087",
+   "C088",
+   "C089",
+   "C090",
+   "C092",
+   "C093"
+  ],
+  "contracts": []
+ },
+ {
+  "name": "Status and health",
+  "what": "Health endpoints and the public status feed.",
+  "milestone": "M3",
+  "backend": [
+   "B086"
+  ],
+  "client": [
+   "C039"
+  ],
+  "contracts": [
+   "CT-STATUS"
+  ]
+ },
+ {
+  "name": "Operations and security",
+  "what": "Infrastructure, deploys, observability, alerting, load and chaos tests, hardening, backups, threat model.",
+  "milestone": "M6",
+  "backend": [
+   "B091",
+   "B092",
+   "B093",
+   "B094",
+   "B095",
+   "B096",
+   "B097",
+   "B098",
+   "B099",
+   "B090"
+  ],
+  "client": [
+   "C099",
+   "C098"
+  ],
+  "contracts": []
+ },
+ {
+  "name": "Contracts, mocks and conformance",
+  "what": "Codegen, mock backend, client simulator, and the suites that prove both sides agree.",
+  "milestone": "M0",
+  "backend": [
+   "B003",
+   "B011",
+   "B100"
+  ],
+  "client": [
+   "C003",
+   "C007",
+   "C100"
+  ],
+  "contracts": []
+ }
+]

@@ -8,7 +8,7 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 
 | Path | What |
 |---|---|
-| [`plan/`](plan/README.md) | The build plan: 101 backend lanes + 105 client lanes, architecture, strict guidelines, integration gates |
+| [`plan/`](plan/START_HERE.md) | The build plan (start with `plan/START_HERE.md` and `plan/ROADMAP.md`): 101 backend lanes + 105 client lanes, architecture, strict guidelines, integration gates |
 | [`contracts/`](contracts/README.md) | Frozen connection points shared with the backend repo (REST, WebSocket, events, crypto, LAN, billing) |
 | [`assets/DESIGN.md`](assets/DESIGN.md) | Design system: brand, mascot, colour, type, motion, components, voice, accessibility |
 | [`assets/theme/`](assets/theme) | Abyss/Shallows theme: tokens, CSS, Tailwind preset, terminal themes, live preview |

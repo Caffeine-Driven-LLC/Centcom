@@ -84,6 +84,27 @@ def main():
                     if dpath in claimed: E(f'{claimed[dpath]}: deliverable {dpath} also claimed by {j}')
 
     if full and not a.plan:
+        ms = load_milestones(); meta = load_milestone_meta()
+        allids = [l['id'] for p in PLANS for l in skel[p]]
+        for i in allids:
+            if i not in ms: E(f'{i}: no milestone in plan/milestones.json')
+            elif ms[i] not in MS_ORDER: E(f'{i}: unknown milestone {ms[i]}')
+        for i in ms:
+            if i not in allids: E(f'milestones.json: unknown lane {i}')
+        for p in PLANS:
+            for l in skel[p]:
+                for d in l['depends_on']:
+                    if d in ms and l['id'] in ms and MS_ORDER.index(ms[d]) > MS_ORDER.index(ms[l['id']]):
+                        E(f'{l["id"]} ({ms[l["id"]]}) depends on {d} which is scheduled later ({ms[d]})')
+        for m in MS_ORDER:
+            if m not in meta: E(f'milestones_meta.json: missing {m}')
+        ids = set(allids)
+        for ft in load_features():
+            for i in ft['backend'] + ft['client']:
+                if i not in ids: E(f'features.json "{ft["name"]}": unknown lane {i}')
+            for c in ft['contracts']:
+                if c not in contract_ids: E(f'features.json "{ft["name"]}": unknown contract {c}')
+            if ft['milestone'] not in MS_ORDER: E(f'features.json "{ft["name"]}": bad milestone')
         cards = {p: load_cards(p) for p in PLANS}
         impl = {p: {} for p in PLANS}; cons = {p: {} for p in PLANS}
         for p in PLANS:

@@ -1,0 +1,101 @@
+{
+ "M0": {
+  "name": "Contracts and scaffolding",
+  "who": "both",
+  "goal": "Both repos build and test in CI, the contracts are frozen and locked, and each side has the mock of the other so everyone can work alone.",
+  "demo": "`pnpm test` is green in both repos; the mock backend and the client simulator start; `lock.py --compare` says identical.",
+  "gate": "G0",
+  "exit": [
+   "Contract validators and plan validators run in CI",
+   "Codegen produces types from `contracts/` in both repos",
+   "Mock backend (C007) and client simulator (B011) run scripted scenarios",
+   "Local dev environments start with one command"
+  ]
+ },
+ "M1": {
+  "name": "Solo agent in the terminal",
+  "who": "client only",
+  "goal": "A person installs Centcom, it finds their own Claude Code and/or Codex, and they work with agents in git worktrees in a polished TUI with the mascot. No network, no account.",
+  "demo": "Run `centcom`, check `centcom provider status`, give a task, approve a command, see the diff, run two agents on two branches.",
+  "gate": "none (demo script)",
+  "exit": [
+   "Both engines pass golden-transcript tests offline",
+   "TUI snapshots pass at 80x24 and under NO_COLOR",
+   "Permission prompts, diff view, fleet panel, spinner and mascot work end to end",
+   "No credential is ever read or logged (secret-pattern tests)"
+  ]
+ },
+ "M2": {
+  "name": "LAN multiplayer (free tier)",
+  "who": "client only",
+  "goal": "Two machines on the same Wi-Fi share one command post with no backend and no account: pair with a code, queue prompts, host approves, everything end-to-end encrypted.",
+  "demo": "Laptop A hosts, laptop B joins with the pairing code, B queues a prompt, A approves, the agent runs, both see the stream, B sees presence.",
+  "gate": "G3 (LAN variant against the client simulator)",
+  "exit": [
+   "Host and guest engines pass the shared event fixtures",
+   "Crypto passes the known-answer vectors; pairing passes the CPace vectors",
+   "Queue, control and presence behave per contract with two real processes",
+   "Who-pays gate blocks subscription-backed shared sessions by default"
+  ]
+ },
+ "M3": {
+  "name": "Accounts and relay",
+  "who": "both",
+  "goal": "Sign in to Centcom, create a hosted session, and work together from anywhere through the relay, with resume after a dropped connection.",
+  "demo": "`centcom login` (device flow), create a hosted session, a teammate joins from another network, kill the connection and watch it resume.",
+  "gate": "G1, G2, G3",
+  "exit": [
+   "Device flow works against the real API",
+   "Relay handshake, sequencing, resume and queue pass the provider and consumer conformance suites",
+   "Relay logs and storage contain no plaintext (privacy tests)",
+   "Dev and stage environments deploy from CI"
+  ]
+ },
+ "M4": {
+  "name": "Teams and money",
+  "who": "both",
+  "goal": "Workspaces with members and roles, invites, plans and checkout, entitlements, quotas, notifications, and the first web screens.",
+  "demo": "Owner upgrades to Pro in the browser, invites a teammate by link, the entitlement flips, the client unlocks the relay, usage warnings appear.",
+  "gate": "G4",
+  "exit": [
+   "Stripe test-mode checkout updates entitlements through webhooks",
+   "Seats, proration and dunning behave per contract",
+   "Quota warnings reach clients as notices and notifications",
+   "Web app covers login, session view, members, invites, billing"
+  ]
+ },
+ "M5": {
+  "name": "Fleet and polish",
+  "who": "both",
+  "goal": "Branch-mode fleets across people, file locks, webhooks, audit log, updates, flags and telemetry, and the rest of the web app.",
+  "demo": "Three people each run agents on their own branches in one workspace and see each other's state, locks and conflicts; admins read the audit log.",
+  "gate": "G5",
+  "exit": [
+   "Locks and conflict signals work across three clients",
+   "Webhooks deliver with retries and signatures",
+   "Audit export works",
+   "Auto-update verifies signatures and rolls out by channel"
+  ]
+ },
+ "M6": {
+  "name": "Launch",
+  "who": "both",
+  "goal": "Production readiness: infrastructure, load and chaos tests, security review, installers, docs, accessibility, and both conformance suites green.",
+  "demo": "Fresh machine install, update, full flow in production-like stage; load test at target concurrency; incident drill.",
+  "gate": "G6",
+  "exit": [
+   "Load and chaos tests meet the targets in B095/B096",
+   "Threat model reviewed, penetration findings fixed",
+   "Installers and updater tested on Linux, macOS and Windows",
+   "Provider policy table re-verified and written confirmations obtained or features kept off"
+  ]
+ },
+ "Later": {
+  "name": "After launch",
+  "who": "both",
+  "goal": "Useful but not needed for launch.",
+  "demo": "-",
+  "gate": "-",
+  "exit": []
+ }
+}

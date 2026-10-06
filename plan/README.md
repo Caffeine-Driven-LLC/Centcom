@@ -9,27 +9,30 @@ Two plans (**105 client lanes, 101 backend lanes**), built in parallel by differ
 | Builds against | mock client simulator (B011) | mock backend (C007) |
 | Proves compatibility with | provider conformance suite (B100) | consumer conformance suite (C100) |
 
-## Read in this order
+## Start here
+1. **[`START_HERE.md`](START_HERE.md)**: 10-minute reading path, your role, your first week, FAQ, glossary.
+2. **[`OVERVIEW.md`](OVERVIEW.md)**: what we are building and how it fits together.
+3. **[`ROADMAP.md`](ROADMAP.md)**: milestones M0-M6, what each demos, how long it takes.
+4. **[`FEATURES.md`](FEATURES.md)**: every feature mapped to its backend lanes, client lanes and contracts.
+5. Your side's index ([client](client/README.md) or [backend](backend/README.md)), then your lane card.
 
-1. [`ARCHITECTURE.md`](ARCHITECTURE.md): what we are building, the stack, the trust model, the integration gates.
-2. [`GUIDELINES.md`](GUIDELINES.md): the strict rules every lane obeys (boundaries, contracts, tests, security, definition of done, change control).
-3. [`../contracts/README.md`](../contracts/README.md): the connection points.
-4. Your plan's index ([backend](backend/README.md) or [client](client/README.md)), then your lane card.
-
-## Map
-
+## All files
 | File | What |
 |---|---|
-| [`skeleton.json`](skeleton.json) | The 200 lanes: id, title, phase, size, role, dependencies. Source of truth for structure. |
-| `lanes/<plan>/<ID>.json` | The lane cards (source). Written to be buildable by someone who has never seen the project. |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Stack, domain model, trust model, gates |
+| [`GUIDELINES.md`](GUIDELINES.md) | The strict rules every lane obeys |
+| [`ROADMAP.md`](ROADMAP.md), [`milestones.json`](milestones.json) | Milestones and the lane → milestone assignment (generated doc, edit the json) |
+| [`FEATURES.md`](FEATURES.md), [`features.json`](features.json) | Feature map (generated doc, edit the json) |
+| [`skeleton.json`](skeleton.json) | The lanes: id, title, phase, size, role, dependencies |
+| `lanes/<plan>/<ID>.json` | The lane cards (source) |
 | `backend/`, `client/` | Rendered cards + plan index (generated) |
 | [`GRAPH.md`](GRAPH.md) | Layers, parallelism, critical path (generated) |
 | [`CONTRACT_MATRIX.md`](CONTRACT_MATRIX.md) | Every contract × the lanes that implement/consume it (generated) |
 | [`INTEGRATION.md`](INTEGRATION.md) | Gates G0-G6 and who unblocks them (generated) |
-| [`DECISIONS.md`](DECISIONS.md) | Every question raised while writing the cards, and how it was resolved |
-| [`SIZING.md`](SIZING.md) | Lanes that may need splitting at kickoff (generated) |
-| [`LANE_CARD_SPEC.md`](LANE_CARD_SPEC.md) | Card format and the rules `validate_plan.py` enforces |
-| [`PR_TEMPLATE.md`](PR_TEMPLATE.md) | Pull request template for lanes |
+| [`DECISIONS.md`](DECISIONS.md) | Every question raised while writing the cards, and the answer |
+| [`SIZING.md`](SIZING.md) | Lanes that may need splitting |
+| [`ENGINE_DELTA.md`](ENGINE_DELTA.md) | Why we drive the vendors' CLIs |
+| [`LANE_CARD_SPEC.md`](LANE_CARD_SPEC.md), [`PR_TEMPLATE.md`](PR_TEMPLATE.md) | Card format; PR template |
 
 ## Tooling (`tools/plan/`)
 
