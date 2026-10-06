@@ -78,8 +78,8 @@
    "note": "theme tokens and tiers; card gaps: pinned 256 table, hc mode, member colours, provider API"
   },
   "C033": {
-   "pct": 0.5,
-   "note": "half-block renderer; card gaps: golden output, Cento component with frame durations, cache, budget"
+   "pct": 0.65,
+   "note": "Cento component with per-frame durations, frame cache, hero/mini sizes (8x14 and 2x6), 256-colour and ASCII fallbacks, recolouring, animation budget of 6; gaps: no golden files against play.py, app still draws through PixelView"
   },
   "C034": {
    "pct": 0.5,
