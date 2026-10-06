@@ -6,3 +6,4 @@ export { COMMANDS } from './state/commands.js';
 export { buildLines } from './util/transcript.js';
 export { SessionStore, ago, type SessionMeta } from './sessions.js';
 export { ClientConfig, settingsFromConfig } from './clientConfig.js';
+export { buildRuntime, type Runtime, type RuntimeOptions } from './runtime.js';

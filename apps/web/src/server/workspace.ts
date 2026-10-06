@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { ClaudeCodeEngine, CodexEngine, DemoEngine, newId, type AgentEngine } from '@centcom/agent';
 import { appLogger } from './logger.js';
-import { AppController, ClientConfig, SessionStore, initialSettings, settingsFromConfig, type Item } from '@centcom/tui';
+import { AppController, ClientConfig, SessionStore, buildRuntime, initialSettings, settingsFromConfig, type Item } from '@centcom/tui';
 import type { ServerMsg, WebState } from './protocol.js';
 
 /** One running agent session for one directory, shared by every browser tab or app window that opens it. */
@@ -23,9 +23,12 @@ export class Workspace {
     if (!demo) cc.set('client.engine', which); // remember the agent you picked
     const settings = settingsFromConfig(cc.cfg);
     const logger = appLogger(cc.cfg.log).child({ component: 'web', session_id: newId('ses') }); // one shared file sink for the whole server, one binding per workspace
-    const ctl = new AppController({ logger, engine, demo, cwd: dir, branch, version: '0.1.0', ghosts: false, permissionMode: settings.permissionMode, settings, ...cc.options({ ...initialSettings(), ...settings }, { saveHistory: !demo }), sessions: demo ? undefined : new SessionStore(), resume: demo ? undefined : resume });
+    const rt = await buildRuntime({ cwd: dir, engineId: engine.id, demo, dangerous: settings.permissionMode === 'bypassPermissions' });
+    const ctl = new AppController({ ...rt.options, logger, engine, demo, cwd: dir, branch, version: '0.1.0', ghosts: false, permissionMode: settings.permissionMode, settings, ...cc.options({ ...initialSettings(), ...settings }, { saveHistory: !demo }), sessions: demo ? undefined : new SessionStore(), resume: demo ? undefined : resume });
     const ws = new Workspace(dir, ctl, cc);
+    rt.bind(ctl);
     await ctl.start();
+    for (const w of rt.warnings) ctl.notice('warn', w);
     for (const w of cc.warnings) ctl.notice('warn', 'Settings: ' + w);
     cc.onWarn = (w) => ctl.notice('warn', 'Settings: ' + w);
     return ws;

@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { render } from 'ink';
 import { detectColorTier } from '@centcom/theme';
 import { ClaudeCodeEngine, CodexEngine, DemoEngine, detectClaude, detectCodex, type AgentEngine, type PermissionMode } from '@centcom/agent';
-import { App, AppController, ClientConfig, SessionStore, initialSettings, settingsFromConfig } from '@centcom/tui';
+import { App, AppController, ClientConfig, SessionStore, buildRuntime, initialSettings, settingsFromConfig } from '@centcom/tui';
 import type { FlatFlags } from '@centcom/config';
 import { createAppLogger } from '@centcom/net';
 import type { CentoColor } from '@centcom/mascot';
@@ -37,6 +37,7 @@ Options
   -c, --continue               continue the most recent conversation in this folder
   --resume <id>                continue a specific saved conversation (see /resume)
   --no-save                    do not save this conversation or your prompt history
+  --no-checkpoints             do not snapshot the folder before each prompt (/rewind then has nothing to go back to)
   --model <name>               model to use (same ids as /model)
   --mode <default|plan|acceptEdits|bypassPermissions>  start in a permission mode
   --dangerously-skip-permissions   never ask: run commands and edit files freely (alias: --yolo)
@@ -113,7 +114,8 @@ async function main() {
   const { logger } = createAppLogger({ level: cc.cfg.log.level, maxBytes: cc.cfg.log.max_file_bytes, maxFiles: cc.cfg.log.max_files });
   logger.info('app.start', { version: VERSION, engine: engine.id, demo, mode });
   let instance: ReturnType<typeof render> | undefined;
-  const ctl = new AppController({
+  const rt = await buildRuntime({ cwd: process.cwd(), engineId: engine.id, demo, dangerous: dangerous || mode === 'bypassPermissions', checkpoints: !has('--no-checkpoints') });
+  const ctl = new AppController({ ...rt.options,
     engine, demo, cwd: process.cwd(), branch, version: VERSION, permissionMode: mode, dangerous: dangerous || mode === 'bypassPermissions', ghosts: has('--demo-team'),
     logger, settings, ...cc.options({ ...initialSettings(), ...settings }, { saveHistory: !has('--no-save') }),
     sessions: has('--no-save') ? undefined : new SessionStore(),
@@ -127,8 +129,10 @@ async function main() {
   process.stdout.write('\x1b[?1049h\x1b[2J\x1b[H'); // alternate screen: the transcript never pollutes scrollback
   const leave = () => process.stdout.write('\x1b[?1049l');
   process.on('exit', leave);
+  rt.bind(ctl);
   await ctl.start();
   if (note) ctl.notice('warn', note);
+  for (const w of rt.warnings) ctl.notice('warn', w);
   for (const w of cc.warnings) { ctl.notice('warn', 'Settings: ' + w); process.stderr.write('centcom: settings: ' + w + '\n'); }
   cc.onWarn = (w) => ctl.notice('warn', 'Settings: ' + w);
   if (mode === 'bypassPermissions') ctl.notice('warn', 'Dangerously skip permissions is ON', 'Cento will run commands and edit files without asking. Use /mode default to turn approvals back on.');

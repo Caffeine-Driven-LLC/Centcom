@@ -1,9 +1,10 @@
 /** Non-interactive mode: `centcom -p "prompt"`. No screen, no prompts: text goes to stdout, problems to stderr.
  *  Exit codes: 0 done, 1 error, 2 bad usage, 3 finished but an action needed an approval and was declined. */
-import { AppController, SessionStore } from '@centcom/tui';
+import { AppController, SessionStore, buildRuntime } from '@centcom/tui';
 import type { AgentEngine, NormalisedEvent, PermissionMode } from '@centcom/agent';
 
 export interface PrintOptions {
+  /** Where permissions.json lives (tests point it at a temp folder). */ configDir?: string;
   engine: AgentEngine; demo: boolean; cwd: string; branch: string; version: string; mode: PermissionMode; prompt: string;
   format: 'text' | 'json' | 'stream-json'; save: boolean; resume?: string; model?: string; out?: NodeJS.WritableStream; err?: NodeJS.WritableStream;
 }
@@ -22,7 +23,9 @@ export async function runPrint(o: PrintOptions): Promise<number> {
   const out = o.out ?? process.stdout; const err = o.err ?? process.stderr;
   if (!o.prompt) { err.write('Give Centcom something to do: centcom -p "your task" (or pipe text in).\n'); return 2; }
   const declined: string[] = []; let failed = ''; let streamed = false;
-  const ctl: AppController = new AppController({
+  // the same permission policy as the app (hard denies, saved rules); what would need a person is declined below and reported
+  const rt = await buildRuntime({ cwd: o.cwd, engineId: o.engine.id, demo: o.demo, dangerous: o.mode === 'bypassPermissions', checkpoints: false, ...(o.configDir ? { configDir: o.configDir } : {}) });
+  const ctl: AppController = new AppController({ ...rt.options,
     engine: o.engine, demo: o.demo, cwd: o.cwd, branch: o.branch, version: o.version, permissionMode: o.mode, skills: [], dangerous: o.mode === 'bypassPermissions',
     settings: o.model ? { model: o.model } : undefined, sessions: o.save ? new SessionStore() : undefined, resume: o.resume,
     onEvent: (ev: NormalisedEvent) => {
@@ -32,6 +35,7 @@ export async function runPrint(o: PrintOptions): Promise<number> {
       if (ev.type === 'error' && ev.fatal) failed = ev.tool_message;
     },
   });
+  rt.bind(ctl);
   await ctl.start();
   // nobody is there to answer, so anything that still needs an approval is declined and reported
   const unsub = ctl.store.subscribe(() => { const a = ctl.state.approvals[0]; if (a) { declined.push(`${a.req.tool}: ${a.req.summary}`); ctl.answerApproval('deny'); } });

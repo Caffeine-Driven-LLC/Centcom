@@ -17,5 +17,9 @@ export const COMMANDS: SlashCommand[] = [
   { name: 'auto', args: '[on|off]', desc: 'Auto skills: apply matching skills and commands to your prompts' },
   { name: 'skills', args: '[filter | enable <id> | disable <id>]', desc: 'List, enable or disable the skills Centcom can auto-apply' },
   { name: 'interrupt', desc: 'Stop the running agent' },
+  { name: 'rewind', args: '[number] [files|conversation|both]', desc: 'Go back to before an earlier prompt (Esc Esc when idle)' },
+  { name: 'compact', desc: 'Ask the agent to compact its context' },
+  { name: 'permissions', args: '[remove <id>]', desc: 'Show or remove saved permission rules' },
+  { name: 'trust', args: 'rules', desc: 'Use this project\'s own permission rules file' },
   { name: 'quit', desc: 'Leave Centcom' },
 ];

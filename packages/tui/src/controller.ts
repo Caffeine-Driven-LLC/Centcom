@@ -3,7 +3,9 @@
  * answers approvals through the permission policy, runs slash commands, and drives the mascot.
  * The React tree only reads the store and calls the controller's methods.
  */
-import { CLAUDE_MODELS, modelLabel, newId } from '@centcom/agent';
+import { CLAUDE_MODELS, createAgentBus, createCheckpointManager, createContextView, modelLabel, newId, nodeGit } from '@centcom/agent';
+import type { AgentBus, AgentId, Checkpoint, CheckpointManager, ContextConfig, ContextView, EngineId, EngineStartOptions, GitRunner, PermissionEngine, PolicyMode, RewindMode } from '@centcom/agent';
+import type { PendingApproval as PolicyPending } from '@centcom/agent';
 import type { Logger } from '@centcom/net';
 import { SessionStore, ago, titleFrom, type SessionMeta } from './sessions.js';
 import { MASTER_DIR, discover, injection, masterSkills, match, setEnabled, type Skill } from '@centcom/skills';
@@ -36,7 +38,15 @@ export interface ControllerOptions {
   dangerous?: boolean;
   /** A line that starts with `# ` is a note for the memory files, not a prompt. Returns the diff to confirm, and what to do when the person says yes. */
   onMemoryAdd?: (text: string) => Promise<{ diff: string; apply: () => Promise<string> } | { error: string }>;
+  /** The permission policy engine (hard denies, saved rules, modes). Without it the controller uses its own simple built-in rules (demo and tests). Its prompter must call `promptApproval`. */
+  policy?: { engine: PermissionEngine; root: string };
+  /** Save a checkpoint of the folder before every prompt so `/rewind` can go back. Off when left out. */
+  checkpoints?: { git?: GitRunner };
+  /** Context warnings and automatic compaction (engine-reported numbers only). */
+  context?: Partial<ContextConfig>;
 }
+const POLICY_MODE: Record<PermissionMode, PolicyMode> = { default: 'ask', acceptEdits: 'accept-edits', plan: 'plan', bypassPermissions: 'bypass' };
+const HARD_DENY: Record<string, string> = { credential_path: 'it touches a credentials file', outside_root: 'it writes outside this project', git_internals: 'it writes inside .git', agent_stopped: 'the agent was stopped' };
 
 let uid = 0;
 const nid = (p: string) => `${p}${++uid}`;
@@ -58,6 +68,8 @@ export class AppController {
   private verbTimer?: NodeJS.Timeout;
   private lastExitPress = 0;
   private readonly me = 'agt_you';
+  private bus: AgentBus = createAgentBus({ onError: () => undefined });
+  private ctxView?: ContextView; private cp?: CheckpointManager; private pendingReqs = new Map<string, ApprovalRequest>(); private lastEsc = 0;
 
   constructor(private o: ControllerOptions) {
     this.verbs = o.verbs ?? new VerbRotator();
@@ -69,6 +81,12 @@ export class AppController {
       slashSel: 0, palette: { query: '', sel: 0 }, modelSel: 0, gallery: { cat: 0, idx: 0, color: 0, query: '' }, version: o.version, sessionId: newId('ses'), sessions: [],
     });
     this.driver = new MascotDriver({ reducedMotion: settings.reducedMotion, color: settings.color });
+    const clock = { now: () => Date.now(), setTimeout: (f: () => void, ms: number) => { const t = setTimeout(f, ms); t.unref?.(); return t; }, clearTimeout: (h: never) => clearTimeout(h as NodeJS.Timeout) };
+    this.ctxView = createContextView({ bus: this.bus, clock, config: o.context, engines: { capabilities: () => o.engine.capabilities(), status: () => (this.state.busy ? 'running' : this.session ? 'waiting' : 'starting'), send: async (_id, prompt) => { await this.session?.send(prompt); } } });
+    this.bus.on('agent:context_alert', (a) => { if (a.level === 'warn') this.notice('warn', `The context is ${Math.round(a.pct)}% full.`, 'Type /compact to have the agent compact it.'); else if (a.level === 'full') { this.notice('warn', 'The context is almost full.', 'Type /compact now, or start fresh with /new.'); this.driver.setState('context-full'); } });
+    if (o.checkpoints) this.cp = createCheckpointManager({ worktree: o.cwd, agentId: this.me, git: o.checkpoints.git ?? nodeGit, clock,
+      store: { markRewind: async (seq) => this.rewindTranscript(seq), summarize: async (seq, max) => this.summaryUpTo(seq, max) },
+      engine: { capabilities: () => o.engine.capabilities(), start: (so) => o.engine.start({ ...this.startOptions(so.resume?.engine_session_id), ...so }) } });
   }
 
   get state() { return this.store.get(); }
@@ -101,11 +119,13 @@ export class AppController {
     this.store.subscribe(() => { const s = this.state; if (s.settings !== lastSettings || s.fleet !== lastFleet) { lastSettings = s.settings; lastFleet = s.fleet; this.o.onPrefs?.({ settings: s.settings, fleet: s.fleet }); } });
   }
 
-  private async startEngine(resumeToken?: string) {
+  private startOptions(resumeToken?: string): EngineStartOptions {
     const gate: PermissionGate = { decide: (r) => this.decide(r) };
-    this.session = await this.o.engine.start({ agentId: this.me, cwd: this.o.cwd, permissionMode: this.state.settings.permissionMode, model: this.state.settings.model || undefined, addDirs: this.o.demo ? undefined : [MASTER_DIR], approvalGate: gate, ...(resumeToken ? { resume: { engine_session_id: resumeToken } } : {}) });
-    void this.consume(this.session);
+    return { agentId: this.me, cwd: this.o.cwd, permissionMode: this.state.settings.permissionMode, model: this.state.settings.model || undefined, addDirs: this.o.demo ? undefined : [MASTER_DIR], approvalGate: gate, ...(resumeToken ? { resume: { engine_session_id: resumeToken } } : {}) };
   }
+  private async startEngine(resumeToken?: string) { this.adopt(await this.o.engine.start(this.startOptions(resumeToken))); }
+  /** Make `s` the running engine session (after a start, or a conversation rewind). */
+  private adopt(s: EngineSession) { this.session = s; void this.consume(s); }
 
   /* ------------------------------------------------------------------ saved conversations */
   private persistTimer?: NodeJS.Timeout; private lastItems?: Item[]; private lastToken?: string; private lastSid = '';
@@ -164,12 +184,14 @@ export class AppController {
     void this.session?.stop();
   }
 
-  private async consume(s: EngineSession) { for await (const ev of s.events) this.apply(ev); }
+  private async consume(s: EngineSession) { for await (const ev of s.events) { if (s !== this.session) break; this.apply(ev); } } // a replaced session's leftovers are not shown
 
   /* ------------------------------------------------------------------ events -> state */
   apply(ev: NormalisedEvent) {
     this.o.onEvent?.(ev);
     this.logEvent(ev);
+    try { this.ctxView?.onEvent(ev); } catch { /* the meter never breaks the transcript */ }
+    if (ev.type === 'turn.done') void this.cp?.endTurn().catch(() => undefined);
     const me = this.me;
     switch (ev.type) {
       case 'session.started':
@@ -245,6 +267,7 @@ export class AppController {
   /* ------------------------------------------------------------------ approvals (permission policy) */
   private ruleKey(r: ApprovalRequest) { return `${r.tool}:${r.command ?? r.path ?? ''}`; }
   decide(r: ApprovalRequest): Promise<ApprovalDecision> {
+    if (this.o.policy) return this.decideWithPolicy(r);
     const mode = this.state.settings.permissionMode;
     if (mode === 'bypassPermissions') return Promise.resolve({ decision: 'approve', scope: 'once' }); // the user turned approvals off
     const write = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit'].includes(r.tool);
@@ -259,10 +282,30 @@ export class AppController {
     });
   }
 
+  private async decideWithPolicy(r: ApprovalRequest): Promise<ApprovalDecision> {
+    const p = this.o.policy!; this.pendingReqs.set(r.approval_id, r);
+    try {
+      const d = await p.engine.handle(r, { agentId: this.me, root: p.root, mode: POLICY_MODE[this.state.settings.permissionMode], engine: this.o.engine.id as EngineId });
+      if (d.decision === 'deny' && d.reason && HARD_DENY[d.reason]) this.notice('warn', `Blocked: ${r.tool}${r.command ? ` \`${r.command.slice(0, 80)}\`` : r.path ? ` ${r.path}` : ''}`, `Centcom never allows this, in any mode, because ${HARD_DENY[d.reason]}.`);
+      else if (d.decision === 'deny' && d.reason === 'plan_mode') this.toast('info', 'Plan mode is read-only: that change was not made.');
+      return d;
+    } finally { this.pendingReqs.delete(r.approval_id); }
+  }
+  /** The policy engine's prompter: shows the approval and waits for an answer (or for the engine to cancel it). */
+  promptApproval(p: PolicyPending, signal: AbortSignal): Promise<ApprovalDecision> {
+    const req: ApprovalRequest = { ...(this.pendingReqs.get(p.approval_id) ?? { approval_id: p.approval_id, agent_id: p.agent_id, tool_id: p.approval_id, tool: p.tool, summary: p.summary, ...(p.command ? { command: p.command } : {}), ...(p.path ? { path: p.path } : {}), ...(p.cwd ? { cwd: p.cwd } : {}) }), risk: p.risk };
+    return new Promise((resolve) => {
+      const me = this.state.agents.find((a) => a.id === req.agent_id);
+      const pending: PendingApproval = { req, agentName: me?.name ?? 'agent', color: me?.color ?? 'violet', resolve, confirmHigh: req.risk === 'high' };
+      signal.addEventListener('abort', () => { this.set((s) => ({ approvals: s.approvals.filter((a) => a !== pending) })); resolve({ decision: 'deny', scope: 'once', reason: 'cancelled' }); }, { once: true });
+      this.set((s) => ({ approvals: [...s.approvals, pending] }));
+    });
+  }
+
   answerApproval(decision: 'approve' | 'deny', scope: 'once' | 'session' | 'always' = 'once') {
     const [first, ...rest] = this.state.approvals;
     if (!first) return;
-    if (decision === 'approve' && scope !== 'once') this.sessionRules.add(this.ruleKey(first.req));
+    if (decision === 'approve' && scope !== 'once' && !this.o.policy) this.sessionRules.add(this.ruleKey(first.req)); // with the policy engine, it saves the rule itself
     this.set({ approvals: rest });
     first.resolve({ decision, scope });
     this.driver.setState(decision === 'approve' ? 'approved' : 'denied');
@@ -279,13 +322,14 @@ export class AppController {
     this.patch({ histIdx: idx, draft, input: t, cursor: t.length });
   }
 
-  private pendingMemory?: { diff: string; apply: () => Promise<string> };
+  /** A question waiting for y (memory notes, rewinds): the answer never goes to the engine or into history. */
+  private pendingMemory?: { diff: string; apply: () => Promise<string>; no?: string };
   async submit(raw: string) {
     const text = raw.trim();
     if (!text) return;
     if (this.pendingMemory) { // the answer to "add this to memory?": never goes to the engine or into the prompt history
       const p = this.pendingMemory; this.pendingMemory = undefined; this.set({ input: '', cursor: 0 });
-      if (/^(y|yes)$/i.test(text)) { try { this.addItem({ kind: 'notice', id: nid('n'), level: 'ok', text: await p.apply() }); } catch (e) { this.addItem({ kind: 'notice', id: nid('n'), level: 'warn', text: String((e as Error).message ?? e) }); } } else this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: 'Nothing was added to memory.' });
+      if (/^(y|yes)$/i.test(text)) { try { this.addItem({ kind: 'notice', id: nid('n'), level: 'ok', text: await p.apply() }); } catch (e) { this.addItem({ kind: 'notice', id: nid('n'), level: 'warn', text: String((e as Error).message ?? e) }); } } else this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: p.no ?? 'Nothing was added to memory.' });
       return;
     }
     const note = this.o.onMemoryAdd ? /^#[ \t]+(\S[\s\S]*)$/.exec(text) : null;
@@ -308,6 +352,7 @@ export class AppController {
         if (!this.o.demo) outgoing = injection(picks) + text;
       }
     }
+    await this.checkpointBefore(text);
     try { await this.session?.send(outgoing); } catch (e) { this.addItem({ kind: 'notice', id: nid('n'), level: 'error', text: 'Could not send the prompt', detail: String(e) }); }
   }
 
@@ -375,6 +420,10 @@ export class AppController {
       case 'agents': this.set((s) => ({ fleet: !s.fleet })); break;
       case 'quit': this.o.onExit?.(); break;
       case 'interrupt': await this.interrupt(); break;
+      case 'rewind': await this.rewindCommand(arg); break;
+      case 'compact': await this.compactCommand(); break;
+      case 'permissions': await this.permissionsCommand(arg); break;
+      case 'trust': await this.trustCommand(arg); break;
       case 'mode': {
         const alias: Record<string, PermissionMode> = { bypass: 'bypassPermissions', yolo: 'bypassPermissions', skip: 'bypassPermissions', dangerous: 'bypassPermissions', ask: 'default', edits: 'acceptEdits', accept: 'acceptEdits' };
         const m = (alias[arg.toLowerCase()] ?? arg) as PermissionMode;
@@ -413,6 +462,67 @@ export class AppController {
         const story = DEMO_PROMPTS[arg] ?? DEMO_PROMPTS.fix!; this.set({ input: '', cursor: 0 }); await this.submit(story); break;
       }
     }
+  }
+
+  /* ------------------------------------------------------------------ checkpoints and rewind */
+  /** A snapshot of the folder before the prompt goes out (so before any tool runs). Never holds the prompt up for more than 3 s. */
+  private async checkpointBefore(text: string) {
+    if (!this.cp) return; const seq = this.state.items.filter((i) => i.kind === 'user').length; const sid = this.session?.resumeToken();
+    let timer: NodeJS.Timeout | undefined; const late = new Promise<void>((r) => { timer = setTimeout(r, 3000); timer.unref?.(); });
+    await Promise.race([this.cp.create(text, { promptSeq: seq, ...(sid ? { engineSession: { id: sid } } : {}) }).catch(() => undefined), late]); clearTimeout(timer);
+  }
+  /** Conversation rewind: keep what came before the prompt with number `seq` (1 = the first prompt). */
+  private rewindTranscript(seq: number) {
+    let n = 0; const keep: Item[] = []; for (const it of this.state.items) { if (it.kind === 'user' && ++n >= seq) break; keep.push(it); }
+    this.lastItems = undefined; this.set({ items: keep, scroll: 0, approvals: [] });
+  }
+  /** Plain text of the conversation before prompt `seq`, newest kept when it is too long. */
+  private summaryUpTo(seq: number, maxBytes: number): string {
+    let n = 0; const lines: string[] = [];
+    for (const it of this.state.items) { if (it.kind === 'user') { if (++n >= seq) break; lines.push(`User: ${it.text}`); } else if (it.kind === 'assistant') lines.push(`Assistant: ${it.text}`); else if (it.kind === 'tool') lines.push(`(tool ${it.name}: ${it.summary}${it.status ? `, ${it.status}` : ''})`); }
+    let out = lines.join('\n'); while (Buffer.byteLength(out) > maxBytes && lines.length) { lines.shift(); out = '…\n' + lines.join('\n'); } return Buffer.byteLength(out) > maxBytes ? out.slice(-Math.floor(maxBytes / 4)) : out;
+  }
+  private checkpointLine(c: Checkpoint, i: number) { return `${String(c.n).padStart(3)}  ${ago(Date.parse(c.at))}  ${c.label || '(no text)'}${c.commit ? `  +${c.files.added} ~${c.files.changed} -${c.files.removed}` : '  (conversation only)'}${i === 0 ? '  ← latest' : ''}`; }
+  async rewindCommand(arg: string) {
+    if (!this.cp) { this.toast('info', 'Checkpoints are off in this session.'); return; }
+    if (this.state.busy) { this.toast('warn', 'Cento is still working. Press Esc to interrupt, then rewind.'); return; }
+    await this.cp.ready().catch(() => undefined); const list = [...this.cp.list()].reverse();
+    const [nArg, modeArg] = arg.split(/\s+/).filter(Boolean);
+    if (!nArg) { if (!list.length) { this.notice('info', 'No checkpoints yet. One is saved before every prompt.'); return; } this.notice('info', 'Checkpoints (newest first). Type /rewind <number> to go back to before that prompt; add "conversation" or "both" to also rewind the conversation.', list.slice(0, 15).map((c, i) => this.checkpointLine(c, i)).join('\n')); return; }
+    const mode = (modeArg ?? 'files') as RewindMode; if (!['files', 'conversation', 'both'].includes(mode)) { this.toast('warn', 'Rewind what: files, conversation or both?'); return; }
+    const target = list.find((c) => String(c.n) === nArg); if (!target) { this.toast('warn', `No checkpoint ${nArg}. Type /rewind to see the list.`); return; }
+    let plan; try { plan = await this.cp.preview(target.id, mode); } catch (e) { this.notice('warn', 'Cannot rewind files here.', String((e as Error).message ?? e)); return; }
+    const parts: string[] = []; if (plan.restore.length) parts.push(`Put back ${plan.restore.length} file${plan.restore.length === 1 ? '' : 's'}: ${plan.restore.slice(0, 10).join(', ')}`); if (plan.delete.length) parts.push(`Delete ${plan.delete.length} file${plan.delete.length === 1 ? '' : 's'} made since: ${plan.delete.slice(0, 10).join(', ')}`);
+    if (plan.skippedModifiedOutside.length) parts.push(`Left alone (changed by someone else since): ${plan.skippedModifiedOutside.slice(0, 10).join(', ')}`);
+    if (plan.conversation !== 'none') parts.push(plan.conversation === 'engine-resume' ? 'The conversation goes back to that point.' : 'The conversation starts again from a short summary of what came before.');
+    if (mode !== 'conversation') parts.push('Only files in this folder are put back. What commands did elsewhere (installs, network, databases) is not undone.');
+    if (!plan.restore.length && !plan.delete.length && plan.conversation === 'none') { this.notice('info', 'Nothing to put back: the files are already as they were then.', plan.skippedModifiedOutside.length ? parts.join('\n') : undefined); return; }
+    this.pendingMemory = { diff: parts.join('\n'), no: 'Nothing was rewound.', apply: async () => {
+      const r = await this.cp!.rewind(target.id, mode);
+      if (r.conversation) { void this.session?.stop(); this.adopt(r.conversation.session); }
+      if (r.failed) return `Stopped part way: ${r.failed.unrestored.length} file(s) not put back. Your state before the rewind is saved: /rewind ${this.cp!.list().at(-1)?.n ?? ''} undoes it.`;
+      return `Rewound to before "${target.label}": ${r.restored.length} put back, ${r.deleted.length} removed${r.skipped.length ? `, ${r.skipped.length} left alone` : ''}.${r.undoRef ? ` To undo, /rewind ${this.cp!.list().at(-1)?.n}.` : ''}${r.conversation?.resumeError ? ` (The tool said: ${r.conversation.resumeError})` : ''}`;
+    } };
+    this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: `Rewind to before "${target.label}"? Type y to confirm, anything else cancels.`, detail: parts.join('\n') });
+  }
+  /** Esc twice within 600 ms while idle opens the checkpoint list. */
+  escIdle() { const now = Date.now(); if (now - this.lastEsc < 600) { this.lastEsc = 0; void this.rewindCommand(''); } else this.lastEsc = now; }
+
+  /* ------------------------------------------------------------------ permissions */
+  private async permissionsCommand(arg: string) {
+    const p = this.o.policy; if (!p) { this.toast('info', 'Saved permission rules are not used in this session.'); return; }
+    const [sub, id] = arg.split(/\s+/).filter(Boolean);
+    if (sub === 'remove' && id) { const ok = await p.engine.rules.remove(id); this.toast(ok ? 'ok' : 'warn', ok ? `Rule ${id} removed.` : `There is no rule ${id}.`); return; }
+    const rules = p.engine.rules.list(p.root); const warn = p.engine.rules.warnings(); const trust = p.engine.rules.needsTrust();
+    this.notice('info', rules.length ? `${rules.length} permission rule${rules.length === 1 ? '' : 's'} (checked before the mode)` : 'No permission rules yet. Answering "always" to an approval saves one for this project.', [...rules.map((r) => `${r.id}  ${r.action.padEnd(5)} ${r.tool}${r.matcher?.command ? ` ${r.matcher.command}` : ''}${r.matcher?.path_glob ? ` ${r.matcher.path_glob}` : ''}  (${r.scope})`), ...warn.map((w) => `! ${w}`), ...(trust.length ? ['! This project has its own rules file that you have not trusted yet: /trust rules to use it.'] : []), ...(rules.length ? ['Remove one with /permissions remove <id>.'] : [])].join('\n') || undefined);
+  }
+  private async trustCommand(arg: string) {
+    const p = this.o.policy; if (!p || arg.trim() !== 'rules') { this.toast('info', 'Try /trust rules to use this project\'s permission rules file.'); return; }
+    try { await p.engine.rules.trustProject(p.root); this.toast('ok', 'Project rules trusted and loaded.'); } catch (e) { this.toast('warn', String((e as Error).message ?? e)); }
+  }
+  private async compactCommand() {
+    const r = await this.ctxView!.requestCompaction(this.me as AgentId);
+    if (r.ok) this.notice('info', 'Asked the agent to compact its context.'); else this.toast('warn', r.reason === 'unsupported' ? `${this.o.engine.label} has no compact command Centcom can use.` : r.reason === 'busy' ? 'Wait until the agent is idle, then /compact.' : r.reason === 'failed' ? 'The compact request did not go through. Try again in a minute.' : 'The agent is not running.');
   }
 
   toast(level: 'info' | 'ok' | 'warn' | 'error', text: string, ms = 3800) {

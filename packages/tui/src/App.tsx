@@ -114,7 +114,7 @@ export function App({ ctl, tier }: AppProps) {
     if (key.ctrl && input === 't') { ctl.patch({ fleet: !s.fleet }); return; }
     if (key.ctrl && input === 'l') { setScroll(0); return; }
     if (key.tab && key.shift) { ctl.cycleMode(); return; }
-    if (key.escape) { if (s.busy) void ctl.interrupt(); else if (s.input) ctl.patch({ input: '', cursor: 0 }); return; }
+    if (key.escape) { if (s.busy) void ctl.interrupt(); else if (s.input) ctl.patch({ input: '', cursor: 0 }); else ctl.escIdle(); return; }
     if (key.pageUp) { setScroll(s.scroll + Math.max(3, Math.floor(bodyH / 2))); return; }
     if (key.pageDown) { setScroll(s.scroll - Math.max(3, Math.floor(bodyH / 2))); return; }
     if (key.shift && key.upArrow) { setScroll(s.scroll + 3); return; }
