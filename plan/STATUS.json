@@ -260,6 +260,10 @@
   "C072": {
    "pct": 0.8,
    "note": "LAN host server on ws: hello/welcome with local tokens, supersede, 8 member cap, lowest free slot, one seq per session with echo and dedupe, replay buffer with resume and snapshot_required plus lan.snapshot.get, rate limits, 2 MiB outbound close, malformed frame handling, pings and dead detection, presence and cursor coalescing with typing auto-clear, member_left after 10 s, public bind refusal, 0600 JSONL transcript, interceptor, loopback link, pairing hook, ban list; tested with real RelayClient guests and raw sockets; gaps: CLI flags not wired, host engine (C075) not built, a revoked member needs the validator to say so"
+  },
+  "C074": {
+   "pct": 0.8,
+   "note": "transports: RelayTransport, LanTransport (pairing on first connect, token afterwards, fingerprint check), LocalTransport, openTransport, parseJoinTarget, close-code error mapping and a conformance suite that passes for all three; new package @centcom/session; gaps: not used by the session client yet (it still builds the relay link itself), no real discovery-driven connect"
   }
  },
  "next": [
