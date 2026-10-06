@@ -1,6 +1,6 @@
 import { StrictMode, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { applyTheme, getThemePref } from './theme.js';
+import { applyTheme, fromServer, getThemePref, setThemePref } from './theme.js';
 import { Launcher } from './Launcher.js';
 import { Workspace } from './Workspace.js';
 import { useConnection } from './net.js';
@@ -12,6 +12,8 @@ applyTheme(); matchMedia('(prefers-color-scheme: light)').addEventListener('chan
 
 function App() {
   const c = useConnection();
+  // the server remembers theme and panel choices, so the app window and every browser tab agree
+  useEffect(() => { if (c.launcher?.prefs) { const t = fromServer(c.launcher.prefs.theme); if (t !== getThemePref()) setThemePref(t); } }, [c.launcher?.prefs.theme]);
   // "Start as app" opens a window at ?open=<dir>; honour it once the launcher info has arrived
   useEffect(() => {
     if (!c.launcher || c.opened) return;

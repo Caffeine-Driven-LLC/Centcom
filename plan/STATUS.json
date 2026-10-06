@@ -176,6 +176,10 @@
   "C050": {
    "pct": 0.85,
    "note": "centcom -p with text/json/stream-json, piped input, exit codes; verified with real Claude"
+  },
+  "C004": {
+   "pct": 0.95,
+   "note": "five layers, project allow-list, secret guard, atomic 0600 writes, explain; wired into CLI and web; remembers settings and history. Lane card asks for Ajv schema and packages/net; a hand-written schema in packages/config is used instead"
   }
  },
  "next": [
@@ -190,10 +194,6 @@
   {
    "title": "C017 git worktree manager",
    "why": "lets one session run parallel agents on separate branches; a solo feature that also unlocks the team fleet later"
-  },
-  {
-   "title": "C004 layered configuration and C005 logging",
-   "why": "settings are flags and in-memory today; there are no config files or logs to debug with"
   },
   {
    "title": "Package the web launcher as a real desktop app",

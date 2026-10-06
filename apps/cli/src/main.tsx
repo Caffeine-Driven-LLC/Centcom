@@ -4,7 +4,8 @@ import { execFileSync } from 'node:child_process';
 import { render } from 'ink';
 import { detectColorTier } from '@centcom/theme';
 import { ClaudeCodeEngine, CodexEngine, DemoEngine, detectClaude, detectCodex, type AgentEngine, type PermissionMode } from '@centcom/agent';
-import { App, AppController, SessionStore } from '@centcom/tui';
+import { App, AppController, ClientConfig, SessionStore, initialSettings, settingsFromConfig } from '@centcom/tui';
+import type { FlatFlags } from '@centcom/config';
 import type { CentoColor } from '@centcom/mascot';
 import { buildPrompt, readStdin, runPrint } from './print.js';
 
@@ -44,9 +45,20 @@ Centcom drives your own Claude Code; it never sees your login.`;
 function arg(name: string): string | undefined { const i = process.argv.indexOf(name); return i >= 0 ? process.argv[i + 1] : undefined; }
 const has = (n: string) => process.argv.includes(n);
 
-async function pickEngine(): Promise<{ engine: AgentEngine; demo: boolean; note: string }> {
+/** Explicit command-line choices, as the top config layer. They are used for this run and never written back. */
+function cliFlags(): FlatFlags {
+  const f: FlatFlags = {}; const v = (n: string) => arg(n);
+  if (v('--theme')) f['ui.theme'] = v('--theme')!; if (v('--mascot')) f['client.mascot_size'] = v('--mascot')!; if (v('--cento-color')) f['client.cento_color'] = v('--cento-color')!;
+  if (v('--model')) f['client.model'] = v('--model')!; if (v('--colors')) f['ui.color'] = v('--colors') === 'never' ? 'never' : v('--colors')!;
+  if (v('--mode') && v('--mode') !== 'bypassPermissions') f['client.permission_mode'] = v('--mode')!;
+  if (v('--engine') === 'codex' || v('--engine') === 'claude-code') f['client.engine'] = v('--engine')!;
+  if (has('--no-motion')) f['ui.reduced_motion'] = true;
+  return f;
+}
+
+async function pickEngine(preferred: 'claude-code' | 'codex' = 'claude-code'): Promise<{ engine: AgentEngine; demo: boolean; note: string }> {
   let demo = has('--demo') || arg('--engine') === 'demo'; let note = '';
-  const wantCodex = arg('--engine') === 'codex';
+  const wantCodex = (arg('--engine') ?? preferred) === 'codex';
   if (wantCodex && !demo) { const cx = await detectCodex(); if (!cx.installed) { demo = true; note = 'Codex was not found, so this is the demo agent. Install Codex (npm i -g @openai/codex) and run `codex login`.'; } }
   if (!demo && !wantCodex) {
     const st = await detectClaude();
@@ -70,27 +82,30 @@ async function main() {
     const i = Math.max(process.argv.indexOf('-p'), process.argv.indexOf('--print'));
     const next = process.argv[i + 1]; const text = next && !next.startsWith('-') ? next : undefined;
     const piped = process.stdin.isTTY ? '' : await readStdin();
-    const { engine, demo, note } = await pickEngine(); if (note) process.stderr.write(note + '\n');
+    const pc = await ClientConfig.load(process.cwd(), cliFlags());
+    const { engine, demo, note } = await pickEngine(pc.cfg.client.engine); if (note) process.stderr.write(note + '\n');
     let br = ''; try { br = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { /* not a repo */ }
     const fmt = (arg('--output-format') ?? 'text') as 'text' | 'json' | 'stream-json';
     if (!['text', 'json', 'stream-json'].includes(fmt)) { process.stderr.write('--output-format must be text, json or stream-json\n'); process.exit(2); }
     const dangerous = has('--dangerously-skip-permissions') || has('--yolo');
-    const code = await runPrint({ engine, demo, cwd: process.cwd(), branch: br, version: VERSION, mode: dangerous ? 'bypassPermissions' : (arg('--mode') as PermissionMode | undefined) ?? 'default', prompt: buildPrompt(text, piped), format: fmt, save: !has('--no-save'), resume: has('-c') || has('--continue') ? 'last' : arg('--resume'), model: arg('--model') });
+    const code = await runPrint({ engine, demo, cwd: process.cwd(), branch: br, version: VERSION, mode: dangerous || arg('--mode') === 'bypassPermissions' ? 'bypassPermissions' : pc.cfg.client.permission_mode, prompt: buildPrompt(text, piped), format: fmt, save: !has('--no-save'), resume: has('-c') || has('--continue') ? 'last' : arg('--resume'), model: pc.cfg.client.model || undefined });
     process.exit(code);
   }
   if (!process.stdin.isTTY || !process.stdout.isTTY) { console.error('Centcom needs an interactive terminal. Try `centcom --help`.'); process.exit(2); }
 
-  const tier = detectColorTier({ env: process.env, isTTY: true, flag: arg('--colors') });
-  const { engine, demo, note } = await pickEngine();
+  const cc = await ClientConfig.load(process.cwd(), cliFlags());
+  const tier = detectColorTier({ env: process.env, isTTY: true, flag: cc.cfg.ui.color === 'auto' ? undefined : cc.cfg.ui.color });
+  const { engine, demo, note } = await pickEngine(cc.cfg.client.engine);
   let branch = ''; try { branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { /* not a git repo */ }
   const dangerous = has('--dangerously-skip-permissions') || has('--yolo');
-  const mode: PermissionMode = dangerous ? 'bypassPermissions' : (arg('--mode') as PermissionMode | undefined) ?? 'default';
-  const reduced = has('--no-motion') || process.env.CENTCOM_REDUCE_MOTION === '1';
+  const mode: PermissionMode = dangerous || arg('--mode') === 'bypassPermissions' ? 'bypassPermissions' : cc.cfg.client.permission_mode;
+  const settings = { ...settingsFromConfig(cc.cfg), permissionMode: mode };
+  if (arg('--engine') === 'codex' || arg('--engine') === 'claude-code') cc.set('client.engine', arg('--engine')!); // the agent you pick is the one you get next time
 
   let instance: ReturnType<typeof render> | undefined;
   const ctl = new AppController({
     engine, demo, cwd: process.cwd(), branch, version: VERSION, permissionMode: mode, dangerous: dangerous || mode === 'bypassPermissions', ghosts: has('--demo-team'),
-    settings: { ...(arg('--model') ? { model: arg('--model')! } : {}), theme: arg('--theme') === 'light' ? 'light' : 'dark', reducedMotion: reduced, ...(arg('--mascot') ? { mascot: arg('--mascot') as 'large' } : {}), ...(arg('--cento-color') ? { color: arg('--cento-color') as CentoColor } : {}) },
+    settings, ...cc.options({ ...initialSettings(), ...settings }),
     sessions: has('--no-save') ? undefined : new SessionStore(),
     resume: has('-c') || has('--continue') ? 'last' : arg('--resume'),
     onExit: () => instance?.unmount(),
@@ -100,10 +115,11 @@ async function main() {
   process.on('exit', leave);
   await ctl.start();
   if (note) ctl.notice('warn', note);
+  for (const w of cc.warnings) ctl.notice('warn', 'Settings: ' + w);
   if (mode === 'bypassPermissions') ctl.notice('warn', 'Dangerously skip permissions is ON', 'Cento will run commands and edit files without asking. Use /mode default to turn approvals back on.');
   instance = render(<App ctl={ctl} tier={tier} />, { exitOnCtrlC: false, patchConsole: false, maxFps: 30 });
   await instance.waitUntilExit();
-  ctl.stop();
+  ctl.stop(); cc.flush();
   leave();
   process.exit(0);
 }

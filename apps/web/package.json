@@ -15,7 +15,8 @@
     "marked": "^15.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "@centcom/config": "workspace:*"
   },
   "devDependencies": {
     "@types/react-dom": "^19.0.0",

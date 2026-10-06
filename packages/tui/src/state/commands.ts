@@ -13,6 +13,7 @@ export const COMMANDS: SlashCommand[] = [
   { name: 'cento', args: '[animation]', desc: 'Browse all 319 Cento animations' },
   { name: 'demo', args: '[fix|search|delete|compact|ask|error|limit]', desc: 'Run a scripted demo story' },
   { name: 'model', args: '[name]', desc: 'Pick the model (ctrl+o)' },
+  { name: 'config', desc: 'Show the settings in effect and where each came from' },
   { name: 'auto', args: '[on|off]', desc: 'Auto skills: apply matching skills and commands to your prompts' },
   { name: 'skills', args: '[filter | enable <id> | disable <id>]', desc: 'List, enable or disable the skills Centcom can auto-apply' },
   { name: 'interrupt', desc: 'Stop the running agent' },

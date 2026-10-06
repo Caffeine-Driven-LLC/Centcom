@@ -13,7 +13,7 @@ export function Launcher({ c, onStart }: { c: Conn; onStart: (dir: string, demo:
   const [typed, setTyped] = useState(''); const [chosen, setChosen] = useState<string>();
   useEffect(() => { if (L && !dir) c.send({ t: 'browse', path: L.cwd }); }, [L, dir, c]);
   useEffect(() => { if (dir) setTyped(dir.path); }, [dir]);
-  useEffect(() => { if (L && !L.claude.installed && !L.codex.installed) setDemo(true); else if (L && !L.claude.installed && L.codex.installed) setEngine('codex'); }, [L]);
+  useEffect(() => { if (!L) return; if (!L.claude.installed && !L.codex.installed) setDemo(true); else if (!L.claude.installed && L.codex.installed) setEngine('codex'); else setEngine(L.prefs.engine); }, [L?.prefs.engine, L?.claude.installed, L?.codex.installed]);
   if (!L) return <div className="center"><div className="boot"><Cento state="thinking" color="violet" px={5} reduced={false} /><span>{c.up ? 'Loading…' : 'Connecting to Centcom…'}</span></div></div>;
 
   const go = (p: string) => { setChosen(undefined); c.send({ t: 'browse', path: p }); };

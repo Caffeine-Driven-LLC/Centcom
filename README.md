@@ -18,9 +18,8 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 1. **Smoke-test the Codex adapter on a real turn** — it passes its tests against Codex's published protocol schema and the real handshake, but no real model turn has run yet (C103); needs a Codex account
 2. **C003 generate protocol types from `contracts/`** — event and message shapes are hand-typed today (C101, C102, C103 depend on this)
 3. **C017 git worktree manager** — lets one session run parallel agents on separate branches; a solo feature that also unlocks the team fleet later
-4. **C004 layered configuration and C005 logging** — settings are flags and in-memory today; there are no config files or logs to debug with
-5. **Package the web launcher as a real desktop app** — "Start as app" opens a chromeless Chromium window today; a signed installable app (Electron or Tauri) is still to do
-6. **Start multiplayer: C074 transport, C007 mock backend, then the M2 LAN lanes** — none of M2 exists yet; this is the product's main bet
+4. **Package the web launcher as a real desktop app** — "Start as app" opens a chromeless Chromium window today; a signed installable app (Electron or Tauri) is still to do
+5. **Start multiplayer: C074 transport, C007 mock backend, then the M2 LAN lanes** — none of M2 exists yet; this is the product's main bet
 
 ### Started, not finished
 
@@ -41,6 +40,7 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 
 | Lane | What | Size | Milestone |
 |---|---|---|---|
+| [C005](plan/client/C005.md) | Logging and diagnostics with redaction | S | M0 |
 | [C043](plan/client/C043.md) | Task list and progress components | S | M1 |
 
 Each lane card lists its goal, contracts, acceptance criteria and tests. Read [`plan/START_HERE.md`](plan/START_HERE.md) first.
@@ -103,6 +103,10 @@ centcom --resume ses_...                           # continue a specific one (li
 ```
 
 Conversations are saved to `~/.centcom/sessions` (private files) and resumed through the agent's own session, so it remembers what was said. `/new` starts fresh and keeps the old one. Print mode declines anything that needs an approval and says so (exit code 3); allow it with `--mode acceptEdits` or `--dangerously-skip-permissions`. Exit codes: 0 done, 1 error, 2 bad usage, 3 an action was declined. Turn saving off with `--no-save`.
+
+## Remembered settings
+
+Centcom remembers what you choose: theme, Cento's size and color, model, permission mode, auto skills, the side panel, your last agent and your prompt history (per project). Settings come from five layers (defaults, your user file, a project file, environment, flags); `/config` shows each value and where it came from. A project file can't change anything risky, credentials in config files are refused, and skip-permissions is never saved. Details: [`docs/configuration.md`](docs/configuration.md).
 
 ## Try the mascot
 
