@@ -34,8 +34,8 @@
    "note": "permission engine: hard denies (symlink/.. safe, credentials, .git, shell write targets, POSIX and Windows), rule precedence, 5 modes, broker (expiry, remote approvers, duplicates, cancel), always/session rules, persistence with trust gate and fail-closed files, Claude rule syntax and Claude/Codex arg translation, wire shape. Not wired into the TUI prompt (C038) or the engines yet"
   },
   "C016": {
-   "pct": 0.8,
-   "note": "command risk classes; Codex sandbox/approval policy per mode"
+   "pct": 0.9,
+   "note": "shell reader and command classifier (fail closed, depth 4), tool and path classification, protected paths, engine settings for claude and codex (bypass needs opt-in, capability notes), risk classifier adapter; 640-command corpus. Not wired into the TUI/web yet; flag spellings to re-check against C102/C103 recordings"
   },
   "C019": {
    "pct": 0.6,

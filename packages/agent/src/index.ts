@@ -20,3 +20,4 @@ export * from './worktrees/index.js';
 export * from './checkpoints/index.js';
 export * from './fleet/index.js';
 export * from './permissions/index.js';
+export { classifyCommand as classifyCommandRisk, classifyTool, createRiskClassifier, engineSettings, sandboxSettings, isProtectedPath, PROTECTED_PATHS, parseShell, type CommandRisk, type CommandFacts, type EngineSettingsResult, type SandboxSettings, type RiskClassifier as CommandRiskClassifier } from './sandbox/index.js';
