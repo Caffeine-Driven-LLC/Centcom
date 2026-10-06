@@ -208,6 +208,10 @@
   "C023": {
    "pct": 0.95,
    "note": "memory files: quick add with diff and confirmation, edit with conflict detection, atomic writes preserving mode and line endings, secret guard and size caps, marker-based sync with drift status (source_changed/target_edited/conflict), import hint, centcom memory CLI, # line routing in the TUI. Not done: web app hook; Codex user-level AGENTS.md path unconfirmed"
+  },
+  "C021": {
+   "pct": 0.85,
+   "note": "MCP manager: neutral definitions, Claude .mcp.json and Codex config.toml edits that keep every other byte, secret refusal (only variable names written), plan/confirm/backup/apply, built-in approvals entry, status mapping, testServer with fake-clock timeout, centcom mcp CLI. Not done: real test sessions (need engine adapters), Codex key names unverified against the installed version, TUI panel"
   }
  },
  "next": [
