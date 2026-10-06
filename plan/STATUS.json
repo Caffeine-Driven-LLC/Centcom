@@ -74,8 +74,8 @@
    "note": "colour tier detection only; card gaps: capabilities, background query, layout class, CENTO_* env"
   },
   "C032": {
-   "pct": 0.5,
-   "note": "theme tokens and tiers; card gaps: pinned 256 table, hc mode, member colours, provider API"
+   "pct": 0.7,
+   "note": "theme module: dark/light/hc, truecolor/256/16/none tiers with pinned tables and nearest search, ANSI-named status colours, glyph+word statuses without colour, member colours, provider and hooks, setMode single notification, 12 tier x mode snapshots; deviations: graphite greys in the pinned table, memberColor follows the written rule (card examples contradict); gap: components still use the older theme helpers"
   },
   "C033": {
    "pct": 0.5,
