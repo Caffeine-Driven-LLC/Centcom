@@ -1,9 +1,9 @@
 # Internal event bus
 
-A small typed in-process bus that lets the runner, state machine, permissions, locks and the session layer talk without knowing each other. Import from `@centcom/agent` (or `@centcom/agent/events`).
+A small typed in-process bus that lets the runner, state machine, permissions, locks and the session layer talk without knowing each other. Import from `@centcom/agent`.
 
 ```ts
-import { createAgentBus } from '@centcom/agent/events';
+import { createAgentBus } from '@centcom/agent';
 const bus = createAgentBus({ onError: (e, event) => log.warn('bus.handler_failed', { event }) });
 const off = bus.on('agent:state_changed', (p) => ui.update(p.agent_id, p.state));
 bus.emit('agent:state_changed', { agent_id, state: 'thinking', since: new Date().toISOString() });
