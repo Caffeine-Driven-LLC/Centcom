@@ -10,3 +10,5 @@ export * from './b64u.js';
 export * from './text.js';
 export * from './version.js';
 export * from './frames.js';
+export * from './redact.js';
+export { SECRET_PATTERNS } from './generated/secret-patterns.js';

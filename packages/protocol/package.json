@@ -14,7 +14,6 @@
   "devDependencies": {
     "yaml": "^2.6.0",
     "json-schema-to-typescript": "^15.0.0",
-    "openapi-typescript": "^7.4.0",
-    "fast-check": "^3.23.0"
+    "openapi-typescript": "^7.4.0"
   }
 }
