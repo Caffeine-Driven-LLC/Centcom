@@ -240,6 +240,10 @@
   "C051": {
    "pct": 0.9,
    "note": "HTTP client in @centcom/net: operation table generated from openapi.yaml with a CI drift check; typed call, listPage, paginate, revalidate, getStatus, getJwks; CT-ERR retries with full jitter and a 60 s sleep budget, idempotency keys, single-flight 401 refresh, ETag and If-Match, size guard, tolerant response checks, typed errors; all 93 operations pass against the mock. Gaps: responses are checked with generated shapes (types and required fields), not the C003 Ajv validators; no lane uses the client yet"
+  },
+  "C100": {
+   "pct": 0.35,
+   "note": "conformance runner (pnpm conformance: --contract, --json, --out, --strict; report schema, waivers max 60 days, fixture loader) with suites for 13 contracts that pass offline in about 1 s (IDS, ERR, VER, envelope, session events, presence, queue, control, crypto vectors, LAN, telemetry, state map, provider); release-gate aggregator (pnpm release-gate) with checklist; gaps: gate scripts G1-G6 (need the session/queue/billing lanes), suites for PAGE/AUTH/RESUME/DEEPLINK (waived to 2026-12-01), RELEASES/NOTIF suites wait for the update and notification PRs, queue replay host-vs-guest (C076), coverage tooling"
   }
  },
  "next": [

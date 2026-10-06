@@ -9,6 +9,7 @@ step "http client";     pnpm --filter @centcom/net gen:http --check
 step "states doc";      pnpm exec tsx tools/docs/states-doc.ts --check
 step "typecheck";       pnpm -s typecheck
 step "tests";           pnpm -s test
+step "conformance";     pnpm -s conformance
 step "web build";       pnpm -s web:build >/dev/null
 step "plan";            pnpm -s plan:check
 step "progress";        python3 tools/plan/progress.py --check
