@@ -22,8 +22,8 @@
    "note": "demo engine and fixtures; no one-command dev env"
   },
   "C013": {
-   "pct": 0.55,
-   "note": "runner core done and tested: supervision, crash isolation, restart policy, limits, interrupt/SIGTERM/SIGKILL escalation, watchdog, approvals gate, env allow-list, TrustStore, FakeEngine. Not yet: runnerd IPC daemon, trust-store tests, line-cap tests for the real engines, docs/agent-runner.md"
+   "pct": 0.9,
+   "note": "runner, supervision, limits, restart, escalation, env allow-list, TrustStore, runnerd daemon over unix socket (auth, frame cap, lock, idle exit), FakeEngine, 1 MiB line cap in both engines. Not done: Windows named pipe; real Claude per-turn kill is a failed turn, not an agent crash"
   },
   "C014": {
    "pct": 0.6,

@@ -10,5 +10,8 @@
   },
   "devDependencies": {
     "@centcom/testkit": "workspace:*"
+  },
+  "bin": {
+    "centcom-runnerd": "./bin/runnerd.ts"
   }
 }
