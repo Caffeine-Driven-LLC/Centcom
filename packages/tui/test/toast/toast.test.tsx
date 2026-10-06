@@ -20,7 +20,7 @@ describe('toast controller', () => {
   });
   it('an error replaces a visible info at once; the info comes back if its time has not run out', () => {
     const { c, ctl } = make(); ctl.show({ level: 'info', text: 'fyi' }); c.advance(1000); ctl.show({ level: 'warn', text: 'careful' }); expect(ctl.current()!.text).toBe('careful');
-    ctl.show({ level: 'error', text: 'broken' }); expect(ctl.current()!.text).toBe('broken'); c.advance(10_000); expect(ctl.current()!.text).toBe('broken'); ctl.dismiss(); expect(ctl.current()!.text).toBe('careful');
+    ctl.show({ level: 'error', text: 'broken' }); expect(ctl.current()!.text).toBe('broken'); c.advance(1000); expect(ctl.current()!.text).toBe('broken'); ctl.dismiss(); expect(ctl.current()!.text).toBe('careful'); c.advance(3500); expect(ctl.current()).toBeNull(); /* both ran out while the error was up */
     const b = make(); b.ctl.show({ level: 'info', text: 'fyi' }); b.c.advance(1000); b.ctl.show({ level: 'error', text: 'broken', ttlMs: 500 }); b.ctl.dismiss(); expect(b.ctl.current()!.text).toBe('fyi'); b.c.advance(3000); expect(b.ctl.current()).toBeNull();
   });
   it('anything with an action never expires; dismissing it says so', () => {
@@ -47,7 +47,7 @@ describe('notices', () => {
   it('all 7 codes have their own message; an unknown code or hostile params give the generic one or clean text', () => {
     for (const code of ['usage_warning', 'quota_reached', 'plan_changed', 'member_limit_near', 'maintenance_soon', 'client_update_available', 'history_retention_changed']) { expect(Object.keys(NOTICES)).toContain(code); const t = noticeToToast({ code, level: 'info', params: { pct: 5, plan: 'Pro', members: 4, limit: 5, minutes: 10, version: '1.2.3', days: 30 } }, ctx); expect(t.text).not.toBe('Notice received.'); }
     expect(noticeToToast({ code: 'nope', level: 'warn', params: { text: 'evil' } }, ctx).text).toBe('Notice received.'); expect(noticeToToast({ code: '__proto__', level: 'info', params: {} }, ctx).text).toBe('Notice received.');
-    expect(noticeToToast({ code: 'client_update_available', level: 'info', params: { version: '1.0\u001b[31m evil' } }, ctx).text).not.toMatch(/\u001b| /); expect(clean('a\nb\u0007c')).toBe('abc');
+    expect(noticeToToast({ code: 'client_update_available', level: 'info', params: { version: '1.0\u001b[31m\u2028evil' } }, ctx).text).not.toMatch(/\u001b|\u2028/); expect(clean('a\nb\u0007c')).toBe('abc');
   });
 });
 
