@@ -188,6 +188,10 @@
   "C005": {
    "pct": 0.95,
    "note": "@centcom/net log: redacting JSON logger, rotating 0600 file sink, ring, stderr, diagnostics; wired into CLI and web; --debug; verified no content in real logs. `centcom doctor --bundle` still to do (C104)"
+  },
+  "C007": {
+   "pct": 0.9,
+   "note": "@centcom/testkit mock backend: all 93 REST operations (validated, schema-generated), device login/refresh rotation, pagination, idempotency, error injection, ws relay simulator, virtual clock, control plane, scenarios, CLI. Not covered: signature/encryption checks, stateful non-session resources"
   }
  },
  "next": [
