@@ -118,8 +118,8 @@
    "note": "fleet panel with real agents; card gaps: full state labels and tiers, card rows, elapsed, overlay"
   },
   "C044": {
-   "pct": 0.4,
-   "note": "toasts; card gaps: controller, dedupe, actions, placement above the prompt"
+   "pct": 0.7,
+   "note": "toast controller (ttl, queue 20, severity preemption, persistence for actions/errors, dedupe (xN), never drops warn/error), sys.notice message table for all 7 codes with local time and cleaned params, ToastLine/ToastView, toast.dismiss action (ctrl+y instead of the card ctrl+x, which is a chord prefix); gap: the app still shows toasts through its older controller.toast path, bus event toast.dismissed not wired"
   },
   "C045": {
    "pct": 1.0,
