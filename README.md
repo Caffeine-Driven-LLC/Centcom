@@ -13,7 +13,7 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 
 ![Progress](docs/progress.svg)
 
-**36% built** (weighted by lane size across 105 lanes). Details and how this is computed: [`tools/plan/progress.py`](tools/plan/progress.py). Update [`plan/STATUS.json`](plan/STATUS.json) when you finish or advance a lane, then run `python3 tools/plan/progress.py`.
+**37% built** (weighted by lane size across 105 lanes). Details and how this is computed: [`tools/plan/progress.py`](tools/plan/progress.py). Update [`plan/STATUS.json`](plan/STATUS.json) when you finish or advance a lane, then run `python3 tools/plan/progress.py`.
 
 ## Next steps
 
@@ -45,6 +45,7 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 | [C043](plan/client/C043.md) | Task list and progress components | S | M1 |
 | [C056](plan/client/C056.md) | End-to-end crypto module: keys, frames, grants, rotation | L | M2 |
 | [C071](plan/client/C071.md) | LAN discovery over mDNS | M | M2 |
+| [C018](plan/client/C018.md) | File lock client: local and remote advisory locks | M | M5 |
 
 Each lane card lists its goal, contracts, acceptance criteria and tests. Read [`plan/START_HERE.md`](plan/START_HERE.md) first.
 

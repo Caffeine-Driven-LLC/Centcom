@@ -192,6 +192,10 @@
   "C007": {
    "pct": 0.9,
    "note": "@centcom/testkit mock backend: all 93 REST operations (validated, schema-generated), device login/refresh rotation, pagination, idempotency, error injection, ws relay simulator, virtual clock, control plane, scenarios, CLI. Not covered: signature/encryption checks, stateful non-session resources"
+  },
+  "C017": {
+   "pct": 0.95,
+   "note": "WorktreeManager: create (collision names, exclude, rollback), status, remove (dirty/unmerged refusal), list/prune reconcile with orphan flagging, detectConflict via merge-tree, hostile paths, timeouts, lock retries, bus events. Not exercised on Windows or with git older than 2.38 beyond fakes"
   }
  },
  "next": [
