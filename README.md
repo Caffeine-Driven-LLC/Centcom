@@ -13,7 +13,7 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 
 ![Progress](docs/progress.svg)
 
-**39% built** (weighted by lane size across 105 lanes). Details and how this is computed: [`tools/plan/progress.py`](tools/plan/progress.py). Update [`plan/STATUS.json`](plan/STATUS.json) when you finish or advance a lane, then run `python3 tools/plan/progress.py`.
+**40% built** (weighted by lane size across 105 lanes). Details and how this is computed: [`tools/plan/progress.py`](tools/plan/progress.py). Update [`plan/STATUS.json`](plan/STATUS.json) when you finish or advance a lane, then run `python3 tools/plan/progress.py`.
 
 ## Next steps
 
@@ -26,6 +26,7 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 
 | Lane | What | Done | Note |
 |---|---|--:|---|
+| [C051](plan/client/C051.md) | HTTP API client generated from OpenAPI | 90% | HTTP client in @centcom/net: operation table generated from openapi.yaml with a CI drift check; typed call, listPage, paginate, revalidate, getStatus, getJwks; CT-ERR retries with full jitter and a 60 s sleep budget, idempotency keys, single-flight 401 refresh, ETag and If-Match, size guard, tolerant response checks, typed errors; all 93 operations pass against the mock. Gaps: responses are checked with generated shapes (types and required fields), not the C003 Ajv validators; no lane uses the client yet |
 | [C013](plan/client/C013.md) | Agent runner daemon hosting AgentEngine processes (claude, codex) | 85% | runner and runnerd; gaps: windows pipe, preflight wiring, runnerd logs, daemon-level tests |
 | [C014](plan/client/C014.md) | Agent session state machine emitting contract state names | 85% | state machine and emitter; gaps: not wired into the app, golden transcripts from real parsers, combined property test |
 | [C104](plan/client/C104.md) | Provider detection and login handoff: provider status, login, logout, doctor checks | 85% | provider detection and commands; gaps: message copy, runtime fs spy, CLI-level hang test, app still uses old detectors |
@@ -33,9 +34,8 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 | [C005](plan/client/C005.md) | Logging and diagnostics with redaction | 85% | redacting logger and file sink; gaps: redaction table size, real-fs sink test, injected clock in sink |
 | [C101](plan/client/C101.md) | Engine abstraction: AgentEngine interface, capabilities and normalised event stream | 80% | engine layer; gaps: bounded event buffer with backpressure, validator run on both adapters, denial and rate-limit transcripts |
 | [C102](plan/client/C102.md) | Claude Code engine: drive the user’s own claude binary (stream-json, resume, approvals bridge) | 80% | claude engine with a secured approval bridge (per-run token, private socket, timeout, fail closed); gaps: prompt over stdin, bypass gate, spawn/first-event timeouts, version check, subagent.done, fake CLI and goldens |
-| [C103](plan/client/C103.md) | Codex engine: drive the user’s own codex binary (app-server JSON-RPC, exec fallback) | 75% | codex app-server engine tested against a protocol-faithful fake; no real turn yet. Real-Codex checklist: docs/codex-verification.md, recorder: tools/codex/record.ts |
 
-+30 more in [`plan/STATUS.json`](plan/STATUS.json).
++31 more in [`plan/STATUS.json`](plan/STATUS.json).
 
 ### Ready to pick up (all dependencies done)
 
