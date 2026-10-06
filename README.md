@@ -13,15 +13,14 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 
 ![Progress](docs/progress.svg)
 
-**32% built** (weighted by lane size across 105 lanes). Details and how this is computed: [`tools/plan/progress.py`](tools/plan/progress.py). Update [`plan/STATUS.json`](plan/STATUS.json) when you finish or advance a lane, then run `python3 tools/plan/progress.py`.
+**33% built** (weighted by lane size across 105 lanes). Details and how this is computed: [`tools/plan/progress.py`](tools/plan/progress.py). Update [`plan/STATUS.json`](plan/STATUS.json) when you finish or advance a lane, then run `python3 tools/plan/progress.py`.
 
 ## Next steps
 
 1. **Smoke-test the Codex adapter on a real turn** — it passes its tests against Codex's published protocol schema and the real handshake, but no real model turn has run yet (C103); needs a Codex account
-2. **C003 generate protocol types from `contracts/`** — event and message shapes are hand-typed today (C101, C102, C103 depend on this)
-3. **C017 git worktree manager** — lets one session run parallel agents on separate branches; a solo feature that also unlocks the team fleet later
-4. **Package the web launcher as a real desktop app** — "Start as app" opens a chromeless Chromium window today; a signed installable app (Electron or Tauri) is still to do
-5. **Start multiplayer: C074 transport, C007 mock backend, then the M2 LAN lanes** — none of M2 exists yet; this is the product's main bet
+2. **C017 git worktree manager** — lets one session run parallel agents on separate branches; a solo feature that also unlocks the team fleet later
+3. **Package the web launcher as a real desktop app** — "Start as app" opens a chromeless Chromium window today; a signed installable app (Electron or Tauri) is still to do
+4. **Start multiplayer: C074 transport, C007 mock backend, then the M2 LAN lanes** — none of M2 exists yet; this is the product's main bet
 
 ### Started, not finished
 
@@ -43,7 +42,11 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 | Lane | What | Size | Milestone |
 |---|---|---|---|
 | [C005](plan/client/C005.md) | Logging and diagnostics with redaction | S | M0 |
+| [C007](plan/client/C007.md) | Mock backend: REST from OpenAPI plus WebSocket relay simulator | L | M0 |
+| [C010](plan/client/C010.md) | Opt-in telemetry client | S | M0 |
 | [C043](plan/client/C043.md) | Task list and progress components | S | M1 |
+| [C056](plan/client/C056.md) | End-to-end crypto module: keys, frames, grants, rotation | L | M2 |
+| [C071](plan/client/C071.md) | LAN discovery over mDNS | M | M2 |
 
 Each lane card lists its goal, contracts, acceptance criteria and tests. Read [`plan/START_HERE.md`](plan/START_HERE.md) first.
 

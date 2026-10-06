@@ -180,16 +180,16 @@
   "C004": {
    "pct": 0.95,
    "note": "five layers, project allow-list, secret guard, atomic 0600 writes, explain; wired into CLI and web; remembers settings and history. Lane card asks for Ajv schema and packages/net; a hand-written schema in packages/config is used instead"
+  },
+  "C003": {
+   "pct": 0.95,
+   "note": "@centcom/protocol: types, tolerant/strict Ajv-standalone validators, errors, states, operations, IDs/time/b64u/text/version helpers; all fixtures pass; CI checks it is up to date. Not yet used by the engines or the TUI"
   }
  },
  "next": [
   {
    "title": "Smoke-test the Codex adapter on a real turn",
    "why": "it passes its tests against Codex's published protocol schema and the real handshake, but no real model turn has run yet (C103); needs a Codex account"
-  },
-  {
-   "title": "C003 generate protocol types from `contracts/`",
-   "why": "event and message shapes are hand-typed today (C101, C102, C103 depend on this)"
   },
   {
    "title": "C017 git worktree manager",
