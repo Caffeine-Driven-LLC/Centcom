@@ -17,10 +17,10 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 
 ## Next steps
 
-1. **Smoke-test the Codex adapter on a real turn** — it passes its tests against Codex's published protocol schema and the real handshake, but no real model turn has run yet (C103); needs a Codex account
-2. **C017 git worktree manager** — lets one session run parallel agents on separate branches; a solo feature that also unlocks the team fleet later
-3. **Package the web launcher as a real desktop app** — "Start as app" opens a chromeless Chromium window today; a signed installable app (Electron or Tauri) is still to do
-4. **Start multiplayer: C074 transport, C007 mock backend, then the M2 LAN lanes** — none of M2 exists yet; this is the product's main bet
+1. **Verify the Codex adapter on a real Codex** — it is tested against Codex's published protocol and a faithful fake, but no real turn has run (C103). On a computer with Codex: follow docs/codex-verification.md (recorder: tools/codex/record.ts)
+2. **Wire the new runtime pieces into the app** — permissions, memory, MCP, hooks, context, checkpoints, locks and the fleet are built and tested as libraries; the terminal and web app do not use most of them yet
+3. **Finish the M1 terminal lanes** — C036 transcript view, C043 task list, C045 keybindings and help, C048 onboarding
+4. **Multiplayer client against the mock backend** — M2 lanes (transport, relay client, crypto, sessions, queue, LAN) can be built and tested against the C007 mock backend before the real backend exists
 
 ### Started, not finished
 

@@ -159,7 +159,7 @@
   },
   "C103": {
    "pct": 0.75,
-   "note": "codex app-server engine tested against a protocol-faithful fake and the real handshake; no real turn yet"
+   "note": "codex app-server engine tested against a protocol-faithful fake; no real turn yet. Real-Codex checklist: docs/codex-verification.md, recorder: tools/codex/record.ts"
   },
   "C104": {
    "pct": 0.9,
@@ -228,20 +228,20 @@
  },
  "next": [
   {
-   "title": "Smoke-test the Codex adapter on a real turn",
-   "why": "it passes its tests against Codex's published protocol schema and the real handshake, but no real model turn has run yet (C103); needs a Codex account"
+   "title": "Verify the Codex adapter on a real Codex",
+   "why": "it is tested against Codex's published protocol and a faithful fake, but no real turn has run (C103). On a computer with Codex: follow docs/codex-verification.md (recorder: tools/codex/record.ts)"
   },
   {
-   "title": "C017 git worktree manager",
-   "why": "lets one session run parallel agents on separate branches; a solo feature that also unlocks the team fleet later"
+   "title": "Wire the new runtime pieces into the app",
+   "why": "permissions, memory, MCP, hooks, context, checkpoints, locks and the fleet are built and tested as libraries; the terminal and web app do not use most of them yet"
   },
   {
-   "title": "Package the web launcher as a real desktop app",
-   "why": "\"Start as app\" opens a chromeless Chromium window today; a signed installable app (Electron or Tauri) is still to do"
+   "title": "Finish the M1 terminal lanes",
+   "why": "C036 transcript view, C043 task list, C045 keybindings and help, C048 onboarding"
   },
   {
-   "title": "Start multiplayer: C074 transport, C007 mock backend, then the M2 LAN lanes",
-   "why": "none of M2 exists yet; this is the product's main bet"
+   "title": "Multiplayer client against the mock backend",
+   "why": "M2 lanes (transport, relay client, crypto, sessions, queue, LAN) can be built and tested against the C007 mock backend before the real backend exists"
   }
  ]
 }
