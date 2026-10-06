@@ -240,6 +240,10 @@
   "C051": {
    "pct": 0.9,
    "note": "HTTP client in @centcom/net: operation table generated from openapi.yaml with a CI drift check; typed call, listPage, paginate, revalidate, getStatus, getJwks; CT-ERR retries with full jitter and a 60 s sleep budget, idempotency keys, single-flight 401 refresh, ETag and If-Match, size guard, tolerant response checks, typed errors; all 93 operations pass against the mock. Gaps: responses are checked with generated shapes (types and required fields), not the C003 Ajv validators; no lane uses the client yet"
+  },
+  "C098": {
+   "pct": 0.6,
+   "note": "bench harness (calibration, stats, budgets, baseline compare with normalisation, noise handling, results schema, pnpm bench/bench:compare, baseline-commit check, nightly workflow) with 9 metrics: crypto, envelope, mascot, transcript scroll and layout, version, memory; self-test of the gate passes; gaps: first-prompt, keypress-to-paint, diff, resume and reducer rates, leak check not measured yet; version/memory not gating until the packaged CLI"
   }
  },
  "next": [

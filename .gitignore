@@ -10,3 +10,4 @@ apps/web/dist
 /dist
 /artifacts
 *.key
+bench-results.json

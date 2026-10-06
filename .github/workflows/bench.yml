@@ -1,0 +1,28 @@
+name: bench
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '17 3 * * *'
+permissions:
+  contents: read
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Benchmarks
+        run: pnpm bench
+        continue-on-error: true
+      - name: Keep the history
+        run: node -e "const fs=require('fs');const h=fs.existsSync('perf-history.json')?JSON.parse(fs.readFileSync('perf-history.json','utf8')):[];h.push({at:new Date().toISOString(),...JSON.parse(fs.readFileSync('bench-results.json','utf8'))});fs.writeFileSync('perf-history.json',JSON.stringify(h.slice(-90)))"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bench
+          path: |
+            bench-results.json
+            perf-history.json

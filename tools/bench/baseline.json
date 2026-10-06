@@ -1,0 +1,60 @@
+{
+ "schema_version": 1,
+ "reference_calibration_ms": 123.24079600000002,
+ "entries": {
+  "cli.version.warm": {
+   "p50": 419.6958940000002,
+   "budget": 150,
+   "unit": "ms",
+   "gated": false
+  },
+  "transcript.scroll.frame": {
+   "p50": 0.16421230000000833,
+   "budget": 16,
+   "unit": "ms",
+   "gated": true
+  },
+  "transcript.layout.10k": {
+   "p50": 48.613636999999926,
+   "budget": 1500,
+   "unit": "ms",
+   "gated": true
+  },
+  "mascot.redraw": {
+   "p50": 0.013867600000003222,
+   "budget": 2,
+   "unit": "ms",
+   "gated": true
+  },
+  "envelope.parse": {
+   "p50": 0.0003741200000013123,
+   "budget": 0.5,
+   "unit": "ms",
+   "gated": true
+  },
+  "crypto.encrypt_sign.4k": {
+   "p50": 0.14520940000002155,
+   "budget": 1,
+   "unit": "ms",
+   "gated": true
+  },
+  "crypto.encrypt_sign.192k": {
+   "p50": 2.489904000000024,
+   "budget": 8,
+   "unit": "ms",
+   "gated": true
+  },
+  "crypto.verify_decrypt.4k": {
+   "p50": 0.13097150000003238,
+   "budget": 1,
+   "unit": "ms",
+   "gated": true
+  },
+  "memory.transcript.10k": {
+   "p50": 301.210020385264,
+   "budget": 300,
+   "unit": "MB",
+   "gated": false
+  }
+ }
+}
