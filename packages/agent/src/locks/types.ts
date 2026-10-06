@@ -21,9 +21,9 @@ export interface LockDeps {
 }
 export type LockResult = { ok: true; heldBy?: AgentId } | { ok: false; reason: 'held'; heldBy: AgentId; expiresAt: string } | { ok: false; reason: 'timeout' };
 export interface LockInfo { heldBy: AgentId; expiresAt: string; remote: boolean }
-export interface Conflict { agentIds: [AgentId, AgentId]; path_hmac: string }
+export interface LockConflict { agentIds: [AgentId, AgentId]; path_hmac: string }
 export interface LockClient {
   acquire(path: string, o: { agentId: AgentId; ttlMs?: number }): Promise<LockResult>; release(path: string, agentId: AgentId): Promise<void>; releaseAll(agentId: AgentId): Promise<void>;
-  check(path: string): LockInfo | null; onRemoteLock(evt: FileLockPayload): void; conflicts(): Conflict[]; /** Sends what was queued while the transport was down. */ flush(): void; conflictPayload(c: Conflict): PConflictDetected; dispose(): void;
+  check(path: string): LockInfo | null; onRemoteLock(evt: FileLockPayload): void; conflicts(): LockConflict[]; /** Sends what was queued while the transport was down. */ flush(): void; conflictPayload(c: LockConflict): PConflictDetected; dispose(): void;
 }
 export type { AgentBus };

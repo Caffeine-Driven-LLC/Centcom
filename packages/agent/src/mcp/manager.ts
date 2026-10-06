@@ -21,7 +21,7 @@ export interface McpDeps {
 }
 export interface McpTarget { engine: McpEngine; scope: McpScope; path: string; baseSha: string | null; newText: string }
 export interface McpPlan { targets: McpTarget[]; diff: string; planHash: string; warnings: string[]; scope: McpScope }
-export interface ApplyReport { written: { engine: string; backup?: string }[] }
+export interface McpApplyReport { written: { engine: string; backup?: string }[] }
 export type McpOp = { kind: 'add' | 'update' | 'remove'; engine: EngineId | 'both'; scope: McpScope; def?: McpServerDef; name?: string; root?: string };
 const ENGINES: McpEngine[] = ['claude-code', 'codex']; const sha = (s: string) => createHash('sha256').update(s).digest('hex');
 const STATE: Record<string, McpState> = { connected: 'connected', ok: 'connected', ready: 'connected', 'needs-auth': 'needs_auth', needs_auth: 'needs_auth', failed: 'failed', error: 'failed', pending: 'pending', connecting: 'pending', disabled: 'disabled' };
@@ -46,7 +46,7 @@ function fromCodex(name: string, r: CodexRaw): McpServerDef {
 
 export interface McpManager {
   list(scope: McpScope, root?: string): Promise<{ engine: McpEngine; servers: McpServerDef[]; builtin: McpServerDef[]; unsupported?: string }[]>;
-  plan(op: McpOp): Promise<McpPlan>; apply(plan: McpPlan, confirm: { accepted: true; planHash: string; userScope?: true }): Promise<ApplyReport>;
+  plan(op: McpOp): Promise<McpPlan>; apply(plan: McpPlan, confirm: { accepted: true; planHash: string; userScope?: true }): Promise<McpApplyReport>;
   status(): McpEngineStatus[]; testServer(def: McpServerDef, engine: McpEngine): Promise<McpServerStatus>; claudeConfigArg(defs: McpServerDef[]): string; dispose(): void;
 }
 export function createMcpManager(d: McpDeps): McpManager {
@@ -98,7 +98,7 @@ export function createMcpManager(d: McpDeps): McpManager {
       if (!confirm || confirm.accepted !== true) throw new McpError('not_confirmed', 'Nothing was written: it needs a confirmation.'); if (confirm.planHash !== plan.planHash || hashOf(plan.targets) !== plan.planHash) throw new McpPlanChanged();
       if (plan.scope === 'user' && confirm.userScope !== true) throw new McpError('needs_user_confirm', 'This changes your user-level settings for every project; confirm that too.');
       for (const t of plan.targets) { const cur = await d.fs.read(t.path); if ((cur === undefined ? null : sha(cur)) !== t.baseSha) throw new McpPlanChanged(); }
-      const ts = new Date(d.clock.now()).toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z'); const written: ApplyReport['written'] = [];
+      const ts = new Date(d.clock.now()).toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z'); const written: McpApplyReport['written'] = [];
       for (const t of plan.targets) { const cur = await d.fs.read(t.path); let backup: string | undefined; if (cur !== undefined) { backup = `${t.path}.${ts}.centcom-bak`; await d.fs.writeAtomic(backup, cur); } await d.fs.writeAtomic(t.path, t.newText); written.push({ engine: t.engine, ...(backup ? { backup } : {}) }); }
       d.log?.info('mcp.applied', { files: written.length }); return { written };
     },

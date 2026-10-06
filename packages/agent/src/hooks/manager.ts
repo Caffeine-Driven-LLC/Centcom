@@ -5,7 +5,7 @@ import type { Capability, EngineId } from '../types.js';
 import { looksLikeSecretText } from '../mcp/defs.js';
 import { unifiedDiff } from '../mcp/diff.js';
 import { jsonErrorAt } from '../mcp/jsonpos.js';
-import { CapabilityMissing, HooksError, PlanChanged, SettingsInvalid } from './errors.js';
+import { CapabilityMissing, HooksError, HooksPlanChanged, SettingsInvalid } from './errors.js';
 import { memberAt, scanObject, setMember, topAt } from './jsonpatch.js';
 import { checkHook, CLAUDE_EVENTS, isKnownEvent, LIMITS } from './schema.js';
 import { TEMPLATES, fillTemplate } from './templates.js';
@@ -104,9 +104,9 @@ export function createHooksManager(d: HooksDeps): HooksManager {
     async plan(op) { return (await build(op)).plan; },
     async apply(plan, confirm) {
       if (!confirm || confirm.accepted !== true) throw new HooksError('not_confirmed', 'Nothing was written: it needs a confirmation.');
-      if (confirm.planHash !== plan.planHash || sha(JSON.stringify([plan.path, plan.baseSha, sha(plan.newText)])) !== plan.planHash) throw new PlanChanged();
+      if (confirm.planHash !== plan.planHash || sha(JSON.stringify([plan.path, plan.baseSha, sha(plan.newText)])) !== plan.planHash) throw new HooksPlanChanged();
       if (plan.scope === 'user' && confirm.userScope !== true) throw new HooksError('needs_user_confirm', 'This changes your user-level settings for every project; confirm that too.');
-      const cur = await d.fs.read(plan.path); if ((cur === undefined ? null : sha(cur)) !== plan.baseSha) throw new PlanChanged();
+      const cur = await d.fs.read(plan.path); if ((cur === undefined ? null : sha(cur)) !== plan.baseSha) throw new HooksPlanChanged();
       let backup: string | undefined;
       try {
         if (cur !== undefined) { let ts = new Date(d.clock.now()).toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, '').replace('T', ''); let n = 1; let name = `${plan.path}.centcom-bak.${ts}`; while ((await d.fs.read(name)) !== undefined) name = `${plan.path}.centcom-bak.${ts}-${++n}`; backup = name; await d.fs.writeAtomic(backup, cur); }

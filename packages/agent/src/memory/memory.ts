@@ -1,14 +1,14 @@
 import { looksLikeSecret } from '@centcom/protocol';
 import { isAbsolute, join, relative, resolve, basename } from 'node:path';
 import type { EngineId } from '../types.js';
-import { Conflict, MemoryError, PlanChanged, SecretRejected, TooLarge } from './errors.js';
+import { MemoryConflict, MemoryError, PlanChanged, SecretRejected, TooLarge } from './errors.js';
 import type { MemFs } from './fs.js';
 import { detectEol, sha256, toLf, unifiedDiff, withEol } from './text.js';
 
 export type MemEngine = Extract<EngineId, 'claude-code' | 'codex'>; export type MemScope = 'project' | 'user';
 export interface MemTarget { engine: MemEngine | 'source'; scope: MemScope; path: string; /** sha256 of the file when the plan was made, null if it did not exist. */ baseSha: string | null; newText: string }
 export interface MemoryPlan { kind: 'edit' | 'quick_add' | 'sync'; root?: string; targets: MemTarget[]; diff: string; planHash: string }
-export interface ApplyReport { written: { engine: string; bytes: number }[] }
+export interface MemoryApplyReport { written: { engine: string; bytes: number }[] }
 export type SyncState = 'in_sync' | 'source_changed' | 'target_edited' | 'conflict' | 'disabled';
 export interface SyncStatus { state: SyncState; files: { engine: MemEngine; state: Exclude<SyncState, 'disabled'> }[] }
 export interface MemoryDeps { fs: MemFs; engines: { memoryPaths(engine: EngineId, scope: MemScope, root?: string): string | undefined }; log?: { info(m: string, c?: Record<string, unknown>): void; warn(m: string, c?: Record<string, unknown>): void }; config: { sync: boolean } }
@@ -38,7 +38,7 @@ export const parseHashLine = (line: string): { kind: 'memory_add'; text: string 
 export interface MemoryFiles {
   read(engine: EngineId, scope: MemScope, root?: string): Promise<{ text: string; sha256: string; exists: boolean; unreadable?: boolean }>;
   plan(edit: { engine: EngineId | 'both'; scope: MemScope; newText?: string; quickAdd?: string; root?: string }): Promise<MemoryPlan>;
-  apply(plan: MemoryPlan, confirm: { accepted: true; planHash: string }): Promise<ApplyReport>;
+  apply(plan: MemoryPlan, confirm: { accepted: true; planHash: string }): Promise<MemoryApplyReport>;
   status(root?: string): Promise<SyncStatus>; sync(op: { direction: 'source_to_targets' | 'target_to_source'; from?: EngineId; root?: string }): Promise<MemoryPlan>;
   importHint(root: string): Promise<{ existing: MemEngine; missing: MemEngine; offers: ('pointer' | 'copy')[] } | undefined>; planImport(root: string, kind: 'pointer' | 'copy'): Promise<MemoryPlan>;
 }
@@ -92,9 +92,9 @@ export function createMemoryFiles(d: MemoryDeps): MemoryFiles {
     },
     async apply(plan, confirm) {
       if (!confirm || confirm.accepted !== true) throw new MemoryError('not_confirmed', 'Nothing was written: it needs a confirmation.'); if (confirm.planHash !== plan.planHash || hashOf(plan.targets) !== plan.planHash) throw new PlanChanged();
-      const now = new Map<string, string>(); for (const t of plan.targets) { const l = await load(t.path); if (l.sha !== t.baseSha) throw new Conflict(l.text); now.set(t.path, l.text); }
-      if (plan.kind !== 'sync' && d.config.sync && plan.root) { const states = await fileStates(plan.root).catch(() => []); for (const t of plan.targets) if (states.find((s) => s.path === t.path)?.state === 'conflict') throw new Conflict(now.get(t.path) ?? '', 'Both the shared source and this file changed; choose a direction with sync first.'); }
-      const written: ApplyReport['written'] = []; for (const t of plan.targets) { const buf = Buffer.from(t.newText, 'utf8'); await d.fs.writeAtomic(t.path, buf, 0o644); written.push({ engine: t.engine, bytes: buf.length }); }
+      const now = new Map<string, string>(); for (const t of plan.targets) { const l = await load(t.path); if (l.sha !== t.baseSha) throw new MemoryConflict(l.text); now.set(t.path, l.text); }
+      if (plan.kind !== 'sync' && d.config.sync && plan.root) { const states = await fileStates(plan.root).catch(() => []); for (const t of plan.targets) if (states.find((s) => s.path === t.path)?.state === 'conflict') throw new MemoryConflict(now.get(t.path) ?? '', 'Both the shared source and this file changed; choose a direction with sync first.'); }
+      const written: MemoryApplyReport['written'] = []; for (const t of plan.targets) { const buf = Buffer.from(t.newText, 'utf8'); await d.fs.writeAtomic(t.path, buf, 0o644); written.push({ engine: t.engine, bytes: buf.length }); }
       d.log?.info('memory.applied', { files: written.length, kind: plan.kind }); return { written };
     },
     async importHint(root) { const have = await Promise.all(ENGINES.map(async (e) => ({ e, ok: (await load(pathFor(e, 'project', root))).sha !== null }))); if (have.every((h) => h.ok) || have.every((h) => !h.ok)) return undefined; const existing = have.find((h) => h.ok)!.e; return { existing, missing: ENGINES.find((x) => x !== existing)!, offers: ['pointer', 'copy'] }; },

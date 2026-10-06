@@ -2,7 +2,7 @@ import { chmodSync, existsSync, readFileSync, readdirSync, statSync } from 'node
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import { Conflict, MemoryError, PlanChanged, SecretRejected, TooLarge, addNote, applyRegion, buildRegion, createMemoryFiles, defaultMemoryPaths, findRegion, nodeMemFs, parseHashLine } from '../../src/index.js';
+import { MemoryConflict, MemoryError, PlanChanged, SecretRejected, TooLarge, addNote, applyRegion, buildRegion, createMemoryFiles, defaultMemoryPaths, findRegion, nodeMemFs, parseHashLine } from '../../src/index.js';
 import { confirm, realRig, rig } from './helpers.js';
 
 const NOTES = '## Notes (added with Centcom)';
@@ -29,13 +29,13 @@ describe('quick add', () => {
 });
 
 describe('edits and conflicts', () => {
-  it('a file that changed between plan and apply gives Conflict with the new text, and writes nothing', async () => {
+  it('a file that changed between plan and apply gives MemoryConflict with the new text, and writes nothing', async () => {
     const r = rig({ files: { 'CLAUDE.md': 'one\n' } }); const plan = await r.mf.plan({ engine: 'claude-code', scope: 'project', newText: 'two\n', root: r.root }); r.mem.files.set(r.claude, Buffer.from('someone else\n'));
-    const err = await r.mf.apply(plan, confirm(plan)).catch((e) => e); expect(err).toBeInstanceOf(Conflict); expect(err.newText).toBe('someone else\n'); expect(r.mem.w.writes).toBe(0); expect(r.mem.text(r.claude)).toBe('someone else\n');
+    const err = await r.mf.apply(plan, confirm(plan)).catch((e) => e); expect(err).toBeInstanceOf(MemoryConflict); expect(err.newText).toBe('someone else\n'); expect(r.mem.w.writes).toBe(0); expect(r.mem.text(r.claude)).toBe('someone else\n');
   });
   it('a file created in the meantime is a conflict too; one deleted in the meantime also', async () => {
-    const r = rig(); const plan = await r.mf.plan({ engine: 'claude-code', scope: 'project', newText: 'x', root: r.root }); r.mem.files.set(r.claude, Buffer.from('appeared')); await expect(r.mf.apply(plan, confirm(plan))).rejects.toBeInstanceOf(Conflict);
-    const g = rig({ files: { 'CLAUDE.md': 'a' } }); const p2 = await g.mf.plan({ engine: 'claude-code', scope: 'project', newText: 'b', root: g.root }); g.mem.files.delete(g.claude); await expect(g.mf.apply(p2, confirm(p2))).rejects.toBeInstanceOf(Conflict);
+    const r = rig(); const plan = await r.mf.plan({ engine: 'claude-code', scope: 'project', newText: 'x', root: r.root }); r.mem.files.set(r.claude, Buffer.from('appeared')); await expect(r.mf.apply(plan, confirm(plan))).rejects.toBeInstanceOf(MemoryConflict);
+    const g = rig({ files: { 'CLAUDE.md': 'a' } }); const p2 = await g.mf.plan({ engine: 'claude-code', scope: 'project', newText: 'b', root: g.root }); g.mem.files.delete(g.claude); await expect(g.mf.apply(p2, confirm(p2))).rejects.toBeInstanceOf(MemoryConflict);
   });
   it('without accepted:true, or with a different plan hash, or a tampered plan, nothing is written', async () => {
     const r = rig({ files: { 'CLAUDE.md': 'a\n' } }); const plan = await r.mf.plan({ engine: 'claude-code', scope: 'project', newText: 'b\n', root: r.root });

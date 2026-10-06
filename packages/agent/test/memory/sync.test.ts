@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import { Conflict, MemoryError, applyRegion, buildRegion, findRegion } from '../../src/index.js';
+import { MemoryConflict, MemoryError, applyRegion, buildRegion, findRegion } from '../../src/index.js';
 import { confirm, rig } from './helpers.js';
 
 const OUT = Array.from({ length: 100 }, (_x, i) => `line ${i} outside the markers`).join('\n');
@@ -37,7 +37,7 @@ describe('drift', () => {
   });
   it('apply refuses an ordinary edit of a file in conflict until a direction is chosen; choosing one clears it', async () => {
     const r = setup(); await doSync(r); r.mem.files.set(r.claude, Buffer.from(r.mem.text(r.claude)!.replace('- use pnpm', '- edited'))); r.mem.files.set(r.source, Buffer.from('# changed\n'));
-    const quick = await r.mf.plan({ engine: 'claude-code', scope: 'project', quickAdd: 'note', root: r.root }); const err = await r.mf.apply(quick, confirm(quick)).catch((e) => e); expect(err).toBeInstanceOf(Conflict); expect(err.message).toContain('direction');
+    const quick = await r.mf.plan({ engine: 'claude-code', scope: 'project', quickAdd: 'note', root: r.root }); const err = await r.mf.apply(quick, confirm(quick)).catch((e) => e); expect(err).toBeInstanceOf(MemoryConflict); expect(err.message).toContain('direction');
     const before = r.mem.w.writes; const plan = await r.mf.sync({ direction: 'source_to_targets', root: r.root }); await r.mf.apply(plan, confirm(plan)); expect(r.mem.w.writes).toBeGreaterThan(before); expect((await r.mf.status(r.root)).state).toBe('in_sync');
   });
   it('pulling a target into the source: a diff, a confirmation, and then the other file is source_changed', async () => {

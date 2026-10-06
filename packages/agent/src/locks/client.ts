@@ -4,7 +4,7 @@ import { assertWritableEventPayload, type PConflictDetected } from '@centcom/pro
 import type { AgentId } from '../events/index.js';
 
 import { canonicalKey, lexicalKey } from './path.js';
-import type { Conflict, FileLockPayload, LockClient, LockDeps, LockInfo, LockResult } from './types.js';
+import type { LockConflict, FileLockPayload, LockClient, LockDeps, LockInfo, LockResult } from './types.js';
 
 const MAX_TTL = 600_000; const MIN_WIRE_TTL = 5_000; const REMOTE_DEFAULT_TTL = 300_000; const QUEUE_MAX = 200;
 interface Held { agentId: AgentId; key: string; ttlMs: number; expiresAt: number; timer?: unknown; mac?: string }
@@ -40,7 +40,7 @@ export function createLockClient(d: LockDeps): LockClient {
     const id = `${mac}|${local_.agentId}|${remoteAgent}`; if (seenConflicts.has(id)) return; seenConflicts.add(id);
     d.bus.emit('lock:conflict', { agent_id: local_.agentId, other_agent_id: remoteAgent as AgentId, path: local_.key }); d.onConflictDetected?.(payload({ agentIds: [local_.agentId, remoteAgent as AgentId], path_hmac: mac }));
   }
-  function payload(c: Conflict): PConflictDetected { const p: PConflictDetected = { agent_ids: [...c.agentIds], path_hmacs: [c.path_hmac] }; assertWritableEventPayload('conflict.detected', p); return p; }
+  function payload(c: LockConflict): PConflictDetected { const p: PConflictDetected = { agent_ids: [...c.agentIds], path_hmacs: [c.path_hmac] }; assertWritableEventPayload('conflict.detected', p); return p; }
 
   async function fileClaim(key: string, agentId: AgentId, expiresAt: number): Promise<{ owned: boolean; other?: { agent: string; expiresAt: number } }> {
     if (!(await ensureDir())) return { owned: false }; const path = api.join(dir, lockName(key)); const text = JSON.stringify({ v: 1, pid, agent_id: agentId, expires_at: iso(expiresAt) });
@@ -120,8 +120,8 @@ export function createLockClient(d: LockDeps): LockClient {
     let lex: string; try { lex = lexicalKey(path, opts); } catch { return null; } const key = aliases.get(lex) ?? lex; const h = holders(key)[0]; if (h) return { heldBy: h.agentId, expiresAt: iso(h.expiresAt), remote: false };
     const r = remoteHolder(key); return r ? { heldBy: r.agentId as AgentId, expiresAt: iso(r.expiresAt), remote: true } : null;
   }
-  function conflicts(): Conflict[] {
-    const out: Conflict[] = []; for (const list of local.values()) for (const h of list) { if (!h.mac || !live(h)) continue; for (const r of remote.get(h.mac)?.values() ?? []) if (r.expiresAt > now()) out.push({ agentIds: [h.agentId, r.agentId as AgentId], path_hmac: h.mac }); } return out;
+  function conflicts(): LockConflict[] {
+    const out: LockConflict[] = []; for (const list of local.values()) for (const h of list) { if (!h.mac || !live(h)) continue; for (const r of remote.get(h.mac)?.values() ?? []) if (r.expiresAt > now()) out.push({ agentIds: [h.agentId, r.agentId as AgentId], path_hmac: h.mac }); } return out;
   }
   function flush() { const t = d.transport; if (!t) return; const q = queue; queue = []; for (const p of q) { if (t.ready && !t.ready()) { enqueue(p); continue; } try { t.publish(p); } catch { enqueue(p); } } }
   function dispose() { disposed = true; off(); for (const list of local.values()) for (const h of list) if (h.timer !== undefined) d.clock.clearTimeout(h.timer as never); for (const t of remote.values()) for (const r of t.values()) if (r.timer !== undefined) d.clock.clearTimeout(r.timer as never); }
