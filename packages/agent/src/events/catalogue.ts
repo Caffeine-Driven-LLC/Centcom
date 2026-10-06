@@ -21,8 +21,11 @@ export type AgentEventMap = {
   'agent:approval_resolved': { agent_id: AgentId; approval_id: ApprovalId; decision: 'allow' | 'deny' | 'timeout' | 'cancel'; by?: MemberId };
   /** wire-safe */
   'agent:state_changed': { agent_id: AgentId; state: StateName; since: Iso };
-  'agent:context': { agent_id: AgentId; used_tokens: number; window_tokens: number };
-  'agent:compaction': { agent_id: AgentId; before_tokens: number; after_tokens: number };
+  /** Exactly what the engine reported, at most once per second per agent; every field may be missing. */
+  'agent:context': { agent_id: AgentId; used?: number; window?: number; pct?: number };
+  /** `warn` and `full` fire once per cycle (until the engine's own number drops 10 points); `ok` says full has cleared. `full` is the local `context-full` state. */
+  'agent:context_alert': { agent_id: AgentId; level: 'warn' | 'full' | 'ok'; pct: number };
+  'agent:compaction': { agent_id: AgentId; phase: 'start' | 'end'; before?: number; after?: number };
   /** Every normalised event of one agent, stamped by the runner with a gap-free per-agent `seq`. */
   'agent:event': { agent_id: AgentId; seq: number; event: NormalisedEvent };
   /** wire-safe: the outcome and, for a crash, the exit code or signal name. `reason` is a local error code, never text from the model. */

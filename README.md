@@ -13,7 +13,7 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 
 ![Progress](docs/progress.svg)
 
-**36% built** (weighted by lane size across 105 lanes). Details and how this is computed: [`tools/plan/progress.py`](tools/plan/progress.py). Update [`plan/STATUS.json`](plan/STATUS.json) when you finish or advance a lane, then run `python3 tools/plan/progress.py`.
+**37% built** (weighted by lane size across 105 lanes). Details and how this is computed: [`tools/plan/progress.py`](tools/plan/progress.py). Update [`plan/STATUS.json`](plan/STATUS.json) when you finish or advance a lane, then run `python3 tools/plan/progress.py`.
 
 ## Next steps
 
@@ -32,8 +32,8 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 | [C002](plan/client/C002.md) | CI pipeline: typecheck, lint, test, build matrix, contract-lock check | 90% | GitHub Actions runs typecheck, tests, web build, plan and contract lock, progress check; first run green; no build matrix or lint yet |
 | [C007](plan/client/C007.md) | Mock backend: REST from OpenAPI plus WebSocket relay simulator | 90% | @centcom/testkit mock backend: all 93 REST operations (validated, schema-generated), device login/refresh rotation, pagination, idempotency, error injection, ws relay simulator, virtual clock, control plane, scenarios, CLI. Not covered: signature/encryption checks, stateful non-session resources |
 | [C015](plan/client/C015.md) | Permission policy engine bridging engine approval requests | 85% | modes incl. dangerously-skip-permissions, session rules, real approval bridge; no persisted "always" rules |
+| [C019](plan/client/C019.md) | Context visibility: usage display and compaction requests through the engine | 85% | context view: engine-reported usage only, warn/full thresholds with hysteresis, compaction request through the engine (capability, idle and approval checks, 60 s backoff), optional auto compaction, de-duplicating ledger, 1/s context events. Not yet: centcom context, /compact, meter UI, state machine mapping of context-full |
 | [C026](plan/client/C026.md) | Local transcript persistence and engine session resume | 85% | conversations saved and resumed (-c, --resume, /resume, /new, web launcher and palette), verified with real Claude; Codex resume untested |
-| [C035](plan/client/C035.md) | Prompt input: multiline, history, paste, slash commands | 85% | multiline, history, paste, slash popup; no external editor |
 
 +19 more in [`plan/STATUS.json`](plan/STATUS.json).
 

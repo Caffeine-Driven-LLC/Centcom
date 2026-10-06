@@ -38,8 +38,8 @@
    "note": "command risk classes; Codex sandbox/approval policy per mode"
   },
   "C019": {
-   "pct": 0.6,
-   "note": "usage and context % shown; no compaction request"
+   "pct": 0.85,
+   "note": "context view: engine-reported usage only, warn/full thresholds with hysteresis, compaction request through the engine (capability, idle and approval checks, 60 s backoff), optional auto compaction, de-duplicating ledger, 1/s context events. Not yet: centcom context, /compact, meter UI, state machine mapping of context-full"
   },
   "C020": {
    "pct": 0.8,
