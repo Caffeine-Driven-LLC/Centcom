@@ -240,6 +240,10 @@
   "C051": {
    "pct": 0.9,
    "note": "HTTP client in @centcom/net: operation table generated from openapi.yaml with a CI drift check; typed call, listPage, paginate, revalidate, getStatus, getJwks; CT-ERR retries with full jitter and a 60 s sleep budget, idempotency keys, single-flight 401 refresh, ETag and If-Match, size guard, tolerant response checks, typed errors; all 93 operations pass against the mock. Gaps: responses are checked with generated shapes (types and required fields), not the C003 Ajv validators; no lane uses the client yet"
+  },
+  "C069": {
+   "pct": 0.8,
+   "note": "centcom webhooks list/show/create/update/rotate-secret/delete/test/deliveries/redeliver/verify: https-only and event-type validation from the contract list, show-once secret (TTY or --show-secret, never in --json otherwise), confirm/--yes on delete, friendly error mapping, local signature verification with overlap and tolerance (constant-time, exit 3); gaps: not wired into main.tsx until the auth lane (C052) lands, no webhook fixtures in contracts/fixtures (tests generate signatures), 18 event types in the contract vs 20+ in the card"
   }
  },
  "next": [
