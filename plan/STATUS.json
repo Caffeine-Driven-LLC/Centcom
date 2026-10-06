@@ -264,6 +264,10 @@
   "C062": {
    "pct": 0.8,
    "note": "fleet sync: publishers (spawn with plan-limit error, state with map validation, local-only states refused, 2/s per agent and no repeats, exit, encrypted branch.update, conflicts), lock arbitration through the relay with keyed path hashes (grant, deny, release, expire, reconnect re-ask), pure fleet model (replay deterministic, sender owns the agent, unknown states generic), bus bridge; three members on the mock relay incl. a lock clash and a conflict; mock relay gained lock arbitration and an agent limit; gaps: not wired to the real LockClient and fleet panel, state map has 64 names (card says 60)"
+  },
+  "C063": {
+   "pct": 0.75,
+   "note": "offline: NetStateMonitor (online/reconnecting/offline/degraded/backend-down and mascot names), encrypted durable outbox with caps, corruption recovery and in-order replay with original ids after reconnect, file seq store, resume reporting, wake detector with jitter, requireOnline and 24 h display rule; session client gains link(), reconnect() and the outbox hook; tested on the mock relay with maintenance mode; gaps: frames buffered offline may go under the older key if the rotate_key replay is still coming, no real kill/restart in the mock, not wired into app startup"
   }
  },
  "next": [

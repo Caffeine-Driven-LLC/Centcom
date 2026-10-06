@@ -13,3 +13,4 @@ export * from './session/index.js';
 export * from './queue/index.js';
 export * from './approvals/index.js';
 export * from './fleet/index.js';
+export * from './offline/index.js';

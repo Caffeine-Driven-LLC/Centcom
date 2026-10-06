@@ -52,7 +52,7 @@ export class QueueClient extends TypedEmitter<QueueEvents> {
     if (new TextEncoder().encode(o.body).length > MAX_CT_BYTES) throw new QueueItemTooLargeError();
     if (this.opts.prechecks !== false) checkSubmit({ role: me.role, muted: this.muted.has(me.id), locked: this.session.policy.locked === true, paused: false, liveOfMember: this.model.liveCountOf(me.id), liveTotal: this.model.liveCount(), queueLimit: this.session.policy.queue_limit });
     const item = o.item ?? this.ids.next('que'); const kind = o.kind ?? 'message';
-    try { const r = await this.session.sendEvent('queue.submit', { id: frameIdOf(item), p: ({ ctBytes }) => ({ item, size: ctBytes, kind }), secret: { body: o.body, ...(o.attachments?.length ? { attachments: o.attachments } : {}) } }); return { item, seq: r.seq }; } catch (e) { throw mapError(e); }
+    try { const r = await this.session.sendEvent('queue.submit', { id: frameIdOf(item), p: { item, size: '$ctBytes', kind }, secret: { body: o.body, ...(o.attachments?.length ? { attachments: o.attachments } : {}) } }); return { item, seq: r.seq }; } catch (e) { throw mapError(e); }
   }
   async cancel(item: string): Promise<void> {
     const it = this.model.get(item); if (this.opts.prechecks !== false) { if (!it) throw new UnknownItemError(); if (it.submitter !== this.session.me.id) throw new NotAllowedError('forbidden', 'Only the person who added an item can cancel it.'); if (it.state !== 'queued' && it.state !== 'approved' && it.state !== 'held') throw new ItemGoneError(); }
