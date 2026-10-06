@@ -99,7 +99,7 @@
   },
   "C039": {
    "pct": 1,
-   "note": "status line"
+   "note": "status line / bar with context, session and weekly limits and reset times, tokens, cost"
   },
   "C040": {
    "pct": 1,
@@ -107,7 +107,7 @@
   },
   "C041": {
    "pct": 1,
-   "note": "ctrl+k palette"
+   "note": "palette in terminal and web (ctrl+k)"
   },
   "C042": {
    "pct": 0.8,
@@ -118,8 +118,8 @@
    "note": "toasts"
   },
   "C045": {
-   "pct": 0.6,
-   "note": "help screen; no rebinding"
+   "pct": 0.7,
+   "note": "help screens in both UIs; no rebinding yet"
   },
   "C046": {
    "pct": 1,

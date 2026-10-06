@@ -1,6 +1,6 @@
 import { StrictMode, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createTheme } from '@centcom/theme';
+import { applyTheme, getThemePref } from './theme.js';
 import { Launcher } from './Launcher.js';
 import { Workspace } from './Workspace.js';
 import { useConnection } from './net.js';
@@ -8,13 +8,7 @@ import '@fontsource-variable/inter';
 import '@fontsource-variable/jetbrains-mono';
 import './styles.css';
 
-const TOKENS = ['bg.base', 'bg.surface', 'bg.raised', 'bg.overlay', 'bg.sunken', 'bg.hover', 'bg.selected', 'border.subtle', 'border.default', 'border.strong', 'text.primary', 'text.secondary', 'text.muted', 'text.link', 'accent.primary', 'accent.fill', 'accent.hover', 'accent.on', 'signal', 'status.success', 'status.warning', 'status.danger', 'status.info'] as const;
-function applyTheme() {
-  const mode = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; const t = createTheme(mode, 'truecolor');
-  for (const k of TOKENS) document.documentElement.style.setProperty('--' + k.replace('.', '-'), t.c(k));
-  document.documentElement.dataset.theme = mode;
-}
-applyTheme(); matchMedia('(prefers-color-scheme: light)').addEventListener('change', applyTheme);
+applyTheme(); matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => getThemePref() === 'system' && applyTheme());
 
 function App() {
   const c = useConnection();

@@ -6,6 +6,8 @@ import { VerbRotator, loadVerbs } from '../src/util/verbs.js';
 
 const txt = (l: { t: string }[]) => l.map((s) => s.t).join('');
 
+import { formatReset } from '../src/util/text.js';
+
 describe('text', () => {
   it('measures wide characters and truncates by cells', () => {
     expect(textWidth('abc')).toBe(3); expect(textWidth('日本')).toBe(4); expect(textWidth('á')).toBe(1);
@@ -79,5 +81,13 @@ describe('verbs', () => {
   it('skips lines that are too long for the spinner row', () => {
     const r = new VerbRotator(['short…', 'x'.repeat(60) + '…'], Math.random, 40);
     expect(r.next()).toBe('short…');
+  });
+});
+
+describe('formatReset', () => {
+  const now = 1_000_000_000_000;
+  it('formats the time until a limit resets', () => {
+    expect(formatReset(now / 1000 + 9660, now)).toBe('2h 41m'); expect(formatReset(now / 1000 + 3 * 86400 + 4 * 3600, now)).toBe('3d 4h');
+    expect(formatReset(now / 1000 + 12 * 60, now)).toBe('12m'); expect(formatReset(now / 1000 - 5, now)).toBe('now'); expect(formatReset(0, now)).toBe('1m');
   });
 });

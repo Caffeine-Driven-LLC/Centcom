@@ -199,7 +199,14 @@ export class ClaudeStreamParser {
   private result(d: J): EventBody[] {
     const out: EventBody[] = [];
     const u = (d.usage ?? {}) as J;
-    out.push({ type: 'usage.report', input_tokens: Number(u.input_tokens ?? 0) + Number(u.cache_creation_input_tokens ?? 0), output_tokens: Number(u.output_tokens ?? 0), cache_read_tokens: Number(u.cache_read_input_tokens ?? 0), ...(typeof d.total_cost_usd === 'number' ? { cost_usd: d.total_cost_usd } : {}), cost_is_estimate: true });
+    // context now = the last API call's prompt (fresh + cached input); the window comes from modelUsage
+    const iters = Array.isArray(u.iterations) ? (u.iterations as J[]) : [];
+    const last = (iters.length ? iters[iters.length - 1]! : u) as J;
+    const ctxTokens = Number(last.input_tokens ?? 0) + Number(last.cache_read_input_tokens ?? 0) + Number(last.cache_creation_input_tokens ?? 0);
+    const mu = Object.values((d.modelUsage ?? {}) as Record<string, J>)[0];
+    const win = Number(mu?.contextWindow ?? 0);
+    out.push({ type: 'usage.report', input_tokens: Number(u.input_tokens ?? 0) + Number(u.cache_creation_input_tokens ?? 0), output_tokens: Number(u.output_tokens ?? 0), cache_read_tokens: Number(u.cache_read_input_tokens ?? 0), ...(typeof d.total_cost_usd === 'number' ? { cost_usd: d.total_cost_usd } : {}), cost_is_estimate: true,
+      ...(win > 0 && ctxTokens > 0 ? { context_tokens: ctxTokens, context_window: win, context_used_pct: Math.min(100, Math.round((ctxTokens / win) * 100)) } : {}) });
     if (d.is_error) {
       const text = String(d.result ?? 'Claude Code reported an error');
       out.push({ type: 'error', code: errorCodeFor(undefined, d.api_error_status, text), tool_message: firstLines(text, 4), fatal: true });

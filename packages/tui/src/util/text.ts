@@ -93,3 +93,10 @@ export function fit(line: Line, width: number): Line {
 export function formatTokens(n: number): string { return n >= 1_000_000 ? (n / 1_000_000).toFixed(1) + 'M' : n >= 1000 ? (n / 1000).toFixed(n >= 10_000 ? 0 : 1) + 'k' : String(n); }
 export function formatElapsed(ms: number): string { const s = Math.floor(ms / 1000); return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`; }
 export function formatCost(usd: number): string { return usd < 0.01 ? '<$0.01' : '$' + usd.toFixed(2); }
+
+/** "2h 41m", "3d 4h", "12m" or "now": time until an epoch-seconds reset. */
+export function formatReset(resetsAtSec: number, nowMs = Date.now()): string {
+  const s = Math.floor(resetsAtSec - nowMs / 1000); if (!resetsAtSec || s <= 60) return s <= 0 && resetsAtSec ? 'now' : '1m';
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+  return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}m` : `${m}m`;
+}

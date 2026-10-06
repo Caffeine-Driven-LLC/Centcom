@@ -6,6 +6,8 @@ import { Cento, Mini } from './Cento.js';
 import { Icon, toolIcon } from './Icon.js';
 import { Diff, Markdown } from './Markdown.js';
 import { Popover } from './Popover.js';
+import { Gallery, Help, Palette, type PaletteItem } from './Overlays.js';
+import { getThemePref, setThemePref, type ThemePref } from './theme.js';
 import type { Conn } from './net.js';
 
 type Mode = 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions';
@@ -16,6 +18,9 @@ const MODES: { id: Mode; title: string; desc: string; icon: string }[] = [
 ];
 const money = (n: number) => (n >= 1 ? `$${n.toFixed(2)}` : `$${n.toFixed(3)}`);
 const tok = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n));
+const reset = (at: number, now = Date.now()) => { const t = Math.floor(at - now / 1000); if (!at) return ''; if (t <= 0) return 'now'; const d = Math.floor(t / 86400), h = Math.floor((t % 86400) / 3600), m = Math.floor((t % 3600) / 60); return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}m` : `${Math.max(1, m)}m`; };
+const winName = (n: string) => (n === 'five_hour' ? 'Session' : n === 'seven_day' ? 'Week' : n.replace(/_/g, ' '));
+const level = (pct: number) => (pct >= 90 ? 'bad' : pct >= 70 ? 'warn' : 'ok');
 const spent = (ms: number) => { const s = Math.floor(ms / 1000); return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`; };
 
 const ToolCard = memo(function ToolCard({ it }: { it: Extract<Item, { kind: 'tool' }> }) {
@@ -52,11 +57,40 @@ const Row = memo(function Row({ it, first }: { it: Item; first: boolean }) {
   }
 });
 
+function Gauge({ label, pct, detail, title }: { label: string; pct: number; detail: string; title: string }) {
+  return <span className={`seg-item gauge ${level(pct)}`} title={title}><span className="lbl">{label}</span><i><b style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} /></i><span className="val">{Math.round(pct)}%</span>{detail && <span className="dim">{detail}</span>}</span>;
+}
+
+function StatusBar({ s, me }: { s: NonNullable<Conn['state']>; me: NonNullable<Conn['state']>['agents'][number] }) {
+  const mode = s.settings.permissionMode as Mode; const model = me.model ? modelLabel(me.model) : 'Default model';
+  const login = me.loginKind === 'subscription' ? 'Subscription' : me.loginKind === 'api_key' ? 'API key' : me.loginKind === 'cloud' ? 'Cloud' : '';
+  return (
+    <footer className="statusbar" aria-label="Session status">
+      <span className={`seg-item state ${s.busy ? 'live' : ''}`}><i className="dot" />{s.busy ? `${me.state.replace(/-/g, ' ')}${s.turnStartedAt ? ' · ' + spent(Date.now() - s.turnStartedAt) : ''}` : 'Idle'}</span>
+      {me.ctxPct !== undefined ? <Gauge label="Context" pct={me.ctxPct} detail={me.ctxTokens && me.ctxWindow ? `${tok(me.ctxTokens)} / ${tok(me.ctxWindow)}` : ''} title={`Context window: ${me.ctxPct}% used${me.ctxTokens && me.ctxWindow ? ` (${me.ctxTokens.toLocaleString()} of ${me.ctxWindow.toLocaleString()} tokens)` : ''}`} /> : <span className="seg-item" title="Shown after the first reply"><span className="lbl">Context</span><span className="dim">—</span></span>}
+      {s.limits.map((l) => <Gauge key={l.name} label={winName(l.name)} pct={l.utilization * 100} detail={l.resets_at ? `resets in ${reset(l.resets_at)}` : ''} title={`${winName(l.name)} limit: ${Math.round(l.utilization * 100)}% used${l.resets_at ? `, resets ${new Date(l.resets_at * 1000).toLocaleString()}` : ''}`} />)}
+      {me.inTok + me.outTok > 0 && <span className="seg-item" title="Tokens for the last reply (input / output)"><span className="lbl">Tokens</span><span className="val">↑{tok(me.inTok)} ↓{tok(me.outTok)}</span></span>}
+      {me.cost > 0 && <span className="seg-item" title="Estimated from your CLI's own report"><span className="lbl">Cost</span><span className="val">{money(me.cost)}</span><span className="dim">est.</span></span>}
+      <span className="grow" />
+      {s.branch && <span className="seg-item opt"><Icon name="git" size={12} /><span className="val">{s.branch}</span></span>}
+      <span className="seg-item opt"><span className="val">{model}</span></span>
+      {login && <span className="seg-item opt"><span className="dim">{login}</span></span>}
+      <span className={`seg-item ${mode === 'bypassPermissions' ? 'bad' : ''}`}><span className="val">{mode === 'bypassPermissions' ? '⚠ Approvals off' : MODES.find((m) => m.id === mode)?.title}</span></span>
+    </footer>
+  );
+}
+
 export function Workspace({ c }: { c: Conn }) {
   const { state: s, items, send } = c;
   const [text, setText] = useState(''); const [sel, setSel] = useState(0);
   const [menu, setMenu] = useState<'model' | 'mode' | null>(null); const [confirmBypass, setConfirmBypass] = useState(false);
   const [stuck, setStuck] = useState(true); const [, tick] = useState(0);
+  const [bannerOff, setBannerOff] = useState(false); const [apMin, setApMin] = useState(false);
+  const [ov, setOv] = useState<null | { k: 'palette' } | { k: 'help' } | { k: 'gallery'; name?: string }>(null);
+  const [side, setSide] = useState(() => { try { return localStorage.getItem('centcom.side') !== '0'; } catch { return true; } });
+  const [theme, setTheme] = useState<ThemePref>(getThemePref);
+  const toggleSide = () => setSide((v) => { const n = !v; try { localStorage.setItem('centcom.side', n ? '1' : '0'); } catch { /* private mode */ } return n; });
+  const cycleTheme = () => { const n: ThemePref = theme === 'system' ? 'dark' : theme === 'dark' ? 'light' : 'system'; setTheme(n); setThemePref(n); };
   const feed = useRef<HTMLDivElement>(null); const box = useRef<HTMLTextAreaElement>(null);
   const history = useRef<string[]>([]); const hIdx = useRef(-1);
 
@@ -64,13 +98,38 @@ export function Workspace({ c }: { c: Conn }) {
   useEffect(() => { const el = feed.current; if (el && stuck) el.scrollTop = el.scrollHeight; }, [items, s?.approvals.length, stuck]);
   useEffect(() => { const t = box.current; if (t) { t.style.height = '0'; t.style.height = Math.min(220, t.scrollHeight) + 'px'; } }, [text]);
   useEffect(() => { box.current?.focus(); }, [s?.approvals.length]);
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey; const typing = /^(input|textarea|select)$/i.test((e.target as HTMLElement)?.tagName ?? '');
+      if (mod && e.key.toLowerCase() === 'k') { e.preventDefault(); setOv((o) => (o?.k === 'palette' ? null : { k: 'palette' })); }
+      else if (mod && e.key.toLowerCase() === 'o') { e.preventDefault(); setMenu((m) => (m === 'model' ? null : 'model')); }
+      else if (mod && e.key.toLowerCase() === 'b') { e.preventDefault(); toggleSide(); }
+      else if (e.key === '?' && !typing) { e.preventDefault(); setOv({ k: 'help' }); }
+    };
+    window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k);
+  }, []);
+  const bypassNow = s?.settings.permissionMode === 'bypassPermissions'; const pendId = s?.approvals[0]?.id;
+  useEffect(() => { if (bypassNow) setBannerOff(false); }, [bypassNow]);
+  useEffect(() => { setApMin(false); }, [pendId]);
   const slash = useMemo(() => (text.startsWith('/') && !text.includes(' ') && !text.includes('\n') ? COMMANDS.filter((x) => x.name.startsWith(text.slice(1).toLowerCase())).slice(0, 7) : []), [text]);
   if (!s) return <div className="center"><div className="boot"><Cento state="thinking" color="violet" px={5} reduced={false} /><span>Starting the agent…</span></div></div>;
 
   const me = s.agents.find((a) => a.mine)!; const pending = s.approvals[0]; const mode = s.settings.permissionMode as Mode;
   const bypass = mode === 'bypassPermissions'; const welcome = items.length === 0 && !s.busy;
-  const limit = s.limits.find((l) => l.name === 'five_hour');
-  const submit = () => { const t = text.trim(); if (!t) return; history.current.push(t); hIdx.current = -1; send({ t: 'submit', text: t }); setText(''); setStuck(true); };
+  /** Commands that only make sense in a browser are handled here; everything else goes to the agent controller. */
+  const local = (t: string): boolean => {
+    const [cmd, ...r] = t.slice(1).split(/\s+/); const arg = r.join(' ').trim();
+    switch (cmd) {
+      case 'help': setOv({ k: 'help' }); return true;
+      case 'model': if (!arg) { setMenu('model'); return true; } return false;
+      case 'cento': setOv({ k: 'gallery', name: arg || undefined }); return true;
+      case 'agents': toggleSide(); return true;
+      case 'theme': { const n = (arg === 'dark' || arg === 'light' || arg === 'system' ? arg : null) as ThemePref | null; if (n) { setTheme(n); setThemePref(n); } else cycleTheme(); return true; }
+      case 'quit': send({ t: 'close' }); return true;
+      default: return false;
+    }
+  };
+  const submit = () => { const t = text.trim(); if (!t) return; if (t.startsWith('/') && local(t)) { history.current.push(t); hIdx.current = -1; setText(''); return; } history.current.push(t); hIdx.current = -1; send({ t: 'submit', text: t }); setText(''); setStuck(true); };
   const setMode = (m: Mode) => { send({ t: 'setMode', mode: m }); setMenu(null); setConfirmBypass(false); };
   const onKey = (e: React.KeyboardEvent) => {
     if (slash.length && (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey && text !== '/' + slash[sel % slash.length]!.name))) { e.preventDefault(); const m = slash[sel % slash.length]!; setText('/' + m.name + (m.args ? ' ' : '')); setSel(0); return; }
@@ -83,6 +142,20 @@ export function Workspace({ c }: { c: Conn }) {
     if (e.key === 'ArrowDown' && hIdx.current >= 0) { e.preventDefault(); hIdx.current++; if (hIdx.current >= history.current.length) { hIdx.current = -1; setText(''); } else setText(history.current[hIdx.current]!); }
   };
 
+  const cmds: PaletteItem[] = [
+    { id: 'a:side', group: 'View', icon: 'panel', label: side ? 'Hide the side panel' : 'Show the side panel', hint: 'Ctrl/Cmd+B', run: toggleSide },
+    { id: 'a:theme', group: 'View', icon: theme === 'light' ? 'sun' : 'moon', label: `Theme: ${theme === 'system' ? 'follows your system' : theme}`, hint: 'switch dark, light, system', run: cycleTheme },
+    { id: 'a:help', group: 'View', icon: 'help', label: 'Show keyboard shortcuts', hint: '?', run: () => setOv({ k: 'help' }) },
+    { id: 'a:cento', group: 'View', icon: 'spark', label: 'Browse the Cento animations', hint: '/cento', run: () => setOv({ k: 'gallery' }) },
+    { id: 'a:auto', group: 'Agent', icon: 'spark', label: `Auto skills: turn ${s.settings.autoSkills ? 'off' : 'on'}`, run: () => send({ t: 'auto', on: !s.settings.autoSkills }) },
+    ...(s.busy ? [{ id: 'a:stop', group: 'Agent', icon: 'stop', label: 'Interrupt the agent', hint: 'Esc', run: () => send({ t: 'interrupt' }) }] : []),
+    { id: 'a:back', group: 'Project', icon: 'back', label: 'Back to projects', run: () => send({ t: 'close' }) },
+    ...MODES.map((m) => ({ id: 'm:' + m.id, group: 'Mode', icon: m.icon, label: `Mode: ${m.title}`, hint: m.desc, run: () => setMode(m.id) })),
+    { id: 'm:bypass', group: 'Mode', icon: 'shieldOff', label: 'Mode: Dangerously skip permissions', hint: 'asks you to confirm', run: () => { setMenu('mode'); setConfirmBypass(true); } },
+    ...CLAUDE_MODELS.map((m) => ({ id: 'md:' + m.id, group: 'Model', icon: 'cpu', label: `Model: ${m.label}`, hint: m.note, run: () => send({ t: 'setModel', id: m.id }) })),
+    ...COMMANDS.filter((x) => !['help', 'model', 'cento', 'agents', 'theme', 'mode', 'quit', 'interrupt', 'auto'].includes(x.name)).map((x) => ({ id: 'c:' + x.name, group: 'Command', icon: 'terminal', label: '/' + x.name + (x.args ? ' ' + x.args : ''), hint: x.desc, run: () => { if (x.args) { setText('/' + x.name + ' '); box.current?.focus(); } else send({ t: 'submit', text: '/' + x.name }); } })),
+  ];
+
   let lastKind = '';
   return (
     <div className={`workspace ${bypass ? 'is-bypass' : ''}`}>
@@ -90,12 +163,13 @@ export function Workspace({ c }: { c: Conn }) {
         <button className="iconbtn" title="Back to projects" aria-label="Back to projects" onClick={() => send({ t: 'close' })}><Icon name="back" /></button>
         <div className="crumb"><b>{c.opened?.split('/').pop()}</b>{s.branch && <span className="pill"><Icon name="git" size={12} />{s.branch}</span>}{s.demo ? <span className="pill warn">Demo</span> : <span className="pill dim">{s.engineLabel}</span>}</div>
         <div className="grow" />
-        {limit && <span className={`meter ${limit.utilization >= 0.9 ? 'bad' : ''}`} title={`5-hour limit ${Math.round(limit.utilization * 100)}% used`}><i style={{ width: `${Math.round(limit.utilization * 100)}%` }} /><span>5h {Math.round(limit.utilization * 100)}%</span></span>}
-        {me.inTok + me.outTok > 0 && <span className="stat">{tok(me.inTok + me.outTok)} tokens{me.cost > 0 && ` · ${money(me.cost)}`}</span>}
+        <button className="kbtn" onClick={() => setOv({ k: 'palette' })} aria-label="Open the command palette" title="Command palette (Ctrl/Cmd+K)"><Icon name="search" size={14} /><span>Search commands</span><kbd>Ctrl K</kbd></button>
+        <button className="iconbtn" onClick={cycleTheme} aria-label={`Theme: ${theme}`} title={`Theme: ${theme === 'system' ? 'follows your system' : theme} (click to change)`}><Icon name={theme === 'light' ? 'sun' : 'moon'} size={15} /></button>
+        <button className={`iconbtn ${side ? 'on' : ''}`} onClick={toggleSide} aria-label="Toggle the side panel" aria-pressed={side} title="Side panel (Ctrl/Cmd+B)"><Icon name="panel" size={15} /></button>
       </header>
-      {bypass && <div className="banner" role="alert"><Icon name="shieldOff" size={15} /><b>Approvals are off.</b> Cento runs commands and edits files without asking.<button onClick={() => setMode('default')}>Turn approvals back on</button></div>}
+      {bypass && !bannerOff && <div className="banner" role="alert"><Icon name="shieldOff" size={15} /><b>Approvals are off.</b> Cento runs commands and edits files without asking.<button onClick={() => setMode('default')}>Turn approvals back on</button><button className="x" aria-label="Dismiss this notice" title="Dismiss (the red chip stays)" onClick={() => setBannerOff(true)}><Icon name="x" size={14} /></button></div>}
 
-      <div className="body">
+      <div className={`body ${side ? '' : 'no-side'}`}>
         <section className="main">
           <div className="feed" ref={feed} onScroll={(e) => { const el = e.currentTarget; setStuck(el.scrollHeight - el.scrollTop - el.clientHeight < 40); }}>
             {welcome ? (
@@ -107,9 +181,10 @@ export function Workspace({ c }: { c: Conn }) {
           </div>
           {!stuck && <button className="jump" onClick={() => setStuck(true)}><Icon name="chevron" size={14} />Latest</button>}
 
-          {pending ? (
+          {pending && apMin && <button className={`apbar r-${pending.risk}`} onClick={() => setApMin(false)} aria-label="Show the approval"><Icon name={pending.risk === 'high' ? 'warn' : 'shield'} size={15} /><b>{pending.tool}</b><code>{pending.path ?? pending.command ?? pending.summary}</code><span className="grow" /><span>Needs approval · Review</span></button>}
+          {pending && !apMin ? (
             <div className={`approval r-${pending.risk}`} role="alertdialog" aria-labelledby="ap-t">
-              <div className="ap-head"><Icon name={pending.risk === 'high' ? 'warn' : 'shield'} size={18} /><h3 id="ap-t">{pending.tool === 'Bash' ? 'Run this command?' : /Edit|Write/.test(pending.tool) ? 'Change this file?' : `Allow ${pending.tool}?`}</h3><span className={`tag ${pending.risk === 'high' ? 'danger' : pending.risk === 'low' ? 'muted' : 'warn'}`}>{pending.risk === 'high' ? 'High risk' : pending.risk === 'low' ? 'Low risk' : 'Medium risk'}</span></div>
+              <div className="ap-head"><Icon name={pending.risk === 'high' ? 'warn' : 'shield'} size={18} /><h3 id="ap-t">{pending.tool === 'Bash' ? 'Run this command?' : /Edit|Write/.test(pending.tool) ? 'Change this file?' : `Allow ${pending.tool}?`}</h3><span className={`tag ${pending.risk === 'high' ? 'danger' : pending.risk === 'low' ? 'muted' : 'warn'}`}>{pending.risk === 'high' ? 'High risk' : pending.risk === 'low' ? 'Low risk' : 'Medium risk'}</span><button className="iconbtn sm" aria-label="Minimise this approval" title="Minimise (it stays pending)" onClick={() => setApMin(true)}><Icon name="chevron" size={14} /></button></div>
               <div className="ap-what"><code>{pending.path ?? pending.command ?? pending.summary}</code></div>
               {pending.diff && <Diff text={pending.diff} />}
               <div className="ap-foot"><span className="muted">Runs on {pending.agentName === 'you' ? 'your' : pending.agentName + "'s"} account</span><span className="grow" />
@@ -148,7 +223,7 @@ export function Workspace({ c }: { c: Conn }) {
           )}
         </section>
 
-        <aside className="side">
+        {side && <aside className="side">
           <div className="cento-card"><Cento state={me.state} color={s.settings.color} px={6} reduced={s.settings.reducedMotion} /></div>
           <h4>Agents</h4>
           {[...s.agents].sort((a, b) => Number(b.mine) - Number(a.mine)).map((a) => (
@@ -156,8 +231,12 @@ export function Workspace({ c }: { c: Conn }) {
               <Mini state={a.mini} color={a.color} busy={a.busy} />
               <div className="ainfo"><b>{a.name}{a.mine && a.name !== 'you' && <small> you</small>}</b><span className={`astate ${a.busy ? 'busy' : ''}`}>{a.state === 'awaiting-approval' ? 'Needs you' : a.state.replace(/-/g, ' ')}</span><small>{a.model ? modelLabel(a.model) : a.engine}{a.cost ? ' · ' + money(a.cost) : ''}</small></div>
             </div>))}
-        </aside>
+        </aside>}
       </div>
+      <StatusBar s={s} me={me} />
+      {ov?.k === 'palette' && <Palette items={cmds} onClose={() => setOv(null)} />}
+      {ov?.k === 'help' && <Help onClose={() => setOv(null)} />}
+      {ov?.k === 'gallery' && <Gallery initial={ov.name} onClose={() => setOv(null)} />}
     </div>
   );
 }

@@ -85,7 +85,7 @@ class DemoSession implements EngineSession {
     this.emit({ type: 'tool.result', tool_id: id, status: result.status, summary: result.summary, ...(result.diff ? { diff: result.diff } : {}) });
     return result.status === 'ok';
   }
-  private usage() { this.n++; this.emit({ type: 'usage.report', input_tokens: 2400 * this.n, output_tokens: 610 * this.n, cache_read_tokens: 9000, cost_usd: 0.031 * this.n, cost_is_estimate: true, context_used_pct: Math.min(95, 12 * this.n) }); this.emit({ type: 'limits.report', windows: [{ name: 'five_hour', utilization: Math.min(0.97, 0.18 + 0.05 * this.n), resets_at: Math.floor(Date.now() / 1000) + 3 * 3600 }, { name: 'seven_day', utilization: 0.41, resets_at: Math.floor(Date.now() / 1000) + 3 * 86400 }] }); }
+  private usage() { this.n++; this.emit({ type: 'usage.report', input_tokens: 2400 * this.n, output_tokens: 610 * this.n, cache_read_tokens: 9000, cost_usd: 0.031 * this.n, cost_is_estimate: true, context_used_pct: Math.min(95, 12 * this.n), context_tokens: Math.min(95, 12 * this.n) * 2000, context_window: 200000 }); this.emit({ type: 'limits.report', windows: [{ name: 'five_hour', utilization: Math.min(0.97, 0.18 + 0.05 * this.n), resets_at: Math.floor(Date.now() / 1000) + 3 * 3600 }, { name: 'seven_day', utilization: 0.41, resets_at: Math.floor(Date.now() / 1000) + 3 * 86400 }] }); }
   private done(ok = true) { this.usage(); this.emit({ type: 'status', state: ok ? 'success' : 'idle' }); this.emit({ type: 'turn.done', outcome: ok ? 'ok' : 'error', stop_reason: 'completed' }); }
 
   private async run(prompt: string) {

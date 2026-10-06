@@ -112,7 +112,7 @@ export class AppController {
       case 'approval.requested': this.patchItem((i) => i.kind === 'tool' && i.toolId === ev.tool_id, (i) => (i.kind === 'tool' ? { ...i, approval: 'pending', diff: ev.diff ?? i.diff } : i)); break;
       case 'approval.resolved': this.patchItem((i) => i.kind === 'tool' && i.approval === 'pending', (i) => (i.kind === 'tool' ? { ...i, approval: ev.decision === 'approve' ? 'approved' : 'denied' } : i)); break;
       case 'tool.result': this.patchItem((i) => i.kind === 'tool' && i.toolId === ev.tool_id, (i) => (i.kind === 'tool' ? { ...i, status: ev.status, result: ev.summary, diff: ev.diff ?? i.diff } : i)); break;
-      case 'usage.report': this.updateAgent(me, () => ({ cost: ev.cost_usd ?? 0, inTok: ev.input_tokens, outTok: ev.output_tokens })); break;
+      case 'usage.report': this.updateAgent(me, () => ({ cost: ev.cost_usd ?? 0, inTok: ev.input_tokens, outTok: ev.output_tokens, ...(ev.context_used_pct !== undefined ? { ctxPct: ev.context_used_pct, ctxTokens: ev.context_tokens, ctxWindow: ev.context_window } : {}) })); break;
       case 'limits.report': this.set({ limits: ev.windows }); break;
       case 'compaction.ended': this.notice('info', `Compacted the context${ev.tokens_before ? ` (${Math.round(ev.tokens_before / 1000)}k → ${Math.round((ev.tokens_after ?? 0) / 1000)}k tokens)` : ''}.`); break;
       case 'question.asked': this.notice('info', ev.text, ev.options?.join('  ·  ')); break;

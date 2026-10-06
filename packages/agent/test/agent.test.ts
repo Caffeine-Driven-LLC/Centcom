@@ -184,3 +184,13 @@ describe('DemoEngine', () => {
     expect(err.find((e) => e.type === 'error')).toMatchObject({ code: 'provider_not_signed_in' });
   });
 });
+
+describe('context usage from a real Claude result', () => {
+  it('derives context tokens, window and percentage from the last API call', () => {
+    const lines = readFileSync(new URL('./fixtures/claude-ok.jsonl', import.meta.url), 'utf8').split('\n').filter(Boolean);
+    const p = new ClaudeStreamParser(); const evs = lines.flatMap((l) => p.push(l));
+    const u = evs.find((e) => e.type === 'usage.report') as any;
+    expect(u.context_tokens).toBe(2 + 10345 + 20921); expect(u.context_window).toBeGreaterThan(100000);
+    expect(u.context_used_pct).toBe(Math.round((u.context_tokens / u.context_window) * 100));
+  });
+});

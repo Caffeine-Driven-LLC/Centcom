@@ -6,7 +6,7 @@ export type MascotSize = 'large' | 'small' | 'off';
 
 export interface AgentView {
   id: string; name: string; color: CentoColor; mine: boolean; engine: string; provider: string; model: string; loginKind: LoginKind;
-  state: string; mini: MiniState; busy: boolean; branch: string; runsOn: string; cost: number; inTok: number; outTok: number; note?: string;
+  state: string; mini: MiniState; busy: boolean; branch: string; runsOn: string; cost: number; inTok: number; outTok: number; ctxPct?: number; ctxTokens?: number; ctxWindow?: number; note?: string;
 }
 
 export type Item =

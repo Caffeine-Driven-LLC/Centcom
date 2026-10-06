@@ -44,7 +44,7 @@ export class CodexMapper {
       case 'item/fileChange/patchUpdated': if (Array.isArray(p.changes)) this.changes.set(p.itemId, p.changes); return [];
       case 'thread/tokenUsage/updated': {
         const last = p.tokenUsage?.last ?? {}; const win = p.tokenUsage?.modelContextWindow; const total = p.tokenUsage?.total?.totalTokens;
-        return [{ type: 'usage.report', input_tokens: last.inputTokens ?? 0, output_tokens: last.outputTokens ?? 0, ...(last.cachedInputTokens ? { cache_read_tokens: last.cachedInputTokens } : {}), cost_is_estimate: true, ...(win && total ? { context_used_pct: Math.min(100, Math.round((total / win) * 100)) } : {}) }];
+        return [{ type: 'usage.report', input_tokens: last.inputTokens ?? 0, output_tokens: last.outputTokens ?? 0, ...(last.cachedInputTokens ? { cache_read_tokens: last.cachedInputTokens } : {}), cost_is_estimate: true, ...(win && total ? { context_used_pct: Math.min(100, Math.round((total / win) * 100)), context_tokens: total, context_window: win } : {}) }];
       }
       case 'account/rateLimits/updated': {
         const r = p.rateLimits ?? {}; const windows: { name: string; utilization: number; resets_at: number }[] = [];
