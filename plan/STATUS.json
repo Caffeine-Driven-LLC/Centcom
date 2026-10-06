@@ -46,8 +46,8 @@
    "note": "auto skills + centcom-master (208 skills); no Codex AGENTS.md install"
   },
   "C025": {
-   "pct": 0.5,
-   "note": "external store with batched notifications"
+   "pct": 1,
+   "note": "@centcom/agent/events: createBus (ordered, re-entrancy queue, error isolation, bounded streams, MaxListeners), AgentEventMap catalogue of 18 events with wire-safe marking; nothing emits to it yet (runner C013 will)"
   },
   "C026": {
    "pct": 0.85,

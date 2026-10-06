@@ -35,7 +35,7 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 | [C081](plan/client/C081.md) | Web app scaffold: Vite, React, router, theme | 85% | Vite + React local web app with launcher, workspace, polished UI; no router |
 | [C101](plan/client/C101.md) | Engine abstraction: AgentEngine interface, capabilities and normalised event stream | 85% | AgentEngine + normalised events; not yet generated from contracts |
 
-+21 more in [`plan/STATUS.json`](plan/STATUS.json).
++20 more in [`plan/STATUS.json`](plan/STATUS.json).
 
 ### Ready to pick up (all dependencies done)
 
