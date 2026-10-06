@@ -46,8 +46,8 @@
    "note": "context view in the app: engine-reported warnings at 75% and when nearly full, /compact through the engine when it has the capability; meter from usage reports"
   },
   "C020": {
-   "pct": 0.5,
-   "note": "auto skills and the bundled master pack; card gaps: installer with plan/apply, AGENTS.md block, centcom skills command, no-exec"
+   "pct": 0.8,
+   "note": "bundled pack (5 skills + checksummed manifest, checked in CI), installer with plan/apply/planHash, Claude Code files and a delimited AGENTS.md block, modified-file protection, atomic writes and symlink/escape refusal, install record, centcom skills command, docs/skills.md; gaps: listing what the engine reports as loaded, per-file overwrite prompt in the CLI"
   },
   "C025": {
    "pct": 1,

@@ -1,0 +1,25 @@
+{
+ "pack_version": "1.0.0",
+ "skills": {
+  "code-review": {
+   "sha256": "556268da13fa56adccd7486c1a652245c0cbc6c1afbf0db3506591a7153b090c",
+   "bytes": 694
+  },
+  "commit-message": {
+   "sha256": "af752509061b28e185987d58fa455c6f093febe92fc20abf4a054d90b9448a0e",
+   "bytes": 662
+  },
+  "handoff-notes": {
+   "sha256": "bb1e78c336adcb4426df16b271044d241593c0d68826effbab450ed21073a9c6",
+   "bytes": 625
+  },
+  "pr-description": {
+   "sha256": "05d263f45990c60fcb9a5a60bbc82c00fbdc8e7d5d13f84c12a80db619deb987",
+   "bytes": 632
+  },
+  "test-writer": {
+   "sha256": "70ee6eb8a40cb30ebc70d11ac65b6e337fb73eebefb2e211d9bc027937133056",
+   "bytes": 705
+  }
+ }
+}

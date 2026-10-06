@@ -6,6 +6,7 @@ step() { printf '\n== %s\n' "$1"; }
 step "lockfile";        pnpm install --frozen-lockfile --prefer-offline >/dev/null
 step "protocol";        pnpm --filter @centcom/protocol gen --check
 step "http client";     pnpm --filter @centcom/net gen:http --check
+step "skills pack";     node tools/skills/build-manifest.mjs --check
 step "states doc";      pnpm exec tsx tools/docs/states-doc.ts --check
 step "typecheck";       pnpm -s typecheck
 step "tests";           pnpm -s test
