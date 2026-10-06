@@ -9,3 +9,4 @@ export * from './delivery/index.js';
 export { backoffDelayMs } from './errors/index.js';
 export type { IdGenerator } from './http/index.js';
 export { backoffDelayMs as relayBackoffDelayMs } from './relay/index.js';
+export * from './session/index.js';
