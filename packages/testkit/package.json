@@ -1,0 +1,23 @@
+{
+  "name": "@centcom/testkit",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "mock-backend": "tsx bin/mock-backend.ts",
+    "mock": "tsx bin/mock-backend.ts"
+  },
+  "dependencies": {
+    "@centcom/protocol": "workspace:*",
+    "ajv": "^8.17.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.0"
+  },
+  "bin": {
+    "centcom-mock-backend": "./bin/mock-backend.ts"
+  }
+}

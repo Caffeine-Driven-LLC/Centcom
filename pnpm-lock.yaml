@@ -308,6 +308,22 @@ importers:
 
   packages/skills: {}
 
+  packages/testkit:
+    dependencies:
+      '@centcom/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      ajv:
+        specifier: ^8.17.1
+        version: 8.20.0
+      ws:
+        specifier: ^8.18.0
+        version: 8.22.0
+    devDependencies:
+      '@types/ws':
+        specifier: ^8.5.0
+        version: 8.18.2
+
   packages/theme: {}
 
   packages/tui:
