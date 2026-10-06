@@ -6,7 +6,7 @@ export type Launcher = Extract<ServerMsg, { t: 'launcher' }>;
 export type DirMsg = Extract<ServerMsg, { t: 'dir' }>;
 
 export interface Conn {
-  up: boolean; launcher?: Launcher; dir?: DirMsg; opened?: string; state?: WebState; items: Item[]; notice?: { level: string; text: string; n: number };
+  up: boolean; launcher?: Launcher; dir?: DirMsg; opened?: string; history: string[]; state?: WebState; items: Item[]; notice?: { level: string; text: string; n: number };
   send: (m: ClientMsg) => void;
 }
 
@@ -16,6 +16,7 @@ export function useConnection(): Conn {
   const [launcher, setLauncher] = useState<Launcher>();
   const [dir, setDir] = useState<DirMsg>();
   const [opened, setOpened] = useState<string>();
+  const [history, setHistory] = useState<string[]>([]);
   const [state, setState] = useState<WebState>();
   const [items, setItems] = useState<Item[]>([]);
   const [notice, setNotice] = useState<Conn['notice']>();
@@ -34,7 +35,7 @@ export function useConnection(): Conn {
         switch (m.t) {
           case 'launcher': setLauncher(m); break;
           case 'dir': setDir(m); break;
-          case 'opened': byId.current.clear(); setItems([]); setState(undefined); setOpened(m.dir); break;
+          case 'opened': byId.current.clear(); setItems([]); setState(undefined); setOpened(m.dir); setHistory(m.history ?? []); break;
           case 'closed': setOpened(undefined); setState(undefined); setItems([]); break;
           case 'notice': setNotice({ level: m.level, text: m.text, n: ++n }); break;
           case 'state': {
@@ -49,5 +50,5 @@ export function useConnection(): Conn {
   }, []);
 
   const send = useCallback((m: ClientMsg) => { const s = ws.current; if (s && s.readyState === s.OPEN) s.send(JSON.stringify(m)); else queue.current.push(m); }, []);
-  return { up, launcher, dir, opened, state, items, notice, send };
+  return { up, launcher, dir, opened, history, state, items, notice, send };
 }
