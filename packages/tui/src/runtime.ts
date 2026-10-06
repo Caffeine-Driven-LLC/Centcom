@@ -2,7 +2,7 @@
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { ClaudeCodeEngine, CodexEngine, FileTrustStore, createLedger, createLockClient, nodeLockFs, toolKind, type NormalisedEvent, createAgentBus, createFleetManager, createPermissionEngine, createPermissionGate, createRiskClassifier, createRuleStore, createRunner, createWorktreeManager, nodeGit, nodePermFs, nodeWtFs, type AgentEngine, type EngineId, type PermissionEngine, type PermissionMode, type PolicyMode } from '@centcom/agent';
+import { ClaudeCodeEngine, CodexEngine, FileTrustStore, createLedger, parseClaudeRule, createLockClient, nodeLockFs, toolKind, type NormalisedEvent, createAgentBus, createFleetManager, createPermissionEngine, createPermissionGate, createRiskClassifier, createRuleStore, createRunner, createWorktreeManager, nodeGit, nodePermFs, nodeWtFs, type AgentEngine, type EngineId, type PermissionEngine, type PermissionMode, type PolicyMode } from '@centcom/agent';
 import { newIdGenerator } from '@centcom/protocol';
 import { userInfo } from 'node:os';
 import { defaultDeps, userConfigPath } from '@centcom/config';
@@ -15,7 +15,8 @@ export interface RuntimeOptions {
   /** No one can answer an approval (print mode): anything that would ask is denied. */ headless?: boolean;
   /** Where permissions.json and trust.json live; defaults to the user config folder. */ configDir?: string; home?: string;
   checkpoints?: boolean;
-  /** `budget.session_usd` (0 = no budget). */ sessionUsd?: number; /** Where the usage outbox lives (default ~/.centcom). */ stateDir?: string;
+  /** `budget.session_usd` (0 = no budget). */ sessionUsd?: number;
+  /** Extra allow rules for this run only (print mode `--allow`), in the permission rule syntax. A rule that does not parse is an error. */ allow?: string[]; /** Where the usage outbox lives (default ~/.centcom). */ stateDir?: string;
   /** Run parallel agents in their own worktrees (`/fleet`). On unless turned off. */ fleet?: boolean;
   /** At most this many fleet agents at once (the plan's limit once accounts exist). */ maxParallel?: number;
 }
@@ -31,6 +32,7 @@ export async function buildRuntime(o: RuntimeOptions): Promise<Runtime> {
     prompter: { prompt: (p, signal) => (ctl ? ctl.promptApproval(p, signal) : Promise.resolve({ decision: 'deny', scope: 'once', reason: 'no_ui' })) },
     config: { home, userRulesPath: join(dir, 'permissions.json'), bypassEnabled: !!o.dangerous, headless: !!o.headless, os: process.platform === 'win32' ? 'win32' : 'posix' } });
   const warnings: string[] = [];
+  for (const a of o.allow ?? []) { let r; try { r = parseClaudeRule(a, 'allow'); } catch { throw new Error(`--allow "${a}" is not a rule. Examples: Bash(npm test), Edit(src/**), Read.`); } rules.add({ tool: r.tool, action: 'allow', scope: 'session', ...(r.matcher ? { matcher: r.matcher } : {}) }, o.cwd); }
   await rules.loadUser().catch(() => warnings.push('Your saved permission rules could not be read, so none are used.'));
   const proj = await rules.loadProject(o.cwd).catch(() => ({ loaded: false, needsTrust: false })); if (proj.needsTrust) warnings.push('This project has its own permission rules file. It is not used until you type /trust rules.');
   warnings.push(...rules.warnings());

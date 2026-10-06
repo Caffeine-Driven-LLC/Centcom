@@ -5,13 +5,13 @@ import { render } from 'ink';
 import { detectColorTier } from '@centcom/theme';
 import { ClaudeCodeEngine, CodexEngine, DemoEngine, detectClaude, detectCodex, type AgentEngine, type PermissionMode } from '@centcom/agent';
 import { App, AppController, ClientConfig, FirstRun, SessionStore, buildRuntime, initialSettings, isFirstRun, markFirstRunDone, settingsFromConfig } from '@centcom/tui';
-import { join as pathJoin } from 'node:path';
+import { join as pathJoin, resolve as pathResolve } from 'node:path';
 import { homedir } from 'node:os';
 import { stateDir } from '@centcom/config';
 import type { FlatFlags } from '@centcom/config';
 import { createAppLogger } from '@centcom/net';
 import type { CentoColor } from '@centcom/mascot';
-import { buildPrompt, readStdin, runPrint } from './print.js';
+import { buildPrompt, readStdin, runPrint } from './print/index.js';
 import { chooseSession, pickSession } from './commands/resume.js';
 import { runProviderCli } from './commands/provider/cli.js';
 import { makeMemoryFiles, runMemoryCli } from './commands/memory/cli.js';
@@ -108,15 +108,26 @@ async function main() {
   if (has('-p') || has('--print')) {
     const i = Math.max(process.argv.indexOf('-p'), process.argv.indexOf('--print'));
     const next = process.argv[i + 1]; const text = next && !next.startsWith('-') ? next : undefined;
-    const piped = process.stdin.isTTY ? '' : await readStdin();
-    const pc = await ClientConfig.load(process.cwd(), cliFlags());
+    const usage = (m: string) => { process.stderr.write(m + '\n'); process.exit(2); };
+    let piped = ''; if (!process.stdin.isTTY) { try { piped = await readStdin(); } catch (e) { usage(String((e as Error).message)); } }
+    if (!text && !piped.trim()) usage('Give Centcom something to do: centcom -p "your task" (or pipe text in).');
+    const cwd = arg('--cwd') ? pathResolve(arg('--cwd')!) : process.cwd(); if (arg('--cwd')) { try { process.chdir(cwd); } catch { usage(`--cwd: no such folder: ${arg('--cwd')}`); } }
+    const pc = await ClientConfig.load(cwd, cliFlags());
     for (const w of pc.warnings) process.stderr.write('centcom: settings: ' + w + '\n');
-    const { engine, demo, note } = await pickEngine(pc.cfg.client.engine); if (note) process.stderr.write(note + '\n');
+    const eng = arg('--engine'); if (eng && !['claude-code', 'codex', 'demo'].includes(eng)) usage('--engine must be claude-code or codex');
+    const { engine, demo, note } = await pickEngine(pc.cfg.client.engine);
+    if (demo && !has('--demo') && eng !== 'demo') { process.stderr.write((note || 'No coding agent is installed.') + '\n'); process.exit(4); } // scripts get a clear failure, never the demo agent
     let br = ''; try { br = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { /* not a repo */ }
     const fmt = (arg('--output-format') ?? 'text') as 'text' | 'json' | 'stream-json';
-    if (!['text', 'json', 'stream-json'].includes(fmt)) { process.stderr.write('--output-format must be text, json or stream-json\n'); process.exit(2); }
+    if (!['text', 'json', 'stream-json'].includes(fmt)) usage('--output-format must be text, json or stream-json');
+    const pm = arg('--permission-mode'); const modes: Record<string, PermissionMode> = { ask: 'default', 'accept-edits': 'acceptEdits', plan: 'plan', default: 'default', acceptEdits: 'acceptEdits' };
+    if (pm && !modes[pm]) usage('--permission-mode must be ask, accept-edits or plan');
+    const num = (name: string) => { const v = arg(name); if (v === undefined) return undefined; const n = Number(v); if (!Number.isFinite(n) || n <= 0) usage(`${name} must be a positive number`); return n; };
+    const allow = process.argv.flatMap((a, k) => (a === '--allow' && process.argv[k + 1] ? [process.argv[k + 1]!] : []));
     const dangerous = has('--dangerously-skip-permissions') || has('--yolo');
-    const code = await runPrint({ engine, demo, cwd: process.cwd(), branch: br, version: VERSION, mode: dangerous || arg('--mode') === 'bypassPermissions' ? 'bypassPermissions' : pc.cfg.client.permission_mode, prompt: buildPrompt(text, piped), format: fmt, save: !has('--no-save'), resume: has('-c') || has('--continue') ? 'last' : arg('--resume'), model: pc.cfg.client.model || undefined });
+    let resume = arg('--resume');
+    if (has('-c') || has('--continue')) { const c = chooseSession(new SessionStore(), { cwd, continue: true }); if ('exit' in c) { process.stderr.write(c.message + '\n'); process.exit(c.exit); } if ('id' in c) resume = c.id; }
+    const code = await runPrint({ engine, demo, cwd, branch: br, version: VERSION, mode: dangerous || arg('--mode') === 'bypassPermissions' ? 'bypassPermissions' : pm ? modes[pm]! : pc.cfg.client.permission_mode, prompt: buildPrompt(text, piped), format: fmt, save: !has('--no-save'), resume, model: arg('--model') ?? (pc.cfg.client.model || undefined), allow, timeoutS: num('--timeout'), maxTurns: num('--max-turns') });
     await done(code);
   }
   if (!process.stdin.isTTY || !process.stdout.isTTY) { console.error('Centcom needs an interactive terminal. Try `centcom --help`.'); process.exit(2); }

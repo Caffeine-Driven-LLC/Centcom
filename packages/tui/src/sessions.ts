@@ -60,8 +60,8 @@ export class SessionStore {
 
   /** Newest first. Only sessions started in this folder unless `cwd` is omitted. */
   list(cwd?: string, limit = 20): SessionMeta[] {
-    let rows: SessionSummary[]; try { rows = this.store.sync.list({ cwd, limit }); } catch { return []; }
-    return rows.map((r) => this.metaOf(r, this.view(r.id)));
+    let rows: SessionSummary[]; try { rows = this.store.sync.list({ cwd, limit: Number.MAX_SAFE_INTEGER }); } catch { return []; }
+    return rows.map((r) => this.metaOf(r, this.view(r.id))).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, limit); // the app's own time of last use wins
   }
 
   load(id: string): { meta: SessionMeta; items: Item[] } | undefined {

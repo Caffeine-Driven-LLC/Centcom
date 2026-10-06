@@ -178,8 +178,8 @@
    "note": "one CI job (typecheck, tests, web build, plan, progress, protocol); card gaps: job split and OS matrix, SHA pins, policy scripts, pr-title, actionlint"
   },
   "C050": {
-   "pct": 0.5,
-   "note": "centcom -p with text/json/stream-json; card gaps: result shape, exit-code table, stdin cap, timeout/SIGINT/EPIPE, redaction"
+   "pct": 0.8,
+   "note": "print mode with text/json/stream-json in the card shape, normalised-name allow-list, redaction, exit-code table (0-6, 124, 130), stdin cap with fenced input, --allow rules, --permission-mode, --timeout, --max-turns (counted locally), --cwd, -c/--resume, EPIPE handled, no demo fallback in scripts; gaps: --input-format stream-json, spawned-binary pipe tests"
   },
   "C004": {
    "pct": 0.85,
