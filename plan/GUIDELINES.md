@@ -58,7 +58,8 @@ Each lane has a card in `plan/lanes/<plan>/<ID>.json` (rendered to `plan/<plan>/
 3. Zero plaintext work content on the backend: if your lane can see message/diff/path/branch text, you have a bug. Review `CT-CRYPTO` §3 (what the relay may see).
 4. Every new endpoint/event: write its abuse case (rate limit, size limit, replay) in the PR description and test it.
 5. Constant-time comparison for secrets and signatures. Randomness from the platform CSPRNG only.
-6. PII minimisation: store only what the lane needs; every stored field has a retention rule (`B090`).
+6. **Provider credentials:** no lane reads, stores, logs, transmits or parses Anthropic/OpenAI credentials, tokens, API keys, `~/.claude*` or `~/.codex/*`. Engines talk to the vendors' CLIs through documented flags/protocols only (CT-PROVIDER). New provider code paths need an ADR.
+7. PII minimisation: store only what the lane needs; every stored field has a retention rule (`B090`).
 
 ## 6. Observability and operations
 

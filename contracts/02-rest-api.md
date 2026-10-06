@@ -96,7 +96,7 @@ Stripe webhooks are **not** part of this contract (internal).
 
 | Method | Path | Scope | Role | Idem | Summary |
 |---|---|---|---|:-:|---|
-| POST | `/v1/usage/events` | usage:write | device | R | Batch of usage events `[{id (`use_` ULID, client-generated), type, qty, at, session_id?, agent_id?}]` (≤ 500), deduped by `id`; response `{accepted, duplicates, rejected[]}`. Types: `agent_minutes`, `tokens_in`, `tokens_out`, `queue_items`, `relay_bytes` |
+| POST | `/v1/usage/events` | usage:write | device | R | Batch of usage events `[{id (`use_` ULID, client-generated), type, qty, at, session_id?, agent_id?}]` (≤ 500), deduped by `id`; response `{accepted, duplicates, rejected[]}`. Client-reportable types (`agent_minutes`, `tokens_in`, `tokens_out`) are **informational** (the user's dashboard; never enforced or billed); `queue_items`, `relay_bytes` and hosted minutes are measured server-side |
 
 ## CT-API-AUDIT
 

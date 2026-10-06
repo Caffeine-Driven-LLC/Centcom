@@ -9,70 +9,73 @@
     "C013",
     "C025"
   ],
-  "goal": "Run Centcom without a TUI: `centcom -p \"prompt\"` runs one task and prints the result as text, JSON or streaming JSON lines, composes with pipes, and exits with predictable codes.",
+  "goal": "`centcom -p \"prompt\"` runs one task without a TUI by driving an engine (`claude-code` or `codex`) and prints the result as text, JSON or stream-JSON of Centcom's normalised events, composes with pipes and stdin, supports resume flags and exits with predictable codes, with no new authentication.",
   "scope_in": [
-    "Flags in `apps/cli/src/print/`: `-p, --print [prompt]`, `--output-format text|json|stream-json` (default `text`), `--input-format text|stream-json` (default `text`), `--model <id|alias>`, `--max-turns <n>` (default 50), `--timeout <seconds>` (default none), `--permission-mode <ask|accept-edits|plan>`, `--allow <rule>` (repeatable, rule syntax from lane C015), `--cwd <dir>`.",
-    "Prompt sources: argument, else stdin when it is a pipe (`cat log | centcom -p \"explain\"` appends stdin as a fenced block to the prompt; cap 1 MiB, over cap exits 2 with `Input is too large (max 1 MiB).`).",
-    "Output: `text` streams the assistant text to stdout only; `json` prints one final object `{type:'result', is_error, result, usage:{tokens_in, tokens_out}, session_id, duration_ms}`; `stream-json` prints one JSON object per line using the event kinds of CT-WS-SESSION-EVENTS (`message.assistant.delta`, `message.assistant.done`, `tool.request`, `tool.result`, `approval.request`, `agent.state`, `agent.exit`) with the decrypted-payload field names, ending with the same `result` line.",
-    "stdout carries data only; progress, warnings and logs go to stderr; no colour, spinner, mascot or alt screen when not a TTY (and with `NO_COLOR`).",
-    "Non-interactive permissions: requests that need approval are never prompted; they are denied with `tool.result` status `denied` unless allowed by `--permission-mode`/`--allow`; if any were denied the process exits 3 after finishing.",
-    "Exit-code table in `exit-codes.ts` mapping typed errors from lane C006 (CT-ERR `code`/status) to: 0 success, 1 general failure, 2 usage error, 3 permission denied, 4 authentication required (`unauthenticated`-class 401), 5 quota or rate limit (429-class), 6 network/unavailable (5xx, offline), 124 timeout, 130 interrupted (SIGINT/SIGTERM via lane C030).",
-    "JSON error output: on failure with `json` or `stream-json` the final line is `{type:'result', is_error:true, error:{code, title, status, detail, request_id, retry_after_s}}` built from the CT-ERR problem+json fields, never the raw HTTP body."
+    "Flags in `apps/cli/src/print/`: `-p, --print [prompt]`, `--engine claude-code|codex` (default from config `engine.default`, else the first engine reported installed and signed in), `--output-format text|json|stream-json` (default `text`), `--input-format text|stream-json`, `--model <name>` (lane C028), `--resume <id>`, `--continue`/`-c` (lane C026), `--max-turns <n>` (default 50), `--timeout <seconds>`, `--permission-mode <ask|accept-edits|plan>`, `--allow <rule>` (repeatable, syntax of lane C015), `--cwd <dir>`.",
+    "Prompt sources: argument, else piped stdin (`cat log | centcom -p \"explain\"` appends stdin as a fenced block; cap 1 MiB, over cap exits 2 with `Input is too large (max 1 MiB).`).",
+    "Output: `text` streams assistant text to stdout only; `json` prints one final object `{type:'result', is_error, result, usage, session_id, engine, duration_ms}` where `usage` is what the engine reported (tokens, `cost_usd_estimate` when reported) and `session_id` is the Centcom session id; `stream-json` prints one JSON object per line using Centcom's NORMALISED event names (`session.started`, `text.delta`, `text.done`, `tool.requested`, `tool.result`, `approval.requested`, `usage.report`, `turn.done`, `error`), ending with the same `result` line. Raw CLI output is never passed through.",
+    "stdout carries data only; progress, warnings and logs go to stderr; no colour, spinner, mascot or alt screen when not a TTY or with `NO_COLOR`.",
+    "Non-interactive permissions: nothing is prompted; approvals are answered by the policy of lane C015 from `--permission-mode`/`--allow`, else denied; if any were denied the process exits 3 after finishing.",
+    "Exit codes in `exit-codes.ts`: 0 success, 1 general failure, 2 usage error, 3 permission denied, 4 provider not installed or not signed in (`provider_not_installed`, `provider_not_signed_in`, `provider_policy_blocked`, `provider_method_disabled`), 5 plan or rate limit (`provider_cap_reached`, `provider_rate_limited`, CT-ERR 429-class), 6 network/unavailable or engine protocol error (`provider_protocol_error`, `provider_version_unsupported`, 5xx), 124 timeout, 130 interrupted (via lane C030).",
+    "JSON error output: on failure in JSON modes the final line is `{type:'result', is_error:true, error:{code, message, retry_after_s?, request_id?}}` where `code` is a CT-ERR code or a client-local provider error code of CT-PROVIDER section 9, and `message` is the engine's own text verbatim (redacted by lane C005)."
   ],
   "scope_out": [
     "Interactive TUI (lanes C034-C049) and first-run flows.",
-    "Persisting or resuming sessions from print mode (lane C026 integration happens later; `--no-session-persistence` is accepted and ignored in this lane).",
-    "Login and account commands (lane C053); print mode only reports `auth-required` with exit 4.",
+    "Login and provider setup: print mode only reports `provider_not_signed_in` with exit 4 and points to `centcom provider login` (lane C104); no new auth, no keys read.",
+    "Engine adapters, the runner and the policy engine (lanes C013, C102, C103, C015).",
     "Joining or hosting multiplayer sessions (session lanes)."
   ],
   "implements": [],
   "consumes": [
     "CT-ERR",
-    "CT-WS-SESSION-EVENTS"
+    "CT-WS-SESSION-EVENTS",
+    "CT-PROVIDER"
   ],
-  "build_against": "Scripted fake runner from lane C013's test kit and the in-memory bus (lane C025); error cases use CT-ERR problem+json bodies from fixtures typed by lane C006; CLI tests spawn the built binary with the pty/pipe harness of lane C008. No backend.",
+  "build_against": "The fake-CLI replay of golden transcripts from `contracts/fixtures/providers/` behind the engine adapters (or a stub `AgentEngine`), the in-memory bus of lane C025, and CLI tests that spawn the built binary with the pipe harness of lane C008. Error cases use CT-ERR problem+json fixtures and CT-PROVIDER error codes. No real CLI, no backend.",
   "deliverables": [
     "apps/cli/src/print/",
     "apps/cli/src/print/README.md"
   ],
   "interfaces": [
-    "`runPrint(deps: {runner: AgentRunner; bus: EventBus; io: {stdin: NodeJS.ReadStream; stdout: NodeJS.WriteStream; stderr: NodeJS.WriteStream}; clock: Clock; errors: ErrorMapper}, opts: PrintOptions): Promise<number>` (returns exit code; never calls `process.exit`)",
-    "`type PrintOptions = {prompt?: string; outputFormat: 'text'|'json'|'stream-json'; inputFormat: 'text'|'stream-json'; model?: string; maxTurns: number; timeoutS?: number; permissionMode?: string; allow: string[]; cwd?: string}`",
-    "`exitCodeFor(err: unknown): number` and the exported constant table `EXIT_CODES`",
-    "`formatResult(r: PrintResult, fmt: 'json'|'stream-json'): string`",
-    "CLI: `centcom -p \"...\" [--output-format ...]`; exit codes as listed in scope."
+    "`runPrint(deps: {engines: EngineRegistry; runner: AgentRunner; bus: EventBus; io: {stdin: NodeJS.ReadStream; stdout: NodeJS.WriteStream; stderr: NodeJS.WriteStream}; clock: Clock; errors: ErrorMapper; sessions: SessionStore}, opts: PrintOptions): Promise<number>` (returns exit code; never calls `process.exit`)",
+    "`type PrintOptions = {prompt?: string; engine?: 'claude-code'|'codex'; outputFormat: 'text'|'json'|'stream-json'; inputFormat: 'text'|'stream-json'; model?: string; resume?: string; continue?: boolean; maxTurns: number; timeoutS?: number; permissionMode?: string; allow: string[]; cwd?: string}`",
+    "`exitCodeFor(err: unknown): number` and constant table `EXIT_CODES`; `formatResult(r: PrintResult, fmt: 'json'|'stream-json'): string`",
+    "CLI: `centcom -p \"...\" [--engine claude-code|codex] [--output-format ...] [--resume <id>]`."
   ],
   "acceptance": [
-    "`centcom -p \"hi\"` with the fake runner prints only the assistant text plus a trailing newline on stdout, nothing on stderr except warnings, exit 0.",
-    "`--output-format json` prints exactly one line of valid JSON on stdout with `type:'result'`, `is_error:false`, `usage.tokens_in`, `usage.tokens_out` and `session_id`; piping into `jq .result` works.",
-    "`--output-format stream-json` prints one JSON object per line, each with a `kind` from the allowed set and a final `result` line; every line parses and unknown internal kinds are not emitted.",
-    "`echo \"data\" | centcom -p \"summarize\"` includes the stdin text in the prompt; a 2 MiB stdin exits 2 with the documented message on stderr and no agent run.",
-    "A tool request needing approval with no `--allow` rule yields a `tool.result` with status `denied`, the run continues, and the exit code is 3; the same run with `--permission-mode accept-edits` for an edit tool exits 0.",
-    "A 429 problem+json (`code: quota_exceeded`, `retry_after_s: 3600`) makes the process exit 5; in `json` mode the final line has `error.code:'quota_exceeded'`, `error.status:429`, `error.retry_after_s:3600` and `error.request_id`; with `text` the message goes to stderr.",
-    "SIGINT during a run stops the agent via lane C030 and exits 130 after printing a final `result` line with `is_error:true` in JSON modes; `--timeout 5` with a stuck runner exits 124 at 5 s (+/-200 ms fake clock).",
-    "Closing the reading end of the pipe (`| head -1`) stops the agent within 1 s and exits without an EPIPE stack trace.",
-    "With stdout not a TTY or `NO_COLOR=1`, the output contains no ESC bytes."
+    "`centcom -p \"hi\" --engine claude-code` against the fake CLI prints only the assistant text plus a newline on stdout, nothing on stderr except warnings, exit 0; the same with `--engine codex` prints the same text from the Codex golden transcript.",
+    "`--output-format json` prints exactly one line of valid JSON with `type:'result'`, `is_error:false`, `engine`, `usage` as reported, and `session_id` matching `^ses_`; `| jq .result` works.",
+    "`--output-format stream-json` prints one JSON object per line using only the normalised event names listed above plus the final `result`; every line parses, no raw CLI event (`system/init`, JSON-RPC frames) appears.",
+    "`echo data | centcom -p summarize` includes stdin in the prompt; 2 MiB stdin exits 2 with the documented message and no engine is started.",
+    "An approval with no `--allow` rule is denied, the run continues and the exit code is 3; with `--permission-mode accept-edits` an edit approval passes and exit is 0; there is no flag that approves everything.",
+    "`--resume <id>` starts the engine with the stored engine session id (asserted from the fake CLI's argv: `--resume <session_id>` for Claude Code, `exec resume` for Codex); `--continue` with no stored session exits 1 with `No session to continue in this directory.`.",
+    "Fake CLI reports `provider_not_signed_in` -> exit 4; `provider_cap_reached` with text `usage limit reached` -> exit 5, JSON `error.code:'provider_cap_reached'` and `error.message` equal to the CLI's text, text mode writes it to stderr.",
+    "SIGINT stops the run via lane C030 and exits 130 with a final `result` line `is_error:true` in JSON modes; `--timeout 5` with a stuck engine exits 124 at 5 s (+/-200 ms fake clock); `| head -1` stops the engine within 1 s with no EPIPE stack.",
+    "With stdout not a TTY or `NO_COLOR=1` no ESC bytes appear; no output line contains any `must_match` string of `secret-patterns.json` even when the engine echoes one."
   ],
   "tests": [
-    "print/text-json.test.ts: formats for success and failure paths.",
-    "print/stream-json.test.ts: line schema validation, ordering, final result, kinds allow-list.",
+    "print/text-json.test.ts: formats for success and failure on both engines.",
+    "print/stream-json.test.ts: line schema, allow-list of normalised names, ordering, final result.",
     "print/stdin.test.ts: pipe input, cap, empty prompt, TTY with no prompt exits 2.",
     "print/permissions.test.ts: deny-by-default, allow rules, exit 3.",
-    "print/exit-codes.test.ts: table-driven mapping of CT-ERR codes/statuses.",
-    "print/signals.test.ts: SIGINT, SIGTERM, timeout, EPIPE using the pipe harness."
+    "print/resume.test.ts: resume and continue flags per engine.",
+    "print/exit-codes.test.ts: table-driven mapping of CT-ERR and provider codes.",
+    "print/signals.test.ts: SIGINT, SIGTERM, timeout, EPIPE; redaction of output."
   ],
   "guardrails": [
-    "MUST write only machine-readable data to stdout in `json` and `stream-json` modes; any human text goes to stderr.",
-    "MUST NOT approve anything implicitly: no prompt can be shown, so unanswered approvals are denied; there is no flag in this lane that approves everything.",
-    "MUST switch on `code` from CT-ERR (never on `title`/`detail`) when mapping to exit codes, treat unknown codes by HTTP status class, and never print internal paths or tokens in `detail`.",
-    "MUST NOT include secrets, tokens or environment values in any output line, and MUST apply the redaction helper of lane C005 to stderr diagnostics.",
-    "MUST NOT call `process.exit` in library code; the binary entry maps the returned code.",
-    "MUST bound memory: stdin cap 1 MiB, buffered output flushed per line, stream-json lines over 1 MiB are truncated with `truncated:true`."
+    "MUST write only machine-readable data to stdout in JSON modes; human text goes to stderr.",
+    "MUST NOT approve anything implicitly and MUST NOT read, accept or print any credential; auth problems are reported with exit 4 and the vendor's `login` hint only.",
+    "MUST map exit codes from error `code` values (CT-ERR or CT-PROVIDER section 9), never from message text; unknown codes map by status class else exit 1.",
+    "MUST pass engine error text through the redaction helper of lane C005 before printing, verbatim otherwise.",
+    "MUST NOT call `process.exit` in library code; MUST bound memory (stdin 1 MiB, lines over 1 MiB truncated with `truncated:true`).",
+    "MUST NOT import vendor SDKs; all model-facing work is the engine child process."
   ],
   "failure_modes": [
-    "Missing prompt and stdin is a TTY -> exit 2 with a one-line usage message, no agent started.",
-    "Runner crashes before any output -> final `result` line (JSON modes) with `is_error:true`, error code taken from the typed error, else `error.code:'unknown'`, exit 1.",
-    "Stdout closed early (EPIPE) -> interrupt the agent through lane C030 and exit 0 silently."
+    "Missing prompt and stdin is a TTY -> exit 2 with a one-line usage message, no engine started.",
+    "Engine crashes or emits unparsable output before any result -> final `result` line `is_error:true`, `error.code:'provider_protocol_error'`, exit 6.",
+    "Stdout closed early (EPIPE) -> interrupt via lane C030 and exit 0 silently.",
+    "Requested engine not installed -> exit 4 with `provider_not_installed` and the install hint of lane C104's table."
   ],
-  "unblocks_gate": "G1"
+  "unblocks_gate": "G1",
+  "notes": "Output no longer mirrors Claude Code's own stream-json; it is Centcom's normalised stream so scripts do not change when a CLI changes. Event names must match lane C101."
 }

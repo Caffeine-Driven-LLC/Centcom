@@ -13,7 +13,8 @@
     "C058",
     "C059",
     "C075",
-    "C076"
+    "C076",
+    "C105"
   ],
   "goal": "Prove that the client matches every contract it implements by running the shared fixtures in per-contract suites with one command and a machine-readable report, and own the consumer-side scripts for integration gates G1-G6 plus the release gate checklist.",
   "scope_in": [
@@ -51,7 +52,8 @@
     "CT-ENTITLEMENTS",
     "CT-NOTIF-PAYLOAD",
     "CT-STATUS",
-    "CT-API-RELEASES"
+    "CT-API-RELEASES",
+    "CT-PROVIDER"
   ],
   "build_against": "Run `pnpm conformance` entirely offline using fixtures and the mock backend (lane C007); gate scripts take `--backend mock|<base url>` and default to the mock, so they are rehearsed before the real backend exists.",
   "deliverables": [

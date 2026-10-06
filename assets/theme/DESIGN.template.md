@@ -683,6 +683,29 @@ Centred box, 60 cols, fuzzy search, grouped results (Commands · Files · Sessio
 #### 10.1.11 Empty and first-run
 First run shows Cento waving (`first_run_welcome`), one sentence, one command to try, and where to read more. No multi-step tour in the terminal.
 
+#### 10.1.12 Providers, sign-in and "who pays"
+
+Centcom drives the user's **own** `claude` (Claude Code) and `codex` CLIs (contract CT-PROVIDER). We never see a login, so the UI is mostly honest *status* and *handoff*.
+
+**First-run step** (after the welcome): "Centcom works with your own Claude Code and Codex. We never see your login."
+```
+ Models
+   Claude Code   ✓ installed 2.1.x   ✓ signed in (subscription)      [use]
+   Codex         ✓ installed 0.xx    ✗ not signed in                  [sign in…]
+```
+- `[sign in…]` launches the vendor's own login **in this terminal** and re-checks when it exits. No custom OAuth screen, no password or token field, ever.
+- If a CLI is missing: one line with the official install hint for the user's OS.
+- Names appear as plain text ("Claude Code", "Codex"). No vendor logos, no "Sign in with Claude/ChatGPT" button of our own, no vendor words in our product or feature names.
+
+**Who pays (always visible):** every agent card and the status line show `runs on <name> · <provider>`. In a command post:
+- the guest composer says **"Your prompt will run on Maya's account."**
+- the host sees **"2 guests can spend your Claude Code usage"** with a one-key pause.
+- a subscription-backed engine is **blocked by default** for shared sessions; the notice says plainly why and offers the API-key route. Copy: *"This session would run other people's prompts on your Claude Code login. Use an API key for shared sessions, or run your own agent on a branch."*
+
+**Limits and failures:** show the tool's own message verbatim in a dim frame under a calm headline ("Claude Code reached its usage limit"), switch the mascot to `quota_reached`, never retry in a loop. States: `provider-auth-required` (`auth_needed`), `provider-cap-reached` (`quota_reached`), `provider-policy-blocked` (`permission_denied`).
+
+**No jokes** in provider, billing or policy messages (principle 6).
+
 ### 10.2 Web components
 
 #### 10.2.1 Buttons
@@ -754,7 +777,7 @@ When several states apply at once, the visible one is the **highest** in this li
 
 1. `crash`, `error`, `auth-required`, `session-expired`, `offline`
 2. `awaiting-approval`, `asking-question`, `merge-conflict`
-3. `rate-limited`, `quota-reached`, `context-full`, `cost-alert`
+3. `rate-limited`, `quota-reached`, `context-full`, `cost-alert`, `provider-cap-reached`, `provider-policy-blocked`
 4. `tool-running`, `editing-file`, `running-command`, `streaming`, `thinking`
 5. `ci-*`, `pr-*`, `deploying`
 6. `background-task`, `compacting`, `saving`
@@ -1035,7 +1058,7 @@ Money surfaces are **calm, exact and honest**. No mascot, no jokes, no dark patt
 | Plan | Badge | Colour | Includes (design-level) |
 |---|---|---|---|
 | Free | `FREE` | `border.strong` outline | Local sessions, LAN multiplayer |
-| Pro | `PRO` | `accent.fill` | Hosted relay for one workspace, history |
+| Pro | `PRO` | `accent.fill` | Hosted relay for one workspace, history (we meter relay time, never model usage) |
 | Team | `TEAM` | `signal` outline | Seats, roles, audit log, shared fleet board |
 
 (Plan contents are product decisions; this section only defines their *presentation*.)

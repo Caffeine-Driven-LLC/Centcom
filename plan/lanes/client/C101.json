@@ -1,0 +1,106 @@
+{
+  "id": "C101",
+  "title": "Engine abstraction: AgentEngine interface, capabilities and normalised event stream",
+  "plan": "client",
+  "phase": "P7 Providers",
+  "size": "L",
+  "role": "runtime",
+  "depends_on": [
+    "C003",
+    "C004",
+    "C005",
+    "C025"
+  ],
+  "goal": "One `AgentEngine` interface, one capability set and one normalised event stream that hide whether an agent is driven by Claude Code or Codex (CT-PROVIDER 3), plus a fake engine and golden-transcript replay harness so every other lane can be built and tested offline. A pure function maps normalised events onto the session wire events so the session lanes never see provider-specific shapes.",
+  "scope_in": [
+    "`AgentEngine`, `EngineSession`, `EngineStartOptions`, `CapabilitySet`, `NormalisedEvent` (every type defined below) and `ProviderError` with the nine `provider_*` codes of CT-PROVIDER 9, in `packages/agent/src/engine/`. Types only depend on `@centcom/protocol` (C003); no vendor SDK, no child_process in this lane.",
+    "Normalised event catalogue (all carry `{ v: 1, seq: number, ts: string, agent_id, turn_id? }`): `session.started`, `text.delta`, `text.done`, `thinking.delta`, `tool.requested`, `approval.requested`, `approval.resolved`, `tool.result`, `subagent.started`, `subagent.text`, `subagent.done`, `usage.report`, `model.changed`, `status`, `error`, `turn.done`. Field-level definitions are in `interfaces`. `seq` is per session, starts at 1, strictly increasing, assigned by the engine layer (not the adapter) so adapters cannot reorder.",
+    "Ordering invariants enforced by a `EventStreamValidator` wrapper (used by every adapter in tests and in dev builds): `session.started` first; every `tool.requested` is followed by exactly one `tool.result` (synthesised with `status:'canceled'` on interrupt/exit); every `approval.requested` by exactly one `approval.resolved`; every `text.delta` message id is closed by `text.done` before `turn.done`; `turn.done` is the last event of a turn; a fatal `error` is followed by `turn.done{outcome:'error'}`.",
+    "`EngineRegistry` (`createEngineRegistry`) with `register`, `get`, `list`, and `select()` that applies precedence explicit option > config key `agent.engine` > first installed of `claude-code`, `codex`; a flag-off engine (`provider.claude_code` / `provider.codex`, evaluated through an injected `isEngineEnabled(id)`) is rejected with `ProviderError('provider_method_disabled')`.",
+    "`CapabilitySet` with the ten capabilities of CT-PROVIDER 3 (`streaming`, `approvals`, `resume`, `subagents`, `mcp`, `skills`, `thinking`, `usage`, `models.list`, `interrupt`) and `requireCapability(set, cap)` that throws `provider_capability_missing`; UI lanes read `capabilities` and never branch on engine id.",
+    "Pure mapping `toSessionWire(ev: NormalisedEvent, ctx: WireContext): WireOut[]` (normalised event to CT-WS-SESSION-EVENTS kinds), table in `interfaces`, plus `coalesceDeltas` (pure, injected clock): merges `text.delta` into frames of at most 4 KiB and at most 10 per second per agent, never splitting a UTF-8 code point.",
+    "`createFakeEngine(script)` and the golden harness: `loadTranscript(path)`, `replayTranscript(engine, transcript, { clock })`, `expectGolden(actual, goldenPath)` (set `UPDATE_GOLDEN=1` to rewrite). Transcript file format `*.transcript.jsonl`: first line `{\"transcript\":1,\"engine\":\"fake\",\"recorded_with\":\"...\"}`, then lines `{\"at_ms\":120,\"event\":{...NormalisedEvent minus seq/ts}}` and `{\"at_ms\":0,\"expect\":\"send\",\"prompt\":\"...\"}` / `{\"expect\":\"interrupt\"}` / `{\"expect\":\"approval\",\"decision\":\"approve\"}` steps. Ships 6 golden transcripts (simple answer, tool call with approval, denial, subagent, rate-limit error, interrupt) under `packages/agent/test/fixtures/transcripts/`.",
+    "`EngineStartOptions` common to all adapters: `cwd`, `permissionMode`, `model?`, `resume?: { engine_session_id: string }`, `systemPromptAppend?`, `mcpServers?`, `allowedTools?`, `env?` (inherited, never logged), `approvalGate` (a C015 `PermissionGate`), `signal`, `limits` (`spawn_timeout_ms` 10 000, `first_event_timeout_ms` 30 000, `interrupt_grace_ms` 5 000, `stderr_ring_bytes` 65 536, `max_line_bytes` 4 194 304)."
+  ],
+  "scope_out": [
+    "Spawning or parsing `claude` (C102) or `codex` (C103); this lane has no child_process code except inside the fake test executable helper owned by those lanes.",
+    "Running many engines in parallel, the process registry and the daemon (C013); this lane defines what one session looks like, not how many run.",
+    "Deciding approvals and risk (C015, C016); engines forward requests to the injected `PermissionGate`.",
+    "Product-state timing and dwell rules (C014) and mascot animation (C046); this lane only carries a `status` event with a state-map key.",
+    "Provider detection, login, version-range checks and the error message table (C104); who-pays policy and flags (C105); encryption and sending of wire frames (session lanes)."
+  ],
+  "implements": [
+    "CT-PROVIDER"
+  ],
+  "consumes": [
+    "CT-WS-SESSION-EVENTS",
+    "CT-STATE-MAP",
+    "CT-IDS",
+    "CT-ERR"
+  ],
+  "build_against": "Everything is pure TypeScript with injected clock and ids; test with the fake engine and the golden transcripts in this lane. The mapping function is validated against `contracts/schemas/events.schema.json` and `contracts/fixtures/events/*.json` (the mock for the session side). No CLI, network or backend is involved.",
+  "deliverables": [
+    "packages/agent/src/engine/types.ts",
+    "packages/agent/src/engine/events.ts",
+    "packages/agent/src/engine/capabilities.ts",
+    "packages/agent/src/engine/errors.ts",
+    "packages/agent/src/engine/registry.ts",
+    "packages/agent/src/engine/validator.ts",
+    "packages/agent/src/engine/wire-map.ts",
+    "packages/agent/src/engine/coalesce.ts",
+    "packages/agent/src/engine/testing/fake-engine.ts",
+    "packages/agent/src/engine/testing/replay.ts",
+    "packages/agent/src/engine/testing/golden.ts",
+    "packages/agent/src/engine/index.ts",
+    "packages/agent/src/engine/README.md",
+    "packages/agent/src/engine/__tests__/",
+    "packages/agent/test/fixtures/transcripts/"
+  ],
+  "interfaces": [
+    "```ts\ntype EngineId = 'claude-code' | 'codex' | 'fake';\ntype ProviderId = 'anthropic' | 'openai' | 'other';\ntype Capability = 'streaming'|'approvals'|'resume'|'subagents'|'mcp'|'skills'|'thinking'|'usage'|'models.list'|'interrupt'|'compact';\ntype CapabilitySet = ReadonlySet<Capability>;\ntype PermissionMode = 'default'|'acceptEdits'|'plan'|'bypassPermissions'; // same union as C013 AgentSpec\ninterface AgentEngine {\n  readonly id: EngineId; readonly provider: ProviderId;\n  capabilities(): CapabilitySet; // static floor; session.started carries the detected set\n  start(o: EngineStartOptions): Promise<EngineSession>; // resolves after `session.started` is emitted or rejects ProviderError\n}\ninterface EngineSession {\n  readonly agentId: AgentId;\n  readonly events: AsyncIterable<NormalisedEvent>; // single consumer, ends after exit\n  send(prompt: string, o?: { attachments?: string[] }): Promise<{ turn_id: string }>;\n  interrupt(): Promise<{ stopped: boolean; escalated: 'none'|'SIGTERM'|'SIGKILL'; duration_ms: number }>;\n  stop(): Promise<{ exit_code: number | null; signal: string | null }>;\n  resumeToken(): string | undefined; // engine session id for resume\n  setModel?(model: string): Promise<void>; // capability models.list\n  listModels?(): Promise<{ id: string; label?: string }[]>; // capability models.list\n  requestCompaction?(): Promise<void>; // capability compact\n}\n```",
+    "`engine.start({ ...opts, resume: { engine_session_id } })` is the resume entry point; adapters without the `resume` capability reject with `provider_capability_missing`.",
+    "Event shapes (all also have `v,seq,ts,agent_id,turn_id?`): `session.started {engine, engine_session_id, model, cli_version, tools: string[], mcp_servers: {name, status: 'connected'|'failed'|'pending'}[], capabilities: Capability[], login_kind: 'subscription'|'api_key'|'cloud'|'unknown'}`; `text.delta {message_id: msg_, index, text}`; `text.done {message_id, text?, input_tokens?, output_tokens?}`; `thinking.delta {message_id, text}`; `tool.requested {tool_id, name, input_summary, risk: 'low'|'medium'|'high', parent_tool_id?}`; `approval.requested {approval_id: apr_, tool_id, summary, command?, cwd?, risk}`; `approval.resolved {approval_id, decision: 'approve'|'deny', scope: 'once'|'session'|'always', by: 'user'|'policy'|'timeout'|'interrupt'}`; `tool.result {tool_id, status: 'ok'|'error'|'denied'|'canceled', summary}`; `subagent.started {subagent_id, parent_tool_id, label}`; `subagent.text {subagent_id, text}`; `subagent.done {subagent_id, status: 'ok'|'error'|'canceled'}`; `usage.report {input_tokens, output_tokens, cache_read_tokens?, cost_usd?, cost_is_estimate: true, context_used_pct?}`; `model.changed {model, reason: 'user'|'fallback'|'engine'}`; `status {state: AgentWireState | ProviderLocalState, detail?}`; `error {code: ProviderErrorCode, tool_message: string, fatal: boolean, retry?: {attempt, max_retries, delay_ms}}`; `turn.done {outcome: 'ok'|'error'|'canceled', stop_reason?: string}`; `turn.started {turn_id}`; `compaction.started {}`; `compaction.ended {tokens_before?, tokens_after?}`; `question.asked {question_id, text, options?: string[]}`; `engine.status {mcp_servers?: {name, status}[], skills?: string[], tools?: string[]}`; `engine.warning {code: string, text: string}`.",
+    "`type ProviderErrorCode = 'provider_not_installed'|'provider_not_signed_in'|'provider_method_disabled'|'provider_policy_blocked'|'provider_cap_reached'|'provider_rate_limited'|'provider_version_unsupported'|'provider_protocol_error'|'provider_capability_missing'`; `class ProviderError extends Error { code: ProviderErrorCode; engine: EngineId; tool_message?: string }`. `tool_message` is the CLI's own words, already redacted with the C005 redactor; display text lives in the C104 message table.",
+    "`status.state` is a key of `contracts/state-map.json`; `ProviderLocalState = 'provider-auth-required'|'provider-cap-reached'|'provider-policy-blocked'` (client-local, never sent on the wire; see C105). Adapters emit only agent-level states from CT-STATE-MAP 09 (`thinking`, `streaming`, `tool-running`, `awaiting-approval`, `sub-agent`, `compacting`, `idle`, `error`, ...).",
+    "`createEngineRegistry(d: { isEngineEnabled(id: EngineId): boolean; config: { get(k: 'agent.engine'): EngineId | undefined }; probe(id: EngineId): Promise<{ installed: boolean }> }): { register(e: AgentEngine): void; get(id: EngineId): AgentEngine; list(): AgentEngine[]; select(o?: { engine?: EngineId }): Promise<AgentEngine> }`.",
+    "`createFakeEngine(t: Transcript, d?: { clock: Clock; ids: IdGenerator; speed?: number }): AgentEngine`; `replayTranscript(e: AgentEngine, t: Transcript, o?: { driver?: (s: EngineSession) => Promise<void> }): Promise<NormalisedEvent[]>`; `expectGolden(events: NormalisedEvent[], file: string): void`.",
+    "Mapping `toSessionWire(ev, ctx: { agentId; newMessageId(): MessageId; approverFor(risk): 'host'|'owner'|'any_editor'; approvalTtlMs: number; now(): Date }): WireOut[]` where `WireOut = { k: string; p?: object; ct?: object }`: `text.delta` -> `message.assistant.delta` ct `{agent_id, message_id, index, delta}`; `text.done` -> `message.assistant.done` ct `{agent_id, message_id, input_tokens?, output_tokens?}`; `tool.requested` -> `tool.request` ct `{agent_id, tool_id, name, input_summary, risk}`; `approval.requested` -> `approval.request` p `{approval_id, agent_id, risk, expires_at, approver}` + ct `{summary, command?, cwd?}`; `approval.resolved` -> `approval.decision` p `{approval_id, decision, scope}` (only when `by` is user or policy; timeout/interrupt produce `tool.result` denied locally); `tool.result` -> `tool.result` ct `{agent_id, tool_id, status, summary}`; `status` (agent-level state) -> `agent.state` p `{agent_id, state, since}`; `error` -> `message.system` ct `{level:'error', text}` where text is `provider_error:<code>`; `model.changed` -> `message.system` info; `subagent.*` -> `agent.state{state:'sub-agent'}` only; `session.started`, `thinking.delta`, `usage.report`, `turn.done`, and provider-local states -> `[]` (local only). `agent.exit` p `{agent_id, outcome, error_code?}` is produced by `exitToWire(exit: EngineExit)`; `agent.spawn` is built by C105, not here.",
+    "Config keys read through C004: `agent.engine` (default unset), `agent.engine.event_buffer` (default 1000)."
+  ],
+  "acceptance": [
+    "`toSessionWire` output for every normalised event type in the 6 golden transcripts validates against `contracts/schemas/events.schema.json` (clear part and decrypted `ct` part) with 0 errors, and no `ct`-only kind leaks fields into `p`.",
+    "Feeding `text.delta` events totalling 10 KiB in 1 ms through `coalesceDeltas` yields frames of at most 4 096 bytes each and at most 10 frames in any 1 s window with the injected clock; concatenated deltas equal the input byte for byte, including a 4-byte emoji placed on a 4 096 boundary.",
+    "`EventStreamValidator` throws `provider_protocol_error` for each of: `tool.result` without prior `tool.requested`, two `turn.done` in one turn, `text.delta` after `text.done` of the same message_id, `seq` that is not previous+1; and passes all 6 golden transcripts.",
+    "`registry.select({engine:'codex'})` rejects with `provider_method_disabled` when `isEngineEnabled('codex')` is false, and `select()` with no option returns `claude-code` when it is installed and `codex` when only codex is installed.",
+    "`requireCapability(new Set(['streaming']), 'resume')` throws a `ProviderError` with `code === 'provider_capability_missing'`.",
+    "A fake-engine session replaying the `approval` transcript pauses after `approval.requested` until the driver calls the injected gate, emits `approval.resolved` with `by:'user'`, then continues; replaying with `speed: 0` finishes the 6 transcripts in under 1 s total.",
+    "`interrupt()` on a fake session mid-tool emits `tool.result{status:'canceled'}`, `approval.resolved{by:'interrupt'}` for any pending approval, then `turn.done{outcome:'canceled'}`, in that order, within 50 ms of fake time.",
+    "`grep -rE \"@anthropic-ai|from 'openai'|node:child_process\" packages/agent/src/engine/` returns nothing (CI check in the lane tests).",
+    "Event buffer: with a 1000-event cap and a stalled consumer, `text.delta`/`thinking.delta` are coalesced (never more than 1 pending delta per message) while `tool.*`, `approval.*` and `turn.done` are never dropped; the stall is surfaced by an `engine.backpressure` debug log, not a lost event."
+  ],
+  "tests": [
+    "engine/events.test.ts: every event type round-trips through the validator; table-driven ordering violations.",
+    "engine/wire-map.test.ts: one case per mapping row; schema validation of results against events.schema.json; property test that random event sequences never produce an `agent.state` outside the agent-level list in CT-STATE-MAP.",
+    "engine/coalesce.test.ts: property test (fast-check) on random UTF-8 strings and random arrival times: lossless, <= 4 KiB, <= 10/s.",
+    "engine/registry.test.ts: precedence, flag-off rejection, installed-probe fallbacks.",
+    "engine/replay.test.ts: golden compare for the 6 transcripts, `UPDATE_GOLDEN` behaviour, interrupt and approval steps, determinism (two runs identical).",
+    "engine/boundary.test.ts: static check that the engine package has no vendor SDK or child_process import."
+  ],
+  "guardrails": [
+    "MUST NOT put any provider-specific type (CLI event names, JSON-RPC methods, vendor SDK types) in `types.ts` or `events.ts`; UI and session code import only these files. A leaked CLI shape here breaks the other engine.",
+    "MUST NOT carry credentials: `EngineStartOptions.env` is passed through to the child and never logged or serialised; `tool_message` is redacted with the C005 redactor and the `secret-patterns.json` set before it enters an event, and truncated to 2 KiB.",
+    "MUST NOT send model names, engine ids, binary versions or paths in clear wire parts (CT-PROVIDER 5): `toSessionWire` puts them only in `ct` or drops them; `provider` and `runs_on` are added by C105 only.",
+    "MUST emit only agent-level states from CT-STATE-MAP 09 on the wire; `provider-*` states stay client-local. Unknown states from a future adapter are mapped to `thinking` and logged at debug.",
+    "Approvals fail closed: if no gate answers within `agent.approval_timeout_ms` (C013 default 600 000) the engine layer resolves `deny` with `by:'timeout'`; an exception in the gate also denies.",
+    "Golden transcripts are inputs to C100 and the other engine lanes; changing one needs the UPDATE_GOLDEN flow and a reviewer note, never an edit to loosen an assertion."
+  ],
+  "failure_modes": [
+    "Adapter emits an event out of order -> validator throws `provider_protocol_error` in tests; in production the session emits `error{fatal:true}` then `turn.done{outcome:'error'}` and stops reading from the CLI.",
+    "Consumer too slow -> deltas coalesce, non-delta events are kept; above 10 000 queued events the adapter is told to pause reading stdout (backpressure); no unbounded growth.",
+    "Unknown event `type` from a future adapter version -> ignored with a debug log, never thrown (GUIDELINES 2.4).",
+    "`stop()` called twice or after exit -> resolves with the first result, no throw.",
+    "Transcript file with unknown `expect` step -> `replayTranscript` fails the test with the line number."
+  ],
+  "unblocks_gate": "G3",
+  "notes": "SPLIT? L is tight: types + registry + wire map + harness. If it overruns, split the golden harness (replay/golden/fake engine) from the types and mapping. Other writers revise C013/C014/C015 to this design in parallel: C013 hosts `EngineSession`s, C014 takes `status` events as its Signals, C015 supplies the `PermissionGate`. CONTRACT GAP: CT-PROVIDER 3 lists capability names but not the event catalogue; this card defines it (client-internal). CONTRACT GAP: `approval.decision` is host-sent on the wire; for an engine-local policy auto-approval (`by:'policy'`) the session lane decides whether to emit it (the relay audit expects the host to be the sender)."
+}

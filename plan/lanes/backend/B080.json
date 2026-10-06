@@ -47,7 +47,7 @@
   "interfaces": [
     "HTTP `GET /v1/workspaces/{id}/entitlements` -> CT-ENTITLEMENTS object, headers `ETag: \"ent-<rev>\"`, `Cache-Control: private, max-age=0, must-revalidate`.",
     "`interface EntitlementService { get(workspaceId: string): Promise<Entitlements>; getRev(workspaceId: string): Promise<number>; invalidate(workspaceId: string): Promise<void>; check(workspaceId: string, key: LimitKey, current?: number): Promise<CheckResult> }` with `CheckResult = {allowed: true} | {allowed: false; reason: 'flag_off'|'count_reached'|'quota_reached'; retry_after_s?: number}`.",
-    "Fastify preHandlers `requireEntitlement('relay_access')`, `requireQuota('agent_minutes_month')`.",
+    "Fastify preHandlers `requireEntitlement('relay_access')`, `requireQuota('hosted_minutes_month')`.",
     "Redis channel `ent:inv` with message `{workspace: string, rev: number}`.",
     "Config: `ENT_CACHE_TTL_MS=30000` (max accepted value 30000, validated), `ENT_STALE_ON_ERROR_MS=0`."
   ],
@@ -56,7 +56,7 @@
     "Cache hit latency of `get` is < 1 ms p99 in a microbenchmark; `GET /entitlements` p95 is <= 50 ms with a warm cache.",
     "`GET` with `If-None-Match` equal to the current ETag returns 304 with no body; a member of another workspace gets 403/404; unauthenticated gets 401.",
     "Status resolution: `past_due` before `grace_until` returns the plan's limits; one millisecond after `grace_until` returns free defaults and `status:'none'`, even if the nightly transition job has not run yet; `canceled` after `period.end` returns `none`.",
-    "`requireEntitlement('relay_access')` on a workspace with `relay_access:false` returns 403 with an `entitlement_*` code from the registry; `requireQuota('agent_minutes_month')` at `reached` returns 429 `quota_exceeded` with `retry_after_s` equal to seconds until `period.end` and a matching `Retry-After` header.",
+    "`requireEntitlement('relay_access')` on a workspace with `relay_access:false` returns 403 with an `entitlement_*` code from the registry; `requireQuota('hosted_minutes_month')` at `reached` returns 429 `quota_exceeded` with `retry_after_s` equal to seconds until `period.end` and a matching `Retry-After` header.",
     "A `null` limit never denies; a count limit of 0 always denies (e.g. `webhooks_max: 0`).",
     "`lan_multiplayer` is always reported true and no check function ever denies LAN features.",
     "If both Postgres and the cache are unavailable, hosted-action checks fail closed with 503 `retry_after_s` (never allow)."

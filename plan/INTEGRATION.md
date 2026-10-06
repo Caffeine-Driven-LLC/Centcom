@@ -29,7 +29,7 @@ Client connects to the real relay: handshake, heartbeat, forced disconnect, resu
 Two real clients: host + guest, queue → approve → agent runs → events fan out, end-to-end encrypted.
 
 - **backend** lanes: B027, B028, B031, B043, B044, B045, B046, B049, B051, B052
-- **client** lanes: C009, C013, C014, C015, C025, C035, C036, C037, C038, C042, C056, C057, C058, C060, C061, C071, C072, C073, C074, C075, C076, C083, C088
+- **client** lanes: C009, C013, C014, C015, C025, C035, C036, C037, C038, C042, C056, C057, C058, C060, C061, C071, C072, C073, C074, C075, C076, C083, C088, C101, C102, C103, C104, C105
 
 ## G4 · Money
 
@@ -49,5 +49,5 @@ Three clients, branch mode, file locks, presence, notifications, webhooks.
 
 Load + chaos + security review, installer + auto-update, runbooks, both conformance suites green.
 
-- **backend** lanes: B026, B050, B084, B085, B087, B088, B089, B090, B091, B092, B093, B094, B095, B096, B097, B098, B099, B100
+- **backend** lanes: B026, B050, B084, B085, B087, B088, B089, B090, B091, B092, B093, B094, B095, B096, B097, B098, B099, B100, B101
 - **client** lanes: C010, C012, C016, C019, C020, C021, C022, C023, C068, C081, C086, C087, C092, C093, C094, C095, C096, C097, C098, C099, C100

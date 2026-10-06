@@ -89,5 +89,6 @@
     "Redis/DB write of policy fails -> reject the frame with sys.error, do not sequence it, keep the previous policy.",
     "Duplicate control frame (same sid, from, id) -> idempotent: no second effect, original seq returned."
   ],
-  "unblocks_gate": "G3"
+  "unblocks_gate": "G3",
+  "notes": "Contract v1.2.0: `control.policy` also carries `queue_paused`; persist it with the other policy fields."
 }

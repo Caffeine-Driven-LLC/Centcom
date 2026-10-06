@@ -52,10 +52,10 @@
     "EntitlementService.bumpRev(workspaceId, reason:'usage_warning'|'plan'|'admin'): Promise<number>  // used by B075",
     "GET /v1/plans -> {plans:[{id:'free'|'pro'|'team', prices:{USD:Money,EUR:Money}, limits}]} (cacheable); GET /v1/workspaces/{id}/entitlements -> Entitlements with ETag",
     "Redis pub/sub channel `entitlements:invalidate` payload {workspace, rev}",
-    "EntitlementLimits keys exactly: relay_access, lan_multiplayer, max_seats, max_session_members, max_concurrent_sessions, max_parallel_agents, history_days, agent_minutes_month, tokens_month, queue_items_month, audit_log_days, webhooks_max, api_keys_max"
+    "EntitlementLimits keys exactly: relay_access, lan_multiplayer, max_seats, max_session_members, max_concurrent_sessions, max_parallel_agents, history_days, hosted_minutes_month, queue_items_month, audit_log_days, webhooks_max, api_keys_max"
   ],
   "acceptance": [
-    "resolveEntitlements for pro/active equals the contract Pro column (relay_access true, max_seats 1, max_session_members 4, max_concurrent_sessions 2, max_parallel_agents 8, history_days 7, agent_minutes_month 6000, audit_log_days 0, webhooks_max 2, api_keys_max 5); team and free columns match likewise; lan_multiplayer is true in all.",
+    "resolveEntitlements for pro/active equals the contract Pro column (relay_access true, max_seats 1, max_session_members 4, max_concurrent_sessions 2, max_parallel_agents 8, history_days 7, hosted_minutes_month 6000, audit_log_days 0, webhooks_max 2, api_keys_max 5); team and free columns match likewise; lan_multiplayer is true in all.",
     "past_due: limits unchanged and grace_until = past_due_since + 7 days; one second after grace_until the resolver returns the free (none) limits.",
     "canceled: limits unchanged until period.end, free limits one millisecond after; none -> free defaults; trialing equals the trial plan's limits.",
     "Team with 3 add-on seats resolves max_seats 8; negative or non-integer add-on seats throws a typed error.",

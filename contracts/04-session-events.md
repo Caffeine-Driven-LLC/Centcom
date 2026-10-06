@@ -33,7 +33,7 @@ Allowed: frame type/kind, ids, timestamps, sizes, queue item ids/states/position
 | `approval.request` | `event` | hybrid | host, editor* | yes | `approval_id`, `agent_id`, `risk`, `expires_at`, `approver` | `summary`, `command`?, `cwd`? |
 | `approval.decision` | `event` | hybrid | host (and delegated approvers) | yes | `approval_id`, `decision`, `scope` | `reason`? |
 | `tool.result` | `event` | encrypted | host, editor* | yes | — | `agent_id`, `tool_id`, `status`, `summary` |
-| `agent.spawn` | `event` | hybrid | host, editor* | yes | `agent_id`, `owner`, `mode` | `label`?, `branch`?, `worktree`?, `model`? |
+| `agent.spawn` | `event` | hybrid | host, editor* | yes | `agent_id`, `owner`, `mode`, `runs_on`?, `provider`? | `label`?, `branch`?, `worktree`?, `model`? |
 | `agent.state` | `event` | clear | host, editor* | yes | `agent_id`, `state`, `since` | — |
 | `agent.exit` | `event` | hybrid | host, editor* | yes | `agent_id`, `outcome`, `error_code`? | `detail`? |
 | `branch.update` | `event` | encrypted | host, editor* | yes | — | `agent_id`, `branch`, `head`, `ahead`, `behind`, `dirty` |
@@ -59,7 +59,7 @@ Allowed: frame type/kind, ids, timestamps, sizes, queue item ids/states/position
 | `control.role` | `control` | clear | host | yes | `member`, `role` | — |
 | `control.transfer_host` | `control` | clear | host | yes | `to` | — |
 | `control.end` | `control` | clear | host | yes | `code` | — |
-| `control.policy` | `control` | clear | host | yes | `auto_approve`, `share_history`, `queue_limit`, `locked`?, `auto_failover`?, `trusted`?, `approvers`? | — |
+| `control.policy` | `control` | clear | host | yes | `auto_approve`, `share_history`, `queue_limit`, `locked`?, `auto_failover`?, `trusted`?, `approvers`?, `queue_paused`? | — |
 | `control.member_joined` | `control` | clear | server | yes | `member`, `name`, `slot`, `role`, `device` | — |
 | `control.member_left` | `control` | clear | server | yes | `member`, `code` | — |
 | `control.roster` | `control` | clear | server | yes | `version`, `members` | — |
@@ -82,7 +82,7 @@ Allowed: frame type/kind, ids, timestamps, sizes, queue item ids/states/position
 - **`approval.request`**: A human decision is needed. Clear part lets the relay route notifications; detail is encrypted.
 - **`approval.decision`**: Answer to an approval request.
 - **`tool.result`**: Outcome of a tool call (display copy).
-- **`agent.spawn`**: A new agent exists. Clear part: id, owner, mode. Secret: label, branch, worktree.
+- **`agent.spawn`**: A new agent exists. Clear part: id, owner, mode, `runs_on` (the member whose account/machine runs it) and `provider` (CT-PROVIDER §5). Secret: label, branch, worktree, model.
 - **`agent.state`**: Product state of an agent. `state` MUST be one of the names in `state-map.json` (CT-STATE-MAP).
 - **`agent.exit`**: An agent finished.
 - **`branch.update`**: Git state of an agent branch.
@@ -121,7 +121,7 @@ Allowed: frame type/kind, ids, timestamps, sizes, queue item ids/states/position
 - **`presence.cursor`**: Cursor / selection in a shared file or transcript. Server throttles to the latest per member every 100 ms.
 
 ### Agent states
-`agent.state.state` is exactly one of: `approved`, `asking-question`, `auth-required`, `awaiting-approval`, `away`, `background-task`, `celebrate`, `ci-fail`, `ci-pass`, `ci-running`, `compacting`, `context-full`, `cost-alert`, `crash`, `creating-file`, `deleting-file`, `denied`, `deploying`, `editing-file`, `empty`, `error`, `first-run`, `handoff`, `high-five`, `host-session`, `idle`, `listening`, `merge-conflict`, `message-queued`, `no-results`, `offline`, `online`, `pair-working`, `planning`, `pr-merged`, `pr-open`, `prompt-received`, `quota-reached`, `rate-limited`, `reading-file`, `ready`, `reconnecting`, `running-command`, `saving`, `searching`, `session-expired`, `sleeping`, `streaming`, `sub-agent`, `success`, `teammate-joins`, `teammate-leaves`, `teammate-typing`, `tests-fail`, `tests-pass`, `thinking`, `thinking-hard`, `tool-running`, `update-available`, `warning`, `welcome-teammate`.
+`agent.state.state` is exactly one of: `approved`, `asking-question`, `auth-required`, `awaiting-approval`, `away`, `background-task`, `celebrate`, `ci-fail`, `ci-pass`, `ci-running`, `compacting`, `context-full`, `cost-alert`, `crash`, `creating-file`, `deleting-file`, `denied`, `deploying`, `editing-file`, `empty`, `error`, `first-run`, `handoff`, `high-five`, `host-session`, `idle`, `listening`, `merge-conflict`, `message-queued`, `no-results`, `offline`, `online`, `pair-working`, `planning`, `pr-merged`, `pr-open`, `prompt-received`, `provider-auth-required`, `provider-cap-reached`, `provider-policy-blocked`, `quota-reached`, `rate-limited`, `reading-file`, `ready`, `reconnecting`, `running-command`, `saving`, `searching`, `session-expired`, `sleeping`, `streaming`, `sub-agent`, `success`, `teammate-joins`, `teammate-leaves`, `teammate-typing`, `tests-fail`, `tests-pass`, `thinking`, `thinking-hard`, `tool-running`, `update-available`, `warning`, `welcome-teammate`.
 These names are the integration point with the UI (mascot and status line), defined in `state-map.json` (CT-STATE-MAP). Backend lanes may validate the enum; they never invent states. Unknown states received by a client are shown as `thinking`-class "working" and logged.
 
 ### Member slots and colours
@@ -168,6 +168,8 @@ Frames stamped by the server carry `from: "srv"` (the literal string). Clients a
 | `queue.reject` / auto-approve reason | auto-approval is recorded in the audit event (actor `srv`, reason = policy), not on the frame |
 | `sys.slow_down.p` | `{for_ms, reason: "rate" \| "outbound"}` |
 | `sys.notice` levels | `usage_warning`→`warn`, `quota_reached`→`error`, `plan_changed`→`info`, `member_limit_near`→`warn`, `maintenance_soon`→`warn`, `client_update_available`→`info`, `history_retention_changed`→`info` |
+
+`control.policy.queue_paused` (host): while true the relay keeps accepting `queue.submit` but does not auto-approve and refuses `queue.approve`/`queue.claim`; the host's own prompts are unaffected. It is what the "pause guest spending" control uses (CT-PROVIDER 5).
 
 ### Slots with several devices
 Slots belong to the **member**, not the device. The same member connecting from two devices shares one slot (the newer connection supersedes the older, CT-WS-ENVELOPE).

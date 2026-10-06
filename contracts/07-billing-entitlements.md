@@ -23,15 +23,14 @@ Schema: `schemas/entitlements.schema.json` · fixtures: `fixtures/entitlements/*
     "max_concurrent_sessions": 3,
     "max_parallel_agents": 8,
     "history_days": 7,
-    "agent_minutes_month": 6000,
-    "tokens_month": null,
+    "hosted_minutes_month": 6000,
     "queue_items_month": null,
     "audit_log_days": 0,
     "webhooks_max": 2,
     "api_keys_max": 5
   },
-  "usage": { "agent_minutes_month": 1830, "tokens_month": 4120000, "queue_items_month": 212, "seats": 3 },
-  "warnings": [ { "limit": "agent_minutes_month", "pct": 80 } ],
+  "usage": { "hosted_minutes_month": 1830, "queue_items_month": 212, "seats": 3 },
+  "warnings": [ { "limit": "hosted_minutes_month", "pct": 80 } ],
   "grace_until": null
 }
 ```
@@ -54,8 +53,7 @@ Schema: `schemas/entitlements.schema.json` · fixtures: `fixtures/entitlements/*
 | `max_concurrent_sessions` | int | Live hosted sessions per workspace | API |
 | `max_parallel_agents` | int | Agents running at once per session (advertised; host client enforces, relay checks `agent.spawn`) | host client + relay |
 | `history_days` | int | Durable history retention | retention job |
-| `agent_minutes_month` | int\|null | Metered agent time | usage pipeline |
-| `tokens_month` | int\|null | Metered tokens (reported by clients) | usage pipeline |
+| `hosted_minutes_month` | int\|null | Minutes a hosted session spends `live` (connection time on the relay), measured **server-side**; model usage is never metered here | relay + usage pipeline |
 | `queue_items_month` | int\|null | Queue submissions | relay |
 | `audit_log_days` | int | Audit retention; 0 = feature off | API |
 | `webhooks_max` | int | Webhook endpoints | API |
@@ -73,7 +71,7 @@ New keys are *additive* (minor). Clients treat an unknown key as "unrestricted u
 | `max_concurrent_sessions` | 0 | 2 | 10 |
 | `max_parallel_agents` | 4 | 8 | 16 |
 | `history_days` | 0 | 7 | 30 |
-| `agent_minutes_month` | 0 hosted | 6 000 | 30 000 (pooled) |
+| `hosted_minutes_month` | 0 | 6 000 (100 h) | 30 000 (500 h, pooled) |
 | `audit_log_days` | 0 | 0 | 90 |
 | `webhooks_max` | 0 | 2 | 20 |
 | `api_keys_max` | 1 | 5 | 50 |
@@ -96,7 +94,7 @@ These are defaults in the seed data; product can change them without a contract 
 
 - At **80 %** of a metered limit the server adds a `warnings[]` entry, sends `sys.notice usage_warning {pct:80}` to live sessions and a notification (CT-NOTIF-PAYLOAD) to owners.
 - At **100 %**: `sys.notice quota_reached`; the relay **pauses new queue approvals and new agents on hosted sessions** (running work finishes), REST creates return `quota_exceeded` (429, `retry_after_s` to period end). **LAN and local use are never blocked.**
-- Metered usage is reported by clients via `POST /v1/usage/events` and deduped by event id (CT-API-USAGE); the relay also records relay-side counters (`relay_bytes`, `queue_items`).
+- Quota meters (`hosted_minutes_month`, `queue_items_month`) are measured **by the server** (the relay). Clients may also report `tokens_in`, `tokens_out` and `agent_minutes` via `POST /v1/usage/events` (CT-API-USAGE) for the user's own dashboard; those are **informational only**: never compared with a limit, never billed. Centcom does not meter or sell model usage: it belongs to the provider account that made the call (CT-PROVIDER).
 
 ## 6. Cache and freshness rules
 

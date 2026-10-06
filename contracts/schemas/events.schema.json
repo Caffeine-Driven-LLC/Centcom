@@ -303,6 +303,18 @@
             "command_post",
             "branch"
           ]
+        },
+        "runs_on": {
+          "type": "string",
+          "pattern": "^mem_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "provider": {
+          "type": "string",
+          "enum": [
+            "anthropic",
+            "openai",
+            "other"
+          ]
         }
       },
       "required": [
@@ -382,6 +394,9 @@
             "pr-merged",
             "pr-open",
             "prompt-received",
+            "provider-auth-required",
+            "provider-cap-reached",
+            "provider-policy-blocked",
             "quota-reached",
             "rate-limited",
             "reading-file",
@@ -1076,6 +1091,9 @@
             "pattern": "^mem_[0-9A-HJKMNP-TV-Z]{26}$"
           },
           "maxItems": 200
+        },
+        "queue_paused": {
+          "type": "boolean"
         }
       },
       "required": [

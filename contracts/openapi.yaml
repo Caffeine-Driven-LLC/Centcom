@@ -8372,14 +8372,6 @@ components:
           type: integer
         history_days:
           type: integer
-        agent_minutes_month:
-          type:
-          - integer
-          - 'null'
-        tokens_month:
-          type:
-          - integer
-          - 'null'
         queue_items_month:
           type:
           - integer
@@ -8390,6 +8382,10 @@ components:
           type: integer
         api_keys_max:
           type: integer
+        hosted_minutes_month:
+          type:
+          - integer
+          - 'null'
       required:
       - relay_access
       - lan_multiplayer
@@ -8398,8 +8394,7 @@ components:
       - max_concurrent_sessions
       - max_parallel_agents
       - history_days
-      - agent_minutes_month
-      - tokens_month
+      - hosted_minutes_month
       - queue_items_month
       - audit_log_days
       - webhooks_max
@@ -8443,13 +8438,11 @@ components:
         usage:
           type: object
           properties:
-            agent_minutes_month:
-              type: integer
-            tokens_month:
-              type: integer
             queue_items_month:
               type: integer
             seats:
+              type: integer
+            hosted_minutes_month:
               type: integer
         warnings:
           type: array

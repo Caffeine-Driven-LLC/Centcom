@@ -26,7 +26,7 @@ They are built by **separate people, separately, in parallel**. The only thing t
             └───────────────┬──────────────────────────────┬───────────────┘
                             │                              │
           ┌─────────────────▼───────────┐     ┌────────────▼────────────────┐
-          │  CLIENT  (100 lanes C001-C100) │     │  BACKEND (100 lanes B001-B100) │
+          │  CLIENT  (105 lanes C001-C105) │     │  BACKEND (101 lanes B001-B101) │
           │  build against mock backend │     │  build against mock client  │
           │  (lane C007)                │     │  simulator (lane B011)      │
           └─────────────────┬───────────┘     └────────────┬────────────────┘
@@ -70,7 +70,7 @@ They are built by **separate people, separately, in parallel**. The only thing t
 ### Client
 | Topic | Decision |
 |---|---|
-| Agent engine | Claude Agent SDK (TypeScript) |
+| Agent engines | The user's own **`claude` (Claude Code) and `codex` CLIs**, driven as child processes (stream-json / app-server JSON-RPC). No vendor SDKs, no direct model API calls, no credential handling (CT-PROVIDER) |
 | TUI | Ink (React for terminals) + our own half-block pixel renderer |
 | Web | Vite + React 19 + TanStack Router, Zustand |
 | Keychain | OS keychain via `@napi-rs/keyring` |
@@ -97,7 +97,8 @@ User ──< Membership >── Workspace ──< Session (command post) ──<
 2. Session content is encrypted with a per-session symmetric key held only by member devices (`CT-CRYPTO`).
 3. The backend is trusted for: identity, authorisation, billing, ordering, rate limits, retention.
 4. Every request is authenticated; every authorisation decision is made server-side (`CT-RBAC`). The client mirrors permissions **for UI only**.
-5. Free (LAN) mode works fully offline from the backend. The client must never *require* the backend for single-user or LAN use.
+5. **Model-provider credentials never reach Centcom at all.** The client drives the user's own `claude` and `codex` CLIs, which sign the user in and hold the credentials; the backend never sees one and a credential-leak guard (B101) enforces it. Whoever's CLI makes the call pays and is bound by their own plan (CT-PROVIDER).
+6. Free (LAN) mode works fully offline from the backend. The client must never *require* the backend for single-user or LAN use.
 
 ## 6. The integration gates
 

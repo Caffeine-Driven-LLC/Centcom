@@ -1,6 +1,6 @@
 {
   "id": "C024",
-  "title": "Sub-agent spawner with isolation",
+  "title": "Parallel agents: a fleet of engine processes in isolated worktrees",
   "plan": "client",
   "phase": "P1 Agent runtime",
   "size": "L",
@@ -9,66 +9,76 @@
     "C013",
     "C017"
   ],
-  "goal": "Spawn sub-agents from a running agent with bounded depth, budget and permissions, optional worktree isolation, and clean cancellation, reporting each spawn as an `agent.spawn` payload and driving the parent's `sub-agent` state.",
+  "goal": "Run a fleet of N agents, each an engine process started through the runner in its own git worktree and branch, with naming, a concurrency limit from entitlements/config, lifecycle and cleanup, native-subagent children in the fleet view, and merge-back readiness hooks.",
   "scope_in": [
-    "`SubagentSpawner.spawn(parentId, spec)` creating a child through the runner (C013) with `parentAgentId` set; child receives a task prompt and returns a final text result capped at 8 KiB (truncated with a marker).",
-    "Limits (config `subagent.*`, defaults): max depth 2, max 4 concurrent children per parent, children count against `agent.max_parallel`, per-child wall clock 15 min, max turns 20.",
-    "Isolation modes: `shared` (read-only tools only, parent cwd), `worktree` (own worktree via C017, full tool set subject to permissions); default `shared`.",
-    "Permission inheritance: child tool set = intersection of requested tools and the parent's currently allowed tools; the child never gets `bypassPermissions` and never exceeds the parent's permission mode; all child approvals go through the same permission engine (C015) annotated with `origin: childId -> parentId`; a child cannot resolve its own or its parent's approvals.",
-    "Cancellation cascade: parent stop/interrupt stops all descendants within 5 s; child failure returns an error result to the parent without killing it.",
-    "Payload builders: `agent.spawn` clear part `{ agent_id, owner, mode: 'command_post'|'branch' }` and secret `{ label?, branch?, worktree?, model? }`; `agent.exit` clear `{ agent_id, outcome: 'ok'|'error'|'canceled', error_code? }` for each child.",
-    "Bus events `subagent:spawned` / `subagent:finished`; parent signals `sub-agent` to the state machine (C014) while any child runs."
+    "`FleetManager.spawn(spec)` creates a worktree via C017 (`WorktreeManager.create`), then starts an engine process through the runner (C013) with `cwd` = that worktree and the chosen engine (`claude-code` or `codex`); one agent = one worktree = one branch; branch name `centcom/<ownerSlug>/<label-slug>-<id6>`, label default `agent-<n>`; `ownerSlug` and label sanitised to `[a-z0-9-]`, max 48 chars.",
+    "Concurrency limit = `min(entitlements.limits.max_parallel_agents, config fleet.max_parallel (default 8))`; extra spawns wait in a FIFO queue (max 32 queued, then `FleetQueueFull`); fairness: round-robin across owners when several members share the host, so no owner holds more than `ceil(limit / activeOwners)` slots while others wait.",
+    "Provider pacing: because parallel agents can hit CLI plan limits quickly, a per-engine spawn stagger (config `fleet.stagger_ms`, default 1 500) and automatic pause of new spawns for that engine when any agent reports `provider_cap_reached` or `provider_rate_limited` (running agents are not killed); resumed manually or after the engine's reported reset time.",
+    "Lifecycle states `queued|starting|running|waiting|done|failed|canceled`; `stop(id)` uses the engine's interrupt (SIGINT for Claude, protocol interrupt for Codex) then terminates after 5 s; `stopAll()` finishes within 8 s; per-agent wall clock cap `fleet.max_minutes` (default 60, 0 = none).",
+    "Cleanup: on exit, a worktree with no changes is removed (C017); one with changes is kept and the agent is marked `branch ready` when it has commits ahead of base and a clean tree, otherwise `needs attention`; crash recovery on startup lists orphaned worktrees from the previous run (`prune` offered, never automatic deletion of changed worktrees).",
+    "Native subagents: engine events carrying `parent_tool_use_id` (Claude `--agents`, `--forward-subagent-text`) are mapped to child nodes under the parent agent in the fleet tree (`FleetNode { id, parent?, kind: 'agent'|'subagent', state, label }`); children share the parent's worktree, do not count against the concurrency limit, and raise the parent's `sub-agent` state signal for C014 while any child runs.",
+    "Merge-back helper hooks: `onBranchReady(handler)` fires `{ agentId, branch, ahead, files }` when an agent finishes with commits; helper `mergePreview(agentId)` calls C017 `detectConflict` against the base and returns the conflicting paths; Centcom never merges, pushes or deletes branches by itself.",
+    "Wire payload builders: `agent.spawn` clear `{ agent_id, owner, mode, runs_on, provider }` and secret `{ label, branch, worktree, model }`; `agent.exit` clear `{ agent_id, outcome, error_code? }`; native subagents are not sent as separate `agent.spawn` events (they appear only in the encrypted detail of the parent's transcript events)."
   ],
   "scope_out": [
-    "Cross-machine agents (agents of other members): session layer.",
-    "Merging a child's branch back: user action / later git lanes.",
-    "Model selection policy and cost limits beyond turn/time caps.",
-    "Sending the payloads over the wire: session lanes."
+    "Worktree creation internals, locks and conflict detection: C017, C018. Engine process IO and approvals: C013, C101-C103, C015.",
+    "Agents on other members' machines: the session layer (a member's own FleetManager runs their agents). Sending payloads over the wire: session lanes.",
+    "Merging, pushing, opening PRs or deleting branches automatically: user action or later lanes.",
+    "Choosing models or cost policy; who-pays banners and the command-post gate: C105."
   ],
   "implements": [],
   "consumes": [
+    "CT-PROVIDER",
     "CT-WS-SESSION-EVENTS",
+    "CT-ENTITLEMENTS",
+    "CT-STATE-MAP",
     "CT-RBAC",
     "CT-IDS"
   ],
-  "build_against": "FakeSdkAdapter via the runner (lane C013), worktrees from real git on throwaway repos (lane C017 helpers) and the permission engine (lane C015) with synthetic decisions; no network.",
+  "build_against": "FakeEngine processes replaying golden transcripts through the runner (C013, C101), real git on throwaway repos via C017 helpers, synthetic entitlements maps from `contracts/fixtures/entitlements/`, fake clock; no real CLI, no network.",
   "deliverables": [
-    "packages/agent/src/subagents/",
-    "docs/subagents.md"
+    "packages/agent/src/fleet/",
+    "docs/fleet.md"
   ],
   "interfaces": [
-    "`createSubagentSpawner(deps: { runner: AgentRunner; worktrees: WorktreeManager; permissions: PermissionEngine; bus: AgentBus; ids: IdGenerator; clock: Clock; config: SubagentConfig }): SubagentSpawner`",
-    "`interface SubagentSpawner { spawn(parent: AgentId, spec: { task: string; isolation?: 'shared'|'worktree'; tools?: string[]; model?: string; label?: string }): Promise<SubagentHandle>; list(parent: AgentId): SubagentHandle[]; cancelAll(parent: AgentId): Promise<void> }`",
-    "`interface SubagentHandle { id: AgentId; parent: AgentId; depth: number; result(): Promise<SubagentResult> }`; `SubagentResult = { outcome: 'ok'|'error'|'canceled'; text: string; truncated: boolean; error_code?: string }`.",
-    "`spawnPayload(h): { clear: { agent_id; owner; mode }; secret: { label?; branch?; worktree?; model? } }`; `exitPayload(h, r): { clear: { agent_id; outcome; error_code? }; secret: { detail? } }`."
+    "`createFleetManager(deps: { runner: AgentRunner; worktrees: WorktreeManager; entitlements: { maxParallelAgents(): number }; bus: AgentBus; ids: IdGenerator; clock: Clock; log: Logger; config: FleetConfig }): FleetManager`",
+    "`interface FleetManager { spawn(spec: { repoRoot: string; engine: EngineId; prompt: string; label?: string; ownerSlug: string; baseRef?: string; model?: string }): Promise<FleetHandle>; list(): FleetNode[]; stop(id: AgentId): Promise<void>; stopAll(): Promise<void>; remove(id: AgentId, o?: { force?: boolean }): Promise<void>; mergePreview(id: AgentId): Promise<{ conflicts: string[] }>; onBranchReady(h: (e: BranchReady) => void): () => void; recoverOrphans(repoRoot: string): Promise<Worktree[]> }`",
+    "`interface FleetHandle { id: AgentId; branch: string; state(): FleetState; done(): Promise<{ outcome: 'ok'|'error'|'canceled'; error_code?: string; branchReady: boolean }> }`; `FleetConfig { max_parallel: number; stagger_ms: number; max_minutes: number; queue_max: number }`; local errors `FleetQueueFull`, `FleetEnginePaused`.",
+    "`spawnPayload(h): { clear: { agent_id; owner; mode; runs_on; provider }; secret: { label; branch; worktree; model? } }`; `exitPayload(h, r): { clear: { agent_id; outcome; error_code? }; secret: { detail? } }`; bus events `fleet:node`, `fleet:branch_ready`.",
+    "CLI: `centcom fleet start --count N --engine claude|codex --prompt <text>`, `centcom fleet list|stop|clean`."
   ],
   "acceptance": [
-    "Depth limit: a child at depth 2 attempting to spawn fails with `SubagentDepthExceeded`; the 5th concurrent child of one parent rejects with `SubagentLimit`; with `agent.max_parallel=4` and 3 running agents only 1 child can start.",
-    "Tool intersection: parent allows [Read, Grep], spec requests [Read, Edit, Bash] -> child gets [Read] only; `bypassPermissions` on the parent yields child mode `default`.",
-    "Child approval requests are tagged with the parent id and appear in the engine's `pending()`; `resolveApproval` called with the child's own member/agent identity is rejected.",
-    "`cancelAll(parent)` or parent `stop()` stops 4 children within 5 s (fake clock) and each emits `agent:exited{outcome:'canceled'}`; no timers remain.",
-    "A child exceeding 15 min is stopped with `outcome:'error', error_code` set to a local code string of <= 200 chars and the parent receives an error result.",
-    "Result text longer than 8 KiB is truncated to 8192 bytes with a marker and `truncated:true`.",
-    "Worktree isolation: child cwd is its own worktree path; on child exit with no changes the worktree is removed, with changes it is kept and reported in the secret payload `branch`.",
-    "Payloads pass the generated `agent.spawn` and `agent.exit` clear-schema validators; the clear part contains no label, branch, path or model."
+    "With `max_parallel_agents` 4 in the entitlements fixture and 6 spawns, exactly 4 engines start, 2 are `queued`, and when one finishes the oldest queued starts within one tick; 33 queued spawns beyond the limit reject the 33rd with `FleetQueueFull`.",
+    "Each started agent's engine process cwd equals its own distinct worktree path, and branch names match `^centcom/[a-z0-9-]+/[a-z0-9-]{1,48}-[a-z0-9]{6}$`; two agents with the same label get different branches.",
+    "Spawns for one engine are separated by >= 1 500 ms (fake clock); after a `provider_cap_reached` event from one Claude agent, further Claude spawns throw `FleetEnginePaused` while a Codex spawn still succeeds and running agents are not interrupted.",
+    "With three owners and limit 6, no owner exceeds 2 running agents while another owner has a queued spawn (property test over 1 000 random schedules).",
+    "`stopAll()` with 8 running fake engines completes within 8 s (fake clock): interrupt first, terminate after 5 s for the unresponsive one, and `fleet:node` shows all `canceled`; no timers or child processes remain (pid check).",
+    "An agent that finishes with 2 commits and a clean tree fires `onBranchReady` once with `ahead: 2`; one with no changes has its worktree removed; one with uncommitted changes is kept, marked `needs attention`, and never auto-removed.",
+    "A transcript event with `parent_tool_use_id` creates a `FleetNode kind:'subagent'` under the right parent, does not consume a concurrency slot (limit test), and the parent signals `sub-agent` until the child's end event.",
+    "Payloads pass the generated `agent.spawn` and `agent.exit` clear-schema validators; the clear part contains no label, branch, path or model, and `provider` is `anthropic` for `claude-code` and `openai` for `codex`.",
+    "`recoverOrphans` after a simulated crash lists the 3 leftover worktrees and removes none."
   ],
   "tests": [
-    "limits.test.ts, tool-intersection.test.ts, permission-origin.test.ts.",
-    "cancel-cascade.test.ts, timeout.test.ts, result-cap.test.ts.",
-    "worktree-isolation.test.ts, payloads.test.ts, state-signal.test.ts (parent shows `sub-agent`)."
+    "limit-queue.test.ts, fairness.property.test.ts.",
+    "naming.test.ts, worktree-binding.test.ts (cwd per agent).",
+    "pacing-pause.test.ts, stop-all.test.ts, wallclock.test.ts.",
+    "cleanup-branch-ready.test.ts, orphans.test.ts, merge-preview.test.ts.",
+    "native-subagents.test.ts (parent_tool_use_id goldens).",
+    "payloads.test.ts."
   ],
   "guardrails": [
-    "A child MUST NEVER hold more privilege than its parent (tools, permission mode, filesystem root); privilege only narrows.",
-    "Children MUST NOT approve their own or any ancestor's requests; approvals route to the same humans as the parent's.",
-    "Clear payloads MUST NOT carry label, branch, worktree path or model name (privacy budget; those are in the encrypted part).",
-    "MUST enforce depth, concurrency and time limits with the injected clock and MUST clean up worktrees/timers on every exit path (including crash).",
-    "MUST NOT let a child run with cwd outside the parent's root."
+    "MUST give every agent its own worktree; two engines MUST NEVER share a cwd, and a cwd MUST stay inside the repo's worktree root.",
+    "MUST NOT delete a worktree or branch that has uncommitted or unmerged work, and MUST NOT merge, push or force anything automatically.",
+    "Clear payloads MUST NOT carry label, branch, worktree path or model name (privacy budget); those stay in the encrypted part.",
+    "MUST enforce the concurrency limit from entitlements on the host (the relay also checks) and MUST NOT retry aggressively after a provider limit event: pause and show the CLI's own message.",
+    "Each agent runs on its owner's engine login only (CT-PROVIDER rule 4); the fleet MUST NOT start an agent on behalf of another member unless C105 allows the mode.",
+    "Every exit path (crash, stop, timeout) MUST clear timers and release the worktree slot with the injected clock."
   ],
   "failure_modes": [
-    "Runner at capacity -> `SubagentLimit` returned to the parent as a tool error; parent continues.",
-    "Worktree creation fails -> spawn fails with the worktree error; no half-started child.",
-    "Parent crashes -> children are cancelled on runner cleanup, never orphaned."
+    "Worktree creation fails (`NotAGitRepo`, `BranchExists`, `GitTimeout`) -> spawn fails with that error, no half-started engine, slot released.",
+    "Engine fails to start (`provider_not_installed`, `provider_not_signed_in`) -> agent `failed` with the engine's message shown verbatim; the worktree is removed if untouched.",
+    "Runner daemon dies -> agents marked `failed`, worktrees kept, `recoverOrphans` offered on next start."
   ],
   "unblocks_gate": "G5",
-  "notes": "Mode in `agent.spawn` is `command_post` or `branch` (the session mode), not the isolation mode; the spawner takes the session mode from the parent's context. Defaults for depth/concurrency are product choices."
+  "notes": "Replaces the earlier in-process SubagentSpawner (path packages/agent/src/subagents/ is now packages/agent/src/fleet/). Native subagents are the engine's own feature, so depth, tools and permissions of children are the engine's; Centcom only displays them. `mode` in `agent.spawn` is the session mode (`command_post` or `branch`) taken from the session context. Defaults (8, 1 500 ms, 60 min) are product choices. SPLIT? the fairness scheduler could be its own lane if it grows."
 }

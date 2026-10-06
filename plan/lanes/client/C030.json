@@ -8,26 +8,28 @@
   "depends_on": [
     "C013"
   ],
-  "goal": "Pressing esc (or sending SIGINT) stops the running turn promptly and predictably: streaming ends, running tools are terminated in escalating steps, pending approvals are cancelled, and the session is left in a clean `idle` state with the partial output kept.",
+  "goal": "Stopping an agent works the same way for every engine: one normalised interrupt that ends the current turn promptly, cancels pending approvals, cleans up the engine's process tree, emits the state transitions and leaves the agent idle with partial output kept.",
   "scope_in": [
-    "`interrupt(agentId, opts)` on top of the lane C013 runner's AbortController: soft interrupt aborts the SDK query and stops streaming within 500 ms.",
-    "Child process escalation for tool processes: SIGINT to the process group, SIGTERM after 2 s, SIGKILL after 5 s; Windows uses taskkill /T.",
-    "Pending permission requests for the agent resolve as denied-by-cancel (tool result status `canceled`), without leaving an approval prompt open.",
-    "Cascade to sub-agents spawned by the agent (lane C024) and to background tasks started in the turn, each with the same ladder.",
-    "Terminal-level semantics: first `ctrl+c` while a turn runs = soft interrupt; second `ctrl+c` within 1 s = hard (skip straight to SIGKILL ladder) and then exit; `ctrl+c` while idle asks `Press ctrl+c again to exit` once, a second press within 2 s exits.",
-    "The partial assistant message is kept in the transcript, flagged `interrupted: true`, and the next prompt may continue from it."
+    "`interrupt(agentId, opts)` calls `AgentEngine.interrupt(agentId)` (lane C101) and tracks the result; engines declare how through capability `interrupt`.",
+    "Claude Code path: SIGINT to the `claude` process (ends the current turn; when `system/init.capabilities` advertises an interrupt receipt such as `interrupt_receipt_v1` wait for it), grace 3 s, then SIGTERM, then SIGKILL at 8 s, escalating to the whole process group.",
+    "Codex path: protocol cancel (app-server `turn/interrupt` for the active turn); if the app-server does not acknowledge within 3 s, or in `exec --json` fallback mode, use the same signal ladder.",
+    "Pending approvals for the agent resolve as `deny` with reason `interrupted` through the permission engine (lane C015) and the prompt UI (lane C038) receives a close event; any approval request arriving after the interrupt for the old turn is auto-denied by turn id.",
+    "State transitions: emit `agent.interrupted` then drive the agent to `idle` through lane C014; partial assistant output is kept and flagged `interrupted: true`; the next prompt continues the same engine session.",
+    "Process-tree cleanup: kill the engine's whole process group (including tool children and MCP servers it started and Centcom's own approval-bridge helper), never any pid not registered by the runner; Windows uses `taskkill /T`.",
+    "Double-Ctrl behaviour: first `ctrl+c` during a turn = soft interrupt; second within 1 s = hard (SIGKILL ladder immediately) and exit 130; idle `ctrl+c` prints `Press ctrl+c again to exit`, second within 2 s exits. Timeouts: per-turn `--timeout`/`agent.turnTimeoutS` calls `interrupt(reason:'timeout')`."
   ],
   "scope_out": [
-    "Key binding registration and remapping (lane C045); this lane exposes the action id `agent.interrupt` and handlers only.",
-    "Rendering of the interrupted state in the transcript (lane C036) and mascot reaction (lane C046).",
-    "Cancelling queue items in a command post (session/queue lanes); this lane emits a bus event they can map to `queue.done` outcome.",
-    "Persisting the interrupted turn (lane C026 records bus events already)."
+    "Key binding registration (lane C045); this lane exposes action ids `agent.interrupt` and `app.interrupt_or_quit`.",
+    "Engine adapter internals and the wire framing of the interrupt (lanes C102, C103); this lane calls the interface and owns the fallback ladder.",
+    "Rendering of the interrupted state (lanes C036, C046) and cancelling command-post queue items (session lanes).",
+    "Persisting the interrupted turn (lane C026 records normalised events already)."
   ],
   "implements": [],
   "consumes": [
-    "CT-STATE-MAP"
+    "CT-STATE-MAP",
+    "CT-PROVIDER"
   ],
-  "build_against": "Scripted fake runner whose query is an async generator honouring AbortSignal, plus fixture child scripts (`sleep`, one that traps SIGINT, one that ignores SIGTERM) under packages/agent/test/fixtures/procs/.",
+  "build_against": "A fake CLI process (scripts under `packages/agent/test/fixtures/procs/`: one that exits on SIGINT, one that traps SIGINT, one that ignores SIGTERM, one that spawns a grandchild, one that speaks a minimal app-server JSON-RPC and acknowledges or ignores `turn/interrupt`) wrapped by a stub `AgentEngine`; fake clock; no real CLI.",
   "deliverables": [
     "packages/agent/src/interrupt/",
     "packages/agent/src/interrupt/README.md",
@@ -35,39 +37,39 @@
   ],
   "interfaces": [
     "`interface InterruptController { interrupt(agentId: string, opts?: {mode?: 'soft'|'hard'; reason?: 'user'|'signal'|'timeout'|'shutdown'}): Promise<InterruptResult>; onSignal(proc: NodeJS.Process): () => void }`",
-    "`type InterruptResult = {agentId: string; stoppedStream: boolean; cancelledApprovals: number; terminated: {pid: number; signal: 'SIGINT'|'SIGTERM'|'SIGKILL'}[]; durationMs: number}`",
-    "`createInterruptController(deps: {runner: AgentRunner; procs: ProcessRegistry; permissions: PermissionEngine; bus: EventBus; clock: Clock; log: Logger}): InterruptController`",
-    "Bus events: `agent.interrupted` ({agent_id, reason, hard}); action id `agent.interrupt` (default `esc`), `app.interrupt_or_quit` (default `ctrl+c`)."
+    "`type InterruptResult = {agentId: string; method: 'protocol'|'sigint'|'none'; stoppedStream: boolean; cancelledApprovals: number; terminated: {pid: number; signal: 'SIGINT'|'SIGTERM'|'SIGKILL'}[]; durationMs: number}`",
+    "`createInterruptController(deps: {engines: EngineRegistry; procs: ProcessRegistry; permissions: PermissionEngine; states: AgentStateMachine; bus: EventBus; clock: Clock; log: Logger}): InterruptController`",
+    "Bus event `agent.interrupted` ({agent_id, reason, hard, method}); action ids `agent.interrupt` (default `esc`), `app.interrupt_or_quit` (default `ctrl+c`); config `agent.turnTimeoutS`, `interrupt.graceMs` (3000)."
   ],
   "acceptance": [
-    "After `interrupt()`, no further `message.assistant.delta`-class bus events for that agent are emitted after 500 ms, measured with the fake clock.",
-    "A tool process that ignores SIGINT receives SIGTERM at 2 s and SIGKILL at 5 s (+/-100 ms with the fake clock); one that exits on SIGINT is not signalled again.",
-    "Process-group kill: a child that spawned a grandchild leaves no surviving grandchild (checked with `ps` in the Linux CI job).",
-    "With 2 pending approvals, both resolve with status `canceled` and the approval UI receives close events; no approval remains registered.",
-    "Hard interrupt (second ctrl+c within 1 s) skips the 2 s wait and runs SIGKILL immediately, then the process exits with code 130.",
-    "After interrupt the agent state machine (lane C014) is back at `idle` and the next user prompt starts a normal turn in the same session.",
-    "Idle `ctrl+c` prints the exit hint once; two idle presses 3 s apart do not exit.",
-    "Interrupting an already-idle agent returns `stoppedStream: false` without error."
+    "After `interrupt()` no further normalised `text.delta` events for that agent are delivered after 500 ms (fake clock); a Claude Code fake CLI that exits on SIGINT receives exactly one SIGINT and no further signal.",
+    "A fake CLI that ignores SIGINT gets SIGTERM at 3 s and SIGKILL at 8 s (+/-100 ms fake clock); `hard` mode skips the grace and sends SIGKILL immediately.",
+    "A grandchild spawned by the fake CLI does not survive the interrupt (checked with `ps` in the Linux CI job); only pids registered by the runner are ever signalled (test asserts the kill list).",
+    "With the Codex stub acknowledging `turn/interrupt` within 3 s, no signal is sent and `method:'protocol'`; when unacknowledged the ladder runs and `method:'sigint'`.",
+    "With 2 pending approvals both resolve as `deny` reason `interrupted`, the prompt UI gets 2 close events, and an `approval.requested` for the cancelled turn arriving 100 ms later is auto-denied.",
+    "After interrupt the state machine is at `idle` (state name from CT-STATE-MAP), `agent.interrupted` fired once, the partial message is flagged `interrupted: true`, and the next prompt starts a normal turn in the same engine session (resume option unchanged).",
+    "Second `ctrl+c` within 1 s runs the hard ladder and exits with code 130 after restoring the terminal; idle `ctrl+c` twice 3 s apart does not exit.",
+    "Concurrent interrupts for one agent coalesce into one ladder; interrupting an idle agent returns `stoppedStream:false` without error."
   ],
   "tests": [
-    "interrupt/escalation.test.ts: SIGINT/SIGTERM/SIGKILL timing with fake clock and fixture procs.",
-    "interrupt/cascade.test.ts: sub-agent and background-task cancellation.",
-    "interrupt/approvals.test.ts: pending approvals resolved as canceled.",
-    "interrupt/signals.test.ts: ctrl+c semantics via the pty harness (single, double, idle).",
-    "interrupt/race.test.ts: interrupt arriving during tool completion; property test that no promise stays pending."
+    "interrupt/ladder.test.ts: SIGINT/SIGTERM/SIGKILL timing with fake clock and fixture procs.",
+    "interrupt/codex-protocol.test.ts: ack, no-ack fallback, exec fallback.",
+    "interrupt/approvals.test.ts: cancel pending and late approvals.",
+    "interrupt/tree-cleanup.test.ts: grandchild and bridge helper removed.",
+    "interrupt/signals.test.ts: ctrl+c semantics via the pty harness.",
+    "interrupt/race.test.ts: interrupt during turn completion; property test that no promise stays pending."
   ],
   "guardrails": [
-    "MUST kill the whole process group, not only the direct child, and MUST NOT signal any pid that was not registered by the agent runner (never kill by name or pid guess).",
-    "MUST NOT leave an approval open after an interrupt; an orphaned approval prompt would let a later keypress approve an action from a cancelled turn.",
-    "MUST be idempotent and re-entrant: concurrent interrupts for the same agent coalesce into one ladder.",
-    "MUST NOT call `process.exit` from the library; only the entrypoint handler (apps/cli) exits, using the exit code from lane C050's table (130 for SIGINT).",
-    "MUST restore the terminal (cursor visible, raw mode off, alt screen left) before exiting on hard interrupt."
+    "MUST kill the whole process group, never signal a pid the runner did not register, never kill by name.",
+    "MUST NOT leave an approval open after an interrupt; a late keypress must not approve an action of a cancelled turn.",
+    "MUST be idempotent and re-entrant; MUST NOT call `process.exit` in the library (entrypoint maps exit 130 per lane C050's table).",
+    "MUST restore the terminal before exit on hard interrupt, and MUST NOT depend on a capability the engine did not advertise (feature-detect `interrupt`, else signals only)."
   ],
   "failure_modes": [
-    "SIGKILL fails (process not killable) -> report the pid in a warning toast, mark the tool result `canceled`, detach and continue; do not block the UI.",
-    "Runner ignores abort for more than 5 s -> force the agent state to `idle` locally, discard further events from that turn by turn-id, and log at warn.",
-    "Interrupt during a git operation started by the worktree manager -> let the git command finish its current step if it is within 2 s, else kill; never leave `index.lock` behind (remove it if owned by the killed pid)."
+    "SIGKILL fails -> warn with the pid, detach, set the agent `idle` locally, discard later events of that turn by turn id.",
+    "Engine adapter ignores `interrupt()` for more than 8 s -> same as above and log at warn; the engine's own error text is shown verbatim.",
+    "Interrupt during a git operation of the worktree manager -> let it finish if within 2 s else kill and remove a stale `index.lock` owned by the killed pid."
   ],
   "unblocks_gate": null,
-  "notes": "Interrupt of a command-post queue item run, when the host cancels, must surface as `queue.done` with an outcome; the mapping lives in the queue client lane. State after interrupt uses the contract state name `idle`."
+  "notes": "The 3 s/8 s ladder replaces the earlier 2 s/5 s tool-process ladder because the target is now the CLI process itself. Normalised event and method names (`interrupt`, `turn.done`) must match lane C101."
 }

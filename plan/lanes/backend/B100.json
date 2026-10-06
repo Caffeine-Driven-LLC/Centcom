@@ -10,7 +10,8 @@
     "B042",
     "B047",
     "B052",
-    "B054"
+    "B054",
+    "B101"
   ],
   "goal": "Prove that the backend satisfies every contract it implements by running the shared fixtures and wire-level checks against real services, emit a machine-readable conformance report, and own the provider-side scripts for integration gates G1-G6.",
   "scope_in": [

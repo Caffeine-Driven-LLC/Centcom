@@ -1165,7 +1165,20 @@
     "B042",
     "B047",
     "B052",
-    "B054"
+    "B054",
+    "B101"
+   ]
+  },
+  {
+   "id": "B101",
+   "title": "Credential-leak guard: scanners for logs, frames, telemetry, backups and CI",
+   "plan": "backend",
+   "phase": "P8 Privacy",
+   "size": "S",
+   "role": "security",
+   "depends_on": [
+    "B005",
+    "B050"
    ]
   }
  ],
@@ -1304,7 +1317,7 @@
   },
   {
    "id": "C013",
-   "title": "Agent runner daemon wrapping the Claude Agent SDK",
+   "title": "Agent runner daemon hosting AgentEngine processes (claude, codex)",
    "plan": "client",
    "phase": "P1 Agent runtime",
    "size": "L",
@@ -1312,7 +1325,8 @@
    "depends_on": [
     "C004",
     "C005",
-    "C025"
+    "C025",
+    "C101"
    ]
   },
   {
@@ -1329,7 +1343,7 @@
   },
   {
    "id": "C015",
-   "title": "Tool permission engine: policies, allow, deny, always-rules",
+   "title": "Permission policy engine bridging engine approval requests",
    "plan": "client",
    "phase": "P1 Agent runtime",
    "size": "L",
@@ -1340,7 +1354,7 @@
   },
   {
    "id": "C016",
-   "title": "Command classification and execution sandbox policy",
+   "title": "Command risk classification and sandbox settings passed to the engines",
    "plan": "client",
    "phase": "P1 Agent runtime",
    "size": "M",
@@ -1373,7 +1387,7 @@
   },
   {
    "id": "C019",
-   "title": "Context management: token counting and compaction triggers",
+   "title": "Context visibility: usage display and compaction requests through the engine",
    "plan": "client",
    "phase": "P1 Agent runtime",
    "size": "M",
@@ -1384,7 +1398,7 @@
   },
   {
    "id": "C020",
-   "title": "Skills loader and bundled skills pack",
+   "title": "Skills pack: install and manage Claude Code skills and Codex AGENTS.md guidance",
    "plan": "client",
    "phase": "P1 Agent runtime",
    "size": "M",
@@ -1395,7 +1409,7 @@
   },
   {
    "id": "C021",
-   "title": "MCP server manager",
+   "title": "MCP server manager: configure and show status through the engines",
    "plan": "client",
    "phase": "P1 Agent runtime",
    "size": "M",
@@ -1406,7 +1420,7 @@
   },
   {
    "id": "C022",
-   "title": "Hooks engine",
+   "title": "Hooks and settings manager for the engines\u2019 native hooks",
    "plan": "client",
    "phase": "P1 Agent runtime",
    "size": "M",
@@ -1417,7 +1431,7 @@
   },
   {
    "id": "C023",
-   "title": "Memory store (project and user memory)",
+   "title": "Memory files: CLAUDE.md and AGENTS.md editing and sync",
    "plan": "client",
    "phase": "P1 Agent runtime",
    "size": "S",
@@ -1428,7 +1442,7 @@
   },
   {
    "id": "C024",
-   "title": "Sub-agent spawner with isolation",
+   "title": "Parallel agents: a fleet of engine processes in isolated worktrees",
    "plan": "client",
    "phase": "P1 Agent runtime",
    "size": "L",
@@ -1451,7 +1465,7 @@
   },
   {
    "id": "C026",
-   "title": "Local session persistence and resume",
+   "title": "Local transcript persistence and engine session resume",
    "plan": "client",
    "phase": "P1 Agent runtime",
    "size": "M",
@@ -1475,7 +1489,7 @@
   },
   {
    "id": "C028",
-   "title": "Model selection and switching",
+   "title": "Model selection through the engines",
    "plan": "client",
    "phase": "P1 Agent runtime",
    "size": "S",
@@ -1486,7 +1500,7 @@
   },
   {
    "id": "C029",
-   "title": "Local cost and token accounting",
+   "title": "Usage and cost display from engine reports",
    "plan": "client",
    "phase": "P1 Agent runtime",
    "size": "S",
@@ -2335,7 +2349,73 @@
     "C058",
     "C059",
     "C075",
-    "C076"
+    "C076",
+    "C105"
+   ]
+  },
+  {
+   "id": "C101",
+   "title": "Engine abstraction: AgentEngine interface, capabilities and normalised event stream",
+   "plan": "client",
+   "phase": "P7 Providers",
+   "size": "L",
+   "role": "runtime",
+   "depends_on": [
+    "C003",
+    "C004",
+    "C005",
+    "C025"
+   ]
+  },
+  {
+   "id": "C102",
+   "title": "Claude Code engine: drive the user\u2019s own claude binary (stream-json, resume, approvals bridge)",
+   "plan": "client",
+   "phase": "P7 Providers",
+   "size": "L",
+   "role": "runtime",
+   "depends_on": [
+    "C101",
+    "C015"
+   ]
+  },
+  {
+   "id": "C103",
+   "title": "Codex engine: drive the user\u2019s own codex binary (app-server JSON-RPC, exec fallback)",
+   "plan": "client",
+   "phase": "P7 Providers",
+   "size": "L",
+   "role": "runtime",
+   "depends_on": [
+    "C101",
+    "C015"
+   ]
+  },
+  {
+   "id": "C104",
+   "title": "Provider detection and login handoff: provider status, login, logout, doctor checks",
+   "plan": "client",
+   "phase": "P7 Providers",
+   "size": "M",
+   "role": "net",
+   "depends_on": [
+    "C004",
+    "C005",
+    "C101"
+   ]
+  },
+  {
+   "id": "C105",
+   "title": "Who-pays policy: runs-on banner, command-post gate, kill switches, policy table",
+   "plan": "client",
+   "phase": "P7 Providers",
+   "size": "M",
+   "role": "tui",
+   "depends_on": [
+    "C014",
+    "C067",
+    "C101",
+    "C104"
    ]
   }
  ]

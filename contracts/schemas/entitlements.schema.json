@@ -59,7 +59,7 @@
         "max_concurrent_sessions",
         "max_parallel_agents",
         "history_days",
-        "agent_minutes_month",
+        "hosted_minutes_month",
         "audit_log_days",
         "webhooks_max",
         "api_keys_max"
@@ -107,20 +107,6 @@
           ],
           "minimum": 0
         },
-        "agent_minutes_month": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "minimum": 0
-        },
-        "tokens_month": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "minimum": 0
-        },
         "queue_items_month": {
           "type": [
             "integer",
@@ -143,6 +129,13 @@
           "minimum": 0
         },
         "api_keys_max": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "hosted_minutes_month": {
           "type": [
             "integer",
             "null"

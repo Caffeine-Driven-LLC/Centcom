@@ -12,7 +12,9 @@
     "p": {
       "agent_id": "agt_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
       "owner": "mem_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
-      "mode": "command_post"
+      "mode": "command_post",
+      "runs_on": "mem_01JA3Z8K2M5N7P9Q0R1S2T3V4W",
+      "provider": "anthropic"
     },
     "ct": {
       "alg": "xchacha20poly1305",

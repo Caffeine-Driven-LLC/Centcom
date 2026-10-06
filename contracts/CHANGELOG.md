@@ -1,5 +1,11 @@
 # Contract changelog
 
+## 1.2.0 (providers)
+- **New contract CT-PROVIDER** (`10-providers.md`): Anthropic and OpenAI models are used by driving the user's **own** `claude` and `codex` CLIs. Centcom never handles provider credentials, never uses the vendor SDKs or model APIs in v1, never pays for or pools usage; the backend never sees a credential. Defines the command-post "who pays" rule, kill-switch flags, login handoff, client-local error vocabulary, risk register, and shared fixtures (`fixtures/providers/`).
+- `agent.spawn` clear part gains optional `runs_on` and `provider`.
+- **Entitlements:** `agent_minutes_month` is now `hosted_minutes_month` (minutes a hosted session is `live`, measured by the relay); `tokens_month` removed. Model usage is never metered or sold; client-reported tokens/agent minutes are informational.
+- New client-local states `provider-auth-required`, `provider-cap-reached`, `provider-policy-blocked`; schema `provider-policy.schema.json`.
+
 ## 1.1.0 (before first implementation; resolves the open questions found while writing the 200 lane cards)
 Additive or clarifying only; no breaking change.
 

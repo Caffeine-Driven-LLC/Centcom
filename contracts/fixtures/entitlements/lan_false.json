@@ -19,12 +19,11 @@
       "max_concurrent_sessions": 0,
       "max_parallel_agents": 4,
       "history_days": 0,
-      "agent_minutes_month": 0,
-      "tokens_month": null,
       "queue_items_month": null,
       "audit_log_days": 0,
       "webhooks_max": 0,
-      "api_keys_max": 1
+      "api_keys_max": 1,
+      "hosted_minutes_month": 0
     }
   }
 }

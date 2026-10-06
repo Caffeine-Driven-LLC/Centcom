@@ -93,7 +93,7 @@ def main():
         name = 'Backend' if plan == 'backend' else 'Client'
         repo = 'Centcom-backend' if plan == 'backend' else 'Centcom'
         sizes = {s: sum(1 for l in lanes if l['size'] == s) for s in 'SML'}
-        open(os.path.join(outdir, 'README.md'), 'w').write(f'''# {name} plan · 100 lanes ({PREFIX[plan]}001-{PREFIX[plan]}100)
+        open(os.path.join(outdir, 'README.md'), 'w').write(f'''# {name} plan · {len(lanes)} lanes ({PREFIX[plan]}001-{PREFIX[plan]}{len(lanes):03d})
 
 Repo: `{repo}` · Rules: [`plan/GUIDELINES.md`](../GUIDELINES.md) · Format: [`plan/LANE_CARD_SPEC.md`](../LANE_CARD_SPEC.md) · Connection points: [`contracts/`](../../contracts/index.json)
 

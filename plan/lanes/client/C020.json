@@ -1,6 +1,6 @@
 {
   "id": "C020",
-  "title": "Skills loader and bundled skills pack",
+  "title": "Skills pack: install and manage Claude Code skills and Codex AGENTS.md guidance",
   "plan": "client",
   "phase": "P1 Agent runtime",
   "size": "M",
@@ -8,64 +8,69 @@
   "depends_on": [
     "C013"
   ],
-  "goal": "Discover, validate and expose agent skills (Markdown instruction packs) from project, user and bundled locations, with progressive disclosure so only names and descriptions cost context until a skill is used. Ship a small bundled pack.",
+  "goal": "Install, update and remove the bundled Centcom skills pack as plain files the engines load natively: SKILL.md folders under `.claude/skills/` for Claude Code and a delimited Centcom section in `AGENTS.md` for Codex, always with a diff preview and user confirmation. Centcom executes nothing from a skill.",
   "scope_in": [
-    "Skill format: directory `<name>/SKILL.md` with YAML-lite frontmatter (`name`, `description`, optional `allowed_tools`) and a Markdown body; optional `references/` text files.",
-    "Search order and precedence: project `.centcom/skills/`, user `<config dir>/skills/`, bundled `packages/agent/skills/`; same name -> project beats user beats bundled; shadowing is reported in `list()` output.",
-    "Validation: `name` `^[a-z0-9][a-z0-9-]{0,39}$` equal to the directory name; `description` 1..300 chars; SKILL.md <= 64 KiB; reference files <= 256 KiB each, max 20; no symlinks resolving outside the skill dir; UTF-8 only; invalid skills are skipped with a reported reason.",
-    "`skillsPromptSection(maxChars = 2000)` rendering only name + description lines; `render(name)` returning the full body on demand (the agent loads it via a tool / prompt injection decided by the runner).",
-    "Frontmatter `allowed_tools` is advisory metadata for the permission engine (it can only narrow, never grant).",
-    "Bundled pack (5 skills): `commit-message`, `code-review`, `test-writer`, `pr-description`, `handoff-notes` -- plain instructions, no scripts, written in English, each < 4 KiB.",
-    "Project skills are data, not code: nothing in a skill is executed by this lane."
+    "Bundled pack under `packages/agent/skills/<name>/SKILL.md` (5 skills: `commit-message`, `code-review`, `test-writer`, `pr-description`, `handoff-notes`) with frontmatter `name`, `description`; each < 4 KiB, plain English, no scripts, no URLs that fetch code; plus `packages/agent/skills/manifest.json` `{ pack_version, skills: { <name>: { sha256, bytes } } }`.",
+    "Targets: Claude Code project scope `<repo>/.claude/skills/<name>/SKILL.md`, user scope `~/.claude/skills/<name>/SKILL.md` (path supplied by the engine adapter, never discovered by reading credential files); Codex: a section in `<repo>/AGENTS.md` (project) or the user-level AGENTS.md path supplied by the adapter, delimited by `<!-- centcom:skills:begin v=<pack_version> sha256=<hex> -->` and `<!-- centcom:skills:end -->`; content outside the markers is never touched.",
+    "Operations `plan(op)` -> `Plan { changes: FileChange[]; diff: string }` and `apply(plan, confirmation)`: install, update (pack_version or checksum differs), remove (only files whose sha256 still matches what Centcom installed; edited files are reported `modified` and left alone unless the user confirms), status (`not_installed|current|outdated|modified`).",
+    "Install record `.centcom/skills-installed.json` (project) / `<config dir>/skills-installed.json` (user): `{ pack_version, installed: { <path>: sha256 } }`, used for checksums and clean removal.",
+    "Scope choice `project|user` per engine; default project; user scope requires a second explicit confirmation line naming the directory class (not the path).",
+    "Listing of skills the engine reports as loaded (from the engine status event, capability `skills`) next to what Centcom installed, so mismatches are visible.",
+    "Atomic writes (temp + rename), directories 0755, files 0644; refuses to write through symlinks and any path escaping the target root (realpath check)."
   ],
   "scope_out": [
-    "A marketplace / install command / remote fetching of skills (non-goal for v1).",
-    "Executing scripts referenced by skills: any execution goes through the permission engine (C015).",
-    "Wiring skills into the SDK request: runner (C013) calls this lane's API."
+    "Loading, ranking or injecting skills into prompts: the engines do that natively (Claude Code `.claude/skills/`; Codex reads `AGENTS.md`).",
+    "A skill marketplace or remote fetching (v1: bundled pack only). Executing scripts referenced by skills: engine plus permissions (C015).",
+    "Editing memory files in general: C023. Writing hooks or MCP config: C022, C021.",
+    "Reading or writing any credential or auth file of either CLI."
   ],
   "implements": [],
   "consumes": [
+    "CT-PROVIDER",
     "CT-IDS"
   ],
-  "build_against": "Filesystem fixtures in a temp dir and the bundled pack; no network.",
+  "build_against": "Temp-dir filesystem fixtures, the bundled pack, and FakeEngine (C101) emitting an engine status event that lists loaded skills; no real CLI, no network.",
   "deliverables": [
     "packages/agent/src/skills/",
     "packages/agent/skills/",
     "docs/skills.md"
   ],
   "interfaces": [
-    "`createSkillRegistry(deps: { fs: SkillFs; dirs: { project?: string; user?: string; bundled: string }; log: Logger }): SkillRegistry`",
-    "`interface SkillRegistry { reload(): Promise<LoadReport>; list(): SkillMeta[]; get(name: string): Promise<Skill | undefined>; promptSection(maxChars?: number): string }`",
-    "`interface SkillMeta { name: string; description: string; source: 'project'|'user'|'bundled'; shadows?: ('user'|'bundled')[]; allowedTools?: string[] }`; `interface Skill extends SkillMeta { body: string; references: string[] }`.",
-    "`LoadReport = { loaded: number; skipped: { dir: string; reason: string }[] }` (reasons are enums, not paths with content)."
+    "`createSkillsInstaller(deps: { fs: SkillFs; bundledDir: string; engines: { targetDirs(engine: EngineId, scope: 'project'|'user', root?: string): { skillsDir?: string; agentsMd?: string } }; log: Logger }): SkillsInstaller`",
+    "`interface SkillsInstaller { status(scope, root?): Promise<SkillsStatus>; plan(op: { kind: 'install'|'update'|'remove'; engines: EngineId[]; scope: 'project'|'user'; skills?: string[]; root?: string }): Promise<SkillsPlan>; apply(plan: SkillsPlan, confirm: { accepted: true; planHash: string }): Promise<ApplyReport> }`",
+    "`interface SkillsPlan { planHash: string; changes: { path: string; action: 'create'|'update'|'delete'|'skip_modified'; before?: string; after?: string }[]; diff: string }`; `SkillsStatus = { pack_version: string; per: { engine: EngineId; skill: string; state: 'not_installed'|'current'|'outdated'|'modified' }[] }`.",
+    "CLI: `centcom skills status|install|update|remove [--scope project|user] [--engine claude|codex] [--yes]` (`--yes` still prints the diff)."
   ],
   "acceptance": [
-    "A project skill named `code-review` shadows the bundled one; `list()` shows `source:'project'` and `shadows:['bundled']`.",
-    "Skills violating any rule (bad name, 301-char description, 65 KiB body, symlink to `/etc/passwd`, invalid UTF-8) are skipped and appear in `LoadReport.skipped` with distinct reason codes; the other skills still load.",
-    "`promptSection(2000)` never exceeds 2000 characters and drops lowest-precedence skills first; with 5 bundled skills it lists all 5 name+description lines.",
-    "The body of a skill is not present in `promptSection` output (test greps for a body-only sentinel).",
-    "`reload()` completes in < 100 ms for 50 skills on CI and is safe to call concurrently (second call awaits first).",
-    "Frontmatter `allowed_tools: [Bash]` never expands permissions: `get(name).allowedTools` equals the list but no function in this lane returns an 'allow' decision.",
-    "All 5 bundled skills pass validation and total size < 20 KiB."
+    "`plan({kind:'install', engines:['claude-code'], scope:'project'})` on an empty repo lists 5 `create` changes under `.claude/skills/` and `apply` with the matching `planHash` writes exactly 5 files; a wrong `planHash` writes nothing and throws `PlanChanged`.",
+    "Codex install inserts one marker-delimited block into `AGENTS.md`; with 40 lines of user text before and after, those lines are byte-identical afterwards; a second install with an unchanged pack yields an empty change list.",
+    "After the user edits an installed `SKILL.md`, `status` reports `modified`, `update` and `remove` return `skip_modified` for that file and delete or overwrite nothing without an explicit per-file confirmation.",
+    "Updating from `pack_version` 1.0.0 to 1.1.0 changes only files whose manifest sha256 differs and records the new checksums in the install record.",
+    "A skills directory that is a symlink to outside the repo, or a skill name `../x`, is refused with `UnsafePath` and nothing is written.",
+    "`apply` without `confirm.accepted === true` writes nothing (fs mock write count 0); `--yes` prints the full diff before applying.",
+    "All 5 bundled skills pass validation (name `^[a-z0-9][a-z0-9-]{0,39}$` equals directory, description 1..300 chars, body <= 4 KiB) and total pack size < 20 KiB.",
+    "No code path spawns a process: the module's imports contain no `child_process` (lint test)."
   ],
   "tests": [
-    "load.test.ts, precedence.test.ts.",
-    "validation.test.ts (each rule), symlink-escape.test.ts.",
-    "prompt-section.test.ts, bundled-pack.test.ts.",
-    "reload-concurrency.test.ts."
+    "plan-apply.test.ts, planhash.test.ts.",
+    "agents-md-block.test.ts (markers, idempotence, user text preserved).",
+    "modified-detection.test.ts, update-remove.test.ts.",
+    "symlink-escape.test.ts, name-validation.test.ts.",
+    "bundled-pack.test.ts, no-exec.test.ts.",
+    "status-vs-engine.test.ts with FakeEngine."
   ],
   "guardrails": [
-    "MUST NOT execute anything from a skill, and MUST NOT interpret frontmatter beyond the documented keys.",
-    "MUST reject symlinks and `..` path segments that escape the skill directory (realpath check).",
-    "MUST NOT send skill content anywhere except the local agent request; skills may contain private project instructions.",
-    "MUST NOT log skill bodies or absolute paths; log counts and reason codes.",
-    "Bundled skills MUST contain no URLs that fetch/execute remote code and no secrets."
+    "MUST NOT write, change or delete anything without a shown diff and an explicit confirmation bound to the plan hash.",
+    "MUST NOT execute any content of a skill or spawn any process; Centcom only copies files.",
+    "MUST NOT touch bytes outside the Centcom markers in `AGENTS.md` or files it did not install (checksum mismatch means hands off).",
+    "MUST NOT read or write `~/.claude` or `~/.codex` internals other than the documented skills directory and AGENTS.md path given by the engine adapter; never read credential files.",
+    "MUST NOT log file contents or absolute paths; log counts, skill names and reason codes."
   ],
   "failure_modes": [
-    "Skills dir missing -> empty list, no error.",
-    "Unreadable file (EACCES) -> that skill skipped with reason `unreadable`.",
-    "Huge directory (> 500 entries) -> stop after 500 and report `too_many` once."
+    "Target directory unwritable (EACCES) -> that change fails with `unwritable`, other changes roll back (all-or-nothing per engine), message with next step.",
+    "Install record missing or corrupt -> treat everything as `modified` (conservative), offer a re-baseline after diff review.",
+    "Engine not installed or capability `skills` absent -> installation still allowed as plain files; status notes that the engine did not confirm loading."
   ],
   "unblocks_gate": "G6",
-  "notes": "Format deliberately mirrors the common SKILL.md convention; no marketplace in v1 (ARCHITECTURE section 8)."
+  "notes": "Skills format follows the verified Claude Code convention (SKILL.md in `.claude/skills/`). Codex has no skills directory in the facts we verified, so guidance goes into AGENTS.md. Marketplace stays out of v1 (ARCHITECTURE section 8)."
 }

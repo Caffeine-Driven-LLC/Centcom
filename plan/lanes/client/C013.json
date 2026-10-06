@@ -1,6 +1,6 @@
 {
   "id": "C013",
-  "title": "Agent runner daemon wrapping the Claude Agent SDK",
+  "title": "Agent runner daemon hosting AgentEngine processes (claude, codex)",
   "plan": "client",
   "phase": "P1 Agent runtime",
   "size": "L",
@@ -8,74 +8,83 @@
   "depends_on": [
     "C004",
     "C005",
-    "C025"
+    "C025",
+    "C101"
   ],
-  "goal": "A runner that starts, drives, interrupts and stops Claude agents through the Claude Agent SDK, streams their output onto the internal bus, enforces concurrency and time limits, and can run as a local daemon so the TUI and CLI share agents. It also hosts the trust store used by MCP and hooks lanes.",
+  "goal": "A local runner daemon that supervises many `AgentEngine` child processes (claude, codex) in parallel, each bound to its own worktree, fans each engine's normalised events onto the internal bus, and survives any single engine crash. The TUI and CLI talk to it over local IPC; it has no model SDK and no credentials.",
   "scope_in": [
-    "`SdkAdapter` interface isolating `@anthropic-ai/claude-agent-sdk` (`query()` streaming input/output, `interrupt`, session resume id); `RealSdkAdapter` and a scriptable `FakeSdkAdapter` (emits canned assistant deltas, tool calls, permission requests, results, errors, crashes).",
-    "`AgentRunner` with `start`, `get`, `list`, `stopAll`: one `AgentHandle` per agent (`agt_` id from the CT-IDS generator), prompt queue per agent (max 20 pending prompts), `send`, `interrupt` (SDK interrupt, then kill after 5 s), `stop`, and an async event stream. Emits `agent:*` events on the bus (C025): started, prompt, message_delta, message_done, tool_requested, tool_result, approval_needed, context, exited.",
-    "Permission hook: the SDK `canUseTool` callback delegates to an injected `PermissionGate.check(req): Promise<GateDecision>` (implemented by lane C015); until provided the default gate denies everything except read-only tools.",
-    "Limits: `agent.max_parallel` (config, default 4) enforced with a queue-or-reject policy (`start` rejects with `RunnerBusy` when full); startup timeout 30 s; overall per-turn watchdog 30 min (config); tool-approval waits bounded by `agent.approval_timeout_ms` (default 600 000) after which the tool is denied; event ring buffer 1000 per agent.",
-    "Environment for the SDK subprocess is an allow-list (PATH, HOME, LANG, TERM, proxy vars, `ANTHROPIC_*` and Claude auth vars the SDK needs) -- Centcom tokens, `CENTCOM_*` secrets and the OS-keychain contents are never passed.",
-    "Daemon mode `runnerd`: local-only IPC over a Unix domain socket (`$XDG_RUNTIME_DIR/centcom/runner.sock`, fallback `<state dir>/runner.sock`) or Windows named pipe `\\\\.\\pipe\\centcom-runner-<user>`, mode 0600, JSON-lines protocol with a version field and per-connection auth by file permissions plus a random 256-bit session secret in the runtime dir; commands `start|send|interrupt|stop|list|subscribe`. Single-instance lock; exits after 60 s with no agents and no clients.",
-    "`TrustStore` (`<config dir>/trust.json`, atomic writes, 0600): `isTrusted(kind: 'mcp'|'hooks', sha256)`, `trust(kind, sha256, label)`, `revoke`; used by lanes C021 and C022 to gate project-supplied commands."
+    "`AgentRunner` with `start(spec)`, `get`, `list`, `stopAll`: one `AgentHandle` per agent (`agt_` id from the CT-IDS generator) wrapping an `AgentEngine` session created through an injected `EngineRegistry` (engines come from C101/C102/C103); the runner never imports a vendor package and never builds provider argv itself.",
+    "Process supervision: each engine child is owned by a `Supervisor` that records pid, start time and exit status; states `starting|running|waiting|stopping|exited|crashed`; engine start timeout 30 s; restart policy `never` by default, `on-crash` (max 2 restarts, backoff 1 s then 4 s, engine `resume` handle reused) when the spec asks for it; a crash emits `agent:exited{outcome:'crash'}` and touches no other agent.",
+    "Resource limits: `agent.max_parallel` (default 4, hard cap 16) with `RunnerBusy` rejection; per-agent prompt queue max 20; per-turn watchdog 30 min; stdout line cap 1 MiB per JSONL line (longer line = `provider_protocol_error`); event ring buffer 1000 per agent; optional per-child `ulimit`-style caps applied through the platform spawn options only (no own sandbox).",
+    "Worktree binding: `AgentSpec.cwd` is the agent's worktree path supplied by the caller (C017/C024); the runner verifies it exists and is a directory, never widens it, and refuses two live agents with the same `cwd` unless `allowSharedCwd` is set (default false).",
+    "Per-agent event fan-out: every `NormalisedEvent` from `engine.events()` is stamped with `agent_id` and a per-agent monotonic `seq`, then published on the bus (C025) as `agent:event`; runner-level lifecycle events `agent:started`, `agent:exited` are added. Slow bus consumers get bounded buffers (1000) and drop-oldest `text.delta` only, never approvals or lifecycle events.",
+    "Local IPC server `runnerd`: Unix domain socket (Linux/macOS, `<runtime dir>/centcom/runner.sock`, dir 0700, socket 0600) or Windows named pipe `\\\\.\\pipe\\centcom-runner-<user-sid-hash>`; newline-delimited JSON frames `{v:1,id,cmd,args}` -> `{v:1,id,ok,result|error}` plus server push `{v:1,evt}`; per-run secret handshake; frame cap 1 MiB; commands `start|send|interrupt|stop|list|subscribe|approve|shutdown`.",
+    "Graceful shutdown: SIGTERM/`shutdown` -> `interrupt` every engine (engine-defined, SIGINT for claude), wait 5 s, SIGTERM, wait 2 s, SIGKILL; resolves within 8 s; stale-socket recovery on start; daemon exits 60 s after the last agent stops with no clients (`--idle-exit-s`).",
+    "Child environment allow-list (`PATH`, `HOME`, `LANG`, `TERM`, `TMPDIR`, proxy variables, and the provider variables the user already has such as `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` passed through unread); `CENTCOM_*` and anything else is dropped except `CENTCOM_AGENT_ID`.",
+    "`TrustStore` (`<config dir>/trust.json`, atomic writes, 0600) kept here because lanes C021 and C022 depend on C013: `isTrusted(kind: 'mcp'|'hooks'|'project-rules', sha256)`, `trust`, `revoke`."
   ],
   "scope_out": [
-    "Permission policy and approval brokering: lane C015. Command classification: C016.",
-    "State names for the UI/wire: C014. Worktrees: C017. Context compaction policy: C019.",
-    "Skills, MCP, hooks, memory, sub-agents: lanes C020-C024.",
-    "Anthropic credentials and login: delegated to the SDK; Centcom neither stores nor forwards them."
+    "Engine adapters, the `AgentEngine` interface and event normalisation: lanes C101 (interface), C102 (claude), C103 (codex). This lane only hosts them.",
+    "Permission decisions and approval brokering: C015. Command risk and sandbox flags: C016. Product state names: C014.",
+    "Git worktree creation/cleanup: C017. Parallel-fleet policy and scheduling above the runner: C024. Transcript persistence: C026.",
+    "Provider detection, login handoff and who-pays checks: C104/C105. No model SDK, no model API client, no credential reading or storage."
   ],
   "implements": [],
   "consumes": [
     "CT-IDS",
+    "CT-ERR",
     "CT-WS-SESSION-EVENTS",
     "CT-RBAC",
-    "CT-ERR"
+    "CT-PROVIDER"
   ],
-  "build_against": "`FakeSdkAdapter` (this lane) drives every test; no network and no Anthropic account needed. A single opt-in smoke test (`CENTCOM_LIVE_SDK=1`) may exercise the real adapter locally but is skipped in CI.",
+  "build_against": "A scriptable fake CLI process (`packages/testkit/src/fake-cli.ts`, from the engine lanes) replays recorded transcripts; where C101 is not merged, use a `FakeEngine` implementing `AgentEngine` that emits the scripted `NormalisedEvent`s, can hang, crash or ignore interrupts. No real `claude`/`codex` binary and no network in CI; an opt-in `CENTCOM_LIVE_CLI=1` smoke test is skipped in CI.",
   "deliverables": [
     "packages/agent/src/runner/",
     "packages/agent/bin/runnerd.ts",
     "docs/agent-runner.md"
   ],
   "interfaces": [
-    "`createRunner(deps: { sdk: SdkAdapter; bus: AgentBus; gate: PermissionGate; ids: IdGenerator; clock: Clock; log: Logger; config: RunnerConfig }): AgentRunner`",
-    "`interface AgentSpec { cwd: string; prompt: string; model?: string; permissionMode?: 'default'|'acceptEdits'|'plan'|'bypassPermissions'; mcpServers?: McpServerSpec[]; systemPromptAppend?: string; resume?: string; maxTurns?: number; parentAgentId?: AgentId }`",
-    "`interface AgentHandle { id: AgentId; send(prompt: string): Promise<void>; interrupt(): Promise<void>; stop(): Promise<void>; events(): AsyncIterable<RunnerEvent>; status(): 'starting'|'running'|'waiting'|'exited' }`",
-    "`interface PermissionGate { check(req: ToolUseRequest, ctx: { agentId: AgentId; signal: AbortSignal }): Promise<GateDecision> }` where `GateDecision = { behavior: 'allow'|'deny'; reason?: string; updatedInput?: unknown }`.",
-    "`class RunnerBusy extends Error`; `interface TrustStore { isTrusted(kind, sha256): Promise<boolean>; trust(kind, sha256, label): Promise<void>; revoke(kind, sha256): Promise<void> }`.",
-    "Daemon: `centcom-runnerd [--socket <path>] [--idle-exit-s 60]`; IPC frames `{ v: 1, id: string, cmd: string, args: object }` -> `{ v: 1, id, ok: boolean, result?: object, error?: { code: string } }`."
+    "`createRunner(deps: { engines: EngineRegistry; bus: AgentBus; ids: IdGenerator; clock: Clock; log: Logger; config: RunnerConfig; trust: TrustStore }): AgentRunner`",
+    "`interface AgentSpec { engine: 'claude-code'|'codex'; cwd: string; prompt: string; model?: string; permissionMode?: PermissionMode; resume?: string; restart?: 'never'|'on-crash'; parentAgentId?: AgentId; allowSharedCwd?: boolean }`",
+    "`interface AgentHandle { id: AgentId; engine: EngineId; send(prompt: string): Promise<void>; interrupt(): Promise<void>; stop(): Promise<void>; events(): AsyncIterable<AgentEvent>; status(): 'starting'|'running'|'waiting'|'stopping'|'exited'|'crashed' }`",
+    "`interface AgentRunner { start(spec: AgentSpec): Promise<AgentHandle>; get(id: AgentId): AgentHandle|undefined; list(): AgentInfo[]; stopAll(opts?: { graceMs?: number }): Promise<void> }`; `class RunnerBusy extends Error`.",
+    "`interface TrustStore { isTrusted(kind: TrustKind, sha256: string): Promise<boolean>; trust(kind: TrustKind, sha256: string, label: string): Promise<void>; revoke(kind: TrustKind, sha256: string): Promise<void> }`",
+    "Bus topics: `agent:started`, `agent:event` (payload `{agentId, seq, event: NormalisedEvent}`), `agent:exited` (`{agentId, outcome: 'ok'|'error'|'canceled'|'crash', code?: number, signal?: string}`).",
+    "Daemon: `centcom-runnerd [--socket <path>] [--idle-exit-s 60]`; IPC frame `{ v: 1, id: string, cmd: 'start'|'send'|'interrupt'|'stop'|'list'|'subscribe'|'approve'|'shutdown', args: object }` -> `{ v: 1, id, ok: boolean, result?: unknown, error?: { code: string } }`."
   ],
   "acceptance": [
-    "With the fake SDK, `start` then a scripted turn emits on the bus, in order: `agent:started`, `agent:prompt`, N x `agent:message_delta`, `agent:message_done`, `agent:exited{outcome:'ok'}`.",
-    "Starting a 5th agent with `agent.max_parallel=4` rejects with `RunnerBusy` immediately; after one agent exits the 5th can start.",
-    "`interrupt()` during a long scripted turn ends the turn within 1 s; if the fake ignores the interrupt the runner force-stops it after exactly 5 s (fake clock) and emits `agent:exited{outcome:'canceled'}`.",
-    "A tool request awaiting approval for `approval_timeout_ms` (600 000 ms, fake clock) is denied and the agent receives a tool-denied result; no leaked timers remain (`clock.pending() === 0` after stop).",
-    "The env passed to the SDK subprocess contains no variable starting `CENTCOM_` other than `CENTCOM_AGENT_ID`, and none matching `/TOKEN|SECRET|PASSWORD/i` (test with a poisoned parent env).",
-    "`runnerd`: second instance exits 1 with `already running`; the socket file has mode 0600 and dir 0700; a client lacking the session secret is rejected (`error.code = 'unauthorized'`) and disconnected; daemon exits within 61 s after the last agent stops with no clients.",
-    "Adapter crash (fake throws mid-stream) yields `agent:exited{outcome:'error'}` and the runner remains usable for other agents.",
-    "Trust store: `trust('mcp', h)` persists; a corrupted trust.json is treated as empty and a backup `trust.json.corrupt` is written; permissions 0600."
+    "With a fake engine replaying a recorded transcript, `start` then one turn publishes on the bus in order: `agent:started`, `agent:event` with seq 1..N strictly increasing, `agent:exited{outcome:'ok'}`; no seq gaps.",
+    "Starting 4 agents in 4 different cwd values runs them concurrently (fake clock: all 4 reach `running` within 1 tick); a 5th with `agent.max_parallel=4` rejects with `RunnerBusy` immediately and succeeds after one agent exits.",
+    "Killing one engine child with SIGKILL yields `agent:exited{outcome:'crash'}` for that agent only; the other 3 agents keep emitting events and `list()` still returns them (crash isolation test).",
+    "With `restart:'on-crash'`, a crashing fake restarts at +1 s and +4 s (fake clock) reusing the `resume` handle, and after the 3rd crash the runner gives up with `outcome:'crash'`.",
+    "`interrupt()` on a fake that honours it ends the turn within 1 s; on a fake that ignores it the runner sends SIGTERM at exactly 5 s and SIGKILL at 7 s and emits `agent:exited{outcome:'canceled'}`; `stopAll` with 4 hung agents resolves in <= 8 s.",
+    "The child env for a poisoned parent env (`CENTCOM_TOKEN`, `GITHUB_TOKEN`, `AWS_SECRET_ACCESS_KEY`) contains none of them, contains only `CENTCOM_AGENT_ID` from the `CENTCOM_` family, and passes `ANTHROPIC_API_KEY` through unchanged but never logs it (log scanner with `fixtures/providers/secret-patterns.json` finds 0 hits).",
+    "A JSONL line of 1 MiB + 1 byte from the engine terminates that agent with `provider_protocol_error` and does not affect other agents.",
+    "`runnerd`: second instance exits 1 with `already running`; socket mode 0600 and dir 0700; a client with the wrong secret gets `error.code = 'unauthorized'` and is disconnected; a 1 MiB + 1 frame is rejected; daemon exits within 61 s after the last agent stops with no clients; a stale socket (dead pid) is replaced within 500 ms.",
+    "A second `start` with the same `cwd` rejects with a typed error unless `allowSharedCwd: true`; a `cwd` that does not exist rejects without spawning.",
+    "TrustStore: `trust('mcp', h)` persists across restart; a corrupted trust.json is treated as empty and `trust.json.corrupt` is written; file mode 0600."
   ],
   "tests": [
-    "runner.test.ts (lifecycle, queue, limits, watchdog), gate.test.ts (default deny, timeout).",
-    "env-allowlist.test.ts, crash.test.ts.",
-    "ipc.test.ts (framing, auth, size cap 1 MiB per frame), daemon-lock.test.ts.",
-    "trust-store.test.ts, fake-adapter.test.ts."
+    "runner.test.ts (lifecycle, queue, limits, watchdog, worktree binding) using FakeEngine and the fake CLI with golden transcripts.",
+    "crash-isolation.test.ts, restart-policy.test.ts, shutdown.test.ts (fake clock).",
+    "env-allowlist.test.ts, secret-scan.test.ts, protocol-line-cap.test.ts.",
+    "ipc.test.ts (framing, auth, size cap), daemon-lock.test.ts, trust-store.test.ts, fanout-backpressure.test.ts."
   ],
   "guardrails": [
-    "MUST route every tool use through `PermissionGate`; MUST fail closed (deny) if the gate throws, times out or is absent.",
-    "MUST NOT pass Centcom tokens, keychain data or arbitrary parent env to the SDK subprocess (allow-list only).",
-    "MUST NOT log prompts, assistant text, tool inputs or file paths; log ids, kinds, durations and counts.",
-    "IPC MUST be local-only (Unix socket / named pipe, never a TCP port), permission-restricted, size-capped, and authenticated with the per-run secret.",
-    "Agents run strictly inside the `cwd` given by the caller; the runner MUST NOT widen it or add parent directories.",
-    "MUST work with no backend and no network except what the SDK itself needs: LAN and solo use never depend on the Centcom API."
+    "MUST NOT depend on any `@anthropic-ai/*` or `openai` package; the only model-facing code is child-process IO owned by the engines.",
+    "MUST NOT read any credential file or token (`~/.claude*`, `~/.codex/*`, keychain); child env is allow-listed and provider variables are passed through unread.",
+    "One engine's crash, hang or flood MUST NOT block, kill or delay another agent: per-agent supervisors, bounded buffers, no shared mutable queue.",
+    "MUST NOT log prompts, assistant text, tool inputs, file paths or model names; log ids, engine id, kinds, durations and counts.",
+    "IPC MUST be local-only (Unix socket/named pipe, never TCP), permission-restricted, size-capped and authenticated with the per-run secret.",
+    "MUST run the unmodified vendor binaries from `PATH` (or the configured absolute path) with no repackaging; MUST check the `provider.*` kill switch before `start` (provided by C105) and treat a blocked engine as `provider_method_disabled`."
   ],
   "failure_modes": [
-    "SDK subprocess dies -> `agent:exited{outcome:'error'}` with a local error code, pending approvals are cancelled, other agents unaffected.",
-    "Runner stopped with agents running -> `stopAll` interrupts all, waits 5 s, kills; resolves in <= 6 s.",
-    "Daemon socket stale after crash -> new daemon checks liveness (connect with 500 ms timeout), removes the stale socket and starts."
+    "Engine child exits non-zero or on signal -> `agent:exited{outcome:'crash'}` with exit code/signal, pending approvals for that agent are cancelled (denied), other agents unaffected.",
+    "Engine silent past the turn watchdog (30 min) -> interrupt then kill, `agent:exited{outcome:'error'}` with local code `watchdog_timeout`; calm message in the UI table.",
+    "Engine binary missing or unsupported version -> `start` rejects with `provider_not_installed` / `provider_version_unsupported`; nothing spawned.",
+    "Daemon socket stale after crash -> new daemon connects with 500 ms timeout, removes the stale socket and starts.",
+    "IPC client disconnects mid-turn -> agents keep running; events are buffered (ring 1000) for the next `subscribe`."
   ],
   "unblocks_gate": "G3",
-  "notes": "The 'agent runner daemon' is optional at runtime (the CLI may embed the runner in-process); the daemon exists so TUI and headless commands can share agents. Local IPC protocol is private to the client and is not a contract. Model names are never logged (they are secret fields on the wire). SPLIT? daemon/IPC could be a separate PR from runner core."
+  "notes": "The daemon is optional at runtime (the CLI may embed the runner in-process); the IPC protocol is private to the client. The old card hosted the SDK adapter and the permission hook; both are gone: engines call the C015 broker themselves. TrustStore stays here because C021/C022 reference it from this lane (ENGINE_DELTA asked for it under C015; kept here to respect the dependency graph). SPLIT? daemon/IPC could be its own PR. Event/interface names (`AgentEngine`, `NormalisedEvent`, `EngineRegistry`) must match C101."
 }

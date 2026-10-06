@@ -1,11 +1,11 @@
 # Centcom build plan
 
-Two plans, **100 lanes each**, built in parallel by different people (or agents), connected **only** through frozen contracts.
+Two plans (**105 client lanes, 101 backend lanes**), built in parallel by different people (or agents), connected **only** through frozen contracts.
 
 | | Backend | Client |
 |---|---|---|
 | Repo | `Centcom-backend` (private) | `Centcom` |
-| Lanes | [B001-B100](backend/README.md) | [C001-C100](client/README.md) |
+| Lanes | [B001-B101](backend/README.md) | [C001-C105](client/README.md) |
 | Builds against | mock client simulator (B011) | mock backend (C007) |
 | Proves compatibility with | provider conformance suite (B100) | consumer conformance suite (C100) |
 

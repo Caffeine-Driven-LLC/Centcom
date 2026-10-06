@@ -73,6 +73,8 @@ Frames stamped by the server carry `from: "srv"` (the literal string). Clients a
 | `sys.slow_down.p` | `{for_ms, reason: "rate" \| "outbound"}` |
 | `sys.notice` levels | `usage_warning`→`warn`, `quota_reached`→`error`, `plan_changed`→`info`, `member_limit_near`→`warn`, `maintenance_soon`→`warn`, `client_update_available`→`info`, `history_retention_changed`→`info` |
 
+`control.policy.queue_paused` (host): while true the relay keeps accepting `queue.submit` but does not auto-approve and refuses `queue.approve`/`queue.claim`; the host's own prompts are unaffected. It is what the "pause guest spending" control uses (CT-PROVIDER 5).
+
 ### Slots with several devices
 Slots belong to the **member**, not the device. The same member connecting from two devices shares one slot (the newer connection supersedes the older, CT-WS-ENVELOPE).
 

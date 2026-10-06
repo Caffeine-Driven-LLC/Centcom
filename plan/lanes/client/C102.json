@@ -1,0 +1,109 @@
+{
+  "id": "C102",
+  "title": "Claude Code engine: drive the user’s own claude binary (stream-json, resume, approvals bridge)",
+  "plan": "client",
+  "phase": "P7 Providers",
+  "size": "L",
+  "role": "runtime",
+  "depends_on": [
+    "C101",
+    "C015"
+  ],
+  "goal": "An `AgentEngine` that runs the user's own unmodified `claude` binary headlessly, turns its stream-json output into the normalised events of C101, routes every permission request through the C015 policy engine via a small stdio MCP server, and survives interrupts, retries, resumes and auth failures, all without ever touching credentials.",
+  "scope_in": [
+    "`createClaudeCodeEngine(deps)` implementing `AgentEngine` (id `claude-code`, provider `anthropic`) in `packages/agent/src/engines/claude-code/`. One child process per turn (prompt on stdin), later turns continue with `--resume <session_id>`; the engine session object outlives the processes.",
+    "Argv builder `buildClaudeArgv(o)`: `claude -p --output-format stream-json --verbose --include-partial-messages --permission-mode <mode> --permission-prompt-tool mcp__centcom_approvals__approve --mcp-config <dir>/mcp.json [--model <m>] [--resume <id>] [--allowedTools <list>] [--append-system-prompt <text>] [--agents <json>]`. Never `--bare`, never `--dangerously-skip-permissions`; `bypassPermissions` only when config `agent.allow_bypass` is true and the session is not a command post. The prompt is written to stdin so it never appears in `ps` or argv limits.",
+    "Stream-json parser: newline-delimited, max line 4 MiB (longer line -> `provider_protocol_error`, child is stopped), tolerant of unknown event types; maps `system/init`, `stream_event` partial deltas, assistant/user messages (tool_use / tool_result blocks), `system/api_retry`, `permission_denied`, and the final `result` message onto C101 events. Message ids are minted as `msg_` ULIDs by the injected `IdGenerator`.",
+    "Stdio MCP approval server `approval-mcp.ts` (hand-written minimal JSON-RPC 2.0: `initialize`, `tools/list`, `tools/call`, `ping`) exposing one tool `approve`. It connects back to the parent over a per-run Unix domain socket (named pipe on Windows) inside a `0700` temp dir with a random 32-byte per-run token (Centcom-internal, not a provider credential). `ApprovalBridge` converts each call into a `ToolUseRequest` for the C015 `PermissionGate`/`requestApproval`, emits `approval.requested` / `approval.resolved`, and answers `{\"behavior\":\"allow\",\"updatedInput\":{...}}` or `{\"behavior\":\"deny\",\"message\":\"...\"}` as the tool's text content.",
+    "Session and resume: capture `session_id` from `system/init`, expose it as `resumeToken()`; `start({resume})` passes `--resume`; a resume of an unknown id (CLI error) maps to `provider_protocol_error` with the tool's message; `--continue` is never used (ambiguous across worktrees).",
+    "Interrupt: `interrupt()` sends SIGINT to the child, waits `interrupt_grace_ms` (5 000), then SIGTERM, then SIGKILL after 3 000 more; emits the cancelled-tool / pending-approval cleanup events of C101 and `turn.done{outcome:'canceled'}`. On Windows uses the CLI's own stop mechanism via `child.kill()` after the same grace (documented).",
+    "Retry and failure mapping: `system/api_retry {attempt,max_retries,retry_delay_ms,error_status,error}` -> `error{fatal:false, retry:{...}}` plus `status{state:'rate-limited'}` when `error_status` is 429, else `status{state:'reconnecting'}`; a final `result` with `is_error` or exit code != 0 is classified by `classifyClaudeFailure(result, stderrTail)`: authentication text/401 -> `provider_not_signed_in`; plan/usage limit text or 429 with a reset time -> `provider_cap_reached`; other 429 -> `provider_rate_limited`; unknown -> `provider_protocol_error`. Classification keys are in one table `failure-table.ts` and use recorded transcripts as the oracle.",
+    "Feature detection: after `system/init`, `capabilities` array (if present) decides `resume`, `subagents`, `mcp`, `skills`, `thinking`, `usage`; if the array is absent, fall back to the conservative floor `{streaming, approvals, resume, interrupt, usage}`. `claude --version` is parsed only to check the supported range (from C104 `supportedRanges`); out-of-range -> `provider_version_unsupported` before spawn, unless config `agent.engine_unsupported_ok` is true.",
+    "Login kind from `system/init` only (its own report of how it authenticates); absent -> `unknown`, which C105 treats as subscription. Emitted in `session.started.login_kind`.",
+    "Subagent tracking: messages carrying `parent_tool_use_id` are attributed to the `Task` tool call that spawned them: first sight emits `subagent.started`, text/blocks emit `subagent.text` (capped 2 KiB per event), the parent's `tool_result` emits `subagent.done`; nested depth capped at 3 (deeper is flattened).",
+    "Process hygiene: spawn timeout 10 s (no `spawn` event -> `provider_not_installed` if ENOENT, else `provider_protocol_error`), first-event timeout 30 s, stderr kept in a 64 KiB ring buffer (redacted before use), environment inherited as-is (plus `NO_COLOR=1`, `CI` untouched), exit code 143 after our SIGTERM treated as a clean cancel, no shell (`spawn(file, args, {shell:false})`), working directory = agent worktree.",
+    "Recorder and fake CLI: `tools/record-claude-transcript.mjs` (dev-only, run by hand against a real signed-in CLI) writes `packages/agent/test/fixtures/providers/claude-code/<scenario>.jsonl` (raw stream-json lines plus `# meta` header with CLI version and date; run through the secret scanner and aborted on any match); `packages/agent/test/fake-cli/claude` (Node script with shebang, plus `claude.cmd`) replays a transcript chosen by env `FAKE_CLI_TRANSCRIPT`, honours SIGINT/SIGTERM, can inject stalls, oversize lines and exit codes, and implements the permission-prompt round trip by calling the MCP server it is given in `--mcp-config`."
+  ],
+  "scope_out": [
+    "Skills, MCP servers, hooks, memory, compaction and subagent execution themselves (the CLI's own); Centcom only passes `--mcp-config`/`--agents`/`--append-system-prompt` and displays what `system/init` reports.",
+    "The permission policy decisions and the approval UI (C015, C038); this lane only bridges requests and answers.",
+    "Process fleet management, worktrees and concurrency limits (C013, C017); detection, login and logout (C104); who-pays and flags (C105).",
+    "Codex (C103); the interface and event definitions (C101).",
+    "Any use of the Claude Agent SDK, model API calls, token counting or cost computation: `usage.report.cost_usd` is the CLI's own `total_cost_usd`, marked `cost_is_estimate: true`."
+  ],
+  "implements": [
+    "CT-PROVIDER"
+  ],
+  "consumes": [
+    "CT-WS-SESSION-EVENTS",
+    "CT-STATE-MAP",
+    "CT-ERR"
+  ],
+  "build_against": "The fake `claude` executable in `packages/agent/test/fake-cli/` replays committed transcripts; the approval bridge is tested against the C015 engine with in-memory fakes and against the fake CLI's MCP client. No real `claude`, login or network is used in CI; a manual `pnpm --filter @centcom/agent record:claude` run against a real CLI is the only way fixtures are created.",
+  "deliverables": [
+    "packages/agent/src/engines/claude-code/engine.ts",
+    "packages/agent/src/engines/claude-code/argv.ts",
+    "packages/agent/src/engines/claude-code/stream-parser.ts",
+    "packages/agent/src/engines/claude-code/event-map.ts",
+    "packages/agent/src/engines/claude-code/failure-table.ts",
+    "packages/agent/src/engines/claude-code/approval-mcp.ts",
+    "packages/agent/src/engines/claude-code/approval-bridge.ts",
+    "packages/agent/src/engines/claude-code/process.ts",
+    "packages/agent/src/engines/claude-code/index.ts",
+    "packages/agent/src/engines/claude-code/README.md",
+    "packages/agent/src/engines/claude-code/__tests__/",
+    "packages/agent/test/fake-cli/claude",
+    "packages/agent/test/fake-cli/claude.cmd",
+    "packages/agent/test/fixtures/providers/claude-code/",
+    "tools/record-claude-transcript.mjs"
+  ],
+  "interfaces": [
+    "`createClaudeCodeEngine(d: { bin?: string /* default 'claude' via PATH lookup */; gate: PermissionGate & Pick<PermissionEngine,'requestApproval'>; ids: IdGenerator; clock: Clock; log: Logger; config: Pick<Config,'get'>; tmpDir: string; supportedRange: string }): AgentEngine`.",
+    "`buildClaudeArgv(o: { mode: PermissionMode; model?: string; resume?: string; allowedTools?: string[]; mcpConfigPath: string; systemPromptAppend?: string; agentsJson?: string }): string[]`. Example: `['-p','--output-format','stream-json','--verbose','--include-partial-messages','--permission-mode','default','--permission-prompt-tool','mcp__centcom_approvals__approve','--mcp-config','/tmp/centcom-ab12/mcp.json','--resume','3f9c...']`.",
+    "mcp.json written per run: `{\"mcpServers\":{\"centcom_approvals\":{\"command\":\"<node>\",\"args\":[\"<dist>/approval-mcp.js\",\"--socket\",\"<dir>/a.sock\"],\"env\":{\"CENTCOM_APPROVAL_TOKEN\":\"<random>\"}}, ...user servers}}`; user MCP servers from `EngineStartOptions.mcpServers` are merged in unchanged.",
+    "Raw stream-json lines handled (examples): `{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"...\",\"model\":\"...\",\"tools\":[...],\"mcp_servers\":[{\"name\":\"centcom_approvals\",\"status\":\"connected\"}],\"capabilities\":[...]}`, `{\"type\":\"system\",\"subtype\":\"api_retry\",\"attempt\":2,\"max_retries\":10,\"retry_delay_ms\":4000,\"error_status\":429,\"error\":\"rate_limit\"}`, `{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"...\",\"total_cost_usd\":0.0123,\"session_id\":\"...\"}`.",
+    "Approval bridge socket protocol (internal): newline JSON `{token, id, tool_name, input}` -> `{id, behavior: 'allow'|'deny', updatedInput?, message?}`; one connection per request; request timeout = `agent.approval_timeout_ms` then `deny`.",
+    "Config keys: `agent.allow_bypass` (default false), `agent.engine_unsupported_ok` (default false), `engines.claude-code.bin` (default `claude`).",
+    "Fake CLI env: `FAKE_CLI_TRANSCRIPT=<file>`, `FAKE_CLI_STALL_MS`, `FAKE_CLI_EXIT=<code>`, `FAKE_CLI_VERSION=2.1.0`; logs every argv to `FAKE_CLI_ARGV_LOG` so tests assert flags."
+  ],
+  "acceptance": [
+    "Replaying `simple-answer.jsonl` through the fake CLI yields exactly the golden normalised events in `packages/agent/test/fixtures/providers/claude-code/simple-answer.golden.json`: `session.started`, N `text.delta`, `text.done`, `usage.report`, `turn.done{ok}`, with `login_kind` taken from init.",
+    "The recorded argv for a default-mode run equals the example in `interfaces` and never contains `--bare`, `--dangerously-skip-permissions` or the prompt text; asserted for all 4 permission modes (bypass only with `agent.allow_bypass=true` and not in command post).",
+    "A tool call that needs permission produces `approval.requested` within 200 ms of the fake CLI calling the MCP tool; answering `approve` through C015 makes the fake CLI continue and the stream contains `approval.resolved{by:'user'}` then `tool.result{ok}`; answering `deny` yields `tool.result{status:'denied'}`.",
+    "No answer within `agent.approval_timeout_ms` (set to 1 s in the test) returns `behavior:'deny'` and emits `approval.resolved{by:'timeout'}`.",
+    "Interrupt: SIGINT is delivered within 50 ms; a fake CLI that ignores SIGINT receives SIGTERM at 5.0 s (+/- 200 ms fake clock) and the session emits `turn.done{outcome:'canceled'}`; exit code 143 does not raise an error event.",
+    "A transcript line over 4 MiB makes the engine stop the child and emit `error{code:'provider_protocol_error', fatal:true}` without buffering more than 4 MiB + 64 KiB; the next `send` after a normal turn uses `--resume <session_id>` from the previous init.",
+    "`system/api_retry` with `error_status:429` yields `error{fatal:false,retry:{attempt:2,max_retries:10,delay_ms:4000}}` and `status{state:'rate-limited'}`; a final result with a 401 text yields `error{code:'provider_not_signed_in'}` and the C105 state mapping `provider-auth-required`; a plan-limit text yields `provider_cap_reached`.",
+    "No `system/init` within 30 s (stall injection) -> `provider_protocol_error`; ENOENT binary -> `provider_not_installed` within 10 s; missing `capabilities` array -> capability set equals the conservative floor; a version outside the range -> `provider_version_unsupported` and no process is spawned.",
+    "A Task tool call with 2 messages carrying `parent_tool_use_id` yields `subagent.started`, 2 `subagent.text`, `subagent.done` and a single `status{state:'sub-agent'}` while it runs.",
+    "The secret scanner finds 0 matches of `contracts/fixtures/providers/secret-patterns.json` in all committed fixtures, in stderr-derived `tool_message`s and in logs captured during the test run; the recorder aborts when a line matches."
+  ],
+  "tests": [
+    "claude-code/argv.test.ts: golden argv per mode/option, forbidden-flag assertions.",
+    "claude-code/stream-parser.test.ts: fragmented chunks, CRLF, 4 MiB boundary, unknown types, invalid JSON line (skipped with debug log, 3 in a row -> protocol error), fuzz test with random chunking.",
+    "claude-code/engine.replay.test.ts: golden normalised output for each recorded scenario (simple-answer, tool-approval, tool-denied, subagent, api-retry-429, auth-failure, plan-limit, resume, interrupt).",
+    "claude-code/approval-bridge.test.ts: allow/deny/timeout/gate-throws, socket permissions 0700 and token mismatch rejected, concurrent approvals (5) keep their ids.",
+    "claude-code/process.test.ts: spawn timeout, first-event timeout, interrupt escalation ladder with fake timers, stderr ring buffer never exceeds 64 KiB.",
+    "claude-code/secrets.test.ts: fixtures and logs scanned with secret-patterns.json; env passthrough not logged.",
+    "claude-code/contract.test.ts: output of `toSessionWire` for the golden streams validates against events.schema.json (CT-WS-SESSION-EVENTS)."
+  ],
+  "guardrails": [
+    "MUST NOT read, open, stat or copy anything under `~/.claude*` or any keychain item; the engine learns about auth only from `system/init`, `result` and exit output. A lint rule in this package bans path strings containing `.claude` outside test fixtures names.",
+    "MUST NOT use `--bare` (it ignores OAuth/keychain and would break subscription logins) and MUST NOT modify, wrap or patch the `claude` binary or its flags beyond documented ones; no auto-install.",
+    "The approval MCP socket is the most dangerous surface: directory `0700`, socket unlinked on exit, per-run random token compared in constant time, bound to the parent pid; a request without the token is dropped silently. A local process that could forge approvals would run tools unreviewed.",
+    "Fail closed on every permission question: parser error, socket error, gate exception, timeout or interrupt all answer `deny`, never `allow`.",
+    "Never pass the user's prompt or file contents in argv or log them; logs carry ids, event types, byte counts and durations only (GUIDELINES 3.5). `tool_message` text is redacted and truncated to 2 KiB.",
+    "Fixtures are recordings of a real session: before commit they are scrubbed of paths (`/home/<user>` -> `/home/user`), emails and tokens, and pass the secret scanner. Never record with an API key in the environment.",
+    "Do not retry on `provider_cap_reached` or 401; honour the CLI's own retry events and add no retry loop of our own."
+  ],
+  "failure_modes": [
+    "CLI crashes mid-turn (non-zero exit, no `result`) -> pending tools get `tool.result{canceled}`, `error{code:'provider_protocol_error', tool_message: stderr tail}`, `turn.done{error}`, then `agent.exit` outcome error; the session can be resumed with the last known session id.",
+    "MCP approval server fails to start (CLI reports it `failed` in `mcp_servers`) -> refuse to run any tool: emit `error{fatal:true,'provider_capability_missing'}`; never fall back to `--permission-mode bypassPermissions`.",
+    "CLI changes its output (unknown fields/events) -> ignored; if the first 5 lines contain no recognised event -> `provider_protocol_error` with the doctor hint.",
+    "User is signed out while an agent runs -> next turn fails with `provider_not_signed_in`; running turn finishes or fails on the CLI's terms; C105 shows `provider-auth-required`.",
+    "Temp dir cannot be created (disk full, permissions) -> `provider_protocol_error` before spawn with an actionable `tool_message`; nothing is spawned.",
+    "Two `send` calls while a turn runs -> the second is rejected with `EngineBusy` (the runner C013 queues prompts), never interleaved."
+  ],
+  "unblocks_gate": "G3",
+  "notes": "SPLIT? L is full: argv/parser/map, approval MCP bridge, process hygiene, recorder and fake CLI. If late, split the MCP approval bridge into its own lane. Flags used (`--permission-prompt-tool`, `--include-partial-messages`, `--agents`) are verified for 2026-10-06; the supported CLI range lives in C104 and the real range must be set when the first transcripts are recorded. Prompt via stdin is the documented `claude -p` input; if a future CLI version needs argv, `buildClaudeArgv` is the single place to change. `--forward-subagent-text` is named in the design note but not in the verified flag list: add it behind `capabilities` detection only. CONTRACT GAP: CT-PROVIDER does not say how `login_kind` is read for Claude Code beyond 'the system/init event'; the exact init field must be confirmed from the first recorded transcript."
+}

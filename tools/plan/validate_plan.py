@@ -34,7 +34,7 @@ def main():
         if a.plan and a.plan != plan: continue
         lanes = skel[plan]; ids = [l['id'] for l in lanes]; pre = PREFIX[plan]; other = 'C' if pre == 'B' else 'B'
         if full:
-            if len(lanes) != 100: E(f'{plan}: {len(lanes)} lanes in skeleton (need 100)')
+            if len(lanes) < 100: E(f'{plan}: {len(lanes)} lanes in skeleton (need at least 100)')
         if len(set(ids)) != len(ids): E(f'{plan}: duplicate lane ids')
         deps = {l['id']: l['depends_on'] for l in lanes}
         for i, d in deps.items():

@@ -91,5 +91,6 @@
     "Instance restart -> queue rebuilt from queue_item rows plus frames after updated_seq; version continues without gaps.",
     "Reorder lists unknown item ids -> unknown ids ignored, known items keep relative order, sender gets sys.error `queue_item_gone` once."
   ],
-  "unblocks_gate": "G3"
+  "unblocks_gate": "G3",
+  "notes": "Contract v1.2.0: `control.policy.queue_paused` (host) makes the queue service keep accepting submits but refuse auto-approval and `queue.approve`/`queue.claim` until cleared; the host's own submits are unaffected (CT-PROVIDER 5, CT-WS-QUEUE)."
 }

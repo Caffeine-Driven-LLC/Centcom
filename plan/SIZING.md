@@ -1,6 +1,6 @@
 # Sizing guidance
 
-The 100 + 100 lane structure stays. These lanes were flagged by their authors as the most likely to exceed their size (L = 5 days). A lead may split one at kickoff by adding sub-lane suffixes (for example `B016a`, `B016b`) through a plan PR that keeps `depends_on` acyclic and only moves deliverables; contracts never change because of a split.
+The lane structure (105 client, 101 backend) stays. These lanes were flagged by their authors as the most likely to exceed their size (L = 5 days). A lead may split one at kickoff by adding sub-lane suffixes (for example `B016a`, `B016b`) through a plan PR that keeps `depends_on` acyclic and only moves deliverables; contracts never change because of a split.
 
 ## Backend
 | Lane | Suggested split line |

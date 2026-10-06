@@ -31,6 +31,7 @@ for area in sorted(os.listdir(os.path.join(C, 'fixtures'))):
     if area in ('events', 'crypto'): continue
     for fn in sorted(os.listdir(d)):
         fx = json.load(open(os.path.join(d, fn)))
+        if 'schema' not in fx: continue
         errs = V.validate(fx['data'], V.load(fx['schema']))
         check((not errs) == fx['valid'], f'fixtures/{area}/{fn}: expected valid={fx["valid"]}, errors={errs[:3]}')
 
@@ -54,6 +55,13 @@ for fn in sorted(os.listdir(os.path.join(C, 'fixtures', 'events'))):
 for r in ev['allOf']:
     k = r['if']['properties']['k']['const']
     check(k in kinds_in_fixtures, f'event kind {k}: no fixture')
+
+# 3b. provider secret patterns: every must_match string matches a pattern, nothing in must_not_match does
+import re
+sp = json.load(open(os.path.join(C, 'fixtures', 'providers', 'secret-patterns.json')))
+rxs = [re.compile(p['regex']) for p in sp['patterns']]
+for sx in sp['must_match']: check(any(r.search(sx) for r in rxs), f'secret-patterns: {sx!r} not caught')
+for sx in sp['must_not_match']: check(not any(r.search(sx) for r in rxs), f'secret-patterns: {sx!r} falsely caught')
 
 # 4. state names used by agent.state exist in state-map.json
 sm = json.load(open(os.path.join(C, 'state-map.json')))

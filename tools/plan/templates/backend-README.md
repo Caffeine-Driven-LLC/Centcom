@@ -19,9 +19,9 @@ The relay is deliberately blind: it routes **ciphertext** and may read only the 
 
 ## The plan
 
-- **[100 backend lanes (B001-B100)](plan/backend/README.md)**: independent tasks with strict acceptance criteria.
+- **[101 backend lanes (B001-B101)](plan/backend/README.md)**: independent tasks with strict acceptance criteria.
 - [Architecture and decisions](plan/ARCHITECTURE.md) · [strict guidelines](plan/GUIDELINES.md) · [dependency graph](plan/GRAPH.md) · [contract matrix](plan/CONTRACT_MATRIX.md) · [integration gates](plan/INTEGRATION.md).
-- The client repo (`Centcom`) has its own 100 lanes. **You never depend on them**; you meet only at [contracts](contracts/README.md). Build against the mock client simulator (lane B011); prove compatibility with the conformance suite (lane B100).
+- The client repo (`Centcom`) has its own 105 lanes. **You never depend on them**; you meet only at [contracts](contracts/README.md). Build against the mock client simulator (lane B011); prove compatibility with the conformance suite (lane B100).
 
 ## Day one
 

@@ -20,7 +20,8 @@
       ],
       "approvers": [
         "mem_01JA3Z8K2M5N7P9Q0R1S2T3V4W"
-      ]
+      ],
+      "queue_paused": true
     }
   },
   "secret_payload": null

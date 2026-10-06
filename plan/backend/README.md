@@ -1,9 +1,9 @@
-# Backend plan · 100 lanes (B001-B100)
+# Backend plan · 101 lanes (B001-B101)
 
 Repo: `Centcom-backend` · Rules: [`plan/GUIDELINES.md`](../GUIDELINES.md) · Format: [`plan/LANE_CARD_SPEC.md`](../LANE_CARD_SPEC.md) · Connection points: [`contracts/`](../../contracts/index.json)
 
-- **100 lanes**: 24 small (≤1 d), 60 medium (≤3 d), 16 large (≤5 d) · 284 person-days of work in total
-- **13 dependency layers** · critical path **45 days** (see [`GRAPH.md`](../GRAPH.md)) · parallelism in layer 1: 1 lanes can start on day one
+- **101 lanes**: 25 small (≤1 d), 60 medium (≤3 d), 16 large (≤5 d) · 285 person-days of work in total
+- **14 dependency layers** · critical path **45 days** (see [`GRAPH.md`](../GRAPH.md)) · parallelism in layer 1: 1 lanes can start on day one
 - Every lane card is independent: it names its inputs (contracts), outputs (deliverables), and how to build with no counterpart (`build_against`).
 - **No lane in this plan depends on a lane in the other plan.** The two sides meet only at contract IDs.
 
@@ -146,4 +146,10 @@ Repo: `Centcom-backend` · Rules: [`plan/GUIDELINES.md`](../GUIDELINES.md) · Fo
 | [B097](B097.md) | Security hardening: headers, WAF rules, secret scanning, dependency policy | M | security | B002 | - | G6 |
 | [B098](B098.md) | Threat model and penetration-test preparation | M | security | B097 | - | G6 |
 | [B099](B099.md) | Backup, restore and disaster-recovery drills | M | infra | B007, B091 | - | G6 |
-| [B100](B100.md) | Provider conformance suite and release gate | L | qa | B011, B042, B047, B052, B054 | - | G6 |
+| [B100](B100.md) | Provider conformance suite and release gate | L | qa | B011, B042, B047, B052, B054, B101 | - | G6 |
+
+### P8 Privacy
+
+| ID | Lane | Size | Role | Depends on | Implements | Gate |
+|---|---|:-:|---|---|---|:-:|
+| [B101](B101.md) | Credential-leak guard: scanners for logs, frames, telemetry, backups and CI | S | security | B005, B050 | - | G6 |

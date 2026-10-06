@@ -1,0 +1,109 @@
+{
+  "id": "C105",
+  "title": "Who-pays policy: runs-on banner, command-post gate, kill switches, policy table",
+  "plan": "client",
+  "phase": "P7 Providers",
+  "size": "M",
+  "role": "tui",
+  "depends_on": [
+    "C014",
+    "C067",
+    "C101",
+    "C104"
+  ],
+  "goal": "Make 'whose account runs this agent' explicit and enforceable: compute who pays per agent, fill the `runs_on` and `provider` clear fields of `agent.spawn`, show the runs-on chip, guest notice and host spend control, block subscription-backed engines in command posts unless the host has confirmed, and honour the three provider kill-switch flags and the bundled policy table.",
+  "scope_in": [
+    "`computeWhoPays(i)` pure function (`packages/agent/src/provider/policy/who-pays.ts`): branch mode -> payer is the agent owner; command post -> payer is the host; result `{ payer: MemberId; provider: ProviderId; login_kind: effective kind; shared: boolean }` where `shared` is true when the payer differs from the member who typed the prompt.",
+    "`buildSpawnClearFields(w): { runs_on: MemberId; provider: ProviderId }` (CT-PROVIDER 5) and `providerOf(engine)` (`claude-code` -> `anthropic`, `codex` -> `openai`, else `other`); only these two provider fields go into the clear part of `agent.spawn`; model, engine id and version are placed by the session lane in the encrypted part.",
+    "Start gate `evaluateStartGate(i): GateResult` (`gate.ts`), run before any engine starts or any guest prompt is claimed: (1) flag off (`provider.claude_code` / `provider.codex`) -> `provider_method_disabled`; (2) command post + effective login kind `subscription` + flag `provider.command_post.subscription` off -> `provider_policy_blocked`; (3) command post + subscription + flag on + no host confirmation for this session -> `needs_confirmation`; (4) otherwise allowed. API-key and cloud logins are allowed in command posts. Running sessions are never killed by a flag turning off (they finish; new sessions and new guest prompts are blocked).",
+    "Flag wiring (`flags.ts`): `defineFlag('provider.claude_code', {type:'boolean', default:true})`, `defineFlag('provider.codex', {type:'boolean', default:true})`, `defineFlag('provider.command_post.subscription', {type:'boolean', default:false})` registered with the C067 client; read with `flags.flag(key)` at gate time, re-read on `flags-changed`; a flags client that has not loaded yields the defaults (so the subscription command post stays blocked offline).",
+    "Host confirmation flow (`confirm.ts`): `requestHostConfirmation(session, engine)` shows the plain notice (message key `provider.cp_subscription.notice`: whose login is used, that plan limits and the provider's terms apply, that written provider confirmation is pending) and requires the host to press `y`; the answer is held in memory for that session only (never persisted, never sent on the wire) and an audit note `provider.cp_subscription.confirmed {engine}` is passed to the injected audit sink; a new session asks again.",
+    "Host-side spend control (`guest-spend.ts`): `createGuestSpendControl(d)` exposes `count()` (connected editors other than the host in a command post), `paused()`, `pause()`, `resume()`; `pause()` calls the injected `setGuestsPaused(true)` which the session lanes implement with the existing `control.policy` frame (`locked: true`) and holds all not-yet-claimed guest queue items; running items finish. Text shown: `N guests can spend your <provider> usage` with a one-key pause (`p`).",
+    "TUI pieces in `packages/tui/src/provider/`: `<RunsOnChip owner payer provider />` rendering `runs on <name> · <provider>` on each agent card (the chip is dim when payer is the viewer, member colour otherwise); `<GuestComposerNotice host provider />` rendering `Your prompt will run on <host>'s account`; `<GuestSpendBanner count provider paused onPause onResume />`; `<SubscriptionGateDialog engine onConfirm onCancel />`; all text from `packages/tui/src/provider/messages.ts` (one table, key per string).",
+    "Client-local state mapping `providerStateFor(code | event): 'provider-auth-required' | 'provider-cap-reached' | 'provider-policy-blocked' | undefined` (`states.ts`): `provider_not_signed_in` -> auth-required; `provider_cap_reached` -> cap-reached; `provider_policy_blocked` and `provider_method_disabled` -> policy-blocked; everything else none (`provider_rate_limited` uses the contract state `rate-limited` through C014). These states drive the mascot/status line only (C046); they are never sent in `agent.state`.",
+    "Bundled `packages/agent/data/provider-policy.json` (must validate against `contracts/schemas/provider-policy.schema.json`; content equal to the reference rows of `contracts/fixtures/providers/policy-reference.json` with `checked_at` refreshed each release by `tools/refresh-provider-policy.mjs`), loader `loadProviderPolicy()`, and the `centcom provider status --policy` section registered through C104's `registerStatusSection` (one line per method: id, status, flag value now, conditions, source URL)."
+  ],
+  "scope_out": [
+    "Detecting login kind and the `provider` commands themselves (C104), engines (C101-C103), the permission policy and approval prompt (C015, C038).",
+    "The flags client (C067) and the REST flags endpoint (CT-API-FLAGS); this lane only defines and reads three flags.",
+    "Sending frames, the queue and the `control.policy` frame (session lanes); this lane calls the injected `setGuestsPaused` and builds field values.",
+    "Billing, quota and entitlements (usage and plan are the backend's; the provider's own usage is never metered here).",
+    "Any legal wording beyond the single notice text; final text needs a human sign-off (CT-PROVIDER 8)."
+  ],
+  "implements": [
+    "CT-PROVIDER"
+  ],
+  "consumes": [
+    "CT-API-FLAGS",
+    "CT-WS-SESSION-EVENTS",
+    "CT-WS-CONTROL",
+    "CT-STATE-MAP"
+  ],
+  "build_against": "Flags: a stub `FlagsClient` with settable values (C067's interface, stubbed locally in tests); roster and `setGuestsPaused` are injected fakes; login kind comes from C104 `ProviderStatus` fixtures or from `session.started.login_kind` in the C101 golden transcripts; the policy table is validated against the contract schema and the reference fixture. TUI components are tested with the pty/ink snapshot harness (C008).",
+  "deliverables": [
+    "packages/agent/src/provider/policy/who-pays.ts",
+    "packages/agent/src/provider/policy/gate.ts",
+    "packages/agent/src/provider/policy/flags.ts",
+    "packages/agent/src/provider/policy/confirm.ts",
+    "packages/agent/src/provider/policy/guest-spend.ts",
+    "packages/agent/src/provider/policy/states.ts",
+    "packages/agent/src/provider/policy/policy-table.ts",
+    "packages/agent/src/provider/policy/index.ts",
+    "packages/agent/src/provider/policy/__tests__/",
+    "packages/agent/data/provider-policy.json",
+    "tools/refresh-provider-policy.mjs",
+    "packages/tui/src/provider/RunsOnChip.tsx",
+    "packages/tui/src/provider/GuestComposerNotice.tsx",
+    "packages/tui/src/provider/GuestSpendBanner.tsx",
+    "packages/tui/src/provider/SubscriptionGateDialog.tsx",
+    "packages/tui/src/provider/messages.ts",
+    "packages/tui/src/provider/__tests__/",
+    "docs/provider-policy.md"
+  ],
+  "interfaces": [
+    "```ts\ntype Mode = 'branch' | 'command_post';\ninterface WhoPays { payer: MemberId; provider: ProviderId; login_kind: 'subscription'|'api_key'|'cloud'; shared: boolean }\ncomputeWhoPays(i: { mode: Mode; owner: MemberId; host: MemberId; promptBy: MemberId; engine: EngineId; loginKind: LoginKind }): WhoPays;\nbuildSpawnClearFields(w: WhoPays): { runs_on: MemberId; provider: ProviderId };\ntype GateResult =\n  | { allowed: true }\n  | { allowed: false; error: 'provider_method_disabled' | 'provider_policy_blocked'; state: 'provider-policy-blocked'; noticeKey: string }\n  | { allowed: false; needs: 'host_confirmation'; engine: EngineId };\nevaluateStartGate(i: { engine: EngineId; mode: Mode; loginKind: LoginKind; flags: Pick<FlagsClient,'flag'>; hostConfirmed: boolean }): GateResult;\n```",
+    "`createGuestSpendControl(d: { roster(): { id: MemberId; role: 'host'|'editor'|'viewer'; connected: boolean }[]; hostId: MemberId; provider: ProviderId; setGuestsPaused(p: boolean): Promise<void> }): { count(): number; paused(): boolean; pause(): Promise<void>; resume(): Promise<void>; on(e: 'change', h: () => void): () => void }`.",
+    "`requestHostConfirmation(d: { ui: { confirm(key: string, params: object): Promise<boolean> }; audit(e: AuditNote): void; sessionId: SessionId }, engine: EngineId): Promise<boolean>`; `hostConfirmed(sessionId, engine): boolean`.",
+    "`providerStateFor(code: ProviderErrorCode): ProviderLocalState | undefined`; `loadProviderPolicy(): ProviderPolicy` (type generated from `provider-policy.schema.json`).",
+    "Flags: `provider.claude_code` (bool, default true), `provider.codex` (bool, default true), `provider.command_post.subscription` (bool, default false), per CT-PROVIDER 6; env override for development only `CENTCOM_FLAG_provider.command_post.subscription=1` through the C067 override mechanism in dev builds.",
+    "UI strings (keys in `messages.ts`): `provider.runs_on` = `runs on {name} · {provider}`; `provider.guest_notice` = `Your prompt will run on {host}'s account`; `provider.guests_can_spend` = `{n} guests can spend your {provider} usage` (singular `1 guest can spend your {provider} usage`); `provider.pause` = `Pause guests`; `provider.cp_subscription.notice` (confirmation text); `provider.blocked.cp_subscription` = `Shared sessions on a subscription login are off. Use an API-key login or run this agent on your own branch.`",
+    "TUI props: `RunsOnChip { payerName: string; payerSlot: number; isSelf: boolean; provider: 'anthropic'|'openai'|'other' }` renders at most 40 columns, truncating the name with an ellipsis; accessibility label reads the same words."
+  ],
+  "acceptance": [
+    "`computeWhoPays` table: branch mode with owner A and prompt by B -> payer A, shared false; command post with host H and prompt by guest G -> payer H, shared true; `buildSpawnClearFields` returns exactly the keys `runs_on` and `provider` and the result validates against `p_agent_spawn` in `contracts/schemas/events.schema.json`.",
+    "`evaluateStartGate`: command post + `subscription` + flag off -> `provider_policy_blocked`; command post + `unknown` kind (treated as subscription) + flag off -> blocked; command post + `api_key` -> allowed regardless of the subscription flag; command post + subscription + flag on + not confirmed -> `needs: 'host_confirmation'`; same with confirmation -> allowed; branch mode + subscription -> allowed.",
+    "With `provider.codex` false, `evaluateStartGate({engine:'codex',...})` returns `provider_method_disabled` while a session already running on codex is untouched (no call to stop/kill in the test spy); flipping the flag emits one recomputation on `flags-changed` within 100 ms.",
+    "With the flags client not yet loaded (defaults), a command post on a subscription login is blocked and a branch-mode agent is allowed.",
+    "Host confirmation is held per session: confirming in session S1 does not allow S2; the audit sink receives exactly one `provider.cp_subscription.confirmed` per confirmation; nothing is written to disk or sent on the wire (fs and net spies).",
+    "`GuestSpendBanner` snapshot for 2 guests and provider anthropic shows `2 guests can spend your Anthropic usage`, reads `1 guest` for one, is hidden for 0 guests, and pressing `p` calls `setGuestsPaused(true)` once; while paused the banner shows `Guests paused` and `resume` calls `setGuestsPaused(false)`.",
+    "`RunsOnChip` snapshot for owner `Maya`, provider anthropic: `runs on Maya · anthropic`; a 60-character name is truncated so the chip is at most 40 columns; the guest composer notice equals `Your prompt will run on Maya's account`.",
+    "`providerStateFor` maps the 9 codes as specified and every returned state exists as a key in `contracts/state-map.json`; none of them is ever passed to the wire `agent.state` builder (test asserts C101 `toSessionWire` drops them).",
+    "`packages/agent/data/provider-policy.json` validates against `provider-policy.schema.json`; its method ids equal those of `policy-reference.json`; `centcom provider status --policy` prints one line per method including the current flag value."
+  ],
+  "tests": [
+    "policy/who-pays.test.ts: table above plus property test that payer is always host or owner, never the prompt author in command post.",
+    "policy/gate.test.ts: full truth table (engine x mode x login kind x flags x confirmation), flag flips, defaults-before-load.",
+    "policy/confirm.test.ts and policy/guest-spend.test.ts: per-session scope, audit note, count from roster changes, pause/resume calls.",
+    "policy/policy-table.test.ts: schema validation, equality with the reference fixture, `--policy` rendering.",
+    "tui/provider/*.test.tsx: ink snapshots at widths 40/80/120, no-colour mode, singular/plural, long names.",
+    "policy/states.test.ts: mapping and state-map key existence.",
+    "policy/contract.test.ts: spawn clear fields validate against the events schema; `provider` never accompanied by model or version in clear."
+  ],
+  "guardrails": [
+    "A subscription-backed engine in a command post is blocked by default and the block MUST hold on every path: new session, host handoff or failover, queue approval of a guest item, and auto-approve policy. Missing information (unknown login kind, flags not loaded, error reading a flag) resolves to blocked, never allowed.",
+    "Host confirmation is never persisted, never inferred from config and never settable by a guest or from a frame; only a local keypress in the host's own UI counts.",
+    "Clear wire fields stay minimal: `provider` is the coarse enum only and `runs_on` is a member id; no model name, engine id, binary version or login kind goes into a clear part (CT-PROVIDER 5).",
+    "Honest UI (CT-PROVIDER 1.6): the chip and guest notice MUST render before any guest prompt is sent; if the payer cannot be computed, the send button is disabled rather than showing a guess.",
+    "Do not name or style any Centcom feature after a vendor (CT-PROVIDER 1.5): strings use the provider word only as a plain attribute (`anthropic`, `openai`) or the tool's own name when quoting it.",
+    "Turning a kill-switch off MUST NOT stop running sessions or lose their transcript; it blocks new starts and new guest prompts only."
+  ],
+  "failure_modes": [
+    "Flags client errors or has no cache -> defaults apply (both engines on, command-post subscription off) and a debug log records `flags: defaults`.",
+    "Roster not available (reconnecting) -> `count()` returns the last known value and the banner shows it dimmed; pause remains effective locally.",
+    "`setGuestsPaused` rejects (offline or not host) -> UI shows `provider.pause_failed`, keeps the previous state, and the local claim of guest items is held anyway (fail safe toward not spending).",
+    "Policy table file missing or invalid -> `centcom provider status --policy` prints the failure and exits 1; gates keep working (they depend on flags, not on the file).",
+    "Host loses the host role while confirmation is held -> confirmation is dropped; the new host is asked."
+  ],
+  "unblocks_gate": "G3",
+  "notes": "CONTRACT GAP: CT-PROVIDER 5 says the host sees a 'one-click pause' but no frame is defined for it; this card uses the existing `control.policy.queue_paused` through an injected callback, which also blocks the host's own members' non-guest submits and is a coarse tool: consider a dedicated policy field in a contract PR. CONTRACT GAP: whether the confirmation must be repeated when the engine changes login mid-session is unspecified; this card re-evaluates the gate on every guest prompt claim. The banner shows the provider's display name (`Anthropic`, `OpenAI`); exact copy needs a design check."
+}

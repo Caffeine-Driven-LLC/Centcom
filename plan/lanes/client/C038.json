@@ -9,73 +9,76 @@
     "C015",
     "C034"
   ],
-  "goal": "Ask the human for tool approval with a clear, safe terminal prompt that shows what, where and whose agent, uses the right keys, resists accidental approval, and works for both local requests and `approval.request` events from a session.",
+  "goal": "Show every approval request, from any engine, in one clear terminal prompt that says what, where, whose agent and which engine and account, uses the right keys, resists accidental approval, and works for both local requests and `approval.request` events from a shared session.",
   "scope_in": [
-    "`<PermissionPrompt>` box per DESIGN §10.1.4: title `Allow Cento to <verb> <object>?`, the exact command or path (up to 6 lines, then `⋯ +N lines (v to view all)`), `in <directory> (<branch>)`, agent name with owner initial + name, risk chip, expiry countdown, and the key row `[y] yes  [a] always for this project  [n] no  [e] edit command`.",
-    "Border `status.warning`; for `risk: \"high\"` and for destructive classifications from lane C016 (delete, force-push, deploy to prod) the border is `status.danger` and approval requires typing `y` then `⏎` (a bare `y` does nothing).",
-    "Key semantics: `y` = decision `approve` scope `once`; `a` = `approve` scope `always`; `n` and `esc` = `deny` scope `once`; `e` opens an inline editor (TextBuffer from lane C035) for the command; `⏎` alone never approves a non-destructive prompt either.",
-    "Mapping to the wire shape of CT-WS-SESSION-EVENTS: input from `approval.request` (clear `approval_id, agent_id, risk, expires_at, approver`; secret `summary, command?, cwd?`), output `{approval_id, decision: 'approve'|'deny', scope: 'once'|'session'|'always', reason?}` for `approval.decision`.",
-    "Queue of pending prompts shown one at a time ordered by `expires_at`, with `1 of 3` badge; the prompt box gutter in lane C035 turns `status.warning` while any prompt is pending.",
-    "Role awareness: only the host (and delegated approvers named by `approver`) see action keys; others see a read-only box `Waiting for <host name> to decide.`.",
-    "Optional terminal bell (BEL) on first display of a prompt when config `notify.bell` is true (default false)."
+    "`<PermissionPrompt>` per DESIGN 10.1.4: title `Allow Cento to <verb> <object>?`, the exact command or path (6 lines, then `⋯ +N lines (v to view all)`), `in <directory> (<branch>)`, agent name with owner initial, risk chip, expiry countdown, and the key row.",
+    "Data source: the normalised `approval.requested` event of any engine, delivered by the permission policy engine (lane C015) as an `ApprovalView`; the prompt never talks to an engine directly. Decisions go back to lane C015, which answers the engine.",
+    "Provider/engine badge (`claude-code` / `codex` with the coarse provider word) and the 'whose account' line from CT-PROVIDER section 5: `runs on <name> · <provider>`; in a command post `Runs on <host>'s account`.",
+    "Options per DESIGN 10.1.4: `[y]` once, `[s]` for this session, `[a]` always for this project, `[n]` deny, `[e]` edit; only the options the request allows are rendered (`allowedScopes`).",
+    "Edit is only offered when the engine supports changing the input for this request (`editable: true` on the event, from the engine's capability); otherwise `[e]` is hidden and the footer says nothing about editing.",
+    "Destructive/high-risk prompts use `status.danger` and require `y` then `⏎`; queue of pending prompts ordered by `expires_at` with `1 of 3` badge; the prompt gutter of lane C035 turns `status.warning` while any prompt is pending.",
+    "Mapping to CT-WS-SESSION-EVENTS: input from `approval.request` (clear `approval_id, agent_id, risk, expires_at, approver`; secret `summary, command?, cwd?`), output `{approval_id, decision, scope, reason?}` for `approval.decision`.",
+    "Role awareness: only the host and named approvers see action keys; others see `Waiting for <host name> to decide.`. Optional BEL on first display when `notify.bell` is true."
   ],
   "scope_out": [
-    "The permission engine, rules, always-rule storage and classification (lanes C015, C016).",
+    "The permission engine, rules, always-rule storage and risk classification (lanes C015, C016) and applying the answer to the engine (lanes C102, C103).",
+    "Detecting providers, who-pays policy and the command-post gate (lanes C104, C105); this component only displays the values it is given.",
     "Sending `approval.decision` over the wire and receiving `approval.request` (session client lanes).",
-    "Desktop or push notifications for approvals (notification lanes).",
-    "Any mascot: DESIGN §10.1.4 and §11.5 keep the mascot out of terminal permission prompts."
+    "Desktop or push notifications; any mascot in the prompt (DESIGN 10.1.4 and 11.5)."
   ],
   "implements": [],
   "consumes": [
     "CT-WS-SESSION-EVENTS",
     "CT-RBAC",
-    "CT-STATE-MAP"
+    "CT-STATE-MAP",
+    "CT-PROVIDER"
   ],
-  "build_against": "Pure component tests with prop fixtures and the pty/TUI snapshot tester from lane C008 (ink-testing-library plus pty harness, frames captured at 80x24 and 120x40). No backend is needed; any session data comes from contracts/fixtures/events/*.json or hand-built typed values from @centcom/protocol (lane C003). Uses the `approval.request` and `approval.decision` fixtures from contracts/fixtures/events/ and the permission engine stub of lane C015's public types; end-to-end with remote approvers uses the mock backend (lane C007) simulator.",
+  "build_against": "Pure component tests with prop fixtures and the pty/TUI snapshot tester of lane C008 (frames at 80x24 and 120x40). Data from `contracts/fixtures/events/*.json` (approval.request/approval.decision) and normalised `approval.requested` events from the golden transcripts in `contracts/fixtures/providers/` mapped by a stub of lane C015's public types. No CLI, no backend.",
   "deliverables": [
     "packages/tui/src/permission/",
     "packages/tui/src/permission/README.md"
   ],
   "interfaces": [
     "`<PermissionPrompt request: ApprovalView; canDecide: boolean; onDecide: (d: ApprovalDecisionInput) => void; onEdit?: (cmd: string) => void; now: () => Date />`",
-    "`type ApprovalView = {approvalId: string; agentId: string; agentLabel: string; ownerName: string; ownerSlot: number; risk: 'low'|'medium'|'high'; destructive: boolean; expiresAt: string; approver: 'host'|'owner'|'any_editor'; title: string; command?: string; cwd?: string; branch?: string; summary: string}`",
+    "`type ApprovalView = {approvalId: string; agentId: string; agentLabel: string; ownerName: string; ownerSlot: number; engine: 'claude-code'|'codex'; provider: 'anthropic'|'openai'|'other'; runsOn: string; accountLine: string; risk: 'low'|'medium'|'high'; destructive: boolean; editable: boolean; allowedScopes: ('once'|'session'|'always')[]; expiresAt: string; approver: 'host'|'owner'|'any_editor'; title: string; command?: string; cwd?: string; branch?: string; summary: string}`",
     "`type ApprovalDecisionInput = {approvalId: string; decision: 'approve'|'deny'; scope: 'once'|'session'|'always'; editedCommand?: string; reason?: 'user'|'expired'|'interrupted'}`",
-    "`<PermissionHost queue: ApprovalView[]; ... />` which sequences prompts; `approvalFromEvent(p: ApprovalRequestClear, s: ApprovalRequestSecret): ApprovalView`",
-    "Action ids: `permission.yes`, `permission.always`, `permission.no`, `permission.edit` (context `permission`)."
+    "`<PermissionHost queue: ApprovalView[]; ... />`; `approvalFromEvent(ev: NormalisedApprovalRequested, ctx: {runsOn: string; accountLine: string}): ApprovalView`; `approvalFromWire(p: ApprovalRequestClear, s: ApprovalRequestSecret): ApprovalView`",
+    "Action ids: `permission.yes`, `permission.session`, `permission.always`, `permission.no`, `permission.edit` (context `permission`)."
   ],
   "acceptance": [
-    "Snapshot at 80x24 matches the DESIGN §10.1.4 anatomy: title, command, `in ~/centcom (agent/feature-retry)`, blank row, key row; box width is `min(cols-2, 78)`.",
-    "For `risk:'low'|'medium'` pressing `y` calls `onDecide` once with `{decision:'approve', scope:'once'}`; `a` -> scope `always`; `n` and `esc` -> `{decision:'deny', scope:'once'}`.",
-    "For a destructive prompt (`high` risk or `destructive:true`) the border token is `status.danger`; pressing `y` alone shows `Type y then Enter to confirm.` and does not call `onDecide`; `y` then `⏎` within 5 s approves; any other key cancels the arming.",
-    "Keystrokes arriving within 300 ms after a prompt first renders are ignored (type-ahead protection), proven by a test that feeds `y` 100 ms after mount and expects no decision.",
-    "At `expires_at` the prompt auto-resolves with `{decision:'deny', reason:'expired'}`, the box dims and shows `Expired`; the remaining time is shown as `expires in 4:32` and updates once per second.",
-    "With `canDecide=false` no key row is rendered, key presses do nothing, and the box reads `Waiting for <name> to decide.`.",
-    "`[e]` is shown only when `onEdit` is provided (local host); the edited command is returned in `editedCommand` and the decision is `approve` `once`.",
-    "Command text containing bidi override `\\u202E`, zero-width characters or ESC sequences is shown with visible escapes (e.g. `\\u{202E}`), so the user sees exactly what will run.",
-    "With 3 pending prompts the badge reads `1 of 3`; answering the first shows the next within one frame.",
-    "Under `NO_COLOR` the risk is conveyed by words `risk: high` and the destructive border by heavy box characters `┏━┓`."
+    "Snapshot at 80x24 matches the DESIGN 10.1.4 anatomy: title, command, `in ~/centcom (agent/feature-retry)`, engine badge line `claude-code · anthropic · runs on Ana`, blank row, key row; box width `min(cols-2, 78)`.",
+    "Feeding the Claude Code and the Codex golden `approval.requested` events produces two prompts differing only in badge text and command text; both decisions return a schema-valid `ApprovalDecisionInput`.",
+    "For low/medium risk `y` calls `onDecide` once with `{decision:'approve', scope:'once'}`, `s` -> `session`, `a` -> `always`, `n` and `esc` -> `{decision:'deny', scope:'once'}`; keys for scopes not in `allowedScopes` are not rendered and do nothing.",
+    "`[e]` is rendered only when `editable` is true and `onEdit` is given; with `editable:false` the key row has no `e` and pressing `e` does nothing; an edited command returns `editedCommand` with `approve`/`once`.",
+    "Destructive prompt (`high` or `destructive:true`): `status.danger` border, bare `y` shows `Type y then Enter to confirm.` and does not call `onDecide`; `y` then `⏎` within 5 s approves.",
+    "Keystrokes within 300 ms after first render are ignored and buffered keys are cleared (test feeds `y` at 100 ms).",
+    "At `expires_at` the prompt auto-resolves `{decision:'deny', reason:'expired'}`, dims, shows `Expired`, and shows `expires in 4:32` updating each second.",
+    "With `canDecide=false` no key row appears, keys do nothing and the box reads `Waiting for <name> to decide.`; in a command post the account line reads `Runs on <host>'s account`.",
+    "Command text with `\\u202E`, zero-width characters or ESC sequences is shown with visible escapes, so the user sees exactly what will run; under `NO_COLOR` risk is conveyed by words and the destructive border by `┏━┓`."
   ],
   "tests": [
-    "permission/keys.test.ts: all key paths incl. destructive arming and type-ahead window with fake clock.",
-    "permission/render.test.ts: snapshots 80x24, 120x40, NO_COLOR, light, destructive.",
+    "permission/keys.test.ts: all key paths, destructive arming, type-ahead window, allowedScopes.",
+    "permission/render.test.ts: snapshots 80x24, 120x40, NO_COLOR, light, destructive, both engines.",
+    "permission/edit-capability.test.ts: editable true/false.",
     "permission/expiry.test.ts: countdown and auto-deny.",
     "permission/untrusted-text.test.ts: bidi, zero width, ANSI in command and cwd.",
-    "permission/roles.test.ts: read-only view for non-approvers.",
-    "permission/event-mapping.test.ts: fixtures to ApprovalView and decision to schema-valid payload."
+    "permission/event-mapping.test.ts: normalised and wire fixtures to ApprovalView; decision to schema-valid payload."
   ],
   "guardrails": [
-    "MUST NEVER make the destructive action the default; `⏎` with nothing armed does nothing, and focus never starts on `y`.",
-    "MUST show what (exact command or path), where (directory and branch) and whose agent (owner name + initial) in every prompt (DESIGN §10.1.4).",
-    "MUST ignore input during the 300 ms type-ahead window and MUST clear any buffered keys when a prompt appears, so text typed into the prompt box cannot approve an action.",
-    "MUST NOT truncate the command silently: hidden lines are announced as `⋯ +N lines` and `v` shows the full text before deciding.",
-    "MUST enforce expiry locally using `expires_at`; an expired prompt can never be approved.",
-    "MUST NOT claim authority the user lacks: the UI mirrors CT-RBAC for display only; the host/server decides, so a decision from a non-approver is simply rejected upstream.",
-    "MUST NOT show the mascot and MUST NOT use joke copy in this component (DESIGN §11.5)."
+    "MUST NEVER make approval the default; `⏎` with nothing armed does nothing, focus never starts on `y`.",
+    "MUST show what (exact command or path), where (directory and branch), whose agent, which engine and whose account in every prompt; MUST NOT hide the account line to save space.",
+    "MUST ignore input during the 300 ms window and clear buffered keys, so text typed into the prompt box cannot approve an action.",
+    "MUST NOT truncate silently: hidden lines are announced and `v` shows the full text before deciding.",
+    "MUST enforce expiry locally; an expired prompt can never be approved.",
+    "MUST NOT offer `[e]` unless the request is marked editable, and MUST NOT claim authority the user lacks (CT-RBAC is display only; the host decides).",
+    "MUST NOT show the mascot or joke copy here (DESIGN 11.5)."
   ],
   "failure_modes": [
-    "`expires_at` already in the past on arrival -> render as expired and immediately emit the auto-deny; do not flash an actionable prompt.",
-    "Missing secret part (`command` absent) -> show `summary` only and hide `[e]`.",
-    "Decision callback throws or the send fails -> keep the prompt open, show `Couldn't send your answer. Try again.`, and re-enable keys."
+    "`expires_at` already past on arrival -> render expired and emit the auto-deny; never flash an actionable prompt.",
+    "Missing `command` -> show `summary` only and hide `[e]`.",
+    "Decision callback throws or send fails -> keep the prompt open, show `Couldn't send your answer. Try again.`, re-enable keys.",
+    "Unknown engine or provider value -> show the raw engine id and `other`, still allow decisions."
   ],
-  "unblocks_gate": "G3"
+  "unblocks_gate": "G3",
+  "notes": "`ApprovalView` fields `engine`, `provider`, `editable`, `allowedScopes` are populated by lane C015 from lane C101's `approval.requested`; align names at review. Scope `session` is added to the key row (it was already in the decision type)."
 }

@@ -235,7 +235,7 @@ STATE_MAP = {
     'compacting': 'compacting', 'context-full': 'context_full', 'background-task': 'background_task', 'sub-agent': 'sub_agent_spawn',
     'saving': 'session_saved', 'success': 'thumbs_up', 'celebrate': 'celebrate', 'error': 'error', 'crash': 'crash',
     'warning': 'worried', 'offline': 'offline', 'reconnecting': 'reconnecting', 'online': 'back_online', 'auth-required': 'auth_needed',
-    'session-expired': 'session_expired', 'rate-limited': 'rate_limited', 'quota-reached': 'quota_reached', 'cost-alert': 'cost_alert',
+    'session-expired': 'session_expired', 'provider-auth-required': 'auth_needed', 'provider-cap-reached': 'quota_reached', 'provider-policy-blocked': 'permission_denied', 'rate-limited': 'rate_limited', 'quota-reached': 'quota_reached', 'cost-alert': 'cost_alert',
     'update-available': 'update_available', 'first-run': 'first_run_welcome', 'empty': 'empty_state', 'no-results': 'no_results',
     'sleeping': 'sleeping', 'away': 'status_away', 'tests-pass': 'tests_passing', 'tests-fail': 'tests_failing',
     'ci-running': 'ci_running', 'ci-pass': 'ci_passed', 'ci-fail': 'ci_failed', 'pr-open': 'pr_open', 'pr-merged': 'pr_merged',

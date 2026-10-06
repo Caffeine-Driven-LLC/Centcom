@@ -1,8 +1,8 @@
-# Client plan · 100 lanes (C001-C100)
+# Client plan · 105 lanes (C001-C105)
 
 Repo: `Centcom` · Rules: [`plan/GUIDELINES.md`](../GUIDELINES.md) · Format: [`plan/LANE_CARD_SPEC.md`](../LANE_CARD_SPEC.md) · Connection points: [`contracts/`](../../contracts/index.json)
 
-- **100 lanes**: 29 small (≤1 d), 53 medium (≤3 d), 18 large (≤5 d) · 278 person-days of work in total
+- **105 lanes**: 29 small (≤1 d), 55 medium (≤3 d), 21 large (≤5 d) · 299 person-days of work in total
 - **10 dependency layers** · critical path **37 days** (see [`GRAPH.md`](../GRAPH.md)) · parallelism in layer 1: 1 lanes can start on day one
 - Every lane card is independent: it names its inputs (contracts), outputs (deliverables), and how to build with no counterpart (`build_against`).
 - **No lane in this plan depends on a lane in the other plan.** The two sides meet only at contract IDs.
@@ -29,23 +29,23 @@ Repo: `Centcom` · Rules: [`plan/GUIDELINES.md`](../GUIDELINES.md) · Format: [`
 
 | ID | Lane | Size | Role | Depends on | Implements | Gate |
 |---|---|:-:|---|---|---|:-:|
-| [C013](C013.md) | Agent runner daemon wrapping the Claude Agent SDK | L | runtime | C004, C005, C025 | - | G3 |
+| [C013](C013.md) | Agent runner daemon hosting AgentEngine processes (claude, codex) | L | runtime | C004, C005, C025, C101 | - | G3 |
 | [C014](C014.md) | Agent session state machine emitting contract state names | M | runtime | C013, C025 | CT-STATE-MAP, CT-WS-SESSION-EVENTS | G3 |
-| [C015](C015.md) | Tool permission engine: policies, allow, deny, always-rules | L | runtime | C013 | - | G3 |
-| [C016](C016.md) | Command classification and execution sandbox policy | M | runtime | C015 | - | G6 |
+| [C015](C015.md) | Permission policy engine bridging engine approval requests | L | runtime | C013 | - | G3 |
+| [C016](C016.md) | Command risk classification and sandbox settings passed to the engines | M | runtime | C015 | - | G6 |
 | [C017](C017.md) | Git worktree manager | M | runtime | C013 | - | G5 |
 | [C018](C018.md) | File lock client: local and remote advisory locks | M | runtime | C017 | - | G5 |
-| [C019](C019.md) | Context management: token counting and compaction triggers | M | runtime | C013 | - | G6 |
-| [C020](C020.md) | Skills loader and bundled skills pack | M | runtime | C013 | - | G6 |
-| [C021](C021.md) | MCP server manager | M | runtime | C013 | - | G6 |
-| [C022](C022.md) | Hooks engine | M | runtime | C015 | - | G6 |
-| [C023](C023.md) | Memory store (project and user memory) | S | runtime | C013 | - | G6 |
-| [C024](C024.md) | Sub-agent spawner with isolation | L | runtime | C013, C017 | - | G5 |
+| [C019](C019.md) | Context visibility: usage display and compaction requests through the engine | M | runtime | C013 | - | G6 |
+| [C020](C020.md) | Skills pack: install and manage Claude Code skills and Codex AGENTS.md guidance | M | runtime | C013 | - | G6 |
+| [C021](C021.md) | MCP server manager: configure and show status through the engines | M | runtime | C013 | - | G6 |
+| [C022](C022.md) | Hooks and settings manager for the engines’ native hooks | M | runtime | C015 | - | G6 |
+| [C023](C023.md) | Memory files: CLAUDE.md and AGENTS.md editing and sync | S | runtime | C013 | - | G6 |
+| [C024](C024.md) | Parallel agents: a fleet of engine processes in isolated worktrees | L | runtime | C013, C017 | - | G5 |
 | [C025](C025.md) | Internal typed event bus | S | runtime | C003 | - | G3 |
-| [C026](C026.md) | Local session persistence and resume | M | runtime | C013, C025 | - | - |
+| [C026](C026.md) | Local transcript persistence and engine session resume | M | runtime | C013, C025 | - | - |
 | [C027](C027.md) | Checkpoints and rewind | M | runtime | C017, C026 | - | - |
-| [C028](C028.md) | Model selection and switching | S | runtime | C013 | - | - |
-| [C029](C029.md) | Local cost and token accounting | S | runtime | C019, C025 | - | G4 |
+| [C028](C028.md) | Model selection through the engines | S | runtime | C013 | - | - |
+| [C029](C029.md) | Usage and cost display from engine reports | S | runtime | C019, C025 | - | G4 |
 | [C030](C030.md) | Interrupt and cancel semantics | S | runtime | C013 | - | - |
 
 ### P2 TUI
@@ -141,4 +141,14 @@ Repo: `Centcom` · Rules: [`plan/GUIDELINES.md`](../GUIDELINES.md) · Format: [`
 | [C097](C097.md) | Opt-in crash reporting and the doctor command | S | runtime | C005, C010 | - | G6 |
 | [C098](C098.md) | Performance budgets and benchmarks | M | qa | C033, C036 | - | G6 |
 | [C099](C099.md) | Client security review: secrets, sandbox, supply chain, SBOM | M | security | C002 | - | G6 |
-| [C100](C100.md) | Consumer conformance suite and release gate | L | qa | C007, C055, C056, C057, C058, C059, C075, C076 | - | G6 |
+| [C100](C100.md) | Consumer conformance suite and release gate | L | qa | C007, C055, C056, C057, C058, C059, C075, C076, C105 | - | G6 |
+
+### P7 Providers
+
+| ID | Lane | Size | Role | Depends on | Implements | Gate |
+|---|---|:-:|---|---|---|:-:|
+| [C101](C101.md) | Engine abstraction: AgentEngine interface, capabilities and normalised event stream | L | runtime | C003, C004, C005, C025 | CT-PROVIDER | G3 |
+| [C102](C102.md) | Claude Code engine: drive the user’s own claude binary (stream-json, resume, approvals bridge) | L | runtime | C101, C015 | CT-PROVIDER | G3 |
+| [C103](C103.md) | Codex engine: drive the user’s own codex binary (app-server JSON-RPC, exec fallback) | L | runtime | C101, C015 | CT-PROVIDER | G3 |
+| [C104](C104.md) | Provider detection and login handoff: provider status, login, logout, doctor checks | M | net | C004, C005, C101 | CT-PROVIDER | G3 |
+| [C105](C105.md) | Who-pays policy: runs-on banner, command-post gate, kill switches, policy table | M | tui | C014, C067, C101, C104 | CT-PROVIDER | G3 |

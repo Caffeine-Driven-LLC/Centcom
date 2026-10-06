@@ -59,5 +59,8 @@
   "handoff": "handoff",
   "pair-working": "pair_programming",
   "high-five": "high_five",
-  "welcome-teammate": "welcome"
+  "welcome-teammate": "welcome",
+  "provider-auth-required": "auth_needed",
+  "provider-cap-reached": "quota_reached",
+  "provider-policy-blocked": "permission_denied"
 }

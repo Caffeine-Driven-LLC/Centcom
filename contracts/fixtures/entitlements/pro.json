@@ -19,19 +19,18 @@
       "max_concurrent_sessions": 2,
       "max_parallel_agents": 8,
       "history_days": 7,
-      "agent_minutes_month": 6000,
-      "tokens_month": null,
       "queue_items_month": null,
       "audit_log_days": 0,
       "webhooks_max": 2,
-      "api_keys_max": 5
+      "api_keys_max": 5,
+      "hosted_minutes_month": 6000
     },
     "usage": {
-      "agent_minutes_month": 4900
+      "hosted_minutes_month": 4900
     },
     "warnings": [
       {
-        "limit": "agent_minutes_month",
+        "limit": "hosted_minutes_month",
         "pct": 80
       }
     ]

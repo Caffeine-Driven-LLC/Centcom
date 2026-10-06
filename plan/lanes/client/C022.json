@@ -1,6 +1,6 @@
 {
   "id": "C022",
-  "title": "Hooks engine",
+  "title": "Hooks and settings manager for the engines’ native hooks",
   "plan": "client",
   "phase": "P1 Agent runtime",
   "size": "M",
@@ -8,62 +8,67 @@
   "depends_on": [
     "C015"
   ],
-  "goal": "A hooks engine that runs user- or project-configured commands at agent lifecycle points (before/after tools, prompt submit, stop, compaction) with strict timeouts, a clear blocking contract, and trust gating for project-supplied hooks.",
+  "goal": "Let the user view, validate and edit the project settings that define the engines' native hooks (Claude Code `settings.json` hooks, Codex equivalents if documented), with ready-made templates and backed-up, confirmed edits. Centcom never executes hooks; the engines do.",
   "scope_in": [
-    "Config: user `<config dir>/hooks.json` and project `.centcom/hooks.json`: `{ hooks: { <Event>: [{ matcher?: string, command: string[], timeout_ms?: number }] } }`; events `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Stop`, `SubagentStop`, `PreCompact`, `Notification`.",
-    "Commands are argv arrays executed without a shell; JSON event on stdin (`{ event, agent_id, tool?: { name, input }, result?: ..., cwd }`); defaults: timeout 10 000 ms (max 60 000), stdout/stderr cap 64 KiB each, max 8 hooks per event, run sequentially in config order (user before project).",
-    "Exit-code contract: 0 = continue (stdout JSON optional); 2 = block (stderr text returned to the agent as the reason); any other non-zero = non-blocking error (logged, agent continues). Optional stdout JSON `{ decision: 'allow'|'deny'|'ask', reason?: string, updated_input?: object }` for `PreToolUse`; `deny` blocks, `allow` never overrides a permission-engine deny, `ask` forces approval.",
-    "`matcher` is a tool-name glob (`Bash`, `Edit|Write`, `mcp__github__*`) for tool events.",
-    "Trust gate: project hooks run only when `TrustStore.isTrusted('hooks', sha256(file bytes))`; changed file means untrusted again; `needsTrust` surfaced to the UI.",
-    "Child env: allow-list (PATH, HOME, LANG, TERM, TMPDIR) plus `CENTCOM_HOOK_EVENT`, `CENTCOM_AGENT_ID`; never tokens.",
-    "Integrates as a `PermissionGate` decorator for `PreToolUse` (runs before the permission engine and can only tighten) and as bus listeners for the other events."
+    "Read and edit hook definitions in Claude Code settings files: project `<repo>/.claude/settings.json` (shared), `<repo>/.claude/settings.local.json` (personal) and user `~/.claude/settings.json` (user scope needs extra confirmation); only the `hooks` object is touched, all other keys preserved byte-for-byte via a minimal JSON patch.",
+    "Per-session injection variant: build a `--settings <file-or-json>` payload containing only chosen hooks for a single run (no file written), used by the fleet and by templates marked 'this session only'.",
+    "Codex: show and edit hook-like settings only where the installed Codex documents them (e.g. a `notify` command in the project-scope config); if none are documented for the detected version the Codex tab says so and offers nothing to edit (capability check, no guessing).",
+    "Validation against a local schema: Claude events `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `Notification`, `Stop`, `SubagentStop`, `PreCompact`, `SessionStart` (the engine's `system/init` or docs-pinned list; unknown events are kept and flagged `unknown_event`); each hook `{ type:'command', command: string, timeout?: number }`, `matcher` string; limits 8 hooks per event, command <= 1 024 chars, timeout 1..600 s.",
+    "Templates (data files in `packages/agent/src/hooks/templates/*.json`): `notify-on-approval` (a Notification hook calling `centcom notify --kind approval`), `run-formatter-after-edit` (PostToolUse on `Edit|Write` running a user-chosen formatter command from a fixed list `prettier --write`, `gofmt -w`, `black`), `block-force-push` (PreToolUse on `Bash` calling a bundled checker script text shown in full), `log-session-stop`. Template commands are shown in full in the diff.",
+    "Safe edit: `plan()` -> diff -> confirmation (hash-bound) -> backup `<file>.centcom-bak.<yyyymmddHHMMSS>` (keep last 5) -> atomic write; 'dry validate' mode runs only schema validation.",
+    "Hook warnings view: lists hooks whose command is not found on PATH (lookup only, no execution) and hooks defined in a shared file that came from a git pull (file hash changed since the user last confirmed), flagged 'review before running'."
   ],
   "scope_out": [
-    "The permission engine itself: lane C015. Trust store implementation: lane C013.",
-    "A hook marketplace or remote hooks. Hooks that modify model output (not supported).",
-    "UI for authoring hooks."
+    "Running hooks, timeouts, exit-code handling, blocking semantics: the engines' own. Centcom does not wrap or intercept tool calls here.",
+    "The permission engine and approval UI: C015; engine approval bridging: C102, C103.",
+    "A hook marketplace or remote templates; hooks that call model APIs.",
+    "Skills, MCP config and memory files: C020, C021, C023."
   ],
   "implements": [],
   "consumes": [
+    "CT-PROVIDER",
     "CT-IDS"
   ],
-  "build_against": "Tiny fixture scripts (node one-liners) written to a temp dir by the tests; fake clock for timeout tests; in-memory TrustStore.",
+  "build_against": "Temp-dir settings fixtures (with comments-free JSON, extra keys, large files), FakeEngine (C101) status events for the version/capability check; no real CLI.",
   "deliverables": [
     "packages/agent/src/hooks/",
     "docs/hooks.md"
   ],
   "interfaces": [
-    "`createHooksEngine(deps: { fs: HooksFs; spawn: SpawnFn; trust: TrustStore; clock: Clock; bus: AgentBus; log: Logger; config: HooksConfig }): HooksEngine`",
-    "`interface HooksEngine { load(projectRoot?: string): Promise<{ needsTrust: PendingTrust[] }>; trust(file: string): Promise<void>; run(event: HookEvent, input: HookInput): Promise<HookOutcome>; gate(inner: PermissionGate): PermissionGate }`",
-    "`HookOutcome = { blocked: boolean; reason?: string; decision?: 'allow'|'deny'|'ask'; updatedInput?: unknown; errors: number }`."
+    "`createHooksManager(deps: { fs: HooksFs; engines: { capabilities(engine: EngineId): CapabilitySet | undefined; settingsPaths(engine: EngineId, scope: 'project'|'local'|'user', root?: string): string | undefined }; clock: Clock; log: Logger }): HooksManager`",
+    "`interface HooksManager { list(root?: string): Promise<HookEntry[]>; validate(entry: HookDef): ValidationIssue[]; templates(): HookTemplate[]; plan(op: { kind: 'add'|'update'|'remove'; engine: EngineId; scope: 'project'|'local'|'user'; event: string; def?: HookDef; index?: number; root?: string }): Promise<HooksPlan>; apply(plan: HooksPlan, confirm: { accepted: true; planHash: string }): Promise<ApplyReport>; sessionSettingsArg(defs: HookDef[]): string }`",
+    "`interface HookDef { matcher?: string; command: string; timeout_s?: number }`; `ValidationIssue = { code: 'unknown_event'|'too_many'|'too_long'|'bad_timeout'|'command_not_found'|'bad_matcher'; message: string }`.",
+    "CLI: `centcom hooks list|add --template <id>|remove|validate [--scope project|local|user]`."
   ],
   "acceptance": [
-    "A `PreToolUse` hook exiting 2 with stderr `no force pushes` blocks the tool and the agent receives exactly that reason text; exit 1 is logged and does not block.",
-    "A hook printing `{decision:'allow'}` does NOT turn a permission-engine `deny` into allow (integration test with C015 stub): the combined outcome is deny.",
-    "A hook sleeping 20 s with `timeout_ms: 10000` is killed at 10 000 ms (fake clock; SIGTERM then SIGKILL after 2 s) and counted as a non-blocking error.",
-    "stdout of 1 MiB is truncated at 64 KiB and the hook is not failed solely for that; invalid JSON stdout from a hook that exited 0 is ignored with a warning.",
-    "Project hooks file is not executed (spawn count 0) until trusted; modifying one byte of the file untrusts it; user hooks run without prompting.",
-    "Matcher `Edit|Write` triggers for Edit and Write and not for Bash; `mcp__github__*` matches `mcp__github__create_issue`.",
-    "The spawned env contains `CENTCOM_HOOK_EVENT` and none of the poisoned variables from the parent (token/secret names).",
-    "9th hook for an event is ignored with a warning; execution order equals config order."
+    "Adding template `run-formatter-after-edit` with `prettier --write` to a settings.json containing `permissions` and `env` keys produces a diff touching only `hooks.PostToolUse`; after apply the other keys are byte-identical and a `.centcom-bak.<ts>` backup exists.",
+    "A 9th hook for one event yields `ValidationIssue code:'too_many'` and `plan` refuses; a `timeout_s` of 0 or 601 yields `bad_timeout`.",
+    "A hook event `Frobnicate` is preserved in the file when other hooks are edited and listed with `unknown_event`; it is never deleted by Centcom.",
+    "`apply` with a stale `planHash` writes nothing (`PlanChanged`); without `accepted: true` writes nothing; user scope requires `confirm.userScope === true`.",
+    "`sessionSettingsArg` returns a JSON string `{\"hooks\":{...}}` containing only the given hooks and writes no file (fs write count 0).",
+    "With a recorded Codex version that documents no hooks, `list` for engine `codex` returns `{ supported: false }` and `plan` for codex throws `CapabilityMissing`.",
+    "Grep of `packages/agent/src/hooks/` shows no import of `child_process` and no spawn call; a lint test enforces this.",
+    "Settings JSON larger than 1 MiB or invalid JSON is refused with `SettingsInvalid` and the file is untouched; backup rotation keeps exactly the 5 newest backups after 7 edits."
   ],
   "tests": [
-    "config.test.ts, exit-codes.test.ts, decision-merge.test.ts (with permission stub).",
-    "timeout.test.ts, caps.test.ts, trust.test.ts.",
-    "matcher.test.ts, env.test.ts, argv-no-shell.test.ts (metacharacters in args are literal)."
+    "list-edit.test.ts (patch preserves other keys).",
+    "validate.test.ts (every issue code).",
+    "templates.test.ts, backup-rotation.test.ts.",
+    "plan-hash.test.ts, scope-confirm.test.ts.",
+    "codex-unsupported.test.ts, no-exec.test.ts."
   ],
   "guardrails": [
-    "MUST NOT run project hooks without local trust bound to the file hash; hooks are arbitrary code execution.",
-    "Hooks MUST NOT be able to loosen security: a hook `allow` cannot override a permission-engine or hard `deny`; `updated_input` is re-validated by the permission engine afterwards.",
-    "MUST spawn by argv without a shell; MUST NOT interpolate event data into command strings.",
-    "MUST NOT log hook commands, stdin payloads, stdout/stderr contents or tool inputs; log event name, duration, exit code.",
-    "Every hook is time-limited (default 10 s, max 60 s) and output-capped (64 KiB)."
+    "MUST NOT execute, test-run or intercept hooks; they are arbitrary code run by the engine, so every command is shown in full in the diff before confirmation.",
+    "MUST NOT write without a hash-bound confirmation and a backup; MUST NOT touch any key other than `hooks` (or the documented Codex notify setting).",
+    "MUST NOT put secrets in hook commands: `looksLikeSecret` (C005) hits are refused without echoing the content.",
+    "MUST NOT read credential files; only the settings files listed above are opened.",
+    "Hooks in a shared project file that changed since last confirmation are flagged for review rather than silently accepted."
   ],
   "failure_modes": [
-    "Hook binary missing -> non-blocking error `spawn_failed`, agent continues.",
-    "Hook crash/timeouts on `PreToolUse` -> do not block (fail open for hooks only because the permission engine remains the fail-closed control).",
-    "hooks.json invalid -> ignored with a warning; no hooks run."
+    "Settings file missing -> created with only `{ \"hooks\": {...} }` after confirmation, directory `.claude/` created 0755.",
+    "Settings file locked or unwritable -> typed `unwritable` error, backup not created, nothing changed.",
+    "Engine version unknown -> allow edits of the documented events, banner 'could not verify against your installed version'."
   ],
   "unblocks_gate": "G6",
-  "notes": "Event names follow the common agent-hook vocabulary; they are internal to the client and not a contract."
+  "notes": "Depends on C015 per skeleton (approval templates reference the permission flow) even though no code is shared. Hook event names above are Claude Code's documented set; verify against the installed version in the doctor output (C104). The template script bodies must contain no network calls."
 }

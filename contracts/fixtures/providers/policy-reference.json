@@ -1,0 +1,57 @@
+{
+  "schema": "provider-policy.schema.json",
+  "valid": true,
+  "note": "Shipped as provider-policy.json by the client; this fixture is the reference table as of 2026-10-06",
+  "data": {
+    "checked_at": "2026-10-06T00:00:00.000Z",
+    "methods": [
+      {
+        "id": "anthropic.claude_code",
+        "provider": "anthropic",
+        "status": "allowed_with_conditions",
+        "flag": "provider.claude_code",
+        "engine": "claude-code",
+        "source": "https://code.claude.com/docs/en/legal-and-compliance",
+        "conditions": [
+          "unmodified binary",
+          "user signs in via Anthropic flow or uses own API key/cloud credentials",
+          "Centcom never reads credentials",
+          "subscription-backed shared command posts blocked by default",
+          "written confirmation pending (CT-PROVIDER 8.1)"
+        ]
+      },
+      {
+        "id": "anthropic.in_app_login",
+        "provider": "anthropic",
+        "status": "not_permitted",
+        "flag": "provider.anthropic.in_app_login",
+        "source": "https://code.claude.com/docs/en/legal-and-compliance"
+      },
+      {
+        "id": "openai.codex",
+        "provider": "openai",
+        "status": "allowed_with_conditions",
+        "flag": "provider.codex",
+        "engine": "codex",
+        "source": "https://learn.chatgpt.com/docs/auth",
+        "conditions": [
+          "unmodified binary",
+          "user signs in via OpenAI flow or uses own API key",
+          "Centcom never reads credentials",
+          "subscription-backed shared command posts blocked by default"
+        ]
+      },
+      {
+        "id": "openai.native_plan_tokens",
+        "provider": "openai",
+        "status": "pending_confirmation",
+        "flag": "provider.openai.native_plan_tokens",
+        "source": "https://developers.openai.com/siwc",
+        "conditions": [
+          "out of scope for v1",
+          "requires an OpenAI-issued client ID"
+        ]
+      }
+    ]
+  }
+}

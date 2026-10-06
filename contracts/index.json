@@ -1,5 +1,5 @@
 {
-  "contract_version": "1.1.0",
+  "contract_version": "1.2.0",
   "frozen": true,
   "rules": "Contract files are identical in both repos and locked by CONTRACTS.lock. See plan/GUIDELINES.md \u00a79 for the change process.",
   "contracts": [
@@ -357,6 +357,18 @@
       "consumed_by": [
         "backend"
       ]
+    },
+    {
+      "id": "CT-PROVIDER",
+      "title": "Model providers via the vendors\u2019 own CLIs; credentials; who pays",
+      "file": "10-providers.md",
+      "kind": "policy",
+      "implemented_by": [
+        "client"
+      ],
+      "consumed_by": [
+        "backend"
+      ]
     }
   ],
   "files": {
@@ -370,7 +382,8 @@
       "06-lan.md",
       "07-billing-entitlements.md",
       "08-integrations.md",
-      "09-state-map.md"
+      "09-state-map.md",
+      "10-providers.md"
     ],
     "machine": [
       "openapi.yaml",

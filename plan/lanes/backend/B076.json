@@ -11,7 +11,7 @@
   ],
   "goal": "Turn metered usage into quota signals: a one-time 80 percent warning and a 100 percent quota_reached per workspace, limit and period, delivered as sys.notice to live hosted sessions, as notifications to owners, and as a queryable quota-state flag other services read.",
   "scope_in": [
-    "Threshold evaluator `evaluateQuota(workspaceId)` that compares B075 usage aggregates with entitlement limits for the metered keys `agent_minutes_month`, `tokens_month`, `queue_items_month` (null limit = never evaluated).",
+    "Threshold evaluator `evaluateQuota(workspaceId)` that compares B075 usage aggregates with entitlement limits for the metered keys `hosted_minutes_month`, `queue_items_month` (null limit = never evaluated).",
     "BullMQ job `quota-signals.evaluate` (enqueued by usage-aggregate updates, debounced 10 s per workspace) plus a 60 s sweep job over workspaces with usage in the current period.",
     "Persistent dedupe table `quota_signal_state` so each (workspace, limit, period_start, level) fires at most once; re-arms when the period rolls or the limit is raised so usage falls below the threshold.",
     "Publish `sys.notice` bodies (`usage_warning {pct:80, resets_at}`, `quota_reached {resets_at}`) to Redis channel `relay:notice:{wsp}` for the fan-out engine (B044) to deliver to every live hosted session of the workspace.",
@@ -53,12 +53,12 @@
     "Config: `QUOTA_WARN_PCT=80` (fixed by contract, validated), `QUOTA_EVAL_DEBOUNCE_MS=10000`, `QUOTA_SWEEP_INTERVAL_S=60`."
   ],
   "acceptance": [
-    "Usage moving from 79.9 % to 80.0 % of `agent_minutes_month` publishes exactly one `usage_warning {pct:80, resets_at}` notice and creates exactly one owner notification, even when `evaluate` runs 10 times concurrently (unique-key dedupe).",
+    "Usage moving from 79.9 % to 80.0 % of `hosted_minutes_month` publishes exactly one `usage_warning {pct:80, resets_at}` notice and creates exactly one owner notification, even when `evaluate` runs 10 times concurrently (unique-key dedupe).",
     "Usage reaching 100 % publishes exactly one `quota_reached {resets_at}` notice and sets `quota:state:{wsp}` field to `reached`; `resets_at` equals the entitlement `period.end` in RFC 3339 UTC with milliseconds.",
     "A jump from 50 % to 130 % in one aggregate update fires both the warning and the reached level (warning first), each once.",
     "A limit of `null` (unlimited) never produces a signal; a limit of 0 on a count key produces no `usage_warning`.",
     "When the period rolls over, or the limit is raised so usage is below 80 %, state returns to `ok` and a later crossing signals again; within the same period and level it never repeats.",
-    "Owners receive notifications only; a `member` or `billing` role user receives none, and the notification `params` contain only ids and enums (`{limit: 'agent_minutes_month', pct: 80}`), never text.",
+    "Owners receive notifications only; a `member` or `billing` role user receives none, and the notification `params` contain only ids and enums (`{limit: 'hosted_minutes_month', pct: 80}`), never text.",
     "Signalling delay from the aggregate update to the Redis publish is <= 15 s p95 in the integration test (60 s sweep is only the backstop).",
     "The 429 `quota_exceeded` rejection itself is not produced here; `getQuotaState` returns `reached` within 1 s of the transition so B080 can use it."
   ],

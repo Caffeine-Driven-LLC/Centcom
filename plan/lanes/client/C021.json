@@ -1,6 +1,6 @@
 {
   "id": "C021",
-  "title": "MCP server manager",
+  "title": "MCP server manager: configure and show status through the engines",
   "plan": "client",
   "phase": "P1 Agent runtime",
   "size": "M",
@@ -8,63 +8,68 @@
   "depends_on": [
     "C013"
   ],
-  "goal": "Configure, start, supervise and stop MCP servers for agents, with explicit trust for project-defined servers, a minimal environment for child processes, and bounded timeouts and output sizes.",
+  "goal": "Let the user configure MCP servers for Claude Code and Codex and see per-engine MCP status, by writing the engines' own documented config formats after confirmation and reading status from the engines' events. Centcom stores no secrets and does not run MCP servers itself.",
   "scope_in": [
-    "Config sources: user `<config dir>/mcp.json` and project `.centcom/mcp.json`: `{ servers: { <name>: { type: 'stdio', command: string, args?: string[], env?: Record<string,string>, cwd?: string } | { type: 'http'|'sse', url: string, headers?: Record<string,string> } } }`; server names `^[a-z][a-z0-9_-]{0,31}$`.",
-    "Trust gate: a project-defined server (or any server whose definition hash changed) is not started until `TrustStore.isTrusted('mcp', sha256(canonical JSON of definition))` (store from lane C013); a `needsTrust` list is exposed for the UI to prompt; user-config servers are trusted implicitly.",
-    "Lifecycle: lazy start on first use, handshake timeout 15 s, health ping every 30 s, restart with backoff 1 s, 2 s, 4 s ... cap 30 s, max 5 consecutive failures then `failed` until manual `restart`; stop with SIGTERM then SIGKILL after 3 s on agent/runner exit.",
-    "Child environment is an allow-list (PATH, HOME, LANG, TERM, TMPDIR) plus declared `env` after `${VAR}` expansion restricted to an allow-list of variable names the user config names in `env_passthrough`; `secret:<name>` values resolved by an injected `SecretResolver` (keychain), never stored in config files.",
-    "Tool exposure: tools named `mcp__<server>__<tool>` handed to the runner; call timeout default 60 000 ms, result size cap 256 KiB (truncated with a marker), concurrency cap 4 per server.",
-    "URL servers: https only except loopback; no redirects to other origins; headers never logged.",
-    "Status API for UI: `{ name, state: 'stopped'|'starting'|'ready'|'failed'|'untrusted', tools: number, lastError?: code }`."
+    "Claude Code config: read/write the project `.mcp.json` (`{ mcpServers: { <name>: { type?: 'stdio'|'http'|'sse', command?, args?, env?, url?, headers? } } }`) and build a `--mcp-config <file-or-json>` payload for per-session servers; Codex: read/write the MCP section of `~/.codex/config.toml` or the project-scope config only where documented, via a TOML edit limited to `[mcp_servers.<name>]` tables.",
+    "Neutral model `McpServerDef { name, transport: 'stdio'|'http'|'sse', command?, args?, url?, env_refs?: Record<string,string> /* NAME -> ENV VAR NAME */, header_refs?: Record<string,string> }`; names `^[a-z][a-z0-9_-]{0,31}$`; converters `toClaude(def)` and `toCodex(def)`.",
+    "Secrets: values are never stored by Centcom. Only environment-variable references are written (`${GITHUB_TOKEN}` form for Claude, `env_vars = [\"GITHUB_TOKEN\"]`-style reference for Codex as documented); a literal value matching `looksLikeSecret` (C005) is refused with `SecretRejected`.",
+    "Every write goes through `plan()` -> diff -> user confirmation -> `apply()` with a timestamped backup `<file>.centcom-bak`; project scope default, user scope needs extra confirmation; project `.mcp.json` servers run arbitrary commands, so the diff view labels stdio `command` lines as 'runs a program on your machine'.",
+    "Status: per engine and per server `{ name, state: 'connected'|'needs_auth'|'failed'|'pending'|'disabled'|'unknown', tools?: number, error?: string }` taken from the engine's status event (Claude `system/init` `mcp_servers` name+status and `mcp_server_errors`; Codex status events) and refreshed on `engine.status` events; tool names shown as the engine reports them.",
+    "Test-connection helper `testServer(def)`: validates the definition, checks the command exists on PATH (`which`-style lookup, no execution) or the URL is https/loopback, then starts a throw-away engine session through the runner with only that server (`--mcp-config`, a no-op prompt) and reports the status the engine gives; 30 s timeout; the session is stopped afterwards.",
+    "Built-in, non-removable entry `centcom-approvals`: the small stdio MCP approval server used as `--permission-prompt-tool` by the Claude engine (owned and started by C102). It is listed with a lock icon, excluded from edits, export and `.mcp.json` writes, and shown as `connected` when the engine reports it."
   ],
   "scope_out": [
-    "Implementing the MCP protocol transport itself beyond using the SDK/official client library (justify the dependency).",
-    "Permission decisions for MCP tool calls: lane C015 (this lane only names the tools and marks read-only hints).",
-    "Keychain access: injected `SecretResolver` (net/auth lanes)."
+    "Implementing the MCP protocol, running or supervising MCP servers, health pings, restarts, tool-call timeouts: the engines do all of it.",
+    "The approval MCP server itself and the approvals bridge: C102 (Claude) and C103 (Codex); permission decisions: C015.",
+    "Keychain access or secret storage of any kind; OAuth flows for MCP servers (the engine's own `/mcp` flow is shown, not driven).",
+    "Skills, hooks and memory files: C020, C022, C023."
   ],
   "implements": [],
   "consumes": [
+    "CT-PROVIDER",
     "CT-IDS",
     "CT-ERR"
   ],
-  "build_against": "A tiny stdio MCP fixture server (packages/agent/src/mcp/__fixtures__/echo-server.ts) that supports initialize, tools/list, a slow tool, a huge-output tool and a crash-on-call tool; fake clock for timeouts; in-memory TrustStore.",
+  "build_against": "Temp-dir fixtures for `.mcp.json` and `config.toml`; FakeEngine (C101) replaying recorded `system/init` and Codex status transcripts including `mcp_server_errors`; fake clock; no real CLI or server.",
   "deliverables": [
     "packages/agent/src/mcp/",
     "docs/mcp.md"
   ],
   "interfaces": [
-    "`createMcpManager(deps: { fs: McpFs; spawn: SpawnFn; trust: TrustStore; secrets: SecretResolver; clock: Clock; bus: AgentBus; log: Logger; config: McpConfig }): McpManager`",
-    "`interface McpManager { load(projectRoot?: string): Promise<{ servers: McpServerStatus[]; needsTrust: PendingTrust[] }>; trust(name: string): Promise<void>; ensureStarted(name: string): Promise<void>; listTools(): Promise<McpToolInfo[]>; callTool(server: string, tool: string, input: unknown, o?: { timeoutMs?: number; signal?: AbortSignal }): Promise<McpToolResult>; restart(name: string): Promise<void>; stopAll(): Promise<void>; status(): McpServerStatus[] }`",
-    "`McpToolInfo = { name: 'mcp__<server>__<tool>'; description: string; readOnlyHint?: boolean }`."
+    "`createMcpManager(deps: { fs: McpFs; engines: { status(engine: EngineId): EngineStatus | undefined; testSession(engine: EngineId, mcpConfigJson: string, o: { timeoutMs: number }): Promise<EngineStatus> }; clock: Clock; bus: AgentBus; log: Logger }): McpManager`",
+    "`interface McpManager { list(scope: 'project'|'user', root?: string): Promise<{ engine: EngineId; servers: McpServerDef[]; builtin: McpServerDef[] }[]>; plan(op: { kind: 'add'|'update'|'remove'; engine: EngineId | 'both'; scope: 'project'|'user'; def?: McpServerDef; name?: string; root?: string }): Promise<McpPlan>; apply(plan: McpPlan, confirm: { accepted: true; planHash: string }): Promise<ApplyReport>; status(): McpEngineStatus[]; testServer(def: McpServerDef, engine: EngineId): Promise<McpServerStatus>; claudeConfigArg(defs: McpServerDef[]): string }`",
+    "`type McpServerStatus = { name: string; state: 'connected'|'needs_auth'|'failed'|'pending'|'disabled'|'unknown'; tools?: number; error?: string; builtin?: boolean }`; bus event `mcp:status { engine, servers }`.",
+    "CLI: `centcom mcp list|add|remove|status|test <name> [--engine claude|codex] [--scope project|user]`."
   ],
   "acceptance": [
-    "A project `.centcom/mcp.json` server is reported `untrusted` and never spawned (spawn mock call count 0) until `trust(name)`; editing its `args` changes the hash and reverts it to `untrusted`.",
-    "Child env for a stdio server contains only the allow-listed variables + declared env: a poisoned parent env with `CENTCOM_REFRESH_TOKEN`, `AWS_SECRET_ACCESS_KEY`, `GITHUB_TOKEN` shows none of them in the spawned env.",
-    "Handshake that does not complete in 15 000 ms (fake clock) marks the server `failed` and kills the child; the crash-on-call fixture is restarted with delays 1 s, 2 s, 4 s and after 5 consecutive failures stays `failed`.",
-    "A tool returning 1 MiB is truncated to 256 KiB with a trailing marker, and the call result flags `truncated:true`; a slow tool call is aborted at 60 000 ms with `McpTimeout`.",
-    "`stopAll` terminates children: SIGTERM, then SIGKILL at 3 s if still alive, resolving in <= 4 s; no zombie child in the process list (test via pid check).",
-    "Tool names follow `mcp__<server>__<tool>`; a server named `a__b` or a tool name containing control characters is rejected.",
-    "An `http` URL server with scheme `http://example.com` is rejected; `https://` and `http://127.0.0.1:PORT` accepted; a 302 to another origin is not followed."
+    "`plan({kind:'add', engine:'claude-code', scope:'project', def:{name:'files', transport:'stdio', command:'npx', args:['-y','some-mcp']}})` produces a diff adding one `mcpServers.files` entry to `.mcp.json`, and `apply` writes it plus a `.centcom-bak` of the previous bytes; unrelated keys and ordering in the file are preserved.",
+    "The same definition for Codex produces exactly one `[mcp_servers.files]` TOML table; other TOML content is byte-identical after apply (golden test).",
+    "A literal `env` value `ghp_` + 36 chars is refused with `SecretRejected` and nothing is written; `env_refs: { GITHUB_TOKEN: 'GITHUB_TOKEN' }` writes only the variable name, never a value (grep of the written file for the test token finds none).",
+    "Given a recorded `system/init` with `mcp_servers:[{name:'files',status:'connected'},{name:'gh',status:'needs-auth'}]` and `mcp_server_errors:[...]`, `status()` shows `connected` and `needs_auth` with the engine's error text verbatim for failures.",
+    "The built-in `centcom-approvals` entry appears in `list().builtin`; `plan({kind:'remove', name:'centcom-approvals'})` throws `BuiltinServer` and it never appears in any written file.",
+    "`testServer` with a missing command returns `failed` with reason `command_not_found` and starts no engine session (testSession mock count 0); with a valid one it calls `testSession` once with a `--mcp-config` JSON containing only that server and resolves within 30 000 ms (fake clock), stopping the session.",
+    "An `http://example.com` URL is rejected; `https://example.com` and `http://127.0.0.1:8080` are accepted.",
+    "`apply` with a stale `planHash` (file changed after the diff) writes nothing and throws `PlanChanged`."
   ],
   "tests": [
-    "config.test.ts (schema, names), trust.test.ts.",
-    "env-allowlist.test.ts, lifecycle.test.ts (fake clock).",
-    "tool-call.test.ts (timeout, truncation, concurrency), shutdown.test.ts.",
-    "http-server.test.ts, fixture server integration."
+    "claude-config.test.ts, codex-toml.test.ts (golden files).",
+    "secrets.test.ts (patterns from fixtures/providers/secret-patterns.json).",
+    "status-mapping.test.ts (Claude init, Codex status goldens).",
+    "builtin.test.ts, plan-apply.test.ts, backup.test.ts.",
+    "test-connection.test.ts (fake clock), url-rules.test.ts."
   ],
   "guardrails": [
-    "MUST NOT start a project-defined MCP server (it runs an arbitrary command) without explicit local trust bound to the definition hash.",
-    "MUST NOT pass the parent environment, tokens or keychain data to servers; secrets only via `secret:` references resolved at spawn.",
-    "MUST NOT log commands, args, env, headers, URLs with credentials or tool inputs/outputs.",
-    "MUST bound everything: startup 15 s, call 60 s, output 256 KiB, 4 concurrent calls per server, 20 servers total.",
-    "MUST NOT shell-interpolate: `command` + `args` are spawned as argv without a shell."
+    "MUST NOT store, cache, echo or log any secret value; only env var names are persisted, and `looksLikeSecret` hits are refused without echoing the content.",
+    "MUST NOT write any config without a diff and confirmation bound to the plan hash; a project `.mcp.json` entry is arbitrary command execution by the engine, so the UI states that before confirming.",
+    "MUST NOT read credential files (`~/.codex/auth.json`, `~/.claude*` credentials); only the documented MCP config sections are parsed, and unknown TOML/JSON content is preserved untouched.",
+    "MUST NOT shell-interpolate: the test helper never executes the server command itself; only the engine does.",
+    "MUST NOT allow removal or editing of `centcom-approvals`."
   ],
   "failure_modes": [
-    "Server binary missing -> status `failed` with `lastError:'spawn_failed'`; other servers unaffected; agent continues without those tools.",
-    "Server writes non-protocol noise on stdout -> ignored up to 1 MiB then killed as `protocol_error`.",
-    "Trust store corrupted -> treated as empty (everything untrusted)."
+    "Config file invalid JSON/TOML -> refuse to edit, show the parse position, leave the file untouched.",
+    "Engine does not report MCP status (capability `mcp` absent or old version) -> show 'status not reported by this version' and still allow config edits.",
+    "Test session times out -> report `failed: timeout`, stop the session, never leave a child process running."
   ],
   "unblocks_gate": "G6",
-  "notes": "Trust semantics reuse TrustStore from lane C013. Dependency choice for the MCP client (official SDK) must be justified in the PR (licence MIT, no install scripts)."
+  "notes": "Exact Codex config keys for project-scope MCP and env references must be verified against the installed `codex` version before release (document the tested range in docs/mcp.md). The built-in approvals server is only listed here; C102 owns its lifecycle."
 }

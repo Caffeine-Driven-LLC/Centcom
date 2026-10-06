@@ -22,7 +22,7 @@ Which of these travel on the wire as **agent** state (`agent.state`): everything
 
 `idle`, `ready`, `thinking`, `thinking-hard`, `planning`, `searching`, `reading-file`, `editing-file`, `creating-file`, `deleting-file`, `running-command`, `tool-running`, `streaming`, `compacting`, `background-task`, `sub-agent`, `awaiting-approval`, `asking-question`, `approved`, `denied`, `success`, `error`, `crash`, `warning`, `tests-pass`, `tests-fail`, `merge-conflict`, `deploying`, `saving`.
 
-The relay validates `agent.state.state` against **all** keys of `state-map.json` (tolerant); clients emit only the list above. All other keys (connectivity, account, limits, social, lifecycle such as `first-run`, `empty`, `celebrate`, `ci-*`, `pr-*`, `listening`, `prompt-received`, `host-session`) are client-local UI states, never sent as agent state. `since` is the ISO time the state started.
+The relay validates `agent.state.state` against **all** keys of `state-map.json` (tolerant); clients emit only the list above. All other keys (connectivity, account, provider (`provider-*`), limits, social, lifecycle such as `first-run`, `empty`, `celebrate`, `ci-*`, `pr-*`, `listening`, `prompt-received`, `host-session`) are client-local UI states, never sent as agent state. `since` is the ISO time the state started.
 
 ## Rules
 1. Receivers tolerate unknown state names (show generic "working").
