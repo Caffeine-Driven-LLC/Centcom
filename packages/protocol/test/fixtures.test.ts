@@ -1,12 +1,13 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { EVENT_MODES, assertWritableEventPayload, assertWritableFrame, assertWritableSecretPayload, parseEventPayload, parseFrame, payloadMode, validateAgainst, type EventKind } from '../src/index.js';
 
 const FIX = join(__dirname, '../../../contracts/fixtures');
 const walk = (d: string): string[] => readdirSync(d).flatMap((n) => { const p = join(d, n); return statSync(p).isDirectory() ? walk(p) : p.endsWith('.json') ? [p] : []; });
-const all = walk(FIX).filter((p) => !p.includes('/crypto/')); const rel = (p: string) => relative(FIX, p);
-const events = all.filter((p) => p.includes('/events/')); const others = all.filter((p) => !p.includes('/events/'));
+const top = (p: string) => relative(FIX, p).split(sep)[0];
+const all = walk(FIX).filter((p) => top(p) !== 'crypto'); const rel = (p: string) => relative(FIX, p);
+const events = all.filter((p) => top(p) === 'events'); const others = all.filter((p) => top(p) !== 'events');
 
 describe('every fixture in contracts/fixtures is checked (new ones are picked up automatically)', () => {
   it('found the corpus', () => { expect(events.length).toBeGreaterThanOrEqual(45); expect(others.length).toBeGreaterThanOrEqual(30); });

@@ -108,6 +108,8 @@ describe('queue and control', () => {
   });
   it('host loss pauses the session after the grace period and host return resumes it', async () => {
     m = await start(); const h = await open({ role: 'host', name: 'H' }); const e = await open({ name: 'E' }); await Promise.all([h, e].map((p) => p.until((x) => x.has('sys.welcome')))); h.close(); await h.until((p) => !!p.closed);
+    for (let i = 0; i < 100 && m.relay.connections().length > 1; i++) await new Promise((r) => setTimeout(r, 20)); // the relay arms the host-grace timer in its own onClose: wait for it before advancing the virtual clock
+    expect(m.relay.connections()).toHaveLength(1);
     await m.virtual!.advance(601_000); await e.until((p) => p.of('control', 'control.session_state').some((f) => f.p.state === 'paused'));
     const h2 = await open({ role: 'host', name: 'H' }); await e.until((p) => p.of('control', 'control.session_state').some((f) => f.p.state === 'live')); void h2;
   });
