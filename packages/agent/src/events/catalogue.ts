@@ -1,7 +1,7 @@
 /** The internal events of the agent runtime. Names are `domain:verb`, on purpose unlike wire kinds, and are not part of any contract.
  *  Fields marked `wire-safe` hold only ids, enums, numbers and timestamps; everything else may hold local text or paths and must never be forwarded as is. */
 import type { Id, StateName } from '@centcom/protocol';
-import type { Risk } from '../types.js';
+import type { NormalisedEvent, Risk } from '../types.js';
 
 export type AgentId = Id<'agt'>;
 export type ApprovalId = Id<'apr'>;
@@ -23,7 +23,10 @@ export type AgentEventMap = {
   'agent:state_changed': { agent_id: AgentId; state: StateName; since: Iso };
   'agent:context': { agent_id: AgentId; used_tokens: number; window_tokens: number };
   'agent:compaction': { agent_id: AgentId; before_tokens: number; after_tokens: number };
-  'agent:exited': { agent_id: AgentId; code: 'done' | 'error' | 'killed' | 'crash'; exit_code?: number; message?: string };
+  /** Every normalised event of one agent, stamped by the runner with a gap-free per-agent `seq`. */
+  'agent:event': { agent_id: AgentId; seq: number; event: NormalisedEvent };
+  /** wire-safe: the outcome and, for a crash, the exit code or signal name. `reason` is a local error code, never text from the model. */
+  'agent:exited': { agent_id: AgentId; outcome: 'ok' | 'error' | 'canceled' | 'crash'; code?: number; signal?: string; reason?: string };
   'worktree:created': { agent_id: AgentId; path: string; branch: string };
   'worktree:removed': { agent_id: AgentId; path: string };
   'lock:changed': { agent_id: AgentId; path: string; action: 'acquire' | 'release' | 'expire'; ttl_ms?: number };

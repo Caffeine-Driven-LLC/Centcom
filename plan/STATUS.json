@@ -22,8 +22,8 @@
    "note": "demo engine and fixtures; no one-command dev env"
   },
   "C013": {
-   "pct": 0.5,
-   "note": "engines run in-process, not as a daemon"
+   "pct": 0.9,
+   "note": "runner, supervision, limits, restart, escalation, env allow-list, TrustStore, runnerd daemon over unix socket (auth, frame cap, lock, idle exit), FakeEngine, 1 MiB line cap in both engines. Not done: Windows named pipe; real Claude per-turn kill is a failed turn, not an agent crash"
   },
   "C014": {
    "pct": 0.6,

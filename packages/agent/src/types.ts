@@ -59,6 +59,8 @@ export interface EngineStartOptions {
   addDirs?: string[];
   allowedTools?: string[];
   env?: Record<string, string | undefined>;
+  /** When true `env` is the child's whole environment (the runner's allow-list); otherwise it is added on top of process.env. */
+  envExact?: boolean;
   approvalGate?: PermissionGate;
   limits?: { spawn_timeout_ms?: number; first_event_timeout_ms?: number; interrupt_grace_ms?: number };
 }
@@ -72,6 +74,10 @@ export interface EngineSession {
   resumeToken(): string | undefined;
   setModel?(model: string): void;
   setPermissionMode?(mode: PermissionMode): void;
+  /** Sends a signal to the engine's process, if it has one right now. Used by the runner to escalate an ignored interrupt. */
+  signal?(sig: 'SIGINT' | 'SIGTERM' | 'SIGKILL'): void;
+  /** Resolves when a long-lived engine process dies on its own (not when stop() was called). Per-turn engines leave this unset: a dead turn process just fails that turn. */
+  readonly exited?: Promise<{ code?: number; signal?: string }>;
 }
 
 export interface AgentEngine {

@@ -46,7 +46,7 @@ When you change them in the app, these are saved to your user file: theme, Cento
 | `ui.reduced_motion` | boolean | `false` | yes | Turn animation off |
 | `ui.color` | auto \| truecolor \| 256 \| 16 \| never | `"auto"` | yes | Terminal color depth |
 | `lan.enabled` | boolean | `true` | no | Allow LAN sessions |
-| `agent.max_parallel` | number (1 to 64) | `4` | yes | Most agents running at once |
+| `agent.max_parallel` | number (1 to 16) | `4` | yes | Most agents running at once |
 | `agent.approval_timeout_ms` | number (1000 to 86400000) | `600000` | yes | How long an approval waits before it is declined |
 | `client.engine` | claude-code \| codex | `"claude-code"` | no | Last agent you used |
 | `client.model` | string | `""` | yes | Model id passed to the agent (empty = the CLI default) |
