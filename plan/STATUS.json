@@ -30,8 +30,8 @@
    "note": "state machine (pure reducer, EVENT_STATE_TABLE), emitter (dedupe, 2/s, coalescing, wire-only), attachStateMachine on the bus, timers, golden claude/codex transcripts; contract gap: prompt-received and sleeping are not in the agent-level list so they stay local. Nothing wires it into the TUI mascot yet (C046)"
   },
   "C015": {
-   "pct": 0.85,
-   "note": "modes incl. dangerously-skip-permissions, session rules, real approval bridge; no persisted \"always\" rules"
+   "pct": 0.95,
+   "note": "permission engine: hard denies (symlink/.. safe, credentials, .git, shell write targets, POSIX and Windows), rule precedence, 5 modes, broker (expiry, remote approvers, duplicates, cancel), always/session rules, persistence with trust gate and fail-closed files, Claude rule syntax and Claude/Codex arg translation, wire shape. Not wired into the TUI prompt (C038) or the engines yet"
   },
   "C016": {
    "pct": 0.8,

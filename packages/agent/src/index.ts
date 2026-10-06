@@ -19,3 +19,4 @@ export * from './provider/index.js';
 export * from './worktrees/index.js';
 export * from './checkpoints/index.js';
 export * from './fleet/index.js';
+export * from './permissions/index.js';
