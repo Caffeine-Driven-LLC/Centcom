@@ -196,6 +196,10 @@
   "C017": {
    "pct": 0.95,
    "note": "WorktreeManager: create (collision names, exclude, rollback), status, remove (dirty/unmerged refusal), list/prune reconcile with orphan flagging, detectConflict via merge-tree, hostile paths, timeouts, lock retries, bus events. Not exercised on Windows or with git older than 2.38 beyond fakes"
+  },
+  "C027": {
+   "pct": 0.8,
+   "note": "checkpoints on shadow refs (temporary index, nothing of the user touched), end markers to tell agent and user edits apart, preview/rewind (files, conversation, both), safety checkpoint and undo ref, cap 100, merge/rebase refusal, non-git handling, event bus wiring, rewind command logic. Not yet: /rewind slash, esc-esc action and picker (TUI lanes), real C026 transcript store adapter"
   }
  },
  "next": [
