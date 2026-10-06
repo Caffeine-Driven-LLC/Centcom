@@ -7,3 +7,4 @@ export * from './demo.js';
 export { ClaudeCodeEngine, buildArgv, redact } from './claude/engine.js';
 export { ClaudeStreamParser, loginKindFrom } from './claude/parse.js';
 export { editDiff } from './claude/diff.js';
+export * from './models.js';

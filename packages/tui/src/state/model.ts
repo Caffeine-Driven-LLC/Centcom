@@ -1,7 +1,7 @@
 import type { ApprovalDecision, ApprovalRequest, EngineId, LoginKind, PermissionMode, Risk } from '@centcom/agent';
 import type { CentoColor, MiniState } from '@centcom/mascot';
 
-export type Mode = 'chat' | 'palette' | 'help' | 'gallery' | 'fleet';
+export type Mode = 'chat' | 'palette' | 'help' | 'gallery' | 'fleet' | 'models';
 export type MascotSize = 'large' | 'small' | 'off';
 
 export interface AgentView {
@@ -20,7 +20,7 @@ export interface Toast { id: string; level: 'info' | 'ok' | 'warn' | 'error'; te
 
 export interface PendingApproval { req: ApprovalRequest; agentName: string; color: CentoColor; resolve: (d: ApprovalDecision) => void; confirmHigh: boolean }
 
-export interface Settings { theme: 'dark' | 'light'; mascot: MascotSize | 'auto'; permissionMode: PermissionMode; reducedMotion: boolean; color: CentoColor; autoSkills: boolean }
+export interface Settings { theme: 'dark' | 'light'; mascot: MascotSize | 'auto'; permissionMode: PermissionMode; reducedMotion: boolean; color: CentoColor; autoSkills: boolean; model: string }
 
 export interface AppState {
   items: Item[];
@@ -40,12 +40,13 @@ export interface AppState {
   fleet: boolean;
   slashSel: number;
   palette: { query: string; sel: number };
+  modelSel: number;
   gallery: { cat: number; idx: number; color: number; query: string };
   exitArmedAt?: number;
   version: string;
 }
 
-export const initialSettings = (): Settings => ({ theme: 'dark', mascot: 'auto', permissionMode: 'default', reducedMotion: false, color: 'violet', autoSkills: true });
+export const initialSettings = (): Settings => ({ theme: 'dark', mascot: 'auto', permissionMode: 'default', reducedMotion: false, color: 'violet', autoSkills: true, model: '' });
 
 export function stateToMini(state: string): MiniState {
   switch (state) {

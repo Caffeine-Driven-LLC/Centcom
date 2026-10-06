@@ -3,6 +3,7 @@
  * answers approvals through the permission policy, runs slash commands, and drives the mascot.
  * The React tree only reads the store and calls the controller's methods.
  */
+import { CLAUDE_MODELS, modelLabel } from '@centcom/agent';
 import { discover, injection, match, type Skill } from '@centcom/skills';
 import { MascotDriver, bakedByCategory, bakedCategories, getBaked, type CentoColor } from '@centcom/mascot';
 import type { AgentEngine, ApprovalDecision, ApprovalRequest, EngineSession, NormalisedEvent, PermissionGate, PermissionMode } from '@centcom/agent';
@@ -45,7 +46,7 @@ export class AppController {
     this.store = new Store<AppState>({
       items: [], agents: [me], activeAgent: this.me, mode: 'chat', input: '', cursor: 0, history: [], histIdx: null, draft: '', scroll: 0, toasts: [], approvals: [], settings,
       busy: false, verb: this.verbs.next(), limits: [], cwd: o.cwd, branch: o.branch ?? '', engineId: o.engine.id, engineLabel: o.engine.label, demo: o.demo, fleet: true,
-      slashSel: 0, palette: { query: '', sel: 0 }, gallery: { cat: 0, idx: 0, color: 0, query: '' }, version: o.version,
+      slashSel: 0, palette: { query: '', sel: 0 }, modelSel: 0, gallery: { cat: 0, idx: 0, color: 0, query: '' }, version: o.version,
     });
     this.driver = new MascotDriver({ reducedMotion: settings.reducedMotion, color: settings.color });
   }
@@ -63,7 +64,7 @@ export class AppController {
     this.driver.start();
     this.driver.setState(this.o.demo ? 'ready' : 'ready');
     const gate: PermissionGate = { decide: (r) => this.decide(r) };
-    this.session = await this.o.engine.start({ agentId: this.me, cwd: this.o.cwd, permissionMode: this.state.settings.permissionMode, approvalGate: gate });
+    this.session = await this.o.engine.start({ agentId: this.me, cwd: this.o.cwd, permissionMode: this.state.settings.permissionMode, model: this.state.settings.model || undefined, approvalGate: gate });
     void this.consume(this.session);
     if (this.o.ghosts) this.startGhosts();
     this.verbTimer = setInterval(() => { if (this.state.busy) this.set({ verb: this.verbs.next() }); }, 4200);
@@ -192,6 +193,13 @@ export class AppController {
     try { await this.session?.send(outgoing); } catch (e) { this.addItem({ kind: 'notice', id: nid('n'), level: 'error', text: 'Could not send the prompt', detail: String(e) }); }
   }
 
+  /** Switch model for the next turn (the running turn keeps its model). */
+  setModel(id: string) {
+    this.setSettings({ model: id }); this.session?.setModel?.(id);
+    this.updateAgent(this.me, () => ({ model: id || 'default' }));
+    this.toast('ok', `Model: ${id ? modelLabel(id) : 'Default'}${this.state.busy ? ' (from the next message)' : ''}`);
+  }
+
   private skillCache?: Skill[];
   skills(): Skill[] { return (this.skillCache ??= this.o.skills ?? discover({ cwd: this.o.cwd })); }
 
@@ -235,6 +243,12 @@ export class AppController {
       case 'mascot': if (['large', 'small', 'off', 'auto'].includes(arg)) this.setSettings({ mascot: arg as Settings['mascot'] }); else this.toast('info', 'Try /mascot large, small, off or auto'); break;
       case 'color': if (['violet', 'red', 'yellow', 'green', 'brown'].includes(arg)) this.setSettings({ color: arg as CentoColor }); else this.toast('info', 'Colours: violet red yellow green brown'); break;
       case 'theme': if (arg === 'dark' || arg === 'light') this.setSettings({ theme: arg }); else this.toast('info', 'Try /theme dark or /theme light'); break;
+      case 'model': {
+        if (!arg) { const i = CLAUDE_MODELS.findIndex((m) => m.id === this.state.settings.model); this.set({ mode: 'models', modelSel: Math.max(0, i) }); break; }
+        const q = arg.toLowerCase(); const m = CLAUDE_MODELS.find((x) => x.id.toLowerCase() === q || x.label.toLowerCase() === q) ?? CLAUDE_MODELS.find((x) => (x.id + ' ' + x.label).toLowerCase().includes(q));
+        if (m) this.setModel(m.id); else if (/^[\w.:-]{3,}$/.test(arg)) this.setModel(arg); else this.toast('warn', `No model called "${arg}"`);
+        break;
+      }
       case 'auto': {
         const on = arg ? arg === 'on' : !this.state.settings.autoSkills; this.setSettings({ autoSkills: on });
         this.toast('info', on ? `Auto skills on (${this.skills().length} found)` : 'Auto skills off'); break;

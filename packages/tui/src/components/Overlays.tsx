@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Box } from 'ink';
 import { bakedByCategory, bakedCategories, bakedNames, getBaked, recolorBaked, CENTO_COLORS, type BakedAnimation } from '@centcom/mascot';
 import { PixelView, Rich, useCol, useTheme } from './ui.js';
+import { CLAUDE_MODELS } from '@centcom/agent';
 import { COMMANDS } from '../state/commands.js';
 import { sp, truncate, type Line } from '../util/text.js';
 
@@ -41,7 +42,7 @@ export function Palette({ query, sel, width }: { query: string; sel: number; wid
 /* --------------------------------------------------------------- help */
 const KEYS: [string, string][] = [
   ['Enter', 'send'], ['ctrl+j  or  \\ Enter', 'new line'], ['Esc', 'interrupt the agent / close'], ['ctrl+c', 'interrupt; twice to quit'],
-  ['shift+tab', 'cycle permission mode'], ['ctrl+k', 'command palette'], ['ctrl+t', 'show or hide the fleet'], ['?', 'this help (empty prompt)'],
+  ['shift+tab', 'cycle permission mode'], ['ctrl+k', 'command palette'], ['ctrl+o', 'choose the model'], ['ctrl+t', 'show or hide the fleet'], ['?', 'this help (empty prompt)'],
   ['PageUp / PageDown', 'scroll the transcript'], ['shift+↑ / shift+↓', 'scroll 3 lines'], ['End', 'jump to the latest'], ['↑ / ↓', 'prompt history'],
   ['ctrl+a / ctrl+e', 'line start / end'], ['ctrl+w', 'delete word'], ['ctrl+u', 'delete to line start'], ['alt+b / alt+f', 'word left / right'],
 ];
@@ -94,5 +95,20 @@ export function Gallery({ cat, idx, color, width, height, reduced }: { cat: numb
       </Box>
       <Rich line={[sp('←→ category · ↑↓ animation · c colour · esc close', { c: 'text.muted' })]} />
     </Box>
+  );
+}
+
+/* --------------------------------------------------------------- model picker */
+export function ModelPicker({ sel, current, width }: { sel: number; current: string; width: number }) {
+  const col = useCol(); const w = Math.min(70, width - 4);
+  return (
+    <Box width={width} justifyContent="center"><Box flexDirection="column" width={w} borderStyle="round" borderColor={col('accent.primary')} paddingX={2}>
+      <Rich line={[sp('Model', { c: 'accent.hover', b: true }), sp('   applies from your next message', { c: 'text.muted' })]} /><Box height={1} />
+      {CLAUDE_MODELS.map((m, i) => {
+        const on = i === sel; const cur = m.id === current;
+        return <Rich key={m.id || 'default'} line={[sp(on ? '▸ ' : '  ', { c: 'accent.hover', b: true }), sp(m.label.padEnd(18), { c: on ? 'text.primary' : 'text.secondary', b: on, bg: on ? 'bg.selected' : undefined }), sp(cur ? '✓ ' : '  ', { c: 'status.success', b: true }), sp(m.note, { c: 'text.muted' })]} />;
+      })}
+      <Box height={1} /><Rich line={[sp('↑↓ move · enter choose · esc close · or type /model <any model id>', { c: 'text.muted' })]} />
+    </Box></Box>
   );
 }

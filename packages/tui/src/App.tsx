@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Text, useInput, usePaste, useWindowSize } from 'ink';
 import { createTheme, type ColorTier } from '@centcom/theme';
 import { bakedCategories } from '@centcom/mascot';
+import { CLAUDE_MODELS } from '@centcom/agent';
 import type { AppController } from './controller.js';
 import { ThemeCtx, useStore } from './components/ui.js';
 import { Header } from './components/Header.js';
@@ -12,7 +13,7 @@ import { Prompt, SlashPopup, promptRows, slashMatches } from './components/Promp
 import { StatusLine } from './components/StatusLine.js';
 import { FleetPanel, FLEET_W } from './components/FleetPanel.js';
 import { Transcript, useTranscriptLines } from './components/Transcript.js';
-import { Palette, Help, Gallery, galleryList, paletteItems } from './components/Overlays.js';
+import { Palette, Help, Gallery, ModelPicker, galleryList, paletteItems } from './components/Overlays.js';
 import { Toasts } from './components/Toasts.js';
 import { COMMANDS } from './state/commands.js';
 import * as ed from './util/editor.js';
@@ -88,6 +89,13 @@ export function App({ ctl, tier }: AppProps) {
       if (input && !key.ctrl && !key.meta) ctl.patch({ palette: { query: s.palette.query + input, sel: 0 } });
       return;
     }
+    if (s.mode === 'models') {
+      if (key.escape || input === 'q') { ctl.patch({ mode: 'chat' }); return; }
+      if (key.upArrow) ctl.patch({ modelSel: (s.modelSel + CLAUDE_MODELS.length - 1) % CLAUDE_MODELS.length });
+      else if (key.downArrow) ctl.patch({ modelSel: (s.modelSel + 1) % CLAUDE_MODELS.length });
+      else if (key.return) { ctl.patch({ mode: 'chat' }); ctl.setModel(CLAUDE_MODELS[s.modelSel]!.id); }
+      return;
+    }
     if (s.mode === 'gallery') {
       const g = s.gallery; const list = galleryList(g.cat); const cats = bakedCategories();
       if (key.escape || input === 'q') { ctl.patch({ mode: 'chat' }); return; }
@@ -101,6 +109,7 @@ export function App({ ctl, tier }: AppProps) {
       return;
     }
     /* chat */
+    if (key.ctrl && input === 'o') { const i = CLAUDE_MODELS.findIndex((m) => m.id === s.settings.model); ctl.patch({ mode: 'models', modelSel: Math.max(0, i) }); return; }
     if (key.ctrl && input === 'k') { ctl.patch({ mode: 'palette', palette: { query: '', sel: 0 } }); return; }
     if (key.ctrl && input === 't') { ctl.patch({ fleet: !s.fleet }); return; }
     if (key.ctrl && input === 'l') { setScroll(0); return; }
@@ -157,7 +166,8 @@ export function App({ ctl, tier }: AppProps) {
         <Box height={bodyH + stripH + bottomH} width={cols}>
           <Box flexDirection="column" width={mainW} height={bodyH + stripH + bottomH}>
             <Box height={bodyH} width={mainW} flexDirection="column">
-              {s.mode === 'palette' ? <Palette query={s.palette.query} sel={s.palette.sel} width={mainW} />
+              {s.mode === 'models' ? <ModelPicker sel={s.modelSel} current={s.settings.model} width={mainW} />
+                : s.mode === 'palette' ? <Palette query={s.palette.query} sel={s.palette.sel} width={mainW} />
                 : s.mode === 'help' ? <Help width={mainW} />
                   : s.mode === 'gallery' ? <Gallery cat={s.gallery.cat} idx={s.gallery.idx} color={s.gallery.color} width={mainW} height={gallerySize} reduced={s.settings.reducedMotion} />
                     : welcome ? <Welcome s={s} width={mainW} height={bodyH} color={s.settings.color} reduced={s.settings.reducedMotion} />

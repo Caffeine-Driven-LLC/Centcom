@@ -10,6 +10,7 @@ export const COMMANDS: SlashCommand[] = [
   { name: 'motion', args: '[full|reduced]', desc: 'Turn mascot animation on or off' },
   { name: 'cento', args: '[animation]', desc: 'Browse all 319 Cento animations' },
   { name: 'demo', args: '[fix|search|delete|compact|ask|error|limit]', desc: 'Run a scripted demo story' },
+  { name: 'model', args: '[name]', desc: 'Pick the model (ctrl+o)' },
   { name: 'auto', args: '[on|off]', desc: 'Auto skills: apply matching skills and commands to your prompts' },
   { name: 'skills', args: '[filter]', desc: 'List the skills and commands Centcom can auto-apply' },
   { name: 'interrupt', desc: 'Stop the running agent' },
