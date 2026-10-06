@@ -1,5 +1,5 @@
 import { homedir as osHomedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join, relative } from 'node:path';
 import { type ConfigFs, nodeFs } from './fs.js';
 import { KEYS, SCHEMA, SECRET_RE, type Key, type KeySpec } from './schema.js';
 
@@ -27,12 +27,22 @@ export function userConfigPath(d: Pick<LoadDeps, 'env' | 'platform' | 'homedir'>
 /** Sessions, history, the web token and other state. Kept in ~/.centcom so earlier installs keep working. */
 export function stateDir(d: Pick<LoadDeps, 'env' | 'homedir'>): string { return d.env.CENTCOM_STATE_DIR ?? join(d.homedir, '.centcom'); }
 
-/** `.centcom/config.json` from the nearest folder up to (and never beyond) the git toplevel. Max 25 levels. */
-export function projectConfigPath(d: Pick<LoadDeps, 'cwd' | 'fs'>): string | undefined {
+const inside = (root: string, dir: string): boolean => { const r = relative(root, dir); return r === '' || (!r.startsWith('..') && !isAbsolute(r)); };
+
+/**
+ * `.centcom/config.json` from the nearest folder up to (and never beyond) the git toplevel. Max 25 levels.
+ * Outside a git repo the search stops below the home directory (never at or above it); a folder that is not under
+ * the home directory only looks at itself. The state dir's own config.json is never a project file.
+ */
+export function projectConfigPath(d: Pick<LoadDeps, 'cwd' | 'fs'> & Partial<Pick<LoadDeps, 'homedir' | 'env'>>): string | undefined {
+  const home = d.homedir; const state = home !== undefined ? stateDir({ env: d.env ?? {}, homedir: home }) : d.env?.CENTCOM_STATE_DIR;
+  const stateCfg = state ? join(state, 'config.json') : undefined;
+  const candidate = (dir: string) => { if (dir === home) return undefined; const p = join(dir, '.centcom', 'config.json'); return p !== stateCfg && d.fs.read(p) !== null ? p : undefined; };
+  const gitRoot = (() => { let dir = d.cwd; for (let i = 0; i < 25; i++) { if (d.fs.exists(join(dir, '.git'))) return dir; const up = dirname(dir); if (up === dir) return undefined; dir = up; } return undefined; })();
   let dir = d.cwd;
   for (let i = 0; i < 25; i++) {
-    const p = join(dir, '.centcom', 'config.json'); if (d.fs.read(p) !== null) return p;
-    if (d.fs.exists(join(dir, '.git'))) return undefined; // reached the repo root: stop here
+    const p = candidate(dir); if (p) return p;
+    if (gitRoot !== undefined ? dir === gitRoot : (home === undefined || !inside(home, dir) || dirname(dir) === home || dir === home)) return undefined; // repo root, or the edge of what we trust outside a repo
     const up = dirname(dir); if (up === dir) return undefined; dir = up;
   }
   return undefined;
@@ -101,6 +111,7 @@ function parseFile(d: LoadDeps, path: string, layer: 'user' | 'project'): Partia
 const ENV: [string, Key, (v: string) => Value | undefined][] = [
   ['CENTCOM_API_URL', 'api.base_url', (v) => v], ['CENTCOM_RELAY_URL', 'relay.url', (v) => v],
   ['CENTCOM_LOG_LEVEL', 'log.level', (v) => v.toLowerCase()],
+  ['CENTCOM_REDUCE_MOTION', 'ui.reduced_motion', (v) => (/^(1|true|on|yes)$/i.test(v) ? true : /^(0|false|off|no)$/i.test(v) ? false : undefined)], // the older spelling still works; CENTCOM_REDUCED_MOTION below wins if both are set
   ['CENTCOM_REDUCED_MOTION', 'ui.reduced_motion', (v) => (/^(1|true|on|yes)$/i.test(v) ? true : /^(0|false|off|no)$/i.test(v) ? false : undefined)],
   ['NO_COLOR', 'ui.color', (v) => (v ? 'never' : undefined)],
 ];
@@ -122,9 +133,16 @@ type Sources = Map<Key, { layer: Layer; source?: string }>;
 
 export async function loadConfig(d: LoadDeps, flags: FlatFlags = {}): Promise<ResolvedConfig> {
   const userPath = userConfigPath(d); const projPath = projectConfigPath(d);
+  // A bad file must never stop Centcom: the user layer falls back to defaults, the project layer is ignored. The warning carries the file and key, never a value.
+  const safely = (layer: 'user' | 'project', path: string): Partial<Record<Key, Value>> => {
+    try { return parseFile(d, path, layer); } catch (e) {
+      if (!(e instanceof ConfigError)) throw e;
+      d.warn(layer === 'user' ? 'user_config_ignored' : 'project_config_ignored', e.message); return {};
+    }
+  };
   const layers: { layer: Layer; source?: string; values: Partial<Record<Key, Value>> }[] = [
-    { layer: 'user', source: userPath, values: parseFile(d, userPath, 'user') },
-    { layer: 'project', source: projPath, values: projPath ? parseFile(d, projPath, 'project') : {} },
+    { layer: 'user', source: userPath, values: safely('user', userPath) },
+    { layer: 'project', source: projPath, values: projPath ? safely('project', projPath) : {} },
     { layer: 'env', values: fromEnv(d) },
     { layer: 'flag', values: Object.fromEntries(Object.entries(flags).filter(([k, v]) => KEYS.includes(k as Key) && v !== undefined && coerce(SCHEMA[k as Key] as KeySpec, v) !== undefined)) as Partial<Record<Key, Value>> },
   ];
@@ -133,6 +151,7 @@ export async function loadConfig(d: LoadDeps, flags: FlatFlags = {}): Promise<Re
   for (const l of layers) for (const [k, v] of Object.entries(l.values) as [Key, Value][]) { flat[k] = v; src.set(k, { layer: l.layer, source: l.source }); }
   // privacy: these always turn telemetry off, whatever any file or flag says
   if (d.env.DO_NOT_TRACK && d.env.DO_NOT_TRACK !== '0' || /^off$/i.test(d.env.CENTCOM_TELEMETRY ?? '')) { flat['telemetry.enabled'] = false; src.set('telemetry.enabled', { layer: 'env' }); }
+  if (src.get('client.model')?.layer === 'project') d.warn('project_sets_model', String(flat['client.model'])); // a cloned repo can pick a pricier model: say so
   const nested: Record<string, Record<string, Value>> = {};
   for (const [k, v] of Object.entries(flat)) { const [a, b] = k.split('.') as [string, string]; (nested[a] ??= {})[b] = v; }
   for (const o of Object.values(nested)) Object.freeze(o);
@@ -150,7 +169,15 @@ type DeepPartial = Record<string, Record<string, Value | undefined>>;
 /** Merge a patch into the user's file and write it atomically (0600). Unknown keys already in the file are kept. */
 export function writeUserConfig(d: LoadDeps, patch: DeepPartial): void {
   const path = userConfigPath(d); let cur: Record<string, Record<string, unknown>> = {};
-  try { const t = d.fs.read(path); if (t) cur = JSON.parse(t); } catch { cur = {}; }
+  // Never overwrite a file we cannot understand: the user's other settings would be lost.
+  let t: string | null;
+  try { t = d.fs.read(path); } catch (e) { d.warn('user_config_not_saved', path); throw new ConfigError('unreadable', `Settings not saved: cannot read ${path} (${(e as NodeJS.ErrnoException).code ?? 'error'}). Fix or remove it first.`, undefined, path); }
+  if (t !== null && t.trim()) {
+    let parsed: unknown;
+    try { parsed = JSON.parse(t); } catch { d.warn('user_config_not_saved', path); throw new ConfigError('parse', `Settings not saved: ${path} is not valid JSON. Fix or remove it first.`, undefined, path); }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) { d.warn('user_config_not_saved', path); throw new ConfigError('parse', `Settings not saved: ${path} is not a JSON object. Fix or remove it first.`, undefined, path); }
+    cur = parsed as typeof cur;
+  }
   for (const [sec, vals] of Object.entries(patch)) for (const [k, v] of Object.entries(vals)) {
     const key = `${sec}.${k}`; const spec = (SCHEMA as Record<string, KeySpec>)[key];
     if (SECRET_RE.test(key) || !spec) throw new ConfigError('invalid_value', `Unknown or forbidden setting "${key}"`, key);

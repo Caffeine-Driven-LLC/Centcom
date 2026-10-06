@@ -28,7 +28,7 @@ Options
   --engine <claude-code|codex|demo>  choose the agent engine (default: claude-code if installed)
   -c, --continue               continue the most recent conversation in this folder
   --resume <id>                continue a specific saved conversation (see /resume)
-  --no-save                    do not save this conversation
+  --no-save                    do not save this conversation or your prompt history
   --model <name>               model to use (same ids as /model)
   --mode <default|plan|acceptEdits|bypassPermissions>  start in a permission mode
   --dangerously-skip-permissions   never ask: run commands and edit files freely (alias: --yolo)
@@ -37,7 +37,7 @@ Options
   --theme <dark|light>         Graphite (default) or Paper (for light terminals)
   --colors <truecolor|256|16|never>  force a colour tier (NO_COLOR is honoured)
   --demo-team                  with --demo: also show two pretend teammates (previews multiplayer)
-  --no-motion                  turn animation off (also CENTCOM_REDUCE_MOTION=1)
+  --no-motion                  turn animation off (also CENTCOM_REDUCED_MOTION=1; the older CENTCOM_REDUCE_MOTION works too)
   -v, --version   -h, --help
 
 Centcom drives your own Claude Code; it never sees your login.`;
@@ -83,6 +83,7 @@ async function main() {
     const next = process.argv[i + 1]; const text = next && !next.startsWith('-') ? next : undefined;
     const piped = process.stdin.isTTY ? '' : await readStdin();
     const pc = await ClientConfig.load(process.cwd(), cliFlags());
+    for (const w of pc.warnings) process.stderr.write('centcom: settings: ' + w + '\n');
     const { engine, demo, note } = await pickEngine(pc.cfg.client.engine); if (note) process.stderr.write(note + '\n');
     let br = ''; try { br = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { /* not a repo */ }
     const fmt = (arg('--output-format') ?? 'text') as 'text' | 'json' | 'stream-json';
@@ -105,7 +106,7 @@ async function main() {
   let instance: ReturnType<typeof render> | undefined;
   const ctl = new AppController({
     engine, demo, cwd: process.cwd(), branch, version: VERSION, permissionMode: mode, dangerous: dangerous || mode === 'bypassPermissions', ghosts: has('--demo-team'),
-    settings, ...cc.options({ ...initialSettings(), ...settings }),
+    settings, ...cc.options({ ...initialSettings(), ...settings }, { saveHistory: !has('--no-save') }),
     sessions: has('--no-save') ? undefined : new SessionStore(),
     resume: has('-c') || has('--continue') ? 'last' : arg('--resume'),
     onExit: () => instance?.unmount(),
@@ -115,7 +116,8 @@ async function main() {
   process.on('exit', leave);
   await ctl.start();
   if (note) ctl.notice('warn', note);
-  for (const w of cc.warnings) ctl.notice('warn', 'Settings: ' + w);
+  for (const w of cc.warnings) { ctl.notice('warn', 'Settings: ' + w); process.stderr.write('centcom: settings: ' + w + '\n'); }
+  cc.onWarn = (w) => ctl.notice('warn', 'Settings: ' + w);
   if (mode === 'bypassPermissions') ctl.notice('warn', 'Dangerously skip permissions is ON', 'Cento will run commands and edit files without asking. Use /mode default to turn approvals back on.');
   instance = render(<App ctl={ctl} tier={tier} />, { exitOnCtrlC: false, patchConsole: false, maxFps: 30 });
   await instance.waitUntilExit();

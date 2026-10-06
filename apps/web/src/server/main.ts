@@ -71,6 +71,7 @@ const server = createServer((req, res) => {
 const workspaces = new Map<string, Workspace>();
 /** Choices that belong to the app itself, not to one project: theme, side panel, last agent. */
 let appCfg: ClientConfig | undefined;
+let appWarned = false;
 const prefs = async (): Promise<Prefs> => { appCfg ??= await ClientConfig.load(process.cwd()); return { theme: appCfg.get('ui.theme') as Prefs['theme'], side: appCfg.get('client.side_panel') as boolean, engine: appCfg.get('client.engine') as Prefs['engine'] }; };
 const savePref = async (m: { theme?: Prefs['theme']; side?: boolean }) => { await prefs(); if (m.theme && ['auto', 'dark', 'light'].includes(m.theme)) appCfg!.set('ui.theme', m.theme); if (typeof m.side === 'boolean') appCfg!.set('client.side_panel', m.side); };
 const wss = new WebSocketServer({ noServer: true, maxPayload: 1_000_000 });
@@ -94,7 +95,8 @@ wss.on('connection', (ws: WebSocket) => {
         case 'hello': {
           const [st, cx] = await Promise.all([detectClaude(), detectCodex()]);
           send({ t: 'launcher', home: HOME, cwd: process.cwd(), recent: readRecent(), claude: { installed: st.installed, version: st.version, signedIn: st.signedIn, kind: st.loginKind }, codex: { installed: cx.installed, version: cx.version, signedIn: cx.signedIn, kind: cx.loginKind }, app: !!findAppBrowser(), prefs: await prefs() });
-          if (current) send({ t: 'opened', dir: current.dir });
+          if (appCfg && !appWarned) { appWarned = true; for (const w of appCfg.warnings) send({ t: 'notice', level: 'warn', text: 'Settings: ' + w }); } // a bad config file never blocks the launcher; say so once
+          if (current) send({ t: 'opened', dir: current.dir, history: current.history() });
           break;
         }
         case 'browse': { const d = listDir(m.path); send({ t: 'dir', ...d, saved: new SessionStore().list(d.path, 50).length }); break; }
@@ -104,7 +106,7 @@ wss.on('connection', (ws: WebSocket) => {
           detach();
           let w = workspaces.get(key);
           if (!w) { w = await Workspace.open(dir, !!m.demo, m.engine === 'codex' ? 'codex' : 'claude-code', m.resume); workspaces.set(key, w); }
-          addRecent(dir); current = w; send({ t: 'opened', dir }); leave = w.join(send); // 'opened' first: the client resets its state on it, and join() sends the first snapshot
+          addRecent(dir); current = w; send({ t: 'opened', dir, history: w.history() }); leave = w.join(send); // 'opened' first: the client resets its state on it, and join() sends the first snapshot
           break;
         }
         case 'launchApp': {
