@@ -1,0 +1,24 @@
+{
+  "$comment": "Per-repository settings for the Claude PR pipeline (claude-pr-state.mjs, claude-prompts/). The scripts are identical in Centcom and Centcom-backend; only this file differs.",
+  "lanePattern": "C\\d{3}",
+  "laneCardDir": "plan/lanes/client",
+  "requiredChecks": [
+    "CI / Typecheck, test, build"
+  ],
+  "titleCheck": null,
+  "protectedPaths": [
+    "contracts/",
+    "plan/",
+    ".github/",
+    "tools/plan/",
+    "tools/ci/",
+    "pnpm-workspace.yaml"
+  ],
+  "laneOwnedPaths": [
+    "plan/STATUS.json"
+  ],
+  "gates": "`bash tools/ci/gates.sh` (every check CI runs, in order)",
+  "mainWorkflows": [
+    "ci.yml"
+  ]
+}
