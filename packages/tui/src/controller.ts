@@ -3,6 +3,7 @@
  * answers approvals through the permission policy, runs slash commands, and drives the mascot.
  * The React tree only reads the store and calls the controller's methods.
  */
+import { discover, injection, match, type Skill } from '@centcom/skills';
 import { MascotDriver, bakedByCategory, bakedCategories, getBaked, type CentoColor } from '@centcom/mascot';
 import type { AgentEngine, ApprovalDecision, ApprovalRequest, EngineSession, NormalisedEvent, PermissionGate, PermissionMode } from '@centcom/agent';
 import { Store } from './state/store.js';
@@ -13,6 +14,7 @@ import { VerbRotator } from './util/verbs.js';
 export interface ControllerOptions {
   engine: AgentEngine; demo: boolean; cwd: string; branch?: string; version: string; permissionMode?: PermissionMode;
   onExit?: () => void; ghosts?: boolean; settings?: Partial<Settings>; verbs?: VerbRotator;
+  skills?: Skill[]; // pass [] to disable discovery (tests)
 }
 
 let uid = 0;
@@ -179,8 +181,19 @@ export class AppController {
     if (this.state.busy) { this.toast('warn', 'Cento is still working. Press Esc to interrupt, then send again.'); return; }
     this.addItem({ kind: 'user', id: nid('u'), text, ts: Date.now() });
     this.setAgentState(this.me, 'prompt-received');
-    try { await this.session?.send(text); } catch (e) { this.addItem({ kind: 'notice', id: nid('n'), level: 'error', text: 'Could not send the prompt', detail: String(e) }); }
+    let outgoing = text;
+    if (this.state.settings.autoSkills) {
+      const picks = match(text, this.skills());
+      if (picks.length) {
+        this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: 'auto skills: ' + picks.map((p) => (p.skill.kind === 'command' ? '/' : '') + p.skill.name).join(' · '), detail: picks.map((p) => `${p.skill.name}: matched ${p.why.join(', ')}`).join('\n') });
+        if (!this.o.demo) outgoing = injection(picks) + text;
+      }
+    }
+    try { await this.session?.send(outgoing); } catch (e) { this.addItem({ kind: 'notice', id: nid('n'), level: 'error', text: 'Could not send the prompt', detail: String(e) }); }
   }
+
+  private skillCache?: Skill[];
+  skills(): Skill[] { return (this.skillCache ??= this.o.skills ?? discover({ cwd: this.o.cwd })); }
 
   async interrupt() {
     if (!this.state.busy) return;
@@ -222,6 +235,15 @@ export class AppController {
       case 'mascot': if (['large', 'small', 'off', 'auto'].includes(arg)) this.setSettings({ mascot: arg as Settings['mascot'] }); else this.toast('info', 'Try /mascot large, small, off or auto'); break;
       case 'color': if (['violet', 'red', 'yellow', 'green', 'brown'].includes(arg)) this.setSettings({ color: arg as CentoColor }); else this.toast('info', 'Colours: violet red yellow green brown'); break;
       case 'theme': if (arg === 'dark' || arg === 'light') this.setSettings({ theme: arg }); else this.toast('info', 'Try /theme dark or /theme light'); break;
+      case 'auto': {
+        const on = arg ? arg === 'on' : !this.state.settings.autoSkills; this.setSettings({ autoSkills: on });
+        this.toast('info', on ? `Auto skills on (${this.skills().length} found)` : 'Auto skills off'); break;
+      }
+      case 'skills': {
+        const f = arg.toLowerCase(); const all = this.skills().filter((k) => !f || (k.name + ' ' + k.description).toLowerCase().includes(f));
+        this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: `${all.length} skill${all.length === 1 ? '' : 's'} and commands${f ? ` matching "${f}"` : ''} · auto skills ${this.state.settings.autoSkills ? 'on' : 'off'}`, detail: all.slice(0, 14).map((k) => `${k.kind === 'command' ? '/' : ''}${k.name}  (${k.source})`).join('\n') + (all.length > 14 ? `\n+${all.length - 14} more` : '') });
+        break;
+      }
       case 'motion': this.setSettings({ reducedMotion: arg === 'reduced' }); this.toast('info', arg === 'reduced' ? 'Animation off' : 'Animation on'); break;
       case 'cento': {
         const cats = bakedCategories(); const a = getBaked(arg.trim());

@@ -32,6 +32,8 @@ Flags: `--mode plan|acceptEdits`, `--mascot large|small|off`, `--cento-color red
 ![welcome](docs/screens/welcome.png)
 ![approval](docs/screens/approval.png)
 
+**Auto skills:** before each prompt Centcom matches your installed skills and commands (`~/.claude/skills`, plugins, `.claude/skills`, `.claude/commands`) against it locally, shows what it picked, and tells Claude to apply them. `/auto on|off`, `/skills [filter]`.
+
 `tools/dev/shot.py` runs the app in a pseudo-terminal and saves a screenshot (needs `pip install pyte pillow`). Checks: `pnpm typecheck && pnpm test`.
 
 ## Try the mascot

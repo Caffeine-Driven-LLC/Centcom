@@ -7,6 +7,7 @@ export default defineConfig({
       '@centcom/theme': r('./packages/theme/src/index.ts'),
       '@centcom/mascot': r('./packages/mascot/src/index.ts'),
       '@centcom/agent': r('./packages/agent/src/index.ts'),
+      '@centcom/skills': r('./packages/skills/src/index.ts'),
       '@centcom/tui': r('./packages/tui/src/index.ts'),
     },
   },

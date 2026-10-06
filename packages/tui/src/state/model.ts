@@ -20,7 +20,7 @@ export interface Toast { id: string; level: 'info' | 'ok' | 'warn' | 'error'; te
 
 export interface PendingApproval { req: ApprovalRequest; agentName: string; color: CentoColor; resolve: (d: ApprovalDecision) => void; confirmHigh: boolean }
 
-export interface Settings { theme: 'dark' | 'light'; mascot: MascotSize | 'auto'; permissionMode: PermissionMode; reducedMotion: boolean; color: CentoColor }
+export interface Settings { theme: 'dark' | 'light'; mascot: MascotSize | 'auto'; permissionMode: PermissionMode; reducedMotion: boolean; color: CentoColor; autoSkills: boolean }
 
 export interface AppState {
   items: Item[];
@@ -45,7 +45,7 @@ export interface AppState {
   version: string;
 }
 
-export const initialSettings = (): Settings => ({ theme: 'dark', mascot: 'auto', permissionMode: 'default', reducedMotion: false, color: 'violet' });
+export const initialSettings = (): Settings => ({ theme: 'dark', mascot: 'auto', permissionMode: 'default', reducedMotion: false, color: 'violet', autoSkills: true });
 
 export function stateToMini(state: string): MiniState {
   switch (state) {
