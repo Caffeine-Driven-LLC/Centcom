@@ -59,7 +59,7 @@ export const until = async (f: () => boolean, ms = 4000): Promise<void> => { con
 export const sha = (b: Uint8Array) => `sha256:${createHash('sha256').update(b).digest('hex')}`;
 
 /** A member with no socket whose frames the test writes by hand: for forged, unsigned, odd or replayed traffic. */
-export async function virtualPeer(r: { m: MockBackend; reg: Registry }, sid: string, name: string, ring = KeyRing.create(), role: 'editor' | 'host' = 'editor', register = true) {
+export async function virtualPeer(r: { m: MockBackend; reg: Registry }, sid: string, name: string, ring = KeyRing.create(), role: 'editor' | 'host' | 'viewer' = 'editor', register = true) {
   await initCrypto(); const keychain = memoryKeychain(); const deviceId = devId(); const device = new DeviceKeyStore(keychain, deviceId); const keys = await device.getOrCreatePublicKeys();
   const first = r.m.relay.peerSend(sid, { name, role, frame: { t: 'event', k: 'reaction', id: 'msg_AAAAAAAAAAAAAAAAAAAAAAAAAA', p: { target: 'msg_AAAAAAAAAAAAAAAAAAAAAAAAAA', code: 'ok', op: 'add' } } as never }); const memberId = String(first.from);
   if (register) r.reg.members.set(memberId, { id: memberId, role, slot: 9, display_name: name, device: deviceId, device_keys: { device: deviceId, x25519: keys.x25519, ed25519: keys.ed25519, fingerprint: device.fingerprint() } });

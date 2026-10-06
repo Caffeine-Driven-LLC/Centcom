@@ -11,3 +11,4 @@ export type { IdGenerator } from './http/index.js';
 export { backoffDelayMs as relayBackoffDelayMs } from './relay/index.js';
 export * from './session/index.js';
 export * from './queue/index.js';
+export * from './approvals/index.js';

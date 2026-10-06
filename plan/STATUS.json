@@ -256,6 +256,10 @@
   "C058": {
    "pct": 0.8,
    "note": "queue client: submit (hybrid frame, size = ciphertext bytes, idempotent item/frame id), cancel, host controls, deterministic reducer with held items while paused, relay queue.state replacement, ignored forged host frames, local pre-checks and server error mapping; tested between two clients on the mock relay plus property tests; gaps: no TUI wiring, auto-approve policies not exercised, frame id is msg_ (contract says que_)"
+  },
+  "C061": {
+   "pct": 0.8,
+   "note": "approval router: request (apr_ id reused as frame id, clear part only the five routing fields, ttl clamped to 10 min, deny on any failure), answer, authorize matrix by live roster (host, delegated approvers, any_editor, owner via supplied set, never viewer or the requester), first decision wins, dedupe and pending() across reconnects, sink with scopes, awaiting/resolved events; session client gains onAny replay; gaps: owner needs workspace roles from outside, not wired to the permission engine or the fleet panel"
   }
  },
  "next": [

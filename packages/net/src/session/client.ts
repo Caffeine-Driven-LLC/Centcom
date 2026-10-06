@@ -45,7 +45,8 @@ export interface SessionHandle {
   sendEvent(kind: string, body: { p?: EventP | ((info: { ctBytes: number }) => EventP); secret?: EventSecret; /** the frame id (a `msg_` id); a retry with the same id is the same frame */ id?: string }): Promise<{ id: string; seq: number }>;
   on<K extends LifecycleName>(name: K, fn: (...a: LifecycleEvents[K]) => void): () => void;
   on(kind: string, fn: (e: DecodedEvent) => void): () => void;
-  onAny(fn: (e: DecodedEvent) => void): () => void;
+  /** every decoded event; with `replay` the most recent ones (up to 500) are delivered first, so a feature that starts after the join does not miss what arrived while connecting */
+  onAny(fn: (e: DecodedEvent) => void, o?: { replay?: boolean }): () => void;
   leave(): Promise<void>; end(): Promise<void>;
   snapshot: { fetch(): Promise<{ doc: SnapshotDoc; seq: number } | null>; upload(): Promise<{ snp: string; seq: number } | null> };
   history: { fetch(afterSeq: number): Promise<number> };
@@ -57,14 +58,14 @@ export interface SessionHandle {
 const realClock: RelayClock = { now: () => Date.now(), setTimeout: (fn, ms) => setTimeout(fn, ms), clearTimeout: (h) => clearTimeout(h as unknown as ReturnType<typeof setTimeout>) };
 /** sys.error codes that mean the relay refused the frame we just sent (it does not say which, so the oldest unechoed one). */
 const FRAME_REFUSALS = new Set<string>(['queue_full', 'queue_item_gone', 'queue_not_allowed', 'forbidden', 'role_insufficient', 'muted', 'session_locked', 'host_required', 'frame_too_large', 'invalid_frame', 'lock_denied']);
-const KEY_WAIT_MS = 10_000; const MAX_PENDING = 1000;
+const RECENT_EVENTS = 500; const KEY_WAIT_MS = 10_000; const MAX_PENDING = 1000;
 
 class Connection implements SessionHandle {
   readonly roster_ = new Roster(); me: MemberInfo; private st: SessionState = 'connecting'; policy: SessionPolicy;
   private readonly life = new Lifecycle(); private readonly handlers = new Map<string, Set<(e: DecodedEvent) => void>>(); private readonly any = new Set<(e: DecodedEvent) => void>();
   private relay!: RelayClient; private channel!: ReliableChannel; private codec!: FrameCodec; private host?: HostDuties; private guest!: GuestKeys;
   private chain: Promise<void> = Promise.resolve(); private pending: SequencedFrame[] = []; private pendingKid?: string; private keyWaiters: { kid: string; res: () => void; rej: (e: unknown) => void; timer: unknown }[] = [];
-  private catchUps: number[] = []; private catchUpWanted = false; private catchingUp = false; private catchUpHead?: number; private unreadable = new Set<string>(); private rotationRequested = false; private lastSeq = 0; private framesSinceSnapshot = 0; private snapTimer?: unknown; private rotateTimer?: unknown; private snapshotting = false; private closed = false; 
+  private recent: DecodedEvent[] = []; private catchUps: number[] = []; private catchUpWanted = false; private catchingUp = false; private catchUpHead?: number; private unreadable = new Set<string>(); private rotationRequested = false; private lastSeq = 0; private framesSinceSnapshot = 0; private snapTimer?: unknown; private rotateTimer?: unknown; private snapshotting = false; private closed = false; 
   private readonly clock: RelayClock; private readonly ids: IdGenerator; private readonly fetchFn: typeof fetch;
 
   constructor(private readonly d: SessionClientDeps, private readonly rest: SessionRest, readonly id: string, role: Role, memberId: string, private readonly ring: KeyRing, private readonly viewOnly: boolean, policy: SessionPolicy, private readonly opts: SessionOptions, private readonly relayUrl: string) {
@@ -144,7 +145,7 @@ class Connection implements SessionHandle {
     }
     this.emitEvent(e); void f;
   }
-  private emitEvent(e: DecodedEvent): void { for (const fn of [...(this.handlers.get(e.kind) ?? [])]) { try { fn(e); } catch { /* a listener must not break delivery */ } } for (const fn of [...this.any]) { try { fn(e); } catch { /* same */ } } }
+  private emitEvent(e: DecodedEvent): void { this.recent.push(e); if (this.recent.length > RECENT_EVENTS) this.recent.shift(); for (const fn of [...(this.handlers.get(e.kind) ?? [])]) { try { fn(e); } catch { /* a listener must not break delivery */ } } for (const fn of [...this.any]) { try { fn(e); } catch { /* same */ } } }
   private onKeys(): void { void this.persistKeys(); this.releaseWaiters(); if (this.st === 'waiting_for_key') this.setState('live'); this.replayPending(); if (this.catchUpWanted) this.needCatchUp(); }
   private replayPending(): void { const todo = this.pending.splice(0); this.chain = this.chain.then(async () => { for (const f of todo) await this.onFrame(f); }).catch(() => undefined); }
   private async persistKeys(): Promise<void> { const s = this.d.crypto.keyringStore?.(this.id); if (s && this.d.crypto.keychain) await this.ring.persist(s, this.d.crypto.keychain, `keyring-wrap`).catch(() => undefined); }
@@ -170,7 +171,7 @@ class Connection implements SessionHandle {
     if (LIFECYCLE.has(name)) return this.life.on(name as LifecycleName, fn as never);
     let s = this.handlers.get(name); if (!s) this.handlers.set(name, (s = new Set())); s.add(fn as never); return () => { s!.delete(fn as never); };
   }
-  onAny(fn: (e: DecodedEvent) => void): () => void { this.any.add(fn); return () => { this.any.delete(fn); }; }
+  onAny(fn: (e: DecodedEvent) => void, o: { replay?: boolean } = {}): () => void { if (o.replay) for (const e of [...this.recent]) { try { fn(e); } catch { /* a listener must not break the others */ } } this.any.add(fn); return () => { this.any.delete(fn); }; }
 
   /* ------------------------------------------------------------- host duties */
   private becomeHost(): void { if (this.host) return; this.host = new HostDuties({ ring: this.ring, deviceId: this.d.deviceId, policy: () => this.policy, now: () => new Date(this.clock.now()), recipients: () => this.roster_.recipients(this.d.deviceId), persist: () => this.persistKeys(), log: (m, c) => this.d.logger?.info(m, c), sendGrant: async (p, secret) => { await this.sendRaw('key.grant', { p, secret }); } }); this.scheduleHostTimers(); }
