@@ -55,7 +55,8 @@ describe('limits', () => {
   });
   it('the folder is free again once its agent has exited', async () => { const r = rig(); const cwd = await r.dirs(); const h = await r.runner.start({ engine: 'fake', cwd, prompt: '' }); await h.stop(); await expect(r.runner.start({ engine: 'fake', cwd, prompt: '' })).resolves.toBeTruthy(); });
   it('a start that takes longer than 30 s fails and leaves no slot taken', async () => {
-    const r = rig({ engine: { startDelayMs: 60_000 }, config: { maxParallel: 1 } }); const p = r.runner.start(await r.spec()); const caught = p.catch((e) => e); await settle(r); await r.clock.advance(30_000); await flush(); expect(await caught).toMatchObject({ code: 'engine_start_timeout' });
+    const r = rig({ engine: { startDelayMs: 60_000 }, config: { maxParallel: 1 } }); const p = r.runner.start(await r.spec()); const caught = p.catch((e) => e); for (let i = 0; i < 500 && r.engine.starts.length === 0; i++) await new Promise((x) => setTimeout(x, 2)); // the runner stats the folder (real IO) before it starts the engine; wait for that, not for a fixed number of ticks
+    await settle(r); await r.clock.advance(30_000); await flush(); expect(await caught).toMatchObject({ code: 'engine_start_timeout' });
     expect(r.runner.list()).toEqual([]); const ok = rig(); await expect(ok.runner.start(await ok.spec())).resolves.toBeTruthy();
   });
   it('a failing engine start, an unknown engine, a disabled provider and a failed preflight spawn nothing', async () => {
