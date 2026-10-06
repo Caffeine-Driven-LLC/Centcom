@@ -18,51 +18,14 @@ import { makeMemoryFiles, runMemoryCli } from './commands/memory/cli.js';
 import { appViews } from './views.js';
 import { runInitCli } from './commands/init.js';
 import { resolvedKeys, runKeys } from './commands/keys.js';
+import { find as findCommand, helpFor, renderHelp, topHelp } from './help/index.js';
 import { makeTelemetry, runTelemetry } from './commands/telemetry.js';
 import { defaultDeps, loadConfig } from '@centcom/config';
 import { runMcpCli } from './commands/mcp/cli.js';
 import { runHooksCli } from './commands/hooks/cli.js';
 
 const VERSION = '0.1.0';
-const HELP = `centcom ${VERSION}: command many hands
-
-Usage
-  centcom [options]            start the terminal app in this directory
-  centcom init [--yes] [--force] [--dry-run]   set this project up (config, memory file, git exclude); safe to run again
-  centcom keys [--json]        list every shortcut (change them in keybindings.json)
-  centcom memory show|add|edit|status|sync   edit CLAUDE.md and AGENTS.md (a line starting with "# " in the app adds a note)
-  centcom mcp list|add|remove|status|test   manage MCP servers for Claude Code and Codex
-  centcom hooks list|add|remove|validate|templates   manage Claude Code hooks (the tool runs them, Centcom only edits the settings)
-  centcom provider status|login|logout|doctor   check, sign in or out of Claude Code and Codex (the tools do the signing in)
-  centcom telemetry status|on|off|reset   anonymous usage counts (off unless you turn them on)
-
-Scripting
-  centcom -p "task"             run once, print the answer, exit (no screen). Piped input is added to the prompt.
-  --output-format <text|json|stream-json>   what -p prints (default text)
-  cat error.log | centcom -p "what went wrong?"
-  Anything that needs an approval is declined and reported (exit code 3); allow it with --mode acceptEdits or --dangerously-skip-permissions.
-  Exit codes: 0 done, 1 error, 2 bad usage, 3 an action was declined.
-
-Options
-  --demo                       scripted demo agent (no login, no model)
-  --engine <claude-code|codex|demo>  choose the agent engine (default: claude-code if installed)
-  -c, --continue               continue the most recent conversation in this folder
-  --resume <id>                continue a specific saved conversation (see /resume)
-  --no-save                    do not save this conversation or your prompt history
-  --no-checkpoints             do not snapshot the folder before each prompt (/rewind then has nothing to go back to)
-  --model <name>               model to use (same ids as /model)
-  --mode <default|plan|acceptEdits|bypassPermissions>  start in a permission mode
-  --dangerously-skip-permissions   never ask: run commands and edit files freely (alias: --yolo)
-  --mascot <large|small|off>   Cento size (default: auto from terminal height)
-  --cento-color <violet|red|yellow|green|brown>
-  --theme <dark|light>         Graphite (default) or Paper (for light terminals)
-  --colors <truecolor|256|16|never>  force a colour tier (NO_COLOR is honoured)
-  --demo-team                  with --demo: also show two pretend teammates (previews multiplayer)
-  --debug                      write detailed logs to ~/.centcom/logs/centcom.log
-  --no-motion                  turn animation off (also CENTCOM_REDUCED_MOTION=1; the older CENTCOM_REDUCE_MOTION works too)
-  -v, --version   -h, --help
-
-Centcom drives your own Claude Code; it never sees your login.`;
+const HELP = topHelp(VERSION);
 
 function arg(name: string): string | undefined { const i = process.argv.indexOf(name); return i >= 0 ? process.argv[i + 1] : undefined; }
 const has = (n: string) => process.argv.includes(n);
@@ -92,6 +55,10 @@ async function pickEngine(preferred: 'claude-code' | 'codex' = 'claude-code'): P
 }
 
 async function main() {
+  // `centcom help [topic]` and `centcom <command> --help` come from the same list as the docs and the man pages
+  const helpOpts = { width: Math.min(80, process.stdout.columns ?? 80), colour: !!process.stdout.isTTY && !process.env.NO_COLOR };
+  if (process.argv[2] === 'help') { const r = helpFor(process.argv[3], helpOpts); (r.code ? console.error : console.log)(r.text); process.exit(r.code); }
+  if ((has('--help') || has('-h')) && process.argv[2] && findCommand(process.argv[2]) && process.argv[2] !== 'centcom') { console.log(renderHelp(findCommand(process.argv[2])!, helpOpts)); process.exit(0); }
   if (has('-h') || has('--help')) { console.log(HELP); return; }
   if (has('-v') || has('--version')) { console.log(VERSION); return; }
   if (process.argv[2] === 'telemetry') process.exit(await runTelemetry(process.argv.slice(3), { out: (l) => console.log(l), err: (l) => console.error(l), version: VERSION }));
