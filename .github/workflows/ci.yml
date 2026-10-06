@@ -25,6 +25,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Generated protocol code matches contracts/
         run: pnpm --filter @centcom/protocol gen --check
+      - name: HTTP operation table matches openapi.yaml
+        run: pnpm --filter @centcom/net gen:http --check
       - name: Agent states doc is up to date
         run: pnpm exec tsx tools/docs/states-doc.ts --check
       - name: Typecheck

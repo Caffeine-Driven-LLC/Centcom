@@ -236,6 +236,10 @@
   "C056": {
    "pct": 0.95,
    "note": "CT-CRYPTO module in @centcom/net: vectors match bit for bit (ciphertext, signature, path MAC, fingerprint), frame encrypt/decrypt/sign/verify with tamper matrix, chunks, device keys in the OS keychain, key ring with rotation and encrypted persistence, grants, invite bundles, TOFU trust store; real keychain only checked through a fake in tests"
+  },
+  "C051": {
+   "pct": 0.9,
+   "note": "HTTP client in @centcom/net: operation table generated from openapi.yaml with a CI drift check; typed call, listPage, paginate, revalidate, getStatus, getJwks; CT-ERR retries with full jitter and a 60 s sleep budget, idempotency keys, single-flight 401 refresh, ETag and If-Match, size guard, tolerant response checks, typed errors; all 93 operations pass against the mock. Gaps: responses are checked with generated shapes (types and required fields), not the C003 Ajv validators; no lane uses the client yet"
   }
  },
  "next": [

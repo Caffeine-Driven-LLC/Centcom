@@ -5,6 +5,9 @@
   "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",
+  "scripts": {
+    "gen:http": "tsx scripts/gen-http.ts"
+  },
   "dependencies": {
     "@centcom/protocol": "workspace:*",
     "@napi-rs/keyring": "2.1.0",
@@ -12,6 +15,7 @@
   },
   "devDependencies": {
     "@centcom/testkit": "workspace:*",
-    "@types/libsodium-wrappers": "0.8.2"
+    "@types/libsodium-wrappers": "0.8.2",
+    "yaml": "2.9.1"
   }
 }
