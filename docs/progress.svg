@@ -10,8 +10,8 @@
 <text x="24" y="34" fill="#ECECEF" font-size="16" font-weight="700">Centcom client</text>
 <text x="736" y="34" fill="#ECECEF" font-size="16" font-weight="700" text-anchor="end">42% built</text>
 <rect x="24" y="52" width="712" height="26" rx="2" fill="#1B1B1F"/>
-<clipPath id="cf"><rect x="24" y="52" width="297.3" height="26" rx="2"/></clipPath><g clip-path="url(#cf)"><rect x="24" y="52" width="297.3" height="26" fill="#7C5CFF"/><rect x="0" y="52" width="345.3" height="26" fill="url(#s)" class="st"/></g>
-<rect x="319.3" y="52" width="3" height="26" fill="#ECECEF"/>
+<clipPath id="cf"><rect x="24" y="52" width="298.4" height="26" rx="2"/></clipPath><g clip-path="url(#cf)"><rect x="24" y="52" width="298.4" height="26" fill="#7C5CFF"/><rect x="0" y="52" width="346.4" height="26" fill="url(#s)" class="st"/></g>
+<rect x="320.4" y="52" width="3" height="26" fill="#ECECEF"/>
 <text x="24" y="100" fill="#B6B6BE" font-size="12">Plan and contracts 100% · implementation by lane size · updated from plan/STATUS.json</text>
 <text x="24" y="125" fill="#B6B6BE" font-size="11">M0</text><text x="64" y="125" fill="#8A8A94" font-size="11">Contracts and scaffolding</text>
 <rect x="270" y="117" width="350" height="8" rx="1" fill="#1B1B1F"/>
@@ -38,8 +38,8 @@
 <text x="736" y="225" fill="#D4D4DA" font-size="11" text-anchor="end">21% · 2/14 lanes</text>
 <text x="24" y="245" fill="#B6B6BE" font-size="11">M6</text><text x="64" y="245" fill="#8A8A94" font-size="11">Launch</text>
 <rect x="270" y="237" width="350" height="8" rx="1" fill="#1B1B1F"/>
-<rect x="270" y="237" width="20.2" height="8" rx="1" fill="#7C5CFF"/>
-<text x="736" y="245" fill="#D4D4DA" font-size="11" text-anchor="end">6% · 0/8 lanes</text>
+<rect x="270" y="237" width="26.3" height="8" rx="1" fill="#7C5CFF"/>
+<text x="736" y="245" fill="#D4D4DA" font-size="11" text-anchor="end">8% · 0/8 lanes</text>
 <text x="24" y="265" fill="#B6B6BE" font-size="11">Later</text><text x="64" y="265" fill="#8A8A94" font-size="11">After launch</text>
 <rect x="270" y="257" width="350" height="8" rx="1" fill="#1B1B1F"/>
 <text x="736" y="265" fill="#D4D4DA" font-size="11" text-anchor="end">0% · 0/1 lanes</text>
