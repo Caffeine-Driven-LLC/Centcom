@@ -22,22 +22,34 @@ export function settingsFromConfig(c: ResolvedConfig): Partial<Settings> {
   };
 }
 
+/** Plain-language text for a config warning. It only ever carries file paths, key names and the project's model id, never file contents. */
+export function describeWarning(code: string, detail?: string): string {
+  switch (code) {
+    case 'user_config_ignored': return `your settings file was not used, defaults apply. ${detail ?? ''}`.trim();
+    case 'project_config_ignored': return `this folder's .centcom/config.json was ignored. ${detail ?? ''}`.trim();
+    case 'project_sets_model': return `this folder's .centcom/config.json selects the model "${detail ?? ''}" (change it with /model or --model)`;
+    case 'user_config_not_saved': return `settings not saved: ${detail ?? 'your settings file'} could not be read or parsed, so it was left untouched`;
+    default: return detail ? `${code}: ${detail}` : code;
+  }
+}
+
 export class ClientConfig {
   readonly cfg!: ResolvedConfig; readonly warnings: string[] = []; private deps: LoadDeps; private saved: Settings | undefined; private timer?: NodeJS.Timeout; private pending: Record<string, Record<string, string | boolean>> = {};
   private constructor(deps: LoadDeps) { this.deps = deps; }
 
   /** Load config for a folder. `flags` are the explicit command-line choices (highest priority, never written back). */
   static async load(cwd: string, flags: FlatFlags = {}, over: Partial<LoadDeps> = {}): Promise<ClientConfig> {
-    const warnings: string[] = []; const deps = defaultDeps({ cwd, warn: (code, key) => warnings.push(key ? `${code}: ${key}` : code), ...over });
+    const warnings: string[] = []; const deps = defaultDeps({ cwd, warn: (code, key) => warnings.push(describeWarning(code, key)), ...over });
     const cc = new ClientConfig(deps); (cc as { cfg: ResolvedConfig }).cfg = await loadConfig(deps, flags); cc.warnings.push(...warnings); return cc;
   }
 
   /** Controller options that make a session start the way you left it and remember what you change. */
-  options(initial: Settings): Pick<ControllerOptions, 'history' | 'onHistory' | 'onPrefs' | 'describeConfig'> {
+  options(initial: Settings, opts: { saveHistory?: boolean } = {}): Pick<ControllerOptions, 'history' | 'onHistory' | 'onPrefs' | 'describeConfig'> {
     this.saved = { ...initial };
+    const keep = opts.saveHistory !== false; // --no-save and demo sessions neither read nor write prompt history
     return {
-      history: loadHistory(this.deps, this.deps.cwd),
-      onHistory: (h) => { try { saveHistory(this.deps, this.deps.cwd, h); } catch { /* history is a convenience; never break the app over it */ } },
+      history: keep ? loadHistory(this.deps, this.deps.cwd) : undefined,
+      onHistory: keep ? (h) => { try { saveHistory(this.deps, this.deps.cwd, h); } catch { /* history is a convenience; never break the app over it */ } } : undefined,
       onPrefs: (p) => this.remember(p.settings, p.fleet),
       describeConfig: () => this.describe(),
     };
@@ -54,6 +66,8 @@ export class ClientConfig {
     this.flushSoon();
   }
   private lastFleet?: boolean;
+  /** Called when a later save fails (the launch-time warnings are in `warnings`). */
+  onWarn?: (text: string) => void;
   /** Remember a single value now (used by the web server for panel and theme choices). */
   set(key: Key, value: string | boolean) { const [a, b] = key.split('.') as [string, string]; (this.pending[a] ??= {})[b] = value; this.live.set(key, value); this.flushSoon(); }
   /** Values saved during this run, so reading them back is never stale. */
@@ -61,7 +75,7 @@ export class ClientConfig {
   private flushSoon() { if (this.timer) return; this.timer = setTimeout(() => { this.timer = undefined; this.flush(); }, 300); this.timer.unref?.(); }
   flush() {
     if (!Object.keys(this.pending).length) return; const patch = this.pending; this.pending = {};
-    try { writeUserConfig(this.deps, patch); } catch (e) { this.warnings.push(`could not save settings: ${(e as Error).message}`); }
+    try { writeUserConfig(this.deps, patch); } catch (e) { this.warnings.push(`could not save settings: ${(e as Error).message}`); this.onWarn?.(this.warnings.at(-1)!); }
   }
 
   /** Human-readable "what is set, and where did it come from" for /config. */
