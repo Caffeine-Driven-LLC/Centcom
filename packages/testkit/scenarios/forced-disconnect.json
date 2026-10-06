@@ -1,0 +1,9 @@
+{
+  "name": "forced-disconnect",
+  "steps": [
+    { "do": "peer_send", "args": { "name": "Host", "role": "host", "k": "message.user" } },
+    { "at_ms": 3000, "do": "disconnect", "args": { "role": "editor", "code": 1001, "reason": "server_restart" } },
+    { "on": { "kind": "sys.hello", "nth": 2 }, "do": "disconnect", "args": { "role": "editor", "code": 4429, "retry_after_s": 2 } },
+    { "on": { "kind": "sys.hello", "nth": 3 }, "do": "disconnect", "args": { "role": "editor", "code": 4400 } }
+  ]
+}

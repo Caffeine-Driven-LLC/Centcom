@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { createHash } from 'node:crypto';
 import Ajv2020 from 'ajv/dist/2020.js';
-import { ERROR_TABLE, OPERATIONS, b64u, compareVersions, type ErrorCode, type Id } from '@centcom/protocol';
+import { ERROR_TABLE, OPERATIONS, b64u, compareVersions, isId, type ErrorCode, type Id } from '@centcom/protocol';
 import { jwks, signJwt, verifyJwt, type KeyPair } from '../core/jwt.js';
 import type { Clock } from '../core/clock.js';
 import type { Rng } from '../core/prng.js';
@@ -73,19 +73,37 @@ export function createRest(d: RestDeps) {
       return fail('invalid_request', requestId, { detail: 'Unsupported grant_type.' });
     },
     revokeToken: ({ body }) => { const t = String(body?.token ?? ''); const fam = [...state.families.values()].find((f) => f.current === t || f.old.has(t)); if (fam) fam.revoked = true; else state.revokedTokens.add(t); return { status: 200, body: {} }; },
-    getMe: (c) => ({ status: 200, body: { ...(generate(respSchema(opDef('getMe'), 200) ?? {}, gctx) as Doc), id: state.user.id, email: state.user.email, display_name: state.user.name }, headers: { etag: etagFor(c.rq.path, state.user) } }),
+    getMe: (c) => {
+      const base = stable(`${c.rq.path}|Me`, () => generate(respSchema(opDef('getMe'), 200) ?? {}, gctx)) as Doc; const seeded = state.seed.users?.find((u) => u.id === state.user.id);
+      const body = { ...base, user: { ...(base.user ?? {}), ...(seeded ?? {}), id: state.user.id, email: state.user.email, display_name: state.user.name }, active_workspace: state.workspace };
+      return { status: 200, body, headers: { etag: etagFor(c.rq.path, body) } };
+    },
     createSession: ({ body }) => { const id = d.newId('ses'); const s = d.getOrCreateSession(id); if (typeof body?.name === 'string') s.name = body.name; if (body?.mode) s.mode = body.mode; return { status: 201, body: { ...(generate(respSchema(opDef('createSession'), 201) ?? {}, gctx) as Doc), id, state: s.state, mode: s.mode, name: s.name } }; },
-    getSession: ({ params }) => { const s = d.getOrCreateSession(params.id!); return { status: 200, body: { ...(generate(respSchema(opDef('getSession'), 200) ?? {}, gctx) as Doc), id: s.id, state: s.state, mode: s.mode } }; },
+    getSession: ({ params }) => { const s = d.getOrCreateSession(params.id!); const seeded = state.seed.sessions?.find((x) => x.id === s.id); return { status: 200, body: { ...(generate(respSchema(opDef('getSession'), 200) ?? {}, gctx) as Doc), ...(seeded ?? {}), id: s.id, state: s.state, ...(seeded ? {} : { mode: s.mode }) } }; },
+    getWorkspace: ({ params, requestId }) => { if (!state.seed.workspaces) return undefined; const w = state.seed.workspaces.find((x) => x.id === params.id); return w ? { status: 200, body: w } : fail('workspace_not_found', requestId); },
+    getEntitlements: ({ params, rq }) => {
+      const base = stable(`${rq.path}|Entitlements`, () => generate(respSchema(opDef('getEntitlements'), 200) ?? {}, gctx)) as Doc; const over = state.entitlements.get(params.id!) ?? {};
+      return { status: 200, body: { ...base, ...over, limits: { ...(base.limits ?? {}), ...((over.limits as Doc | undefined) ?? {}) }, ...(isId('wsp', params.id) ? { workspace: params.id } : {}) } };
+    },
     createJoinToken: ({ params, sub }) => { const s = d.getOrCreateSession(params.id!); if (s.state === 'ended') return undefined; const { ticket, member } = d.issueTicket(s.id, { user: sub }); return { status: 200, body: { ...(generate(respSchema(opDef('createJoinToken'), 200) ?? {}, gctx) as Doc), relay_url: d.wsUrl(), ticket, expires_at: new Date(clock.now() + 60_000).toISOString(), member: member.id } }; },
     endSession: ({ params }) => { const s = d.getOrCreateSession(params.id!); s.state = 'ended'; return { status: 200, body: { ...(generate(respSchema(opDef('endSession'), 200) ?? {}, gctx) as Doc), id: s.id, state: 'ended' } }; },
   };
   function fromSet(set: string, n: number) { let s = ''; for (let i = 0; i < n; i++) s += set[rng.int(set.length)]; return s; }
   const etagFor = (path: string, value: unknown) => { const e = `"${createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0, 16)}"`; state.etags.set(path, e); return e; };
+  /** A generated resource is made once per path and kept, so repeated reads (and their ETags) agree until a write changes it. */
+  const stable = (path: string, make: () => unknown): unknown => { if (!state.resources.has(path)) state.resources.set(path, make()); return state.resources.get(path); };
+  /** Lists answered from `--data` seed files instead of generated rows. */
+  const seededList = (id: string): unknown[] | undefined => {
+    if (id === 'listWorkspaces') return state.seed.workspaces;
+    if (id === 'listSessions' && state.seed.sessions) return state.seed.sessions.map((x) => ({ ...x, state: state.sessions.get(String(x.id))?.state ?? x.state }));
+    return undefined;
+  };
 
   /* ---------------- generic behaviour ---------------- */
   const pageDataset = (key: string, itemSchema: Doc, n = 47): unknown[] => { let ds = state.datasets.get(key); if (!ds) { ds = Array.from({ length: n }, () => generate(itemSchema, gctx)); state.datasets.set(key, ds); } return ds; };
-  function generic(id: string, op: Doc, q: URLSearchParams, requestId: string, pathKey: string): Result {
+  function generic(id: string, op: Doc, q: URLSearchParams, requestId: string, pathKey: string, method: string, reqBody: unknown): Result {
     const status = okStatus(op); const schema = respSchema(op, status);
+    if (method === 'DELETE') { for (const k of [...state.resources.keys()]) if (k.startsWith(`${pathKey}|`)) state.resources.delete(k); state.etags.delete(pathKey); }
     if (status === 204 || !schema) return { status, ...(status === 204 ? {} : { body: {} }) };
     const s = deref(doc, schema); const props = (s.allOf ? Object.assign({}, ...s.allOf.map((p: Doc) => deref(doc, p).properties ?? {})) : s.properties) ?? {};
     if (props.data?.type === 'array' && props.next_cursor) { // a list endpoint: honour limit and cursor
@@ -93,10 +111,19 @@ export function createRest(d: RestDeps) {
       const fp = createHash('sha256').update(pathKey + [...q.entries()].filter(([k]) => k !== 'cursor' && k !== 'limit').map((e) => e.join('=')).join('&')).digest('hex').slice(0, 12);
       let off = 0; const cur = q.get('cursor');
       if (cur) { try { const c = JSON.parse(Buffer.from(b64u.decode(cur)).toString()); if (c.f !== fp || c.exp < clock.now() || !Number.isInteger(c.o)) throw new Error('x'); off = c.o; } catch { return fail('cursor_invalid', requestId); } }
-      const all = pageDataset(id + ':' + fp, props.data.items); const slice = all.slice(off, off + limit); const more = off + limit < all.length;
+      const all = seededList(id) ?? pageDataset(id + ':' + fp, props.data.items); const slice = all.slice(off, off + limit); const more = off + limit < all.length;
       return { status, body: { data: slice, next_cursor: more ? b64u.encode(Buffer.from(JSON.stringify({ o: off + limit, f: fp, exp: clock.now() + 86_400_000 }))) : null, has_more: more } };
     }
-    return { status, body: generate(schema, gctx), headers: op.responses[String(status)]?.headers?.ETag || props.etag ? {} : {} };
+    const rkey = `${pathKey}|${schema.$ref?.split('/').pop() ?? id}`; /* one stored resource per path and shape */
+    if (method === 'GET') return { status, body: stable(rkey,() => generate(schema, gctx)) };
+    if (method === 'PATCH' || method === 'PUT') {
+      /* a write: the stored resource takes the fields the request changed, as long as the result still fits the response schema */
+      const prior = state.resources.get(rkey); const next = { ...((prior ?? generate(schema, gctx)) as Doc) };
+      const ref: string | undefined = schema.$ref?.split('/').pop(); const changes = reqBody && typeof reqBody === 'object' ? Object.entries(reqBody as Doc).filter(([k]) => k in props) : [];
+      const merged = { ...next, ...Object.fromEntries(changes) }; const keep = ref && changes.length && validatorFor(ref)(merged) ? merged : next;
+      state.resources.set(rkey, keep); return { status, body: keep };
+    }
+    return { status, body: generate(schema, gctx) };
   }
 
   /* ---------------- request pipeline ---------------- */
@@ -117,7 +144,9 @@ export function createRest(d: RestDeps) {
       for await (const c of req) { size += (c as Buffer).length; if (size > limit) { tooBig = true; break; } chunks.push(c as Buffer); }
       if (tooBig) return send(fail('payload_too_large', requestId, { instance: url.pathname }));
       // maintenance / client version / injected errors / rate limit
-      if (state.maintenance && route.id !== 'getStatus' && route.id !== 'getHealth') return send(fail('service_unavailable', requestId, { retryAfterS: 30 }));
+      const exempt = route.id === 'getStatus' || route.id === 'getHealth';
+      if (state.maintenance && !exempt) return send(fail('service_unavailable', requestId, { retryAfterS: 30 }));
+      if (state.sticky && !exempt) return send(fail(state.sticky.code, requestId, { retryAfterS: state.sticky.retryAfterS, instance: url.pathname }));
       const ua = /centcom-(?:cli|tui|web)\/(\d+\.\d+\.\d+[^\s]*)/.exec(headers['user-agent'] ?? ''); if (state.minClient && ua && compareVersions(ua[1]!, state.minClient) < 0) return send(fail('client_too_old', requestId, { detail: `Update to ${state.minClient} or newer.` }));
       const inj = state.pendingErrors.shift(); if (inj) return send(fail(inj.code, requestId, { retryAfterS: inj.retryAfterS, instance: url.pathname }));
       if (state.rateLimit && state.rateLimit.remaining <= 0) return send(fail('rate_limited', requestId, { retryAfterS: state.rateLimit.retryAfterS }));
@@ -149,8 +178,12 @@ export function createRest(d: RestDeps) {
         const prior = state.idem.get(k); if (prior) return send(prior.fingerprint === fp ? { status: prior.status, body: prior.body, headers: { ...prior.headers, 'idempotency-replayed': 'true' } } : fail('idempotency_conflict', requestId));
       }
       // conditional writes
-      const ifMatch = headers['if-match']; if (ifMatch && ['PATCH', 'PUT', 'DELETE'].includes(method)) { const cur = state.etags.get(url.pathname); if (cur && cur !== ifMatch) return send(fail('precondition_failed', requestId)); }
-      let result = handlers[route.id]?.({ rq: { method, path: url.pathname, headers }, requestId, params, query: url.searchParams, body, sub, dev }) ?? generic(route.id, op, url.searchParams, requestId, url.pathname);
+      /* conditional writes: If-Match must name the ETag we last gave out for this path ("*" matches any version we gave out) */
+      const ifMatch = headers['if-match']; if (ifMatch && ['PATCH', 'PUT', 'DELETE'].includes(method)) {
+        const cur = state.etags.get(url.pathname); const offered = ifMatch.split(',').map((x) => x.trim().replace(/^W\//, ''));
+        if (!cur || !(offered.includes('*') || offered.includes(cur))) return send(fail('precondition_failed', requestId, { instance: url.pathname }));
+      }
+      let result = handlers[route.id]?.({ rq: { method, path: url.pathname, headers }, requestId, params, query: url.searchParams, body, sub, dev }) ?? generic(route.id, op, url.searchParams, requestId, url.pathname, method, body);
       if (result.status < 400 && method === 'GET' && !result.headers?.etag && result.body && typeof result.body === 'object' && !('has_more' in (result.body as object))) result = { ...result, headers: { ...result.headers, etag: etagFor(url.pathname, result.body) } };
       if (result.status < 400 && ['PATCH', 'PUT'].includes(method) && result.body) result = { ...result, headers: { ...result.headers, etag: etagFor(url.pathname, result.body) } };
       if (key && mutating && fp) state.idem.set(`${sub ?? 'anon'}:${key}`, { fingerprint: fp, status: result.status, body: result.body, headers: result.headers ?? {}, at: clock.now() });
@@ -158,6 +191,8 @@ export function createRest(d: RestDeps) {
     } catch (e) { send(fail('internal_error', requestId, { detail: 'The mock backend hit a bug.' })); process.stderr.write(`mock rest error: ${(e as Error).stack}\n`); }
   }
   void resolve;
-  return { handle, opDef, validatorFor };
+  /** A validator for one component schema that reports violations as JSON pointers (used by the `--data` loader). */
+  const checkSchema = (ref: string) => { const v = validatorFor(ref); return (x: unknown) => { const ok = v(x) as boolean; return { ok, errors: ok ? [] : (v.errors ?? []).map((e) => ({ pointer: e.instancePath, message: e.message ?? e.keyword })) }; }; };
+  return { handle, opDef, validatorFor, checkSchema };
 }
 export type { Server };

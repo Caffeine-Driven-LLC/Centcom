@@ -3,8 +3,8 @@
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { WebSocket, WebSocketServer } from 'ws';
-import { EVENT_MODES, compareVersions, isId, parseEventPayload, parseFrame, type EventKind, type Id } from '@centcom/protocol';
-import type { Clock, TimerHandle } from '../core/clock.js';
+import { EVENT_MODES, compareVersions, isId, parseEventPayload, parseFrame, type ErrorCode, type EventKind, type Id } from '@centcom/protocol';
+import { RealClock, type Clock, type TimerHandle } from '../core/clock.js';
 import { signJwt, verifyJwt, type KeyPair } from '../core/jwt.js';
 import { problem } from './problem.js';
 import type { Frame, MemberRec, MockState, QueueItem, SessionRec } from './state.js';
@@ -12,8 +12,13 @@ import type { Frame, MemberRec, MockState, QueueItem, SessionRec } from './state
 export interface RelayOptions { helloTimeoutMs: number; ping_ms: number; dead_ms: number; outboundLimit: number; maxFrameBytes: number; replayFrames: number; queueLimit: number; memberQueueCap: number; invalidPerMinute: number; presenceMs: number; hostGraceMs: number }
 export const DEFAULT_RELAY_OPTIONS: RelayOptions = { helloTimeoutMs: 5000, ping_ms: 20_000, dead_ms: 50_000, outboundLimit: 2 * 1024 * 1024, maxFrameBytes: 256 * 1024, replayFrames: 5000, queueLimit: 20, memberQueueCap: 5, invalidPerMinute: 10, presenceMs: 500, hostGraceMs: 600_000 };
 
-export interface RelayDeps { clock: Clock; newId: <P extends 'mem' | 'usr' | 'dev' | 'ses' | 'msg' | 'req'>(p: P) => Id<P>; keys: KeyPair[]; state: MockState; opts: RelayOptions; onFrame?: (sess: SessionRec, f: Frame, from: string) => 'drop' | void }
-export interface FrameLogEntry { seq?: number; t: string; k?: string; id?: string; from: string; bytes: number }
+/** `observe` sees the kind (`k`, else `t`) of every frame the relay sequences, before delivery, plus `sys.hello` after each welcome: scenario triggers hang off it. */
+export interface RelayDeps { clock: Clock; newId: <P extends 'mem' | 'usr' | 'dev' | 'ses' | 'msg' | 'req'>(p: P) => Id<P>; keys: KeyPair[]; state: MockState; opts: RelayOptions; onFrame?: (sess: SessionRec, f: Frame, from: string) => 'drop' | void; observe?: (sid: string, kind: string) => void; log?: (e: Record<string, unknown>) => void }
+/** One line of the frame log: kind, ids, seq, time and size. Never `p` or `ct`. Presence entries have no seq. */
+export interface FrameLogEntry { seq?: number; ts: string; t: string; k?: string; id?: string; from: string; bytes: number }
+export type FaultType = 'drop' | 'duplicate' | 'reorder' | 'delay';
+/** Who a forced disconnect hits and how: `reason: 'kicked'` runs the full kick (member_left, rotate_key, bye), 4409 sends `sys.bye superseded`. */
+export interface DisconnectOptions { sid?: string; member?: string; role?: Role; code: number; retryAfterS?: number; reason?: 'kicked' | 'superseded' | 'server_restart'; error?: ErrorCode }
 type Role = MemberRec['role'];
 
 interface Conn { id: number; ws: WebSocket; sid?: string; member?: MemberRec; device?: string; authed: boolean; lastActive: number; helloTimer?: TimerHandle; pingTimer?: TimerHandle; ackSeq: number; slowWarned: boolean; invalid: number[]; presenceCount: number; presenceWindow: number }
@@ -26,10 +31,13 @@ const ULID_OK = (s: unknown) => typeof s === 'string' && /^[a-z]{3}_[0-9A-HJKMNP
 export function createRelay(d: RelayDeps) {
   const { clock, state, opts } = d; const wss = new WebSocketServer({ noServer: true, handleProtocols: (p) => (p.has('centcom.v1') ? 'centcom.v1' : false), maxPayload: 8 * 1024 * 1024 });
   const conns = new Set<Conn>(); const logs = new Map<string, FrameLogEntry[]>(); const hostTimers = new Map<string, TimerHandle>(); const presenceLatest = new Map<string, Map<string, Frame>>(); const presenceTimers = new Map<string, TimerHandle>(); const held = new Map<string, { frame: Frame }>(); let connSeq = 0;
-  const faults: { sid?: string; type: 'drop' | 'duplicate' | 'reorder' | 'delay'; ms?: number }[] = [];
+  /** Members created by peerSend (no socket of their own). */
+  const virtualMembers = new Set<string>();
+  const faults: { sid?: string; type: FaultType; ms?: number; left: number }[] = [];
   let paused = new Set<WebSocket>();
   const iso = () => new Date(clock.now()).toISOString();
-  const log = (sid: string, e: FrameLogEntry) => { let l = logs.get(sid); if (!l) logs.set(sid, (l = [])); l.push(e); };
+  /** The frame log keeps the newest `replayFrames` entries per session (bounded like the replay buffer). */
+  const log = (sid: string, e: FrameLogEntry) => { let l = logs.get(sid); if (!l) logs.set(sid, (l = [])); l.push(e); if (l.length > opts.replayFrames * 2) l.splice(0, l.length - opts.replayFrames * 2); d.log?.({ event: 'frame', sid, ...e }); };
 
   /* ------------------------------------------------------------ sessions and tickets */
   function getOrCreateSession(id: string): SessionRec {
@@ -64,8 +72,10 @@ export function createRelay(d: RelayDeps) {
   function sequence(s: SessionRec, f: Frame, from: string): Frame {
     const out: Frame = { ...f, v: 1, sid: s.id, from, ts: iso(), seq: s.nextSeq++ }; if (!out.id) out.id = d.newId('msg');
     s.buffer.push(out); if (s.buffer.length > opts.replayFrames) s.buffer.shift(); if (from !== 'srv') s.seen.set(`${from}:${out.id}`, out.seq!);
-    log(s.id, { seq: out.seq, t: out.t, k: out.k, id: out.id, from, bytes: JSON.stringify(out).length });
-    const fault = faults.findIndex((x) => !x.sid || x.sid === s.id); const fx = fault >= 0 ? faults.splice(fault, 1)[0] : undefined; const targets = sessConns(s.id);
+    log(s.id, { seq: out.seq, ts: out.ts!, t: out.t, k: out.k, id: out.id, from, bytes: JSON.stringify(out).length });
+    d.observe?.(s.id, out.k ?? out.t); /* a scenario trigger may queue a fault for this very frame */
+    const fault = faults.findIndex((x) => !x.sid || x.sid === s.id); const fx = fault >= 0 ? faults[fault] : undefined; if (fx && --fx.left <= 0) faults.splice(fault, 1);
+    const targets = sessConns(s.id);
     const deliver = (ff: Frame) => { for (const c of targets) send(c, ff); };
     const pending = held.get(s.id);
     if (fx?.type === 'drop') return out; // lost on the wire: the buffer still has it, so resume can recover it
@@ -87,41 +97,52 @@ export function createRelay(d: RelayDeps) {
   function onConnection(ws: WebSocket) {
     const c: Conn = { id: ++connSeq, ws, authed: false, lastActive: clock.now(), ackSeq: 0, slowWarned: false, invalid: [], presenceCount: 0, presenceWindow: 0 }; conns.add(c);
     c.helloTimer = clock.setTimeout(() => { if (!c.authed) close(c, 4408, 'hello timeout'); }, opts.helloTimeoutMs);
-    ws.on('message', (data, isBinary) => { try { onMessage(c, isBinary ? null : data.toString()); } catch (e) { process.stderr.write(`mock relay error: ${(e as Error).stack}\n`); close(c, 1011); } });
-    ws.on('close', () => onClose(c)); ws.on('error', () => undefined);
+    ws.on('message', (data, isBinary) => { try { onMessage(c, isBinary ? null : data.toString()); } catch (e) { (d.log ?? ((x) => process.stderr.write(JSON.stringify(x) + '\n')))({ event: 'relay_error', message: (e as Error).message }); close(c, 1011); } });
+    ws.on('close', (code) => { d.log?.({ event: 'ws_close', sid: c.sid, code }); onClose(c); }); ws.on('error', () => undefined);
   }
   function onClose(c: Conn) {
     clearTimers(c); conns.delete(c); paused.delete(c.ws); if (!c.sid || !c.member) return; const s = state.sessions.get(c.sid); if (!s) return;
-    if (c.member.id === s.hostId && !sessConns(s.id).some((x) => x.member?.id === s.hostId)) { // the host left: pause after a grace period
-      hostTimers.set(s.id, clock.setTimeout(() => { hostTimers.delete(s.id); if (s.state === 'live') sessionState(s, 'paused'); }, opts.hostGraceMs));
-    }
+    if (c.member.id === s.hostId && !sessConns(s.id).some((x) => x.member?.id === s.hostId)) hostAway(s);
   }
+  /** The host is gone (socket closed, or a virtual host was "disconnected"): pause the session after the grace period. */
+  function hostAway(s: SessionRec) {
+    if (hostTimers.has(s.id)) return;
+    hostTimers.set(s.id, clock.setTimeout(() => { hostTimers.delete(s.id); if (s.state === 'live') sessionState(s, 'paused'); }, opts.hostGraceMs));
+  }
+  /** The host is back: cancel a pending pause, or resume a paused session. */
+  function hostBack(s: SessionRec) { clock.clearTimeout(hostTimers.get(s.id)); hostTimers.delete(s.id); if (s.state === 'paused') sessionState(s, 'live'); }
 
   function onMessage(c: Conn, text: string | null) {
     c.lastActive = clock.now();
-    if (text === null) { sysError(c, 'invalid_frame', { detail: 'Binary frames are not used.' }); return invalid(c); }
+    if (text === null) return badFrame(c, { detail: 'Binary frames are not used.' });
     if (Buffer.byteLength(text) > opts.maxFrameBytes) return sysError(c, 'frame_too_large');
-    let raw: unknown; try { raw = JSON.parse(text); } catch { sysError(c, 'invalid_frame', { detail: 'Not JSON.' }); return invalid(c); }
-    const r = parseFrame(raw); if (!r.ok) { sysError(c, 'invalid_frame', { errors: r.issues.slice(0, 5).map((i) => ({ pointer: i.pointer, code: i.code })) }); return invalid(c); }
+    let raw: unknown; try { raw = JSON.parse(text); } catch { return badFrame(c, { detail: 'Not JSON.' }); }
+    const r = parseFrame(raw); if (!r.ok) return badFrame(c, { errors: r.issues.slice(0, 5).map((i) => ({ pointer: i.pointer, code: i.code })) });
     const f = r.value as unknown as Frame;
     if (!c.authed) { if (f.t !== 'sys.hello') { sysError(c, 'protocol_violation', { detail: 'sys.hello must come first.' }); return close(c, 4400); } return onHello(c, f); }
     if (f.ack !== undefined && f.ack > c.ackSeq) c.ackSeq = f.ack;
-    if (f.sid !== undefined && f.sid !== c.sid) { sysError(c, 'invalid_frame', { detail: 'Wrong session.' }); return invalid(c); }
+    if (f.sid !== undefined && f.sid !== c.sid) return badFrame(c, { detail: 'Wrong session.' });
     switch (f.t) {
       case 'sys.ping': return send(c, { v: 1, t: 'sys.pong', ts: iso(), p: { t: f.p?.t } });
       case 'sys.pong': case 'ack': return;
       case 'sys.bye': return close(c, 1000);
       case 'sys.resume': return resume(c, state.sessions.get(c.sid!)!, typeof f.p?.last_seq === 'number' ? f.p.last_seq : null);
       case 'event': case 'queue': case 'control': case 'presence': return onSessionFrame(c, f);
-      default: sysError(c, 'invalid_frame', { detail: 'That frame type is not sent by clients.' }); return invalid(c);
+      default: return badFrame(c, { detail: 'That frame type is not sent by clients.' });
     }
   }
-  function invalid(c: Conn) { const n = clock.now(); c.invalid = c.invalid.filter((t) => n - t < 60_000); c.invalid.push(n); if (c.invalid.length > opts.invalidPerMinute) close(c, 4400); }
+  /** An invalid frame: `sys.error invalid_frame` for each of the first `invalidPerMinute` in a 60 s window; the next one closes 4400 with no error first. */
+  function badFrame(c: Conn, o: Parameters<typeof problem>[2]) {
+    const n = clock.now(); c.invalid = c.invalid.filter((t) => n - t < 60_000); c.invalid.push(n);
+    if (c.invalid.length > opts.invalidPerMinute) return close(c, 4400, 'too many invalid frames');
+    sysError(c, 'invalid_frame', o);
+  }
 
   function onHello(c: Conn, f: Frame) {
     const p = (f.p ?? {}) as { protocols?: number[]; ticket?: string; client?: { version?: string }; last_seq?: number | null };
     if (!Array.isArray(p.protocols) || !p.protocols.includes(1)) { sysError(c, 'unsupported_protocol'); return close(c, 4400); }
     if (state.minClient && p.client?.version && compareVersions(p.client.version, state.minClient) < 0) { sysError(c, 'client_too_old'); return close(c, 4426); }
+    if (state.maintenance || state.sticky?.code === 'service_unavailable') { sysError(c, 'service_unavailable', { retryAfterS: state.sticky?.retryAfterS ?? 30 }); return close(c, 4503); }
     const v = verifyJwt(d.keys, String(p.ticket ?? ''), { now: clock.now(), aud: 'centcom-relay' });
     if (!v.ok) { sysError(c, 'ticket_invalid', { detail: v.reason }); return close(c, 4401); }
     if (state.usedJti.has(v.claims.jti)) { sysError(c, 'ticket_replayed'); return close(c, 4401); }
@@ -135,10 +156,10 @@ export function createRelay(d: RelayDeps) {
     const resumable = last !== null && last >= oldest - 1;
     send(c, { v: 1, t: 'sys.welcome', ts: iso(), p: { protocol: 1, caps: [], member: { id: m.id, name: m.name, slot: m.slot, role: m.role }, roster_v: s.rosterV, heartbeat: { ping_ms: opts.ping_ms, dead_ms: opts.dead_ms }, server_time: iso(), limits: { max_frame_bytes: opts.maxFrameBytes, seq_rate: 30, seq_burst: 100, presence_rate: 10, outbound_buffer_bytes: opts.outboundLimit, max_members: 50, queue_limit: s.policy.queue_limit }, resume: last === null ? null : resumable ? { from_seq: last + 1 } : { snapshot_required: true }, session: { mode: s.mode, state: s.state } } });
     if (last !== null) resume(c, s, last);
-    clock.clearTimeout(hostTimers.get(s.id)); hostTimers.delete(s.id);
     if (!m.joined) { m.joined = true; server(s, 'control', 'control.member_joined', { member: m.id, name: m.name, slot: m.slot, role: m.role, device: m.device }); }
-    if (m.id === s.hostId && s.state === 'paused') sessionState(s, 'live');
+    if (m.id === s.hostId) hostBack(s);
     for (const pf of presenceLatest.get(s.id)?.values() ?? []) send(c, pf);
+    d.observe?.(s.id, 'sys.hello');
   }
 
   function resume(c: Conn, s: SessionRec, last: number | null) {
@@ -161,7 +182,7 @@ export function createRelay(d: RelayDeps) {
     if (f.t === 'presence') return presence(c, s, f);
     const verdict = allowed(m.role, k, f.t); if (verdict !== 'ok') return sysError(c, verdict === 'forbidden' ? 'forbidden' : 'role_insufficient');
     if (m.muted && (f.t === 'event' || k === 'queue.submit')) return sysError(c, 'muted');
-    if (k in EVENT_MODES && f.p !== undefined && EVENT_MODES[k as EventKind] !== 'encrypted') { const pr = parseEventPayload(k, f.p); if (!pr.ok) { sysError(c, 'invalid_frame', { errors: pr.issues.slice(0, 5).map((i) => ({ pointer: `/p${i.pointer}`, code: i.code })) }); return invalid(c); } }
+    if (k in EVENT_MODES && f.p !== undefined && EVENT_MODES[k as EventKind] !== 'encrypted') { const pr = parseEventPayload(k, f.p); if (!pr.ok) return badFrame(c, { errors: pr.issues.slice(0, 5).map((i) => ({ pointer: `/p${i.pointer}`, code: i.code })) }); }
     const dup = f.id ? s.seen.get(`${m.id}:${f.id}`) : undefined; if (dup !== undefined) { const orig = s.buffer.find((x) => x.seq === dup); if (orig) send(c, orig); return; } // a resend: same seq, no new frame
     if (k.startsWith('queue.')) return queueOp(c, s, f);
     if (k.startsWith('control.')) return controlOp(c, s, f);
@@ -190,9 +211,7 @@ export function createRelay(d: RelayDeps) {
     const target = typeof p.member === 'string' ? s.members.get(p.member) : undefined;
     switch (k) {
       case 'control.kick': {
-        if (!target || target.id === s.hostId) return;
-        server(s, 'control', 'control.member_left', { member: target.id, code: 'kicked' }); server(s, 'control', 'control.rotate_key', { kid: `k${s.rosterV + 2}`, reason: 'member_removed' });
-        s.members.delete(target.id); s.rosterV++; for (const x of sessConns(s.id)) if (x.member?.id === target.id) { send(x, { v: 1, t: 'sys.bye', ts: iso(), p: { reason: 'kicked' } }); close(x, 4403); }
+        if (target && target.id !== s.hostId) kick(s, target);
         return;
       }
       case 'control.mute': if (target) target.muted = true; return; case 'control.unmute': if (target) target.muted = false; return;
@@ -204,32 +223,69 @@ export function createRelay(d: RelayDeps) {
     }
   }
 
+  /** Remove a member: `member_left` and `rotate_key` get consecutive seqs, then the member's sockets get `sys.bye kicked` and close 4403. */
+  function kick(s: SessionRec, target: MemberRec) {
+    server(s, 'control', 'control.member_left', { member: target.id, code: 'kicked' }); server(s, 'control', 'control.rotate_key', { kid: `k${s.rosterV + 2}`, reason: 'member_removed' });
+    s.members.delete(target.id); s.rosterV++; for (const x of sessConns(s.id)) if (x.member?.id === target.id) { send(x, { v: 1, t: 'sys.bye', ts: iso(), p: { reason: 'kicked' } }); close(x, 4403); }
+  }
+
   /** Presence is ephemeral: at most one fan-out per member per `presenceMs`, never replayed, never echoed to the sender. */
   function presence(c: Conn, s: SessionRec, f: Frame) {
     const m = c.member!; const now = clock.now(); if (now - c.presenceWindow > 1000) { c.presenceWindow = now; c.presenceCount = 0; } if (++c.presenceCount > 10) return; // over 10 per second: dropped
     let map = presenceLatest.get(s.id); if (!map) presenceLatest.set(s.id, (map = new Map())); map.set(m.id, { ...f, sid: s.id, from: m.id, ts: iso() });
-    log(s.id, { t: f.t, k: f.k, id: f.id, from: m.id, bytes: JSON.stringify(f).length });
+    log(s.id, { ts: iso(), t: f.t, k: f.k, id: f.id, from: m.id, bytes: JSON.stringify(f).length });
     const key = `${s.id}:${m.id}`; if (presenceTimers.has(key)) return;
     presenceTimers.set(key, clock.setTimeout(() => { presenceTimers.delete(key); const latest = presenceLatest.get(s.id)?.get(m.id); if (!latest) return; for (const o of sessConns(s.id)) if (o.member?.id !== m.id) send(o, latest); }, opts.presenceMs));
   }
 
   /* ------------------------------------------------------------ control surface (used by the control plane and scenarios) */
-  function disconnect(o: { sid?: string; member?: string; code: number; retryAfterS?: number }) {
-    for (const c of [...conns]) { if (!c.authed || (o.sid && c.sid !== o.sid) || (o.member && c.member?.id !== o.member)) continue;
-      if (o.code === 4503) sysError(c, 'service_unavailable', { retryAfterS: o.retryAfterS ?? 30 }); else if (o.code === 4401) sysError(c, 'token_expired'); else if (o.code === 4429) sysError(c, 'rate_limited', { retryAfterS: o.retryAfterS ?? 5 }); else if (o.code === 4426) sysError(c, 'client_too_old'); else if (o.code === 4403) sysError(c, 'forbidden'); else if (o.code === 4404) sysError(c, 'session_not_found');
-      close(c, o.code); }
+  /** The `sys.error` that precedes each forced close code (CT-WS-ENVELOPE close table). */
+  const CLOSE_ERROR: Partial<Record<number, ErrorCode>> = { 4400: 'protocol_violation', 4401: 'ticket_invalid', 4403: 'forbidden', 4404: 'session_not_found', 4426: 'client_too_old', 4429: 'rate_limited', 4503: 'service_unavailable' };
+  function disconnect(o: DisconnectOptions) {
+    for (const c of [...conns]) {
+      if (!c.authed || (o.sid && c.sid !== o.sid) || (o.member && c.member?.id !== o.member) || (o.role && c.member?.role !== o.role)) continue;
+      const s = state.sessions.get(c.sid!);
+      if (o.reason === 'kicked' && s && c.member && s.members.has(c.member.id) && c.member.id !== s.hostId) { kick(s, c.member); continue; }
+      if (o.code === 4409 || o.reason === 'superseded') send(c, { v: 1, t: 'sys.bye', ts: iso(), p: { reason: 'superseded' } });
+      else if (o.reason) send(c, { v: 1, t: 'sys.bye', ts: iso(), p: { reason: o.reason } });
+      const code = o.error ?? CLOSE_ERROR[o.code];
+      if (code) sysError(c, code, o.code === 4503 || o.code === 4429 ? { retryAfterS: o.retryAfterS ?? (o.code === 4503 ? 30 : 5) } : o.code === 4401 && !o.error ? { detail: 'expired' } : {});
+      close(c, o.code);
+    }
+    /* a virtual host has no socket to close: "disconnecting" it starts host loss directly */
+    if (o.role === 'host' || o.member) for (const s of state.sessions.values()) {
+      if ((o.sid && s.id !== o.sid) || !s.hostId || (o.member && o.member !== s.hostId)) continue;
+      if (virtualMembers.has(s.hostId)) hostAway(s);
+    }
+  }
+  /** Push `sys.error` frames to every connection of a session (or of all sessions), as if the client had misbehaved. */
+  function wsError(o: { sid?: string; code: ErrorCode; count?: number; retryAfterS?: number }) {
+    for (const c of [...conns]) if (c.authed && (!o.sid || c.sid === o.sid)) for (let i = 0; i < (o.count ?? 1); i++) sysError(c, o.code, o.retryAfterS !== undefined ? { retryAfterS: o.retryAfterS } : {});
   }
   const notice = (sid: string, code: string, level: 'info' | 'warn' | 'error', params: object) => { for (const c of sessConns(sid)) send(c, { v: 1, t: 'sys.notice', ts: iso(), p: { code, level, params } }); };
   function closeAll(code = 1001) { for (const c of [...conns]) close(c, code); }
-  function reset() { closeAll(1001); logs.clear(); presenceLatest.clear(); held.clear(); faults.length = 0; for (const t of [...hostTimers.values(), ...presenceTimers.values()]) clock.clearTimeout(t); hostTimers.clear(); presenceTimers.clear(); paused = new Set(); }
+  /** Close every socket with 1001, wait up to `graceMs` of real time for the close handshakes, then cut whatever is left. */
+  async function shutdown(graceMs = 250): Promise<void> {
+    const open = [...conns].map((c) => c.ws); closeAll(1001);
+    const timer = new RealClock();
+    await Promise.race([
+      Promise.all(open.map((ws) => (ws.readyState === WebSocket.CLOSED ? undefined : new Promise<void>((r) => ws.once('close', () => r()))))),
+      new Promise<void>((r) => timer.setTimeout(r, graceMs)),
+    ]);
+    for (const ws of open) if (ws.readyState !== WebSocket.CLOSED) ws.terminate();
+    wss.close();
+  }
+  function reset() { closeAll(1001); logs.clear(); presenceLatest.clear(); held.clear(); faults.length = 0; for (const t of [...hostTimers.values(), ...presenceTimers.values()]) clock.clearTimeout(t); hostTimers.clear(); presenceTimers.clear(); paused = new Set(); virtualMembers.clear(); }
   /** A scripted peer: a member without a socket that "sends" frames (kind and opaque bodies only). */
   function peerSend(sid: string, o: { name?: string; role?: Role; frame: Omit<Frame, 'v' | 'sid'> }) {
-    const s = getOrCreateSession(sid); let m = [...s.members.values()].find((x) => x.name === (o.name ?? 'Peer')); if (!m) { m = { id: d.newId('mem'), user: d.newId('usr'), name: o.name ?? 'Peer', slot: s.members.size, role: o.role ?? 'editor', device: d.newId('dev'), joined: true }; s.members.set(m.id, m); s.rosterV++; if (m.role === 'host' && !s.hostId) s.hostId = m.id; server(s, 'control', 'control.member_joined', { member: m.id, name: m.name, slot: m.slot, role: m.role, device: m.device }); }
+    const s = getOrCreateSession(sid); let m = [...s.members.values()].find((x) => x.name === (o.name ?? 'Peer')); if (!m) { m = { id: d.newId('mem'), user: d.newId('usr'), name: o.name ?? 'Peer', slot: s.members.size, role: o.role ?? 'editor', device: d.newId('dev'), joined: true }; s.members.set(m.id, m); virtualMembers.add(m.id); s.rosterV++; if (m.role === 'host' && !s.hostId) s.hostId = m.id; server(s, 'control', 'control.member_joined', { member: m.id, name: m.name, slot: m.slot, role: m.role, device: m.device }); }
+    if (m.id === s.hostId && virtualMembers.has(m.id)) hostBack(s); /* a virtual host that speaks is present again */
     return sequence(s, { ...o.frame, v: 1, sid }, m.id);
   }
   return {
-    onUpgrade, getOrCreateSession, issueTicket, disconnect, notice, closeAll, reset, peerSend, frames: (sid: string) => (logs.get(sid) ?? []) as readonly FrameLogEntry[],
-    addFault: (x: { sid?: string; type: 'drop' | 'duplicate' | 'reorder' | 'delay'; ms?: number }) => { faults.push(x); },
+    onUpgrade, getOrCreateSession, issueTicket, disconnect, wsError, notice, closeAll, shutdown, reset, peerSend, frames: (sid: string) => (logs.get(sid) ?? []) as readonly FrameLogEntry[],
+    /** Make the next `count` (default 1) sequenced frames of a session (or any session) drop, duplicate or arrive late; `reorder` swaps the next two. */
+    addFault: (x: { sid?: string; type: FaultType; ms?: number; count?: number }) => { faults.push({ sid: x.sid, type: x.type, ms: x.ms, left: x.type === 'reorder' ? 1 : Math.max(1, x.count ?? 1) }); },
     /** Test helper: stop delivering to one socket as if its client stopped reading; its buffer fills up for real (see slowConsumer). */
     connections: () => [...conns].filter((c) => c.authed).map((c) => ({ sid: c.sid!, member: c.member!.id, ackSeq: c.ackSeq })),
     isOpen: () => conns.size, ids: { isId }, close: () => { closeAll(1001); wss.close(); },

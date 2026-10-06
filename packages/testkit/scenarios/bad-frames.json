@@ -1,0 +1,9 @@
+{
+  "name": "bad-frames",
+  "steps": [
+    { "do": "peer_send", "args": { "name": "Host", "role": "host", "k": "message.user" } },
+    { "at_ms": 1000, "do": "error", "args": { "code": "invalid_frame", "channel": "ws", "count": 3 } },
+    { "at_ms": 2000, "do": "peer_send", "args": { "name": "Host", "t": "event", "k": "future.kind", "p": { "anything": 1 } } },
+    { "at_ms": 3000, "do": "disconnect", "args": { "code": 4400 } }
+  ]
+}

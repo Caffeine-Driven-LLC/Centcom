@@ -97,7 +97,8 @@ function buildValidators(): { strict: string; tolerant: string } {
     else for (const d of Object.keys(schema.$defs)) { exportsStrict[`write_${d}`] = `${id}#/$defs/${d}`; exportsLoose[`read_${d}`] = `${id}#/$defs/${d}`; }
   }
   /** Ajv's standalone output calls require() for its tiny runtime helpers; turn that into a real ESM import (no eval, no Ajv instance at runtime). */
-  const esm = (code: string) => { const imports: string[] = []; const body = code.replace(/(?:const|var|let)\s+(\w+)\s*=\s*require\("(ajv\/dist\/runtime\/[\w/.-]+?)"\)\.default;?/g, (_m, id: string, mod: string) => { imports.push(`import ${id} from ${JSON.stringify(mod + '.js')};`); return ''; }); return imports.join('\n') + '\n' + body; };
+  const esm = (code: string) => { const imports: string[] = []; const body = code.replace(/(?:const|var|let)\s+(\w+)\s*=\s*require\("(ajv\/dist\/runtime\/[\w/.-]+?)"\)\.default;?/g, (_m, id: string, mod: string) => { imports.push(`import ${id}_cjs from ${JSON.stringify(mod + '.js')};\nconst ${id} = ${id}_cjs.default ?? ${id}_cjs;`); return ''; }); return imports.join('\n') + '\n' + body; };
+  /* the runtime helpers are CommonJS with exports.default: plain Node ESM hands back the exports object, bundlers hand back the function, so take either */
   const wrap = (label: string, code: string) => `/* eslint-disable */\n// @ts-nocheck\n${banner}// ${label}\n${esm(code)}\n`;
   return { strict: wrap('Strict validators (write side): reject anything not in the schema.', standaloneCode(ajv, exportsStrict)), tolerant: wrap('Tolerant validators (read side): ignore unknown fields and accept unknown enum values (CT-VER).', standaloneCode(ajvL, exportsLoose)) };
 }

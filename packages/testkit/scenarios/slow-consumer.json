@@ -1,0 +1,7 @@
+{
+  "name": "slow-consumer",
+  "steps": [
+    { "do": "peer_send", "args": { "name": "Host", "role": "host", "k": "message.user" } },
+    { "at_ms": 1000, "do": "peer_send", "args": { "name": "Host", "k": "message.assistant.delta", "ct_bytes": 65536, "count": 160 } }
+  ]
+}

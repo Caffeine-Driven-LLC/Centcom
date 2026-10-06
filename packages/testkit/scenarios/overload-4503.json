@@ -1,0 +1,8 @@
+{
+  "name": "overload-4503",
+  "steps": [
+    { "do": "peer_send", "args": { "name": "Host", "role": "host", "k": "message.user" } },
+    { "at_ms": 2000, "do": "disconnect", "args": { "code": 4503, "retry_after_s": 5 } },
+    { "at_ms": 2000, "do": "error", "args": { "code": "service_unavailable", "count": 2, "retry_after_s": 5 } }
+  ]
+}
