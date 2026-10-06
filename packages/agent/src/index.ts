@@ -11,3 +11,4 @@ export * from './models.js';
 export { ApprovalBridge, describeTool, PERMISSION_TOOL } from './claude/bridge.js';
 export { CodexEngine, policyFor, loginKindFromAccount } from './codex/engine.js';
 export { CodexMapper, diffFor, errorCodeFor } from './codex/map.js';
+export * from './events/index.js';
