@@ -1,5 +1,5 @@
 /** Local-only control channel for the runner: newline-delimited JSON over a Unix socket (or Windows named pipe). Never TCP. */
-import { chmod, mkdir, unlink } from 'node:fs/promises';
+import { chmod, lstat, mkdir, unlink, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { createConnection, createServer, type Server, type Socket } from 'node:net';
 import { timingSafeEqual } from 'node:crypto';
@@ -11,9 +11,33 @@ export interface Request { v: 1; id: string; cmd: 'hello' | 'start' | 'send' | '
 export type Response = { v: 1; id: string; ok: true; result?: unknown } | { v: 1; id: string; ok: false; error: { code: string } };
 export class AlreadyRunning extends Error { constructor() { super('already running'); this.name = 'AlreadyRunning'; } }
 
-/** Refuses to start over a live daemon; replaces a socket nobody answers on. */
+export class UnsafeDirectory extends Error { constructor(readonly dir: string, why: string) { super(`Refusing to use ${dir}: ${why}.`); this.name = 'UnsafeDirectory'; } }
+
+/** Requires a folder that is a real directory (not a symlink), owned by this user where the platform has uids, with mode exactly 0700. */
+export async function assertPrivateDir(dir: string): Promise<void> {
+  const st = await lstat(dir);
+  if (st.isSymbolicLink()) throw new UnsafeDirectory(dir, 'it is a symlink');
+  if (!st.isDirectory()) throw new UnsafeDirectory(dir, 'it is not a folder');
+  const uid = process.getuid?.(); if (uid !== undefined && st.uid !== uid) throw new UnsafeDirectory(dir, `it is owned by user ${st.uid}, not by you`);
+  if ((st.mode & 0o777) !== 0o700) throw new UnsafeDirectory(dir, `its mode is ${(st.mode & 0o777).toString(8)}, it must be 700`);
+}
+
+/** Creates `dir` (and any missing parents) as 0700 and verifies every folder it created or trusts from the first one it had to create down to `dir`. An existing `dir` must already pass `assertPrivateDir`; an existing ancestor outside the chain we create (such as /tmp) is left alone. */
+export async function ensurePrivateDir(dir: string): Promise<void> {
+  const missing: string[] = []; for (let d = dir; ; d = dirname(d)) { try { await lstat(d); break; } catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e; missing.unshift(d); if (dirname(d) === d) break; } }
+  for (const d of missing) { await mkdir(d, { mode: 0o700 }).catch((e) => { if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e; }); await chmod(d, 0o700); await assertPrivateDir(d); }
+  await assertPrivateDir(dir);
+}
+
+/** Writes the shared secret: any existing file (or link) is removed first, then the new one is created exclusively (O_EXCL) as 0600, so a pre-planted file can never receive it. */
+export async function writeSecretFile(path: string, secret: string): Promise<void> {
+  await assertPrivateDir(dirname(path)); await unlink(path).catch((e) => { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e; });
+  await writeFile(path, secret, { flag: 'wx', mode: 0o600 });
+}
+
+/** Refuses to start over a live daemon; replaces a socket nobody answers on. Throws UnsafeDirectory if the socket folder is not private to this user. */
 export async function claimSocket(path: string, probeMs = 500): Promise<void> {
-  await mkdir(dirname(path), { recursive: true, mode: 0o700 }); await chmod(dirname(path), 0o700).catch(() => undefined);
+  await ensurePrivateDir(dirname(path));
   const alive = await new Promise<boolean>((res) => { const c = createConnection(path); const t = setTimeout(() => { c.destroy(); res(false); }, probeMs); c.once('connect', () => { clearTimeout(t); c.destroy(); res(true); }); c.once('error', () => { clearTimeout(t); res(false); }); });
   if (alive) throw new AlreadyRunning();
   await unlink(path).catch(() => undefined);
@@ -30,7 +54,8 @@ export async function startIpcServer(o: IpcOptions): Promise<IpcServer> {
   const armIdle = () => { if (idle !== undefined) o.clock.clearTimeout(idle as never); idle = undefined; if (o.idleExitMs === undefined) return; idle = o.clock.setTimeout(() => { if (conns.size === 0 && !o.runner.list().some((a) => ['starting', 'running', 'waiting', 'stopping'].includes(a.status))) o.onIdle?.(); else armIdle(); }, o.idleExitMs); };
   const server: Server = createServer((sock) => {
     conns.add(sock); armIdle(); let buf = ''; let authed = false; const subs = new Set<() => void>(); sock.setEncoding('utf8');
-    const send = (r: object) => { if (!sock.destroyed) sock.write(JSON.stringify(r) + '\n'); };
+    const send = (r: object) => (sock.destroyed ? true : sock.write(JSON.stringify(r) + '\n'));
+    const drained = () => new Promise<void>((res) => { if (sock.destroyed) return res(); const done = () => { sock.off('drain', done); sock.off('close', done); res(); }; sock.once('drain', done); sock.once('close', done); });
     const fail = (id: string, code: string, drop = false) => { send({ v: 1, id, ok: false, error: { code } }); if (drop) sock.end(); };
     sock.on('data', (chunk: string) => {
       buf += chunk;
@@ -54,7 +79,7 @@ export async function startIpcServer(o: IpcOptions): Promise<IpcServer> {
         case 'list': return o.runner.list();
         case 'approve': return { resolved: o.runner.resolveApproval(need('agent_id') as AgentId, need('approval_id'), { decision: a.decision === 'approve' ? 'approve' : 'deny', scope: a.scope }) };
         case 'subscribe': { const h = agent(); const it = h.events({ replay: a.replay !== false })[Symbol.asyncIterator](); let open = true; subs.add(() => { open = false; void it.return?.(); });
-          void (async () => { while (open) { const n = await it.next(); if (n.done) break; send({ v: 1, evt: n.value }); } })(); return {}; }
+          void (async () => { while (open) { const n = await it.next(); if (n.done) break; if (!send({ v: 1, evt: n.value })) await drained(); } })(); return {}; }
         case 'shutdown': setImmediate(() => o.onShutdown?.()); return {};
         default: throw Object.assign(new Error('cmd'), { code: 'unknown_command' });
       }
@@ -62,7 +87,7 @@ export async function startIpcServer(o: IpcOptions): Promise<IpcServer> {
     sock.on('close', () => { conns.delete(sock); for (const s of subs) s(); armIdle(); }); sock.on('error', () => undefined);
   });
   await new Promise<void>((res, rej) => { server.once('error', rej); server.listen(o.socketPath, () => res()); });
-  await chmod(o.socketPath, 0o600).catch(() => undefined); armIdle();
+  await chmod(o.socketPath, 0o600); armIdle();
   return { clients: () => conns.size, close: () => new Promise<void>((res) => { if (idle !== undefined) o.clock.clearTimeout(idle as never); for (const c of conns) c.destroy(); server.close(() => res()); }) };
 }
 

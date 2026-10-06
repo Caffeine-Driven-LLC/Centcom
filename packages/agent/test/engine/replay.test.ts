@@ -4,7 +4,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { VirtualClock } from '@centcom/testkit';
 import { EVENT_MODES, parseEventPayload, parseSecretPayload } from '@centcom/protocol';
-import { EventStreamValidator, createFakeEngine, expectGolden, loadTranscript, parseTranscript, replayTranscript, toSessionWire, type NormalisedEvent, type WireContext } from '../../src/index.js';
+import { EventStreamValidator, toSessionWire, type NormalisedEvent, type WireContext } from '../../src/index.js';
+import { createFakeEngine, expectGolden, loadTranscript, parseTranscript, replayTranscript } from '../../src/engine/testing/index.js';
 
 const DIR = fileURLToPath(new URL('../fixtures/transcripts/', import.meta.url)); const NAMES = readdirSync(DIR).filter((f) => f.endsWith('.transcript.jsonl')).map((f) => f.replace('.transcript.jsonl', '')).sort();
 const play = async (name: string, speed = 0) => { const clock = new VirtualClock(); const t = loadTranscript(join(DIR, `${name}.transcript.jsonl`)); return replayTranscript(createFakeEngine(t, { clock, speed }), t); };

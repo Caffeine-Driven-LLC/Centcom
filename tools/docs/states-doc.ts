@@ -16,7 +16,7 @@ The state machine (\`packages/agent/src/state\`) turns the normalised engine eve
 |---|---|---|
 ${rows}
 
-When several tools are open at once the newest one is shown; when it closes the previous one is shown, then \`thinking\`. Tool kinds come from the tool name (and, for shell tools, the first word of the command: \`cat\` is a read, \`rg\` a search, \`rm\` a delete).
+When several tools are open at once the newest one is shown; when it closes the previous one is shown, then \`thinking\`. Open approvals are tracked by id: while any is open the state is \`awaiting-approval\` and settling always returns to it. Tool kinds come from the tool name (and, for shell tools, the first word of the command: \`cat\` is a read, \`rg\` a search, \`rm\` a delete).
 
 ## Timing
 

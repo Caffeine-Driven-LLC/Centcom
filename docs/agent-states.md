@@ -24,7 +24,7 @@ The state machine (`packages/agent/src/state`) turns the normalised engine event
 | `tool.requested (other)` | `tool-running` | also any unknown tool |
 | `tool.result` | `(previous open tool, else thinking)` | tests-pass / tests-fail when the command was a test run |
 | `subagent.started` | `sub-agent` |  |
-| `approval.requested` | `awaiting-approval` | stays until resolved |
+| `approval.requested` | `awaiting-approval` | stays until every open approval is resolved; no other event (warning, error, compaction, tool, text, merge-conflict, saving, a dwell timer) displaces it. Only approval.resolved, turn.done, interrupt and exit leave it |
 | `approval.resolved (approve)` | `approved` | 800 ms, then back to work |
 | `approval.resolved (deny)` | `denied` | 800 ms, then back to work |
 | `question.asked` | `asking-question` | stays until the next work event |
@@ -40,7 +40,7 @@ The state machine (`packages/agent/src/state`) turns the normalised engine event
 | `signal: merge_conflict / saving` | `merge-conflict / saving` | 2 s |
 | `idle for 15 min` | `sleeping` | any turn.started wakes it |
 
-When several tools are open at once the newest one is shown; when it closes the previous one is shown, then `thinking`. Tool kinds come from the tool name (and, for shell tools, the first word of the command: `cat` is a read, `rg` a search, `rm` a delete).
+When several tools are open at once the newest one is shown; when it closes the previous one is shown, then `thinking`. Open approvals are tracked by id: while any is open the state is `awaiting-approval` and settling always returns to it. Tool kinds come from the tool name (and, for shell tools, the first word of the command: `cat` is a read, `rg` a search, `rm` a delete).
 
 ## Timing
 

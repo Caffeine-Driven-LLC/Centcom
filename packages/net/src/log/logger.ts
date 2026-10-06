@@ -8,13 +8,15 @@ export interface Bindings { component?: string; request_id?: string; session_id?
 export interface Logger { trace(msg: string, ctx?: Record<string, unknown>): void; debug(msg: string, ctx?: Record<string, unknown>): void; info(msg: string, ctx?: Record<string, unknown>): void; warn(msg: string, ctx?: Record<string, unknown>): void; error(msg: string, ctx?: Record<string, unknown>): void; child(b: Bindings): Logger; flush(): Promise<void> }
 export const MAX_LINE = 16 * 1024;
 
-export interface LoggerOptions { level: Level; sinks: Sink[]; clock: () => number; home?: string; /** test hook: lets a test prove the logger fails closed when redaction breaks */ redactor?: (v: unknown, home?: string) => unknown }
+/** 'silent' writes nothing at all. */
+export type LogLevel = Level | 'silent';
+export interface LoggerOptions { level: LogLevel; sinks: Sink[]; clock: () => number; home?: string; /** test hook: lets a test prove the logger fails closed when redaction breaks */ redactor?: (v: unknown, home?: string) => unknown }
 
 const RESERVED = new Set(['ts', 'level', 'component', 'msg', 'request_id', 'session_id']);
 
 /** One JSON object per line. The level check is the first thing that happens, so dropped records cost almost nothing. There is no option to skip redaction. */
 export function createLogger(o: LoggerOptions, bindings: Bindings = {}): Logger {
-  const min = LEVELS[o.level]; const redactor = o.redactor ?? redactValue;
+  const min = o.level === 'silent' ? Infinity : LEVELS[o.level]; const redactor = o.redactor ?? redactValue;
   const emit = (level: Level, msg: string, ctx?: Record<string, unknown>) => {
     if (LEVELS[level] < min) return;
     let rec: LogRecord;
