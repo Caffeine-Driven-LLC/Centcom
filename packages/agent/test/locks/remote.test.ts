@@ -1,0 +1,17 @@
+import { describe, expect, it } from 'vitest';
+import { A, B, C, macWith, rig } from './helpers.js';
+
+const mac = macWith(); const ev = (action: string, agent: string, key: string, ttl?: number) => ({ action, agent_id: agent, path_hmac: mac(key), ...(ttl !== undefined ? { ttl_ms: ttl } : {}) }) as never;
+describe('inbound events (acceptance 7)', () => {
+  it('an acquire from a teammate shows up in check and in warn mode in heldBy; block mode refuses', async () => {
+    const w = rig({ pathMac: mac }); w.client.onRemoteLock(ev('acquire', B, 'src/a.ts', 30_000)); expect(w.client.check('src/a.ts')).toMatchObject({ heldBy: B, remote: true }); expect(await w.client.acquire('src/a.ts', { agentId: A })).toEqual({ ok: true, heldBy: B });
+    const b = rig({ pathMac: mac, mode: 'block' }); b.client.onRemoteLock(ev('acquire', B, 'src/a.ts', 30_000)); expect(await b.client.acquire('src/a.ts', { agentId: A })).toMatchObject({ ok: false, reason: 'held', heldBy: B }); b.client.onRemoteLock(ev('release', B, 'src/a.ts')); expect(await b.client.acquire('src/a.ts', { agentId: A })).toEqual({ ok: true });
+  });
+  it('entries expire after ttl_ms on the receiver clock even if no release arrives', async () => { const r = rig({ pathMac: mac }); r.client.onRemoteLock(ev('acquire', B, 'f', 20_000)); await r.clock.advance(19_999); expect(r.client.check('f')).not.toBeNull(); await r.clock.advance(1); expect(r.client.check('f')).toBeNull(); expect(r.clock.pending()).toBe(0); });
+  it('a missing ttl uses 5 minutes; a sender clock is never used', async () => { const r = rig({ pathMac: mac }); r.client.onRemoteLock({ ...(ev('acquire', B, 'f') as object), ts: '1999-01-01T00:00:00Z' } as never); await r.clock.advance(299_999); expect(r.client.check('f')).not.toBeNull(); await r.clock.advance(1); expect(r.client.check('f')).toBeNull(); });
+  it('expire and release remove only that agent', async () => { const r = rig({ pathMac: mac }); r.client.onRemoteLock(ev('acquire', B, 'f', 30_000)); r.client.onRemoteLock(ev('acquire', C, 'f', 30_000)); r.client.onRemoteLock(ev('expire', B, 'f')); expect(r.client.check('f')!.heldBy).toBe(C); r.client.onRemoteLock(ev('release', C, 'f')); expect(r.client.check('f')).toBeNull(); });
+  it('an unknown action, a bad shape and a deny are ignored; the unknown one is logged at debug', () => { const r = rig({ pathMac: mac }); r.client.onRemoteLock(ev('steal', B, 'f')); r.client.onRemoteLock(ev('deny', B, 'f', 5000)); r.client.onRemoteLock({ action: 'acquire' } as never); r.client.onRemoteLock(null as never); expect(r.client.check('f')).toBeNull(); expect(r.logs.filter((l) => l.level === 'debug' && /unknown action/.test(l.msg))).toHaveLength(1); });
+  it('events from agents who are not in the session are ignored', () => { const r = rig({ pathMac: mac, isMember: (a) => a !== C }); r.client.onRemoteLock(ev('acquire', C, 'f', 30_000)); expect(r.client.check('f')).toBeNull(); r.client.onRemoteLock(ev('acquire', B, 'f', 30_000)); expect(r.client.check('f')).not.toBeNull(); });
+  it('our own events coming back from the relay are ignored', async () => { const r = rig({ pathMac: mac }); await r.client.acquire('f', { agentId: A }); r.client.onRemoteLock(ev('acquire', A, 'f', 30_000)); expect(r.client.conflicts()).toEqual([]); });
+  it('dispose clears the timers', () => { const r = rig({ pathMac: mac }); r.client.onRemoteLock(ev('acquire', B, 'f', 30_000)); r.client.dispose(); expect(r.clock.pending()).toBe(0); });
+});

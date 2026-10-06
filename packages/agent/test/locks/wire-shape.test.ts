@@ -1,0 +1,21 @@
+import { assertWritableEventPayload } from '@centcom/protocol';
+import { describe, expect, it } from 'vitest';
+import { A, B, macWith, memTransport, rig } from './helpers.js';
+
+describe('published frames (acceptance 5)', () => {
+  it('the clear part validates against the file.lock schema, has the hash and never the path; the secret part carries the path', async () => {
+    const m = memTransport(); const r = rig({ transport: m.tr, pathMac: macWith() }); await r.client.acquire('src/very/private/name.ts', { agentId: A, ttlMs: 60_000 }); await r.client.release('src/very/private/name.ts', A);
+    expect(m.sent.map((s) => s.clear.action)).toEqual(['acquire', 'release']); for (const s of m.sent) { expect(() => assertWritableEventPayload('file.lock', s.clear)).not.toThrow(); expect(JSON.stringify(s.clear)).not.toContain('private'); expect(JSON.stringify(s.clear)).not.toContain('name.ts'); expect(s.clear.path_hmac).toBe(macWith()('src/very/private/name.ts')); expect(s.clear.agent_id).toBe(A); expect(s.secret).toEqual({ path: 'src/very/private/name.ts' }); expect(Object.keys(s.clear).sort()).toEqual(s.clear.action === 'acquire' ? ['action', 'agent_id', 'path_hmac', 'ttl_ms'] : ['action', 'agent_id', 'path_hmac']); }
+    expect(m.sent[0]!.clear.ttl_ms).toBe(60_000);
+  });
+  it('the wire ttl stays inside what the relay accepts (5 s to 10 min here)', async () => { const m = memTransport(); const r = rig({ transport: m.tr, pathMac: macWith() }); await r.client.acquire('a', { agentId: A, ttlMs: 10 }); expect(m.sent[0]!.clear.ttl_ms).toBe(5000); });
+  it('the expiry of a lock is published as expire', async () => { const m = memTransport(); const r = rig({ transport: m.tr, pathMac: macWith(), running: () => false }); await r.client.acquire('a', { agentId: A, ttlMs: 10_000 }); await r.clock.advance(10_000); await new Promise((x) => setTimeout(x, 20)); expect(m.sent.map((s) => s.clear.action)).toEqual(['acquire', 'expire']); });
+  it('another key id gives another hash for the same path (after a key rotation)', async () => { const a = memTransport(); const b = memTransport(); const r1 = rig({ transport: a.tr, pathMac: macWith('k1') }); const r2 = rig({ transport: b.tr, pathMac: macWith('k2') }); await r1.client.acquire('x', { agentId: A }); await r2.client.acquire('x', { agentId: A }); expect(a.sent[0]!.clear.path_hmac).not.toBe(b.sent[0]!.clear.path_hmac); });
+  it('no transport: nothing is sent; no key: nothing is sent and one warning says why', async () => { const m = memTransport(); const noKey = rig({ transport: m.tr }); await noKey.client.acquire('a', { agentId: A }); await noKey.client.acquire('b', { agentId: A }); expect(m.sent).toEqual([]); expect(noKey.logs.filter((l) => l.level === 'warn' && /key/.test(l.msg))).toHaveLength(1); const solo = rig({ pathMac: macWith() }); expect(await solo.client.acquire('a', { agentId: A })).toEqual({ ok: true }); });
+  it('paths and hashes never appear together in a log line', async () => { const m = memTransport(); const r = rig({ transport: m.tr, pathMac: macWith() }); await r.client.acquire('src/q.ts', { agentId: A }); await r.client.release('src/q.ts', A); for (const l of r.logs) { expect(l.msg).not.toContain('src/q.ts'); expect(l.msg).not.toContain(macWith()('src/q.ts')); } });
+  it('while the connection is down events are queued (200, oldest dropped) and sent in order when it is back', async () => {
+    const m = memTransport({ up: false }); const r = rig({ transport: m.tr, pathMac: macWith() }); for (let i = 0; i < 250; i++) { await r.client.acquire(`f${i}`, { agentId: A }); } expect(m.sent).toEqual([]); expect(r.client.check('f0')).not.toBeNull(); // local locks work meanwhile
+    m.setUp(true); r.client.flush(); expect(m.sent).toHaveLength(200); expect(m.sent[0]!.secret.path).toBe('f50'); expect(m.sent.at(-1)!.secret.path).toBe('f249'); r.client.flush(); expect(m.sent).toHaveLength(200);
+  });
+  it('a transport that throws does not break the agent', async () => { const r = rig({ transport: { publish: () => { throw new Error('boom'); } }, pathMac: macWith() }); expect(await r.client.acquire('a', { agentId: A })).toEqual({ ok: true }); expect(await r.client.acquire('a', { agentId: B })).toEqual({ ok: true, heldBy: A }); });
+});

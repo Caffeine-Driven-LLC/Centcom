@@ -13,7 +13,7 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 
 ![Progress](docs/progress.svg)
 
-**42% built** (weighted by lane size across 105 lanes). Details and how this is computed: [`tools/plan/progress.py`](tools/plan/progress.py). Update [`plan/STATUS.json`](plan/STATUS.json) when you finish or advance a lane, then run `python3 tools/plan/progress.py`.
+**43% built** (weighted by lane size across 105 lanes). Details and how this is computed: [`tools/plan/progress.py`](tools/plan/progress.py). Update [`plan/STATUS.json`](plan/STATUS.json) when you finish or advance a lane, then run `python3 tools/plan/progress.py`.
 
 ## Next steps
 
@@ -35,7 +35,7 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 | [C010](plan/client/C010.md) | Opt-in telemetry client | 90% | telemetry client: gate (config + DO_NOT_TRACK + CENTCOM_TELEMETRY), allow-list sanitiser per event, bounded buffer, batching (100 events, 64 KiB, 1/min on a monotonic clock), silent sender with one re-queue, install id (0600, reset), tested against the mock backend. Not wired into the app: opt-in prompt, centcom telemetry command, emit calls (other lanes) |
 | [C019](plan/client/C019.md) | Context visibility: usage display and compaction requests through the engine | 85% | context view: engine-reported usage only, warn/full thresholds with hysteresis, compaction request through the engine (capability, idle and approval checks, 60 s backoff), optional auto compaction, de-duplicating ledger, 1/s context events. Not yet: centcom context, /compact, meter UI, state machine mapping of context-full |
 
-+23 more in [`plan/STATUS.json`](plan/STATUS.json).
++24 more in [`plan/STATUS.json`](plan/STATUS.json).
 
 ### Ready to pick up (all dependencies done)
 
@@ -44,7 +44,6 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 | [C043](plan/client/C043.md) | Task list and progress components | S | M1 |
 | [C056](plan/client/C056.md) | End-to-end crypto module: keys, frames, grants, rotation | L | M2 |
 | [C071](plan/client/C071.md) | LAN discovery over mDNS | M | M2 |
-| [C018](plan/client/C018.md) | File lock client: local and remote advisory locks | M | M5 |
 
 Each lane card lists its goal, contracts, acceptance criteria and tests. Read [`plan/START_HERE.md`](plan/START_HERE.md) first.
 

@@ -220,6 +220,10 @@
   "C010": {
    "pct": 0.9,
    "note": "telemetry client: gate (config + DO_NOT_TRACK + CENTCOM_TELEMETRY), allow-list sanitiser per event, bounded buffer, batching (100 events, 64 KiB, 1/min on a monotonic clock), silent sender with one re-queue, install id (0600, reset), tested against the mock backend. Not wired into the app: opt-in prompt, centcom telemetry command, emit calls (other lanes)"
+  },
+  "C018": {
+   "pct": 0.85,
+   "note": "advisory lock client: hashed local lock files with exclusive create and stale takeover, canonical path keys (case, NFC, symlinks), warn/block modes and permission gate, renewal and expiry, remote table by path hash on the receiver clock, conflict events and payload, wire shape checked against the contract, bounded offline queue. Not yet: real transport/path key (session and crypto lanes), C015 wiring of lockGate"
   }
  },
  "next": [
