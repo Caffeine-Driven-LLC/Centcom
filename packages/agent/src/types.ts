@@ -28,7 +28,7 @@ export type EventBody =
   | { type: 'subagent.started'; subagent_id: string; parent_tool_id: string; label: string }
   | { type: 'subagent.text'; subagent_id: string; text: string }
   | { type: 'subagent.done'; subagent_id: string; status: 'ok' | 'error' | 'canceled' }
-  | { type: 'usage.report'; input_tokens: number; output_tokens: number; cache_read_tokens?: number; cost_usd?: number; cost_is_estimate: true; context_used_pct?: number; context_tokens?: number; context_window?: number }
+  | { type: 'usage.report'; /** The engine's id of the message this usage belongs to; used to keep a replay from counting twice. */ message_id?: string; input_tokens: number; output_tokens: number; cache_read_tokens?: number; cost_usd?: number; cost_is_estimate: true; context_used_pct?: number; context_tokens?: number; context_window?: number }
   | { type: 'limits.report'; windows: { name: string; utilization: number; resets_at: number }[] }
   | { type: 'model.changed'; model: string; reason: 'user' | 'fallback' | 'engine' }
   | { type: 'status'; state: string; detail?: string }

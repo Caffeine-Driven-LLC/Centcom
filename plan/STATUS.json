@@ -38,8 +38,8 @@
    "note": "shell reader and command classifier (fail closed, depth 4), tool and path classification, protected paths, engine settings for claude and codex (bypass needs opt-in, capability notes), risk classifier adapter; 640-command corpus. Not wired into the TUI/web yet; flag spellings to re-check against C102/C103 recordings"
   },
   "C019": {
-   "pct": 0.6,
-   "note": "usage and context % shown; no compaction request"
+   "pct": 0.85,
+   "note": "context view: engine-reported usage only, warn/full thresholds with hysteresis, compaction request through the engine (capability, idle and approval checks, 60 s backoff), optional auto compaction, de-duplicating ledger, 1/s context events. Not yet: centcom context, /compact, meter UI, state machine mapping of context-full"
   },
   "C020": {
    "pct": 0.8,

@@ -1,0 +1,5 @@
+{"at_ms": 0, "event": {"type": "usage.report", "message_id": "msg_a", "input_tokens": 1200, "output_tokens": 300, "cost_is_estimate": true, "context_tokens": 150000, "context_window": 200000}}
+{"at_ms": 10, "event": {"type": "usage.report", "message_id": "msg_b", "input_tokens": 800, "output_tokens": 150, "cost_is_estimate": true, "context_tokens": 194000, "context_window": 200000}}
+{"at_ms": 20, "event": {"type": "compaction.started"}}
+{"at_ms": 30, "event": {"type": "compaction.ended", "tokens_before": 194000, "tokens_after": 40000}}
+{"at_ms": 40, "event": {"type": "usage.report", "message_id": "msg_c", "input_tokens": 500, "output_tokens": 90, "cost_is_estimate": true, "context_tokens": 41000, "context_window": 200000}}

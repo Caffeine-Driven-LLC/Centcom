@@ -24,3 +24,4 @@ export { classifyCommand as classifyCommandRisk, classifyTool, createRiskClassif
 export * from './memory/index.js';
 export * from './mcp/index.js';
 export * from './hooks/index.js';
+export * from './context/index.js';
