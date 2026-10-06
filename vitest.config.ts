@@ -15,5 +15,5 @@ export default defineConfig({
       '@centcom/tui': r('./packages/tui/src/index.ts'),
     },
   },
-  test: { include: ['packages/*/test/**/*.test.ts', 'packages/*/test/**/*.test.tsx', 'apps/*/test/**/*.test.ts'], environment: 'node' },
+  test: { include: ['packages/*/test/**/*.test.ts', 'packages/*/test/**/*.test.tsx', 'apps/*/test/**/*.test.ts', 'tools/**/*.test.ts'], environment: 'node' },
 });
