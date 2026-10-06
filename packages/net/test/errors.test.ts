@@ -123,3 +123,15 @@ describe('next action', () => {
   it('network trouble is worth retrying; an abort is not', () => { expect(nextAction(new CentcomError({ kind: 'network' }))).toBe('retry'); expect(nextAction(new CentcomError({ kind: 'timeout' }))).toBe('retry'); expect(nextAction(new CentcomError({ kind: 'aborted' }))).toBe('none'); });
   it('unknown codes use their status class', () => { expect(nextAction(E('unknown', 401))).toBe('reauthenticate'); expect(nextAction(E('unknown', 503))).toBe('retry'); expect(nextAction(E('unknown', 404))).toBe('none'); });
 });
+
+describe('known contract conflict: errors.json retryable:true codes the status table says never to retry', () => {
+  const SIX = ['authorization_pending', 'slow_down', 'session_paused', 'lock_denied', 'key_required', 'export_not_ready'] as const;
+  it('errors.json still marks exactly these 400/409 codes retryable (update docs/errors.md if this changes)', () => {
+    const conflicting = ERROR_CODES.filter((c) => ERROR_TABLE[c].retryable && [400, 409].includes(ERROR_TABLE[c].status)).sort();
+    expect(conflicting).toEqual([...SIX].sort());
+  });
+  it.each(SIX)('retryDecision does not auto-retry %s', (code) => {
+    const status = ERROR_TABLE[code as ErrorCode].status;
+    for (const method of ['GET', 'POST']) expect(retryDecision({ status, method, hasIdempotencyKey: true, attempt: 1, authRefreshed: false, code })).toMatchObject({ retry: false, reason: 'fix_the_request' });
+  });
+});

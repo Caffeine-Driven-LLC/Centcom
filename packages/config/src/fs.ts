@@ -1,6 +1,6 @@
 /** A tiny filesystem port so everything can be tested without touching disk. */
 import { chmodSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, sep } from 'node:path';
 
 export interface ConfigFs {
   /** null when the file does not exist; throws on any other error (EACCES etc.) */
@@ -30,7 +30,7 @@ export function memFs(files: Record<string, string> = {}, opts: { unreadable?: s
     files: map, modes,
     read(p) { if (opts.unreadable?.includes(p)) throw Object.assign(new Error('EACCES'), { code: 'EACCES' }); return map.get(p) ?? null; },
     writeAtomic(p, d, m) { const tmp = p + '.tmp'; map.set(tmp, d); if (opts.failRename) throw new Error('rename failed'); map.set(p, d); map.delete(tmp); modes.set(p, m); },
-    isDir(p) { return dirs.has(p) || [...map.keys()].some((k) => k.startsWith(p + '/')); },
+    isDir(p) { return dirs.has(p) || [...map.keys()].some((k) => k.startsWith(p + sep)); },
     exists(p) { return map.has(p) || dirs.has(p); },
   };
 }
