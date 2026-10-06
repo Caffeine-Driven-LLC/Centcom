@@ -196,6 +196,10 @@
   "C017": {
    "pct": 0.95,
    "note": "WorktreeManager: create (collision names, exclude, rollback), status, remove (dirty/unmerged refusal), list/prune reconcile with orphan flagging, detectConflict via merge-tree, hostile paths, timeouts, lock retries, bus events. Not exercised on Windows or with git older than 2.38 beyond fakes"
+  },
+  "C024": {
+   "pct": 0.8,
+   "note": "fleet manager: worktree and branch per agent, plan/config limit with fair FIFO queue (32), per-engine stagger and pause on provider limits, stop/stopAll/wall clock, cleanup (branch ready, needs attention, orphans, merge preview), native subagent nodes, spawn/exit payloads. centcom fleet command logic. Not yet: wiring to the real engine registry in the app, TUI fleet view"
   }
  },
  "next": [
