@@ -252,6 +252,10 @@
   "C057": {
    "pct": 0.75,
    "note": "session client against the mock relay: create/join/leave/end/claim-host/list/share-link REST, a new join token per attempt, host key grants (share_history on/off), rotation on kick and scheduled, guest waiting_for_key and held frames, sign-verify-decrypt before any event, forged server frames and bad frames dropped, TOFU key-changed with held frames and trustDevice, snapshot upload cadence and restore with history fill, 47 event fixtures round-trip; gaps: re-encrypting unsent frames after rotation, chunking over 192 KiB, share-link guests end to end, host hand-over key transfer; contract gaps noted (key.grant frame key, snapshot blob format); adds resumeFrom({ask:false}) and flush() to the C055 channel"
+  },
+  "C059": {
+   "pct": 0.8,
+   "note": "presence client: coalesced presence.update (1/s, latest wins), typing refresh and idle, auto-away and busy rules, encrypted cursors (10/s, deduped, null clears), receiver model with 10 s cursor expiry and offline on member_left, roster check, best-effort ephemeral frames, session reads presence off the socket and drops unverifiable ones with a counter; tested with a fake clock and two clients on the mock relay; gaps: no UI, nudge not implemented, burst seeding checked against the stub only"
   }
  },
  "next": [
