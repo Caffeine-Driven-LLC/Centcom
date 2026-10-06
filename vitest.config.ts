@@ -9,6 +9,7 @@ export default defineConfig({
       '@centcom/agent': r('./packages/agent/src/index.ts'),
       '@centcom/skills': r('./packages/skills/src/index.ts'),
       '@centcom/config': r('./packages/config/src/index.ts'),
+      '@centcom/protocol': r('./packages/protocol/src/index.ts'),
       '@centcom/tui': r('./packages/tui/src/index.ts'),
     },
   },

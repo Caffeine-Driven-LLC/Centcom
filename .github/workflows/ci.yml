@@ -23,6 +23,8 @@ jobs:
         with: { node-version-file: .node-version, cache: pnpm }
       - name: Install (lockfile must be up to date)
         run: pnpm install --frozen-lockfile
+      - name: Generated protocol code matches contracts/
+        run: pnpm --filter @centcom/protocol gen --check
       - name: Typecheck
         run: pnpm typecheck
       - name: Tests
