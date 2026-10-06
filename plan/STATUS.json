@@ -248,6 +248,14 @@
   "C073": {
    "pct": 0.85,
    "note": "pairing code, CPace key exchange, host/guest flow with confirmation, attempt limit and ban list, reconnect token, session trust store, fingerprint binding, redaction tests; gap: no real socket run; host server (C072) not built"
+  },
+  "C054": {
+   "pct": 0.85,
+   "note": "relay client: ticket per attempt, subprotocol, hello/welcome checks, heartbeat, reconnect with backoff and close-code policy, send limiter and slow_down, URL safety (wss, private ws only, IPv4-mapped form), no tickets in logs; 120 tests on an in-memory socket; gap: not yet run against the mock backend end to end"
+  },
+  "C055": {
+   "pct": 0.85,
+   "note": "reliable channel: ordered, de-duplicated delivery with hold buffer and gap recovery, outbox with resend/stuck/limits, ack cadence, resume/snapshot/history paths, relay-reset detection, seq store; 17 tests incl. a 1,000-schedule property test; gap: not yet run against the mock backend end to end"
   }
  },
  "next": [
