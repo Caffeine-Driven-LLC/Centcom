@@ -4,7 +4,7 @@
  * The React tree only reads the store and calls the controller's methods.
  */
 import { CLAUDE_MODELS, createAgentBus, createCheckpointManager, createContextView, modelLabel, newId, nodeGit } from '@centcom/agent';
-import type { AgentBus, AgentId, Checkpoint, CheckpointManager, ContextConfig, ContextView, EngineId, EngineStartOptions, GitRunner, PermissionEngine, PolicyMode, RewindMode } from '@centcom/agent';
+import type { AgentBus, AgentId, FleetManager, FleetNode, Checkpoint, CheckpointManager, ContextConfig, ContextView, EngineId, EngineStartOptions, GitRunner, PermissionEngine, PolicyMode, RewindMode } from '@centcom/agent';
 import type { PendingApproval as PolicyPending } from '@centcom/agent';
 import type { Logger } from '@centcom/net';
 import { SessionStore, ago, titleFrom, type SessionMeta } from './sessions.js';
@@ -44,7 +44,11 @@ export interface ControllerOptions {
   checkpoints?: { git?: GitRunner };
   /** Context warnings and automatic compaction (engine-reported numbers only). */
   context?: Partial<ContextConfig>;
+  /** Parallel agents in their own worktrees (`/fleet`). Their events, branch-ready news and approvals come over `bus`. */
+  fleet?: { manager: FleetManager; bus: AgentBus; ownerSlug: string };
 }
+const FLEET_COLORS: CentoColor[] = ['green', 'yellow', 'red', 'brown', 'violet'];
+const FLEET_STATE: Record<string, string> = { queued: 'queued', starting: 'prompt-received', running: 'thinking', waiting: 'idle', done: 'success', failed: 'error', canceled: 'idle' };
 const POLICY_MODE: Record<PermissionMode, PolicyMode> = { default: 'ask', acceptEdits: 'accept-edits', plan: 'plan', bypassPermissions: 'bypass' };
 const HARD_DENY: Record<string, string> = { credential_path: 'it touches a credentials file', outside_root: 'it writes outside this project', git_internals: 'it writes inside .git', agent_stopped: 'the agent was stopped' };
 
@@ -84,6 +88,7 @@ export class AppController {
     const clock = { now: () => Date.now(), setTimeout: (f: () => void, ms: number) => { const t = setTimeout(f, ms); t.unref?.(); return t; }, clearTimeout: (h: never) => clearTimeout(h as NodeJS.Timeout) };
     this.ctxView = createContextView({ bus: this.bus, clock, config: o.context, engines: { capabilities: () => o.engine.capabilities(), status: () => (this.state.busy ? 'running' : this.session ? 'waiting' : 'starting'), send: async (_id, prompt) => { await this.session?.send(prompt); } } });
     this.bus.on('agent:context_alert', (a) => { if (a.level === 'warn') this.notice('warn', `The context is ${Math.round(a.pct)}% full.`, 'Type /compact to have the agent compact it.'); else if (a.level === 'full') { this.notice('warn', 'The context is almost full.', 'Type /compact now, or start fresh with /new.'); this.driver.setState('context-full'); } });
+    if (o.fleet) this.watchFleet(o.fleet);
     if (o.checkpoints) this.cp = createCheckpointManager({ worktree: o.cwd, agentId: this.me, git: o.checkpoints.git ?? nodeGit, clock,
       store: { markRewind: async (seq) => this.rewindTranscript(seq), summarize: async (seq, max) => this.summaryUpTo(seq, max) },
       engine: { capabilities: () => o.engine.capabilities(), start: (so) => o.engine.start({ ...this.startOptions(so.resume?.engine_session_id), ...so }) } });
@@ -182,7 +187,10 @@ export class AppController {
     this.toastTimers.forEach(clearTimeout);
     for (const a of this.state.approvals) a.resolve({ decision: 'deny', scope: 'once', reason: 'exit' });
     void this.session?.stop();
+    void this.stopFleet();
   }
+  /** Fleet agents are this app's own processes: stop them before exiting (at most about 8 s). */
+  stopFleet(): Promise<void> { return this.o.fleet ? this.o.fleet.manager.stopAll().catch(() => undefined) : Promise.resolve(); }
 
   private async consume(s: EngineSession) { for await (const ev of s.events) { if (s !== this.session) break; this.apply(ev); } } // a replaced session's leftovers are not shown
 
@@ -422,6 +430,7 @@ export class AppController {
       case 'interrupt': await this.interrupt(); break;
       case 'rewind': await this.rewindCommand(arg); break;
       case 'compact': await this.compactCommand(); break;
+      case 'fleet': await this.fleetCommand(arg); break;
       case 'permissions': await this.permissionsCommand(arg); break;
       case 'trust': await this.trustCommand(arg); break;
       case 'mode': {
@@ -462,6 +471,49 @@ export class AppController {
         const story = DEMO_PROMPTS[arg] ?? DEMO_PROMPTS.fix!; this.set({ input: '', cursor: 0 }); await this.submit(story); break;
       }
     }
+  }
+
+  /* ------------------------------------------------------------------ fleet */
+  private fleetIds: string[] = [];
+  private watchFleet(f: NonNullable<ControllerOptions['fleet']>) {
+    f.bus.on('fleet:node', ({ node }) => { if (node.kind === 'agent') this.upsertFleetAgent(node); });
+    f.bus.on('agent:event', ({ agent_id, event: ev }) => {
+      if (!this.fleetIds.includes(agent_id)) return;
+      if (ev.type === 'status') this.updateAgent(agent_id, () => ({ state: ev.state, mini: stateToMini(ev.state), busy: isBusyState(ev.state) }));
+      else if (ev.type === 'session.started') this.updateAgent(agent_id, () => ({ model: ev.model, loginKind: ev.login_kind }));
+      else if (ev.type === 'usage.report') this.updateAgent(agent_id, (a) => ({ cost: a.cost + (ev.cost_usd ?? 0), inTok: a.inTok + ev.input_tokens, outTok: a.outTok + ev.output_tokens }));
+      else if (ev.type === 'approval.requested') this.toast('warn', `${this.state.agents.find((a) => a.id === agent_id)?.name ?? 'An agent'} needs approval`, 5000);
+    });
+    f.bus.on('fleet:branch_ready', (e) => { const n = this.fleetIds.indexOf(e.agentId) + 1; this.notice('ok', `Agent ${n} finished: branch ${e.branch} is ready (${e.ahead} commit${e.ahead === 1 ? '' : 's'}, ${e.files.length} file${e.files.length === 1 ? '' : 's'}).`, `/fleet preview ${n} checks it for conflicts with its base. Centcom never merges or pushes for you.`); });
+  }
+  private upsertFleetAgent(n: FleetNode) {
+    const i = this.fleetIds.indexOf(n.id); const state = n.state === 'running' || n.state === 'waiting' ? (this.state.agents.find((a) => a.id === n.id)?.state ?? FLEET_STATE[n.state]!) : FLEET_STATE[n.state] ?? 'idle';
+    const view: Partial<AgentView> = { name: `${i < 0 ? this.fleetIds.length + 1 : i + 1} ${n.label}`, state, mini: n.state === 'queued' ? 'waiting' : stateToMini(state), busy: n.state === 'starting' || n.state === 'running', branch: n.branch ?? '', note: n.attention ?? (n.error_code ? `failed: ${n.error_code}` : n.state === 'queued' ? 'waiting for a slot' : undefined) };
+    if (i < 0) { this.fleetIds.push(n.id); this.set((s) => ({ agents: [...s.agents, { id: n.id, color: FLEET_COLORS[(this.fleetIds.length - 1) % FLEET_COLORS.length]!, mine: false, engine: this.o.engine.label, provider: this.o.engine.provider, model: '', loginKind: 'unknown', runsOn: 'you', cost: 0, inTok: 0, outTok: 0, name: '', state: 'idle', mini: 'idle', busy: false, branch: '', ...view } as AgentView] })); }
+    else this.updateAgent(n.id, () => view);
+    if (n.state === 'failed') this.notice('warn', `Agent ${this.fleetIds.indexOf(n.id) + 1} (${n.label}) stopped with an error${n.error_code ? `: ${n.error_code}` : ''}.`);
+  }
+  private fleetAgent(nArg: string | undefined): FleetNode | undefined { const n = Number(nArg); const id = Number.isInteger(n) ? this.fleetIds[n - 1] : undefined; return id ? this.o.fleet!.manager.list().find((x) => x.id === id) : undefined; }
+  private async fleetCommand(arg: string) {
+    const f = this.o.fleet; if (!f) { this.toast('info', this.o.demo ? 'The fleet needs a real engine (not the demo).' : 'Parallel agents are off in this session.'); return; }
+    const [sub = 'list', ...rest] = arg.split(/\s+/).filter(Boolean);
+    try {
+      switch (sub) {
+        case 'list': { const nodes = f.manager.list().filter((n) => n.kind === 'agent'); this.notice('info', nodes.length ? `${nodes.length} fleet agent${nodes.length === 1 ? '' : 's'}` : 'No fleet agents yet. /fleet start [count] <task> runs agents in parallel, each on its own branch.', nodes.map((n) => `${this.fleetIds.indexOf(n.id) + 1}. ${n.label}  ${n.state}${n.branch ? `  ${n.branch}` : ''}${n.attention ? `  [${n.attention}]` : ''}${n.error_code ? `  (${n.error_code})` : ''}`).join('\n') || undefined); for (const p of f.manager.paused()) this.notice('warn', `New ${p.engine} agents are paused`, p.message); break; }
+        case 'start': {
+          const count = /^\d+$/.test(rest[0] ?? '') ? Math.min(16, Math.max(1, Number(rest.shift()))) : 1; const task = rest.join(' ').trim(); if (!task) { this.toast('info', 'Usage: /fleet start [count] <task>'); return; }
+          const label = task.split(/\s+/).slice(0, 4).join(' '); this.set({ fleet: true });
+          for (let i = 1; i <= count; i++) { const h = await f.manager.spawn({ repoRoot: this.o.cwd, engine: this.o.engine.id, prompt: task, ownerSlug: f.ownerSlug, label: count > 1 ? `${label} ${i}` : label, ...(this.state.settings.model ? { model: this.state.settings.model } : {}) }); void h.done().then((r) => { if (r.outcome !== 'ok' && r.error_code === 'fleet_timeout') this.notice('warn', `Agent ${this.fleetIds.indexOf(h.id) + 1} was stopped after its time limit.`); }); }
+          this.toast('ok', `Started ${count} agent${count === 1 ? '' : 's'} on their own branches.`); break;
+        }
+        case 'stop': { if (rest[0] === 'all') { await f.manager.stopAll(); this.toast('ok', 'All fleet agents stopped.'); break; } const n = this.fleetAgent(rest[0]); if (!n) { this.toast('warn', 'Which agent? /fleet stop <number> or /fleet stop all'); return; } await f.manager.stop(n.id as AgentId); this.toast('ok', `Agent ${rest[0]} stopped.`); break; }
+        case 'preview': { const n = this.fleetAgent(rest[0]); if (!n) { this.toast('warn', 'Which agent? /fleet preview <number>'); return; } const r = await f.manager.mergePreview(n.id as AgentId); this.notice(r.conflicts.length ? 'warn' : 'ok', r.conflicts.length ? `Merging ${n.branch} would conflict in ${r.conflicts.length} file${r.conflicts.length === 1 ? '' : 's'}.` : `${n.branch} merges cleanly into its base.`, r.conflicts.join('\n') || undefined); break; }
+        case 'remove': { const n = this.fleetAgent(rest[0]); if (!n) { this.toast('warn', 'Which agent? /fleet remove <number> [force]'); return; } await f.manager.remove(n.id as AgentId, { force: rest[1] === 'force' }); this.fleetIds = this.fleetIds.map((x) => (x === n.id ? '' : x)); this.set((s) => ({ agents: s.agents.filter((a) => a.id !== n.id) })); this.toast('ok', `Agent ${rest[0]} and its worktree were removed.`); break; }
+        case 'clean': { const o = await f.manager.recoverOrphans(this.o.cwd); this.notice('info', o.length ? `${o.length} worktree${o.length === 1 ? '' : 's'} left from an earlier run. Nothing was removed.` : 'Nothing left over from earlier runs.', o.map((w) => `${w.branch}  ${w.path}`).join('\n') || undefined); break; }
+        case 'resume': { const engine = rest[0] === 'codex' ? 'codex' : 'claude-code'; f.manager.resume(engine); this.toast('ok', `New ${engine} agents may start again.`); break; }
+        default: this.toast('info', 'Try /fleet, /fleet start [count] <task>, /fleet stop <n|all>, /fleet preview <n>, /fleet remove <n>, /fleet clean');
+      }
+    } catch (e) { this.notice('warn', String((e as Error).message ?? e)); }
   }
 
   /* ------------------------------------------------------------------ checkpoints and rewind */

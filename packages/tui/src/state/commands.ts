@@ -5,6 +5,7 @@ export const COMMANDS: SlashCommand[] = [
   { name: 'clear', desc: 'Same as /new: start fresh with an empty context' },
   { name: 'resume', args: '[number|id]', desc: 'Continue a saved conversation from this folder' },
   { name: 'agents', desc: 'Show or hide the fleet panel' },
+  { name: 'fleet', args: '[start [n] <task> | stop <n|all> | preview <n> | remove <n> | clean]', desc: 'Run agents in parallel, each in its own worktree and branch' },
   { name: 'mode', args: '[default|edits|plan|bypass]', desc: 'Set how permissions are asked (bypass = dangerously skip permissions)' },
   { name: 'mascot', args: '[large|small|off|auto]', desc: 'Change how big Cento is' },
   { name: 'color', args: '[violet|red|yellow|green|brown]', desc: 'Change Cento\'s colour' },

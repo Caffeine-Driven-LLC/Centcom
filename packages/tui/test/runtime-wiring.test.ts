@@ -72,3 +72,25 @@ describe('context in the app', () => {
   });
   it('/compact explains when the engine has no compact command', async () => { const { ctl } = await app(); await ctl.runCommand('/compact'); expect(ctl.state.toasts.at(-1)!.text).toMatch(/no compact command/); ctl.stop(); });
 });
+
+describe('the fleet in the app', () => {
+  async function fleetApp() {
+    const cwd = repo(); const { createAgentBus, createFleetManager, createRunner, createWorktreeManager, nodeGit, nodeWtFs } = await import('@centcom/agent'); const { newIdGenerator } = await import('@centcom/protocol');
+    const bus = createAgentBus({ onError: () => undefined }); const ids = newIdGenerator({ now: () => Date.now(), random: (n) => new Uint8Array(n).map(() => Math.floor(Math.random() * 256)) });
+    const clock = { now: () => Date.now(), setTimeout: (f: () => void, ms: number) => setTimeout(f, ms), clearTimeout: (h: never) => clearTimeout(h) }; const quiet = { debug: () => undefined, info: () => undefined, warn: () => undefined, error: () => undefined };
+    const fake = new FakeEngine({ id: 'claude-code' }); const runner = createRunner({ engines: { get: () => fake as never }, bus, ids, clock, log: quiet, config: { maxParallel: 8 }, env: {} });
+    const worktrees = createWorktreeManager({ git: nodeGit, fs: nodeWtFs, bus, clock, config: { root: tmp('centcom-wt-') } }); const manager = createFleetManager({ runner, worktrees, entitlements: { maxParallelAgents: () => 4 }, bus, ids, clock, config: { stagger_ms: 0 } });
+    const ctl = new AppController({ engine: new FakeEngine({ id: 'claude-code' }) as never, demo: false, cwd, version: 't', skills: [], fleet: { manager, bus, ownerSlug: 'alex' } }); await ctl.start(); return { ctl, cwd, fake, manager, runner };
+  }
+  it('/fleet start 2 runs two agents on their own branches; they show in the fleet panel; /fleet lists them; stop all ends them', async () => {
+    const { ctl, fake } = await fleetApp(); await ctl.runCommand('/fleet start 2 fix the flaky test'); await until(() => fake.sessions.length === 2, 10_000);
+    const rows = ctl.state.agents.filter((a) => !a.mine); expect(rows.map((a) => a.name)).toEqual(['1 fix the flaky test 1', '2 fix the flaky test 2']); expect(rows.every((a) => /^centcom\/alex\//.test(a.branch))).toBe(true); expect(new Set(fake.sessions.map((s) => s.o.cwd)).size).toBe(2); expect(ctl.state.fleet).toBe(true);
+    await ctl.runCommand('/fleet'); expect(notices(ctl).at(-1)).toMatch(/2 fleet agents[\s\S]*1\. fix the flaky test 1/); await ctl.runCommand('/fleet stop all'); await until(() => ctl.state.agents.filter((a) => !a.mine).every((a) => a.state === 'idle' || a.state === 'success'), 10_000); ctl.stop();
+  }, 30_000);
+  it('an agent that commits announces its branch is ready, and preview checks it for conflicts', async () => {
+    const { ctl, fake, manager, runner } = await fleetApp(); await ctl.runCommand('/fleet start add a file'); await until(() => fake.sessions.length === 1, 10_000); const wt = fake.sessions[0]!.o.cwd; writeFileSync(join(wt, 'new.txt'), 'x'); git(wt, 'add', '-A'); git(wt, 'commit', '-q', '-m', 'agent work');
+    const id = manager.list()[0]!.id; await runner.get(id as never)!.stop(); await until(() => notices(ctl).some((n) => /is ready \(1 commit, 1 file\)/.test(n)), 10_000);
+    await ctl.runCommand('/fleet preview 1'); await until(() => notices(ctl).some((n) => /merges cleanly/.test(n))); expect(ctl.state.agents.find((a) => a.id === id)!.note).toBe('branch ready'); ctl.stop();
+  }, 30_000);
+  it('usage errors and the demo are explained', async () => { const { ctl } = await fleetApp(); await ctl.runCommand('/fleet start'); expect(ctl.state.toasts.at(-1)!.text).toMatch(/Usage/); await ctl.runCommand('/fleet stop 7'); expect(ctl.state.toasts.at(-1)!.text).toMatch(/Which agent/); ctl.stop(); const demo = new AppController({ engine: new FakeEngine() as never, demo: true, cwd: '/tmp', version: 't', skills: [] }); await demo.runCommand('/fleet'); expect(demo.state.toasts.at(-1)!.text).toMatch(/real engine/); demo.stop(); }, 30_000);
+});

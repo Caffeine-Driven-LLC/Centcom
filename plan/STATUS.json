@@ -30,16 +30,16 @@
    "note": "state machine (pure reducer, EVENT_STATE_TABLE), emitter (dedupe, 2/s, coalescing, wire-only), attachStateMachine on the bus, timers, golden claude/codex transcripts; contract gap: prompt-received and sleeping are not in the agent-level list so they stay local. Nothing wires it into the TUI mascot yet (C046)"
   },
   "C015": {
-   "pct": 0.95,
-   "note": "permission engine: hard denies (symlink/.. safe, credentials, .git, shell write targets, POSIX and Windows), rule precedence, 5 modes, broker (expiry, remote approvers, duplicates, cancel), always/session rules, persistence with trust gate and fail-closed files, Claude rule syntax and Claude/Codex arg translation, wire shape. Not wired into the TUI prompt (C038) or the engines yet"
+   "pct": 1.0,
+   "note": "permission engine wired into the terminal, print mode and web through buildRuntime: hard denies, saved user/project rules (always), project rules behind /trust, Centcom risk classifier, prompter in the app, /permissions"
   },
   "C016": {
-   "pct": 0.9,
-   "note": "shell reader and command classifier (fail closed, depth 4), tool and path classification, protected paths, engine settings for claude and codex (bypass needs opt-in, capability notes), risk classifier adapter; 640-command corpus. Not wired into the TUI/web yet; flag spellings to re-check against C102/C103 recordings"
+   "pct": 1.0,
+   "note": "risk classifier feeds the permission engine in the app (risk shown in approvals), engineSettings for claude/codex; Codex flag spellings to confirm on a real Codex (docs/codex-verification.md)"
   },
   "C019": {
-   "pct": 0.85,
-   "note": "context view: engine-reported usage only, warn/full thresholds with hysteresis, compaction request through the engine (capability, idle and approval checks, 60 s backoff), optional auto compaction, de-duplicating ledger, 1/s context events. Not yet: centcom context, /compact, meter UI, state machine mapping of context-full"
+   "pct": 0.95,
+   "note": "context view in the app: engine-reported warnings at 75% and when nearly full, /compact through the engine when it has the capability; meter from usage reports"
   },
   "C020": {
    "pct": 0.8,
@@ -110,8 +110,8 @@
    "note": "palette in terminal and web (ctrl+k)"
   },
   "C042": {
-   "pct": 0.8,
-   "note": "fleet panel with mini Cento; fed by demo ghosts only"
+   "pct": 0.9,
+   "note": "fleet panel shows real fleet agents (numbered, branch, state, attention) next to you; ordering puts agents needing you first"
   },
   "C044": {
    "pct": 1,
@@ -198,12 +198,12 @@
    "note": "WorktreeManager: create (collision names, exclude, rollback), status, remove (dirty/unmerged refusal), list/prune reconcile with orphan flagging, detectConflict via merge-tree, hostile paths, timeouts, lock retries, bus events. Not exercised on Windows or with git older than 2.38 beyond fakes"
   },
   "C027": {
-   "pct": 0.8,
-   "note": "checkpoints on shadow refs (temporary index, nothing of the user touched), end markers to tell agent and user edits apart, preview/rewind (files, conversation, both), safety checkpoint and undo ref, cap 100, merge/rebase refusal, non-git handling, event bus wiring, rewind command logic. Not yet: /rewind slash, esc-esc action and picker (TUI lanes), real C026 transcript store adapter"
+   "pct": 0.95,
+   "note": "checkpoints before every prompt in the app, /rewind list and rewind of files, conversation or both with a y confirmation, Esc Esc when idle, --no-checkpoints"
   },
   "C024": {
-   "pct": 0.8,
-   "note": "fleet manager: worktree and branch per agent, plan/config limit with fair FIFO queue (32), per-engine stagger and pause on provider limits, stop/stopAll/wall clock, cleanup (branch ready, needs attention, orphans, merge preview), native subagent nodes, spawn/exit payloads. centcom fleet command logic. Not yet: wiring to the real engine registry in the app, TUI fleet view"
+   "pct": 0.95,
+   "note": "fleet in the app: /fleet start [n] <task>, list, stop, preview, remove, clean; agents in the fleet panel with live states; branch-ready notices; approvals through the same policy, limited to each worktree; stopped on exit"
   },
   "C023": {
    "pct": 0.95,

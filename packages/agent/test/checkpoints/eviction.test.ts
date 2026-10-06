@@ -23,7 +23,8 @@ describe('rewind to n then to the latest is a no-op (property)', () => {
     await fc.assert(fc.asyncProperty(fc.array(fc.record({ file: fc.constantFrom('a.txt', 'src/b.ts', 'c/d/e.txt', 'new.txt'), body: fc.string({ maxLength: 20 }), del: fc.boolean() }), { minLength: 2, maxLength: 6 }), fc.nat(), async (steps, pick) => {
       const r = repo(); const t = rig(r); for (const [i, s] of steps.entries()) await t.turn(`t${i}`, i, () => { if (s.del) { try { execFileSync('rm', ['-f', `${r.dir}/${s.file}`]); } catch { /* absent */ } } else r.put(s.file, `${s.body}\n`); });
       const snap = () => { sh(r.dir, 'add', '-A'); const x = sh(r.dir, 'write-tree').trim(); sh(r.dir, 'reset', '-q'); return x; }; const original = snap(); const k = t.mgr.list()[pick % t.mgr.list().length]!;
-      await t.mgr.rewind(k.id, 'files', { confirmedPaths: [] }); const latest = t.mgr.list().at(-1)!; await t.mgr.rewind(latest.id, 'files'); expect(snap()).toBe(original);
+      const res = await t.mgr.rewind(k.id, 'files', { confirmedPaths: [] }); if (res.undoRef) { const latest = t.mgr.list().at(-1)!; expect(latest.label).toBe('before rewind'); await t.mgr.rewind(latest.id, 'files'); } else expect(res.restored.length + res.deleted.length).toBe(0); // a rewind that changed nothing has nothing to undo
+      expect(snap()).toBe(original);
     }), { numRuns: Number(process.env.CP_RUNS ?? 12) });
   }, 180_000);
 });

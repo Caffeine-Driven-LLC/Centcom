@@ -138,7 +138,7 @@ async function main() {
   if (mode === 'bypassPermissions') ctl.notice('warn', 'Dangerously skip permissions is ON', 'Cento will run commands and edit files without asking. Use /mode default to turn approvals back on.');
   instance = render(<App ctl={ctl} tier={tier} />, { exitOnCtrlC: false, patchConsole: false, maxFps: 30 });
   await instance.waitUntilExit();
-  ctl.stop(); cc.flush();
+  ctl.stop(); await ctl.stopFleet(); cc.flush();
   leave();
   process.exit(0);
 }

@@ -13,7 +13,8 @@
     "@centcom/agent": "workspace:*",
     "@centcom/skills": "workspace:*",
     "@centcom/config": "workspace:*",
-    "@centcom/net": "workspace:*"
+    "@centcom/net": "workspace:*",
+    "@centcom/protocol": "workspace:*"
   },
   "devDependencies": {
     "@centcom/testkit": "workspace:*"

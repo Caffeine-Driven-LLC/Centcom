@@ -355,6 +355,9 @@ importers:
       '@centcom/net':
         specifier: workspace:*
         version: link:../net
+      '@centcom/protocol':
+        specifier: workspace:*
+        version: link:../protocol
       '@centcom/skills':
         specifier: workspace:*
         version: link:../skills
