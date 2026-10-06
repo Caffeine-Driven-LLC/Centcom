@@ -8,9 +8,11 @@
   "dependencies": {
     "@centcom/net": "workspace:*",
     "@centcom/protocol": "workspace:*",
-    "libsodium-wrappers-sumo": "0.8.4"
+    "libsodium-wrappers-sumo": "0.8.4",
+    "ws": "8.22.0"
   },
   "devDependencies": {
-    "@centcom/testkit": "workspace:*"
+    "@centcom/testkit": "workspace:*",
+    "@types/ws": "8.18.2"
   }
 }

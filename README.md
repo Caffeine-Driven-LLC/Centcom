@@ -13,7 +13,7 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 
 ![Progress](docs/progress.svg)
 
-**47% built** (weighted by lane size across 105 lanes). Details and how this is computed: [`tools/plan/progress.py`](tools/plan/progress.py). Update [`plan/STATUS.json`](plan/STATUS.json) when you finish or advance a lane, then run `python3 tools/plan/progress.py`.
+**48% built** (weighted by lane size across 105 lanes). Details and how this is computed: [`tools/plan/progress.py`](tools/plan/progress.py). Update [`plan/STATUS.json`](plan/STATUS.json) when you finish or advance a lane, then run `python3 tools/plan/progress.py`.
 
 ## Next steps
 
@@ -35,7 +35,7 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 | [C030](plan/client/C030.md) | Interrupt and cancel semantics | 85% | interrupt controller, 3 s/8 s signal ladder to whole process groups, registered pids only, Codex protocol-then-ladder with restart on the same thread, approvals denied and late ones refused, partial answer kept, ctrl+c semantics with exit 130 in the app and -p; gaps: turn timeout, interrupt receipt, stale index.lock cleanup |
 | [C104](plan/client/C104.md) | Provider detection and login handoff: provider status, login, logout, doctor checks | 85% | provider detection and commands; gaps: message copy, runtime fs spy, CLI-level hang test, app still uses old detectors |
 
-+35 more in [`plan/STATUS.json`](plan/STATUS.json).
++36 more in [`plan/STATUS.json`](plan/STATUS.json).
 
 ### Ready to pick up (all dependencies done)
 
