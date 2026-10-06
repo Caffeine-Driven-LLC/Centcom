@@ -15,5 +15,5 @@ export interface SnapshotMeta { snp: string; seq: number; size: number; sha256: 
 
 /** Everything the session client throws on purpose. `code` is stable; the message is for people and never holds a key, ticket or URL. */
 export class SessionError extends Error {
-  constructor(readonly code: 'relay_not_included' | 'waiting_for_key' | 'view_only' | 'not_host' | 'no_key' | 'too_large' | 'snapshot_invalid' | 'snapshot_unsupported' | 'ended' | 'bad_link' | 'untrusted_device' | 'timeout', message: string) { super(message); this.name = 'SessionError'; }
+  constructor(readonly code: 'relay_not_included' | 'muted' | 'waiting_for_key' | 'view_only' | 'not_host' | 'no_key' | 'too_large' | 'snapshot_invalid' | 'snapshot_unsupported' | 'ended' | 'bad_link' | 'untrusted_device' | 'timeout', message: string) { super(message); this.name = 'SessionError'; }
 }

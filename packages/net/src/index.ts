@@ -11,3 +11,4 @@ export type { IdGenerator } from './http/index.js';
 export { backoffDelayMs as relayBackoffDelayMs } from './relay/index.js';
 export * from './session/index.js';
 export * from './queue/index.js';
+export { ControlClient, ControlStateModel, ControlError, ForbiddenError, InvalidPolicyError, SelfActionError, NotHostError as ControlNotHostError, readServerFrame, SERVER_KINDS, type KickCode, type EndCode, type ControlEvents, type ControlClock, type ControlState, type ServerEvent } from './control/index.js';
