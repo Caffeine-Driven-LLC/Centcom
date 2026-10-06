@@ -16,25 +16,24 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 ## Next steps
 
 1. **Smoke-test the Codex adapter on a real turn** — it passes its tests against Codex's published protocol schema and the real handshake, but no real model turn has run yet (C103); needs a Codex account
-2. **Confirm the first CI run is green (C002)** — the workflow is written and every step passes locally, but GitHub has not run it yet
-3. **C003 generate protocol types from `contracts/`** — event and message shapes are hand-typed today (C101, C102, C103 depend on this)
-4. **C017 git worktree manager** — lets one session run parallel agents on separate branches; a solo feature that also unlocks the team fleet later
-5. **C004 layered configuration and C005 logging** — settings are flags and in-memory today; there are no config files or logs to debug with
-6. **Package the web launcher as a real desktop app** — "Start as app" opens a chromeless Chromium window today; a signed installable app (Electron or Tauri) is still to do
-7. **Start multiplayer: C074 transport, C007 mock backend, then the M2 LAN lanes** — none of M2 exists yet; this is the product's main bet
+2. **C003 generate protocol types from `contracts/`** — event and message shapes are hand-typed today (C101, C102, C103 depend on this)
+3. **C017 git worktree manager** — lets one session run parallel agents on separate branches; a solo feature that also unlocks the team fleet later
+4. **C004 layered configuration and C005 logging** — settings are flags and in-memory today; there are no config files or logs to debug with
+5. **Package the web launcher as a real desktop app** — "Start as app" opens a chromeless Chromium window today; a signed installable app (Electron or Tauri) is still to do
+6. **Start multiplayer: C074 transport, C007 mock backend, then the M2 LAN lanes** — none of M2 exists yet; this is the product's main bet
 
 ### Started, not finished
 
 | Lane | What | Done | Note |
 |---|---|--:|---|
 | [C102](plan/client/C102.md) | Claude Code engine: drive the user’s own claude binary (stream-json, resume, approvals bridge) | 90% | claude stream-json, approvals bridge, resume token, interrupt; no version-range check |
+| [C002](plan/client/C002.md) | CI pipeline: typecheck, lint, test, build matrix, contract-lock check | 90% | GitHub Actions runs typecheck, tests, web build, plan and contract lock, progress check; first run green; no build matrix or lint yet |
 | [C015](plan/client/C015.md) | Permission policy engine bridging engine approval requests | 85% | modes incl. dangerously-skip-permissions, session rules, real approval bridge; no persisted "always" rules |
 | [C026](plan/client/C026.md) | Local transcript persistence and engine session resume | 85% | conversations saved and resumed (-c, --resume, /resume, /new, web launcher and palette), verified with real Claude; Codex resume untested |
 | [C035](plan/client/C035.md) | Prompt input: multiline, history, paste, slash commands | 85% | multiline, history, paste, slash popup; no external editor |
 | [C081](plan/client/C081.md) | Web app scaffold: Vite, React, router, theme | 85% | Vite + React local web app with launcher, workspace, polished UI; no router |
 | [C101](plan/client/C101.md) | Engine abstraction: AgentEngine interface, capabilities and normalised event stream | 85% | AgentEngine + normalised events; not yet generated from contracts |
 | [C050](plan/client/C050.md) | Non-interactive mode: print, JSON output, pipes | 85% | centcom -p with text/json/stream-json, piped input, exit codes; verified with real Claude |
-| [C016](plan/client/C016.md) | Command risk classification and sandbox settings passed to the engines | 80% | command risk classes; Codex sandbox/approval policy per mode |
 
 +21 more in [`plan/STATUS.json`](plan/STATUS.json).
 

@@ -170,8 +170,8 @@
    "note": "login kind shown; no policy table or gate"
   },
   "C002": {
-   "pct": 0.8,
-   "note": "GitHub Actions workflow (typecheck, tests, web build, plan and contract lock, progress check); first run not yet seen"
+   "pct": 0.9,
+   "note": "GitHub Actions runs typecheck, tests, web build, plan and contract lock, progress check; first run green; no build matrix or lint yet"
   },
   "C050": {
    "pct": 0.85,
@@ -182,10 +182,6 @@
   {
    "title": "Smoke-test the Codex adapter on a real turn",
    "why": "it passes its tests against Codex's published protocol schema and the real handshake, but no real model turn has run yet (C103); needs a Codex account"
-  },
-  {
-   "title": "Confirm the first CI run is green (C002)",
-   "why": "the workflow is written and every step passes locally, but GitHub has not run it yet"
   },
   {
    "title": "C003 generate protocol types from `contracts/`",
