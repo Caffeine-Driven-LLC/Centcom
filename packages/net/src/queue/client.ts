@@ -20,6 +20,7 @@ export const frameIdOf = (item: string): string => `msg_${item.slice(4)}`;
 /** Server refusals mapped to errors people can act on. */
 export function mapError(e: unknown): unknown {
   if (e instanceof SessionError && e.code === 'too_large') return new QueueItemTooLargeError();
+  if (e instanceof SessionError && e.code === 'muted') return new NotAllowedError('muted');
   if (e instanceof CentcomError) {
     if (e.code === 'queue_full') return new QueueFullError(); if (e.code === 'queue_item_gone') return new ItemGoneError();
     if (['forbidden', 'role_insufficient', 'muted', 'session_locked', 'queue_not_allowed', 'host_required'].includes(e.code)) return new NotAllowedError('forbidden');

@@ -256,6 +256,10 @@
   "C058": {
    "pct": 0.8,
    "note": "queue client: submit (hybrid frame, size = ciphertext bytes, idempotent item/frame id), cancel, host controls, deterministic reducer with held items while paused, relay queue.state replacement, ignored forged host frames, local pre-checks and server error mapping; tested between two clients on the mock relay plus property tests; gaps: no TUI wiring, auto-approve policies not exercised, frame id is msg_ (contract says que_)"
+  },
+  "C060": {
+   "pct": 0.8,
+   "note": "control client: host kick/mute/unmute/role/transfer/end/policy/rotation requests with local NotHost, self-action and policy-schema checks, server-only frame authenticity and roster versioning, state model (mute expiry, host change, policy merge, effective-from-seq), removal handling (keys wiped, no reconnect, once), session-side mute and role handling; gaps: failover tested on the state model only (the mock does not emit failover), no UI"
   }
  },
  "next": [
