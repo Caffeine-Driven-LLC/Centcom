@@ -19,7 +19,7 @@ export function Rich({ line }: { line: Line }) {
   return (
     <Text wrap="truncate">
       {line.map((s, i) => (
-        <Text key={i} color={col(s.c)} backgroundColor={col(s.bg)} bold={s.b} dimColor={s.d} italic={s.i} underline={s.u}>{s.t}</Text>
+        <Text key={i} color={col(s.c)} backgroundColor={col(s.bg)} bold={s.b} dimColor={s.d} italic={s.i} underline={s.u} inverse={s.r}>{s.t}</Text>
       ))}
     </Text>
   );

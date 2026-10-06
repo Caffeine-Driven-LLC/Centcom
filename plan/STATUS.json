@@ -114,8 +114,8 @@
    "note": "palette with substring filter; card gaps: fuzzy scoring, providers, groups, recent"
   },
   "C042": {
-   "pct": 0.6,
-   "note": "fleet panel with real agents; card gaps: full state labels and tiers, card rows, elapsed, overlay"
+   "pct": 0.7,
+   "note": "state labels with tier for all 64 states, sort (tier, needs you, age), event reducer, rail/overlay FleetPanel with needs-you/waiting, exit outcomes, reverse-video active row, key handling and per-second elapsed tick; gaps: app still uses components/FleetPanel.tsx, memberColor from theme, rail slot wiring"
   },
   "C044": {
    "pct": 0.4,
