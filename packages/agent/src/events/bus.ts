@@ -2,7 +2,7 @@
 export type Unsubscribe = () => void;
 /** Any return value is allowed and ignored (a Promise is watched for rejection). Wider than the lane card's `void | Promise<void>`, which would make `(p) => list.push(p)` a type error. */
 export type Handler<P> = (p: P) => unknown;
-export interface StreamOptions { buffer?: number; overflow?: 'drop-oldest' | 'drop-newest' }
+export interface StreamOptions { buffer?: number; overflow?: 'drop-oldest' | 'drop-newest'; /** Which queued events a slow reader may lose. Others are kept (up to 10x the buffer, as a memory bound). Defaults to the bus's own rule. */ droppable?: (k: string, p: unknown) => boolean }
 export interface BusStream<K, P> extends AsyncIterableIterator<{ k: K; p: P }> { /** Events thrown away because the consumer was too slow. */ readonly dropped: number }
 
 export interface EventBus<M extends Record<string, unknown>> {
@@ -21,7 +21,7 @@ export class BusError extends Error {
 }
 
 interface Entry { h: Handler<never>; once: boolean; active: boolean }
-export interface BusOptions { onError: (e: unknown, k: string) => void; maxListeners?: number; maxQueue?: number }
+export interface BusOptions { onError: (e: unknown, k: string) => void; maxListeners?: number; maxQueue?: number; /** Default for `stream`: which events a slow reader may lose (everything, unless set). */ droppable?: (k: string, p: unknown) => boolean }
 
 export function createBus<M extends Record<string, unknown>>(o: BusOptions): EventBus<M> {
   const maxListeners = o.maxListeners ?? 100; const maxQueue = o.maxQueue ?? 10_000;
@@ -60,7 +60,7 @@ export function createBus<M extends Record<string, unknown>>(o: BusOptions): Eve
     stream(ks, so = {}) {
       const cap = Math.max(1, so.buffer ?? 1000); const mode = so.overflow ?? 'drop-oldest'; const buf: { k: (typeof ks)[number]; p: unknown }[] = []; const waiting: ((r: IteratorResult<never>) => void)[] = []; let done = false; let lost = 0;
       const unsubs = [...new Set(ks)].map((k) => bus.on(k, (p) => { if (done) return; const w = waiting.shift(); if (w) { (w as (r: IteratorResult<{ k: typeof k; p: unknown }>) => void)({ value: { k, p }, done: false }); return; }
-        if (buf.length >= cap) { lost++; if (mode === 'drop-newest') return; buf.shift(); } buf.push({ k, p }); }));
+        if (buf.length >= cap) { const may = so.droppable ?? o.droppable ?? (() => true); if (mode === 'drop-newest' && may(k as string, p)) { lost++; return; } const i = buf.findIndex((x) => may(x.k as string, x.p)); if (i >= 0) { buf.splice(i, 1); lost++; } else if (buf.length >= cap * 10) { buf.shift(); lost++; } } buf.push({ k, p }); }));
       const finish = () => { if (done) return; done = true; unsubs.forEach((u) => u()); buf.length = 0; for (const w of waiting.splice(0)) w({ value: undefined as never, done: true }); };
       const it = {
         next: () => (buf.length ? Promise.resolve({ value: buf.shift()!, done: false as const }) : done ? Promise.resolve({ value: undefined, done: true as const }) : new Promise<IteratorResult<never>>((res) => { waiting.push(res); })),

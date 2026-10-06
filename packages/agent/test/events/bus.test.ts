@@ -92,3 +92,13 @@ describe('speed', () => {
     expect(n).toBe(3_000_000); expect(ms).toBeLessThan(1000);
   });
 });
+
+describe('slow readers never lose approvals', () => {
+  it('a full stream drops text deltas first and keeps approvals, results and lifecycle events', async () => {
+    const { createAgentBus } = await import('../../src/index.js'); const bus = createAgentBus({ onError: (e) => { throw e; } }); const s = bus.stream(['agent:event', 'agent:exited'], { buffer: 3 });
+    const ev = (type: string, seq: number) => bus.emit('agent:event', { agent_id: 'agt_x' as never, seq, event: { type, seq } as never });
+    ev('text.delta', 1); ev('approval.requested', 2); ev('text.delta', 3); ev('tool.result', 4); ev('text.delta', 5); bus.emit('agent:exited', { agent_id: 'agt_x' as never, outcome: 'ok' });
+    const got: string[] = []; for (let i = 0; i < 3; i++) { const r = await s.next(); got.push(r.value.k === 'agent:exited' ? 'exited' : (r.value.p as { event: { type: string } }).event.type); }
+    expect(got).toEqual(['approval.requested', 'tool.result', 'exited']); expect(s.dropped).toBe(3); // all three text deltas went, nothing else await s.return!();
+  });
+});

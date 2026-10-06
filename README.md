@@ -13,7 +13,7 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 
 ![Progress](docs/progress.svg)
 
-**48% built** (weighted by lane size across 105 lanes). Details and how this is computed: [`tools/plan/progress.py`](tools/plan/progress.py). Update [`plan/STATUS.json`](plan/STATUS.json) when you finish or advance a lane, then run `python3 tools/plan/progress.py`.
+**39% built** (weighted by lane size across 105 lanes). Details and how this is computed: [`tools/plan/progress.py`](tools/plan/progress.py). Update [`plan/STATUS.json`](plan/STATUS.json) when you finish or advance a lane, then run `python3 tools/plan/progress.py`.
 
 ## Next steps
 
@@ -26,16 +26,16 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 
 | Lane | What | Done | Note |
 |---|---|--:|---|
-| [C013](plan/client/C013.md) | Agent runner daemon hosting AgentEngine processes (claude, codex) | 90% | runner, supervision, limits, restart, escalation, env allow-list, TrustStore, runnerd daemon over unix socket (auth, frame cap, lock, idle exit), FakeEngine, 1 MiB line cap in both engines. Not done: Windows named pipe; real Claude per-turn kill is a failed turn, not an agent crash |
-| [C042](plan/client/C042.md) | Fleet panel: agent list, states, needs-you ordering | 90% | fleet panel shows real fleet agents (numbered, branch, state, attention) next to you; ordering puts agents needing you first |
-| [C102](plan/client/C102.md) | Claude Code engine: drive the user’s own claude binary (stream-json, resume, approvals bridge) | 90% | claude stream-json, approvals bridge, resume token, interrupt; no version-range check |
-| [C104](plan/client/C104.md) | Provider detection and login handoff: provider status, login, logout, doctor checks | 90% | provider detect (5 s probes, 15 s overall, 30 s cache), classify, redact, semver, login/logout handoff (inherit stdio, no shell, no TTY refusal), message table for all 9 codes, doctor checks, centcom provider status|login|logout|doctor. Not done: real login/logout tried against live vendor tools; supported ranges are placeholders; main help text |
-| [C002](plan/client/C002.md) | CI pipeline: typecheck, lint, test, build matrix, contract-lock check | 90% | GitHub Actions runs typecheck, tests, web build, plan and contract lock, progress check; first run green; no build matrix or lint yet |
-| [C007](plan/client/C007.md) | Mock backend: REST from OpenAPI plus WebSocket relay simulator | 90% | @centcom/testkit mock backend: all 93 REST operations (validated, schema-generated), device login/refresh rotation, pagination, idempotency, error injection, ws relay simulator, virtual clock, control plane, scenarios, CLI. Not covered: signature/encryption checks, stateful non-session resources |
-| [C026](plan/client/C026.md) | Local transcript persistence and engine session resume | 85% | conversations saved and resumed (-c, --resume, /resume, /new, web launcher and palette), verified with real Claude; Codex resume untested |
-| [C035](plan/client/C035.md) | Prompt input: multiline, history, paste, slash commands | 85% | multiline, history, paste, slash popup; no external editor |
+| [C013](plan/client/C013.md) | Agent runner daemon hosting AgentEngine processes (claude, codex) | 85% | runner and runnerd; gaps: windows pipe, preflight wiring, runnerd logs, daemon-level tests |
+| [C014](plan/client/C014.md) | Agent session state machine emitting contract state names | 85% | state machine and emitter; gaps: not wired into the app, golden transcripts from real parsers, combined property test |
+| [C104](plan/client/C104.md) | Provider detection and login handoff: provider status, login, logout, doctor checks | 85% | provider detection and commands; gaps: message copy, runtime fs spy, CLI-level hang test, app still uses old detectors |
+| [C004](plan/client/C004.md) | Layered configuration system (defaults, user, project, env, flags) | 85% | layered config used everywhere; gaps vs card: warns instead of throwing on bad files and secrets, sync writer, fewer precedence tests |
+| [C005](plan/client/C005.md) | Logging and diagnostics with redaction | 85% | redacting logger and file sink; gaps: redaction table size, real-fs sink test, injected clock in sink |
+| [C101](plan/client/C101.md) | Engine abstraction: AgentEngine interface, capabilities and normalised event stream | 80% | engine layer; gaps: bounded event buffer with backpressure, validator run on both adapters, denial and rate-limit transcripts |
+| [C102](plan/client/C102.md) | Claude Code engine: drive the user’s own claude binary (stream-json, resume, approvals bridge) | 80% | claude engine with a secured approval bridge (per-run token, private socket, timeout, fail closed); gaps: prompt over stdin, bypass gate, spawn/first-event timeouts, version check, subagent.done, fake CLI and goldens |
+| [C103](plan/client/C103.md) | Codex engine: drive the user’s own codex binary (app-server JSON-RPC, exec fallback) | 75% | codex app-server engine tested against a protocol-faithful fake; no real turn yet. Real-Codex checklist: docs/codex-verification.md, recorder: tools/codex/record.ts |
 
-+13 more in [`plan/STATUS.json`](plan/STATUS.json).
++30 more in [`plan/STATUS.json`](plan/STATUS.json).
 
 ### Ready to pick up (all dependencies done)
 
@@ -43,8 +43,6 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 |---|---|---|---|
 | [C071](plan/client/C071.md) | LAN discovery over mDNS | M | M2 |
 | [C096](plan/client/C096.md) | Documentation site, README, man pages, built-in help | M | M6 |
-| [C097](plan/client/C097.md) | Opt-in crash reporting and the doctor command | S | M6 |
-| [C098](plan/client/C098.md) | Performance budgets and benchmarks | M | M6 |
 
 Each lane card lists its goal, contracts, acceptance criteria and tests. Read [`plan/START_HERE.md`](plan/START_HERE.md) first.
 

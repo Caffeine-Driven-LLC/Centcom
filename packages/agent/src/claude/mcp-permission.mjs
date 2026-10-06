@@ -6,6 +6,7 @@ import { createConnection } from 'node:net';
 import { createInterface } from 'node:readline';
 
 const SOCK = process.env.CENTCOM_APPROVAL_SOCK;
+const TOKEN = process.env.CENTCOM_APPROVAL_TOKEN ?? '';
 const TOOL = {
   name: 'approve',
   description: 'Ask the Centcom user whether Claude may use a tool. Returns the permission decision.',
@@ -25,7 +26,7 @@ function ask(payload) {
     const finish = (v) => { if (!done) { done = true; try { s.destroy(); } catch { /* already closed */ } resolve(v); } };
     const s = createConnection(SOCK);
     s.setEncoding('utf8');
-    s.on('connect', () => s.write(JSON.stringify(payload) + '\n'));
+    s.on('connect', () => s.write(JSON.stringify({ ...payload, token: TOKEN }) + '\n'));
     s.on('data', (c) => { buf += c; const i = buf.indexOf('\n'); if (i >= 0) { try { finish(JSON.parse(buf.slice(0, i))); } catch { finish({ behavior: 'deny', message: 'Bad answer from Centcom.' }); } } });
     s.on('error', () => finish({ behavior: 'deny', message: 'Could not reach Centcom to ask for permission.' }));
     s.on('close', () => finish({ behavior: 'deny', message: 'Centcom closed before answering.' }));

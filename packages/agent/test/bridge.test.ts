@@ -65,4 +65,19 @@ describe('approval bridge', () => {
     writeFileSync(tmp, JSON.stringify(cfg));
     expect(JSON.parse((await callApprove(tmp, { tool_name: 'Bash', input: { command: 'x' }, tool_use_id: 't' })).text).behavior).toBe('deny');
   });
+
+  it('refuses a request without this run\'s token, before anything reaches the gate; the socket is private', async () => {
+    const seen: ApprovalRequest[] = []; const { bridge } = make(async (r) => { seen.push(r); return { decision: 'approve', scope: 'once' }; }); await bridge.start();
+    const cfg = JSON.parse(readFileSync(bridge.mcpConfigPath!, 'utf8')).mcpServers.centcom; expect(cfg.env.CENTCOM_APPROVAL_TOKEN).toMatch(/^[0-9a-f]{64}$/);
+    const { statSync } = await import('node:fs'); if (process.platform !== 'win32') { expect(statSync(cfg.env.CENTCOM_APPROVAL_SOCK).mode & 0o077).toBe(0); expect(statSync(bridge.mcpConfigPath!).mode & 0o777).toBe(0o600); }
+    const forged = join(tmpdir(), `centcom-forged-${Date.now()}.json`); writeFileSync(forged, JSON.stringify({ mcpServers: { centcom: { ...cfg, env: { ...cfg.env, CENTCOM_APPROVAL_TOKEN: 'f'.repeat(64) } } } }));
+    expect(JSON.parse((await callApprove(forged, { tool_name: 'Bash', input: { command: 'rm -rf /' }, tool_use_id: 't' })).text).behavior).toBe('deny'); expect(seen).toEqual([]);
+    const noToken = join(tmpdir(), `centcom-notoken-${Date.now()}.json`); const { CENTCOM_APPROVAL_TOKEN: _t, ...env } = cfg.env; void _t; writeFileSync(noToken, JSON.stringify({ mcpServers: { centcom: { ...cfg, env } } }));
+    expect(JSON.parse((await callApprove(noToken, { tool_name: 'Bash', input: { command: 'ls' }, tool_use_id: 't' })).text).behavior).toBe('deny'); expect(seen).toEqual([]);
+    expect(JSON.parse((await callApprove(bridge.mcpConfigPath!, { tool_name: 'Bash', input: { command: 'ls' }, tool_use_id: 't' })).text).behavior).toBe('allow'); expect(seen).toHaveLength(1); bridge.close();
+  });
+  it('nobody answering is a deny by timeout', async () => {
+    const events: EventBody[] = []; const bridge = new ApprovalBridge({ agentId: 'a1', cwd: '/w', gate: { decide: () => new Promise(() => undefined) }, emit: (b) => events.push(b), timeoutMs: 200 }); await bridge.start();
+    const v = JSON.parse((await callApprove(bridge.mcpConfigPath!, { tool_name: 'Bash', input: { command: 'ls' }, tool_use_id: 't' })).text); bridge.close(); expect(v).toEqual({ behavior: 'deny', message: 'Nobody answered in time, so it was declined.' }); expect(events.at(-1)).toMatchObject({ type: 'approval.resolved', decision: 'deny', by: 'timeout' });
+  });
 });

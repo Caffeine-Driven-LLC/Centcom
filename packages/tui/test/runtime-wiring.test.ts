@@ -105,3 +105,13 @@ describe('file locks between agents', () => {
     ctl.stop();
   });
 });
+
+describe('resuming across engines', () => {
+  it('a conversation saved with Codex is not handed to Claude as a session id; it continues from a summary', async () => {
+    const { SessionStore } = await import('../src/sessions.js'); const dir = tmp('centcom-sess-'); const store = new SessionStore(dir); const cwd = repo();
+    store.save({ id: 'ses_01JTEST0000000000000000001', cwd, engine: 'codex', title: 'old', resumeToken: 'thread_codex_123', createdAt: 1, updatedAt: 2, messages: 1 }, [{ kind: 'user', id: 'u1', text: 'make the tests pass', ts: 1 }, { kind: 'assistant', id: 'a1', messageId: 'm', agentId: 'x', text: 'I fixed two tests.', done: true }]);
+    const engine = new FakeEngine({ id: 'claude-code' }); const ctl = new AppController({ engine: engine as never, demo: false, cwd, version: 't', skills: [], sessions: store, resume: 'last' }); await ctl.start();
+    expect(engine.starts[0]!.resume).toBeUndefined(); expect(engine.sessions[0]!.o.systemPromptAppend).toMatch(/make the tests pass[\s\S]*I fixed two tests/); expect(notices(ctl).some((n) => /was with Codex/.test(n))).toBe(true); ctl.stop();
+    const store2 = new SessionStore(tmp('centcom-sess-')); store2.save({ id: 'ses_01JTEST0000000000000000002', cwd, engine: 'codex', title: 'old', resumeToken: 'thread_codex_123', createdAt: 1, updatedAt: 2, messages: 1 }, [{ kind: 'user', id: 'u1', text: 'hi', ts: 1 }]); const same = new FakeEngine({ id: 'codex' }); const c2 = new AppController({ engine: same as never, demo: false, cwd, version: 't', skills: [], sessions: store2, resume: 'last' }); await c2.start(); expect(same.starts[0]!.resume).toBe('thread_codex_123'); c2.stop(); // the same engine resumes its own session
+  });
+});

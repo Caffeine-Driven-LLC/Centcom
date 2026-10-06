@@ -114,14 +114,14 @@ export class AppController {
   async start() {
     this.driver.start();
     this.driver.setState('ready');
-    let resumeToken: string | undefined;
+    let resumeToken: string | undefined; let carry: string | undefined;
     if (this.o.resume && this.o.sessions) {
       const id = this.o.resume === 'last' ? this.o.sessions.list(this.o.cwd, 1)[0]?.id : this.o.resume;
       const saved = id ? this.o.sessions.load(id) : undefined;
-      if (saved) { resumeToken = saved.meta.resumeToken; this.loadSaved(saved.meta, saved.items); }
+      if (saved) { this.loadSaved(saved.meta, saved.items); if (saved.meta.engine === this.o.engine.id) resumeToken = saved.meta.resumeToken; else carry = this.carryOver(saved.meta); }
       else this.notice('warn', this.o.resume === 'last' ? 'No saved conversation in this folder yet, so this is a new one.' : 'Could not find that saved conversation, so this is a new one.');
     }
-    await this.startEngine(resumeToken);
+    await this.startEngine(resumeToken, carry);
     if (this.o.ghosts) this.startGhosts();
     this.verbTimer = setInterval(() => { if (this.state.busy) this.set({ verb: this.verbs.next() }); }, 4200);
     this.verbTimer.unref?.();
@@ -132,11 +132,13 @@ export class AppController {
     this.store.subscribe(() => { const s = this.state; if (s.settings !== lastSettings || s.fleet !== lastFleet) { lastSettings = s.settings; lastFleet = s.fleet; this.o.onPrefs?.({ settings: s.settings, fleet: s.fleet }); } });
   }
 
-  private startOptions(resumeToken?: string): EngineStartOptions {
+  private startOptions(resumeToken?: string, carry?: string): EngineStartOptions {
     const gate: PermissionGate = { decide: (r) => this.decide(r) };
-    return { agentId: this.me, cwd: this.o.cwd, permissionMode: this.state.settings.permissionMode, model: this.state.settings.model || undefined, addDirs: this.o.demo ? undefined : [MASTER_DIR], approvalGate: gate, ...(resumeToken ? { resume: { engine_session_id: resumeToken } } : {}) };
+    return { agentId: this.me, cwd: this.o.cwd, permissionMode: this.state.settings.permissionMode, model: this.state.settings.model || undefined, addDirs: this.o.demo ? undefined : [MASTER_DIR], approvalGate: gate, ...(resumeToken ? { resume: { engine_session_id: resumeToken } } : {}), ...(carry ? { systemPromptAppend: carry } : {}) };
   }
-  private async startEngine(resumeToken?: string) { this.adopt(await this.o.engine.start(this.startOptions(resumeToken))); }
+  private async startEngine(resumeToken?: string, carry?: string) { this.adopt(await this.o.engine.start(this.startOptions(resumeToken, carry))); }
+  /** A conversation saved with the other engine cannot be resumed by this one (its session id means nothing here): this one starts fresh with a summary of what was said. */
+  private carryOver(meta: SessionMeta): string { const other = meta.engine === 'codex' ? 'Codex' : meta.engine === 'claude-code' ? 'Claude Code' : meta.engine; this.notice('info', `This conversation was with ${other}. ${this.o.engine.label} continues it from a summary of what was said.`); const n = this.state.items.filter((i) => i.kind === 'user').length; return `This conversation started with another coding agent. Summary of it so far:\n\n${this.summaryUpTo(n + 1, 8 * 1024)}`; }
   /** Make `s` the running engine session (after a start, or a conversation rewind). */
   private adopt(s: EngineSession) { this.session = s; void this.consume(s); }
 
@@ -181,7 +183,7 @@ export class AppController {
     if (!saved) { this.toast('warn', `No saved conversation "${which}". Type /resume to see the list.`); return; }
     this.persist(); await this.session?.stop();
     this.lastItems = undefined; this.set({ items: [], approvals: [] }); this.loadSaved(saved.meta, saved.items);
-    await this.startEngine(saved.meta.resumeToken);
+    if (saved.meta.engine === this.o.engine.id) await this.startEngine(saved.meta.resumeToken); else await this.startEngine(undefined, this.carryOver(saved.meta));
   }
   private listSessions() {
     const list = this.o.sessions?.list(this.o.cwd, 10) ?? [];

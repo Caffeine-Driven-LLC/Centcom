@@ -71,7 +71,7 @@ class ClaudeSession implements EngineSession {
     if (this.closed) throw new Error('session closed');
     if (this.child && !this.sawResult) throw new Error('a turn is already running');
     if (this.child) await this.exitWait; // the previous turn already reported its result; let the process finish exiting
-    if (this.o.approvalGate && !this.bridge) { this.bridge = new ApprovalBridge({ agentId: this.agentId, cwd: this.o.cwd, gate: this.o.approvalGate, emit: (b) => this.emit(b) }); try { await this.bridge.start(); } catch (e) { this.bridge = undefined; this.emit({ type: 'engine.warning', code: 'approval_bridge_failed', text: `Approvals could not be bridged (${String(e)}). Claude will use its own permission mode.` }); } }
+    if (this.o.approvalGate && !this.bridge) { this.bridge = new ApprovalBridge({ agentId: this.agentId, cwd: this.o.cwd, gate: this.o.approvalGate, emit: (b) => this.emit(b) }); try { await this.bridge.start(); } catch (e) { this.bridge = undefined; /* fail closed: never run Claude without Centcom's approvals */ const turn = newId('trn'); this.turn = turn; this.emit({ type: 'turn.started', turn_id: turn }); this.emit({ type: 'error', code: 'provider_protocol_error', tool_message: `Approvals could not be set up (${redact(String((e as Error)?.message ?? e))}), so nothing was run.`, fatal: false }); this.emit({ type: 'turn.done', outcome: 'error', stop_reason: 'approval_bridge_failed' }); return { turn_id: turn }; } }
     const turn = newId('trn'); this.turn = turn; this.sawResult = false;
     this.emit({ type: 'turn.started', turn_id: turn });
     this.emit({ type: 'status', state: 'prompt-received' });

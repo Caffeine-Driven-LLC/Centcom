@@ -1,6 +1,7 @@
 /** Approval bridge: lets the claude CLI ask Centcom for permission through --permission-prompt-tool.
  *  claude spawns mcp-permission.mjs; that script talks to this server over a private socket; we ask the gate. */
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type Server, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -35,7 +36,9 @@ export class ApprovalBridge {
   private sockets = new Set<Socket>();
   mcpConfigPath?: string;
 
-  constructor(private deps: { agentId: string; cwd: string; gate: PermissionGate; emit: (b: EventBody) => void; node?: string }) {}
+  /** A secret for this run only: the permission script must send it with every request, so no other local process can ask in its name. */
+  private token = randomBytes(32).toString('hex');
+  constructor(private deps: { agentId: string; cwd: string; gate: PermissionGate; emit: (b: EventBody) => void; node?: string; /** No answer by then: denied (default 10 min). */ timeoutMs?: number; setTimeout?: (f: () => void, ms: number) => unknown; clearTimeout?: (h: unknown) => void }) {}
 
   /** Start listening and write the MCP config that points claude at our script. Idempotent. */
   async start(): Promise<void> {
@@ -44,8 +47,9 @@ export class ApprovalBridge {
     const sock = process.platform === 'win32' ? `\\\\.\\pipe\\centcom-${newId('p')}` : join(this.dir, 's');
     this.server = createServer((s) => this.onConnection(s));
     await new Promise<void>((res, rej) => { this.server!.once('error', rej); this.server!.listen(sock, res); });
+    if (process.platform !== 'win32') chmodSync(sock, 0o600); /* the socket is only for this user (its folder is 0700 too) */
     this.mcpConfigPath = join(this.dir, 'mcp.json');
-    writeFileSync(this.mcpConfigPath, JSON.stringify({ mcpServers: { centcom: { command: this.deps.node ?? process.execPath, args: [SCRIPT], env: { CENTCOM_APPROVAL_SOCK: sock } } } }), { mode: 0o600 });
+    writeFileSync(this.mcpConfigPath, JSON.stringify({ mcpServers: { centcom: { command: this.deps.node ?? process.execPath, args: [SCRIPT], env: { CENTCOM_APPROVAL_SOCK: sock, CENTCOM_APPROVAL_TOKEN: this.token } } } }), { mode: 0o600 });
   }
 
   argv(): string[] { return this.mcpConfigPath ? ['--mcp-config', this.mcpConfigPath, '--permission-prompt-tool', PERMISSION_TOOL] : []; }
@@ -56,22 +60,25 @@ export class ApprovalBridge {
     s.on('error', () => undefined);
     s.on('data', (c: string) => {
       buf += c; const i = buf.indexOf('\n'); if (i < 0) return;
-      let req: { tool_name: string; input: J; tool_use_id: string };
+      let req: { tool_name: string; input: J; tool_use_id: string; token?: string };
       try { req = JSON.parse(buf.slice(0, i)); } catch { s.end(JSON.stringify({ behavior: 'deny', message: 'Bad request' }) + '\n'); return; }
+      if (!this.tokenOk(req.token)) { s.end(JSON.stringify({ behavior: 'deny', message: 'Not allowed.' }) + '\n'); return; } // a request without this run's token is refused before anything is shown
       void this.ask(req).then((v) => { if (open) s.end(JSON.stringify(v) + '\n'); });
     });
   }
 
+  private tokenOk(t: unknown): boolean { if (typeof t !== 'string') return false; const a = Buffer.from(t); const b = Buffer.from(this.token); return a.length === b.length && timingSafeEqual(a, b); }
   private async ask(req: { tool_name: string; input: J; tool_use_id: string }): Promise<{ behavior: 'allow' | 'deny'; updatedInput?: J; message?: string }> {
     const d = describeTool(req.tool_name, req.input ?? {});
     const approval: ApprovalRequest = { approval_id: newId('apr'), agent_id: this.deps.agentId, tool_id: req.tool_use_id, tool: req.tool_name, summary: d.summary, risk: classifyTool(req.tool_name, req.input), cwd: this.deps.cwd, ...(d.command ? { command: d.command } : {}), ...(d.path ? { path: d.path } : {}), ...(d.diff ? { diff: d.diff } : {}) };
     this.deps.emit({ type: 'approval.requested', approval_id: approval.approval_id, tool_id: approval.tool_id, summary: `${approval.tool}: ${d.summary}`, risk: approval.risk, ...(d.command ? { command: d.command } : {}), ...(d.diff ? { diff: d.diff } : {}), ...(d.path ? { path: d.path } : {}) });
     this.deps.emit({ type: 'status', state: 'awaiting-approval' });
-    let dec: ApprovalDecision;
-    try { dec = await this.deps.gate.decide(approval); } catch { dec = { decision: 'deny', scope: 'once', reason: 'error' }; }
-    this.deps.emit({ type: 'approval.resolved', approval_id: approval.approval_id, decision: dec.decision, scope: dec.scope, by: dec.reason === 'interrupt' ? 'interrupt' : dec.reason?.includes('plan') ? 'policy' : 'user' });
+    let dec: ApprovalDecision; const st = this.deps.setTimeout ?? ((f, ms) => setTimeout(f, ms)); const ct = this.deps.clearTimeout ?? ((h) => clearTimeout(h as NodeJS.Timeout)); let timer: unknown;
+    const late = new Promise<ApprovalDecision>((res) => { timer = st(() => res({ decision: 'deny', scope: 'once', reason: 'timeout' }), this.deps.timeoutMs ?? 600_000); });
+    try { dec = await Promise.race([this.deps.gate.decide(approval), late]); } catch { dec = { decision: 'deny', scope: 'once', reason: 'error' }; } finally { ct(timer); }
+    this.deps.emit({ type: 'approval.resolved', approval_id: approval.approval_id, decision: dec.decision, scope: dec.scope, by: dec.reason === 'interrupt' ? 'interrupt' : dec.reason === 'timeout' ? 'timeout' : dec.reason?.includes('plan') ? 'policy' : 'user' });
     if (dec.decision === 'approve') return { behavior: 'allow', updatedInput: req.input };
-    return { behavior: 'deny', message: dec.reason === 'plan mode is read-only' ? 'Plan mode is read-only; nothing was changed.' : dec.reason === 'interrupt' ? 'The user interrupted.' : 'The user declined this action.' };
+    return { behavior: 'deny', message: dec.reason === 'plan mode is read-only' ? 'Plan mode is read-only; nothing was changed.' : dec.reason === 'interrupt' ? 'The user interrupted.' : dec.reason === 'timeout' ? 'Nobody answered in time, so it was declined.' : 'The user declined this action.' };
   }
 
   close() {

@@ -2,32 +2,32 @@
  "updated": "2026-10-06",
  "lanes": {
   "C001": {
-   "pct": 0.6,
-   "note": "pnpm workspaces, strict TS, vitest; no lint/dependency-direction rules yet"
+   "pct": 0.5,
+   "note": "pnpm workspaces, strict TS, vitest; card gaps: eslint and dependency-direction rules, .npmrc, exact pins, licenses, per-package tsconfigs, workspace test"
   },
   "C006": {
    "pct": 0.95,
-   "note": "@centcom/net errors: parser, retry table, backoff, WS close codes, message table for all 79 codes (compile-time exhaustive), nextAction; shared contract redactor; not yet used by an HTTP client (none exists yet)"
+   "note": "error model complete; gap: end-to-end run against a mock errors scenario"
   },
   "C008": {
-   "pct": 0.6,
-   "note": "vitest plus tools/dev/shot.py pty screenshots; no snapshot assertions yet"
+   "pct": 0.3,
+   "note": "VirtualClock and FakeEngine exist; gaps: harness, renderInk, pty harness, network guard, coverage preset"
   },
   "C009": {
    "pct": 1,
    "note": "theme + mascot packages (319 baked animations, runtime sprite engine)"
   },
   "C011": {
-   "pct": 0.3,
-   "note": "demo engine and fixtures; no one-command dev env"
+   "pct": 0.1,
+   "note": "demo engine only; dev seed, mock launcher and fixture repo missing"
   },
   "C013": {
-   "pct": 0.9,
-   "note": "runner, supervision, limits, restart, escalation, env allow-list, TrustStore, runnerd daemon over unix socket (auth, frame cap, lock, idle exit), FakeEngine, 1 MiB line cap in both engines. Not done: Windows named pipe; real Claude per-turn kill is a failed turn, not an agent crash"
+   "pct": 0.85,
+   "note": "runner and runnerd; gaps: windows pipe, preflight wiring, runnerd logs, daemon-level tests"
   },
   "C014": {
-   "pct": 0.95,
-   "note": "state machine (pure reducer, EVENT_STATE_TABLE), emitter (dedupe, 2/s, coalescing, wire-only), attachStateMachine on the bus, timers, golden claude/codex transcripts; contract gap: prompt-received and sleeping are not in the agent-level list so they stay local. Nothing wires it into the TUI mascot yet (C046)"
+   "pct": 0.85,
+   "note": "state machine and emitter; gaps: not wired into the app, golden transcripts from real parsers, combined property test"
   },
   "C015": {
    "pct": 1.0,
@@ -42,92 +42,92 @@
    "note": "context view in the app: engine-reported warnings at 75% and when nearly full, /compact through the engine when it has the capability; meter from usage reports"
   },
   "C020": {
-   "pct": 0.8,
-   "note": "auto skills + centcom-master (208 skills); no Codex AGENTS.md install"
+   "pct": 0.5,
+   "note": "auto skills and the bundled master pack; card gaps: installer with plan/apply, AGENTS.md block, centcom skills command, no-exec"
   },
   "C025": {
    "pct": 1,
    "note": "@centcom/agent/events: createBus (ordered, re-entrancy queue, error isolation, bounded streams, MaxListeners), AgentEventMap catalogue of 18 events with wire-safe marking; nothing emits to it yet (runner C013 will)"
   },
   "C026": {
-   "pct": 0.85,
-   "note": "conversations saved and resumed (-c, --resume, /resume, /new, web launcher and palette), verified with real Claude; Codex resume untested"
+   "pct": 0.45,
+   "note": "saved conversations as snapshots, resume across engines safe; card gaps: append-only log, lock, redaction, index and prune, toSnapshotEvents"
   },
   "C028": {
-   "pct": 1,
-   "note": "ctrl+o and /model, web menu"
+   "pct": 0.4,
+   "note": "model picker with a fixed Claude list; card gaps: model registry from the engines, precedence, rollback, cache"
   },
   "C029": {
-   "pct": 0.8,
-   "note": "tokens, estimated cost, 5h/7d limits"
+   "pct": 0.4,
+   "note": "usage shown from engine reports; card gaps: ledger, /usage, budget alert, outbox"
   },
   "C030": {
-   "pct": 1,
-   "note": "Esc / ctrl+c / Stop, both engines"
+   "pct": 0.5,
+   "note": "interrupt works; card gaps: one interrupt controller, process groups, exit 130, agent.interrupted"
   },
   "C031": {
-   "pct": 1,
-   "note": "truecolor/256/16/none, NO_COLOR"
+   "pct": 0.3,
+   "note": "colour tier detection only; card gaps: capabilities, background query, layout class, CENTO_* env"
   },
   "C032": {
-   "pct": 1,
-   "note": "Abyss and Shallows themes"
+   "pct": 0.5,
+   "note": "theme tokens and tiers; card gaps: pinned 256 table, hc mode, member colours, provider API"
   },
   "C033": {
-   "pct": 1,
-   "note": "half-block renderer, Cento component"
+   "pct": 0.5,
+   "note": "half-block renderer; card gaps: golden output, Cento component with frame durations, cache, budget"
   },
   "C034": {
-   "pct": 1,
-   "note": "Ink shell, responsive layouts"
+   "pct": 0.5,
+   "note": "TUI shell works; card gaps: renderApp/useLayout, safe alt-screen on signals, focus stack, grapheme text module"
   },
   "C035": {
-   "pct": 0.85,
-   "note": "multiline, history, paste, slash popup; no external editor"
+   "pct": 0.6,
+   "note": "prompt with history and slash popup; card gaps: graphemes, bracketed paste chip, length cap, jsonl history, ctrl+r"
   },
   "C036": {
    "pct": 0.95,
    "note": "virtualised layout with per-block cache (10k blocks), follow tail with \"N new\" indicator, ctrl+home/end, resize anchor, 5,000-block cap, terminal sanitising of every string, session-event reducer (seq order, delta reorder/dedupe/gap) and member identity rendering; loadRange for older blocks waits for remote history"
   },
   "C037": {
-   "pct": 1,
-   "note": "unified diff view in transcript and approvals"
+   "pct": 0.5,
+   "note": "diff rendering; card gaps: unified diff parser with files and hunks, word highlight, gap collapse, sanitising"
   },
   "C038": {
-   "pct": 1,
-   "note": "approval dialog with diff, risk and high-risk confirm"
+   "pct": 0.6,
+   "note": "approval prompt with y/n/a and high-risk confirm; card gaps: layout details, session scope, edit, type-ahead guard, expiry"
   },
   "C039": {
-   "pct": 1,
-   "note": "status line / bar with context, session and weekly limits and reset times, tokens, cost"
+   "pct": 0.4,
+   "note": "header and status line; card gaps: status fields/layout API, quota chip, banner, cost format"
   },
   "C040": {
-   "pct": 1,
-   "note": "spinner and verb rotation"
+   "pct": 0.5,
+   "note": "live strip with verbs; card gaps: spinner component, verb pools by state, timings"
   },
   "C041": {
-   "pct": 1,
-   "note": "palette in terminal and web (ctrl+k)"
+   "pct": 0.4,
+   "note": "palette with substring filter; card gaps: fuzzy scoring, providers, groups, recent"
   },
   "C042": {
-   "pct": 0.9,
-   "note": "fleet panel shows real fleet agents (numbered, branch, state, attention) next to you; ordering puts agents needing you first"
+   "pct": 0.6,
+   "note": "fleet panel with real agents; card gaps: full state labels and tiers, card rows, elapsed, overlay"
   },
   "C044": {
-   "pct": 1,
-   "note": "toasts"
+   "pct": 0.4,
+   "note": "toasts; card gaps: controller, dedupe, actions, placement above the prompt"
   },
   "C045": {
    "pct": 1.0,
    "note": "keymap of named actions with contexts and chords, keybindings.json overrides (validated, unbind, conflicts, protected quit/help, ctrl+c reserved), raw and Ink key decoding, dispatcher wired into the app, live help screen with filter, centcom keys [--json]"
   },
   "C046": {
-   "pct": 1,
-   "note": "mascot driver with dwell, one-shot and reduced-motion rules"
+   "pct": 0.5,
+   "note": "mascot driver; card gaps: full state map, priorities and chips, bursts, idle/night, visibility"
   },
   "C047": {
-   "pct": 0.8,
-   "note": "/theme /mascot /color /motion /mode"
+   "pct": 0.5,
+   "note": "settings slash commands; card gaps: settings store with sources, /spinner, /density, env overrides"
   },
   "C048": {
    "pct": 1.0,
@@ -138,60 +138,60 @@
    "note": "reduced motion and NO_COLOR; no screen-reader mode"
   },
   "C081": {
-   "pct": 0.85,
-   "note": "Vite + React local web app with launcher, workspace, polished UI; no router"
+   "pct": 0.5,
+   "note": "local web app (different design from the hosted shell in the card); gaps: router, CSP, budget and a11y checks"
   },
   "C083": {
-   "pct": 0.5,
-   "note": "workspace view with approvals; single local session"
+   "pct": 0.3,
+   "note": "local single-session web view; card is the relay session view (blocked on session lanes)"
   },
   "C086": {
-   "pct": 1,
-   "note": "canvas Cento player"
+   "pct": 0.5,
+   "note": "web Cento from the driver; card gaps: state-map coverage, scheduler, lazy data, aria-hidden"
   },
   "C101": {
    "pct": 0.8,
-   "note": "engine layer: validator, registry, capabilities, delta coalescer, toSessionWire (schema-validated), fake engine + transcript replay + 6 golden transcripts. Not done: stalled-consumer delta coalescing buffer; real adapters do not yet satisfy the validator on interrupt (C102/C103)"
+   "note": "engine layer; gaps: bounded event buffer with backpressure, validator run on both adapters, denial and rate-limit transcripts"
   },
   "C102": {
-   "pct": 0.9,
-   "note": "claude stream-json, approvals bridge, resume token, interrupt; no version-range check"
+   "pct": 0.8,
+   "note": "claude engine with a secured approval bridge (per-run token, private socket, timeout, fail closed); gaps: prompt over stdin, bypass gate, spawn/first-event timeouts, version check, subagent.done, fake CLI and goldens"
   },
   "C103": {
    "pct": 0.75,
    "note": "codex app-server engine tested against a protocol-faithful fake; no real turn yet. Real-Codex checklist: docs/codex-verification.md, recorder: tools/codex/record.ts"
   },
   "C104": {
-   "pct": 0.9,
-   "note": "provider detect (5 s probes, 15 s overall, 30 s cache), classify, redact, semver, login/logout handoff (inherit stdio, no shell, no TTY refusal), message table for all 9 codes, doctor checks, centcom provider status|login|logout|doctor. Not done: real login/logout tried against live vendor tools; supported ranges are placeholders; main help text"
+   "pct": 0.85,
+   "note": "provider detection and commands; gaps: message copy, runtime fs spy, CLI-level hang test, app still uses old detectors"
   },
   "C105": {
    "pct": 0.1,
    "note": "login kind shown; no policy table or gate"
   },
   "C002": {
-   "pct": 0.9,
-   "note": "GitHub Actions runs typecheck, tests, web build, plan and contract lock, progress check; first run green; no build matrix or lint yet"
+   "pct": 0.6,
+   "note": "one CI job (typecheck, tests, web build, plan, progress, protocol); card gaps: job split and OS matrix, SHA pins, policy scripts, pr-title, actionlint"
   },
   "C050": {
-   "pct": 0.85,
-   "note": "centcom -p with text/json/stream-json, piped input, exit codes; verified with real Claude"
+   "pct": 0.5,
+   "note": "centcom -p with text/json/stream-json; card gaps: result shape, exit-code table, stdin cap, timeout/SIGINT/EPIPE, redaction"
   },
   "C004": {
-   "pct": 0.95,
-   "note": "five layers, project allow-list, secret guard, atomic 0600 writes, explain; wired into CLI and web; remembers settings and history. Lane card asks for Ajv schema and packages/net; a hand-written schema in packages/config is used instead"
+   "pct": 0.85,
+   "note": "layered config used everywhere; gaps vs card: warns instead of throwing on bad files and secrets, sync writer, fewer precedence tests"
   },
   "C003": {
    "pct": 0.95,
-   "note": "@centcom/protocol: types, tolerant/strict Ajv-standalone validators, errors, states, operations, IDs/time/b64u/text/version helpers; all fixtures pass; CI checks it is up to date. Not yet used by the engines or the TUI"
+   "note": "protocol package complete in practice; gaps: exit 2 on bad contract input, unknown-keyword rejection, --contracts flag"
   },
   "C005": {
-   "pct": 0.95,
-   "note": "@centcom/net log: redacting JSON logger, rotating 0600 file sink, ring, stderr, diagnostics; wired into CLI and web; --debug; verified no content in real logs. `centcom doctor --bundle` still to do (C104)"
+   "pct": 0.85,
+   "note": "redacting logger and file sink; gaps: redaction table size, real-fs sink test, injected clock in sink"
   },
   "C007": {
-   "pct": 0.9,
-   "note": "@centcom/testkit mock backend: all 93 REST operations (validated, schema-generated), device login/refresh rotation, pagination, idempotency, error injection, ws relay simulator, virtual clock, control plane, scenarios, CLI. Not covered: signature/encryption checks, stateful non-session resources"
+   "pct": 0.75,
+   "note": "mock backend with all REST operations and relay; gaps: 13 of 16 scenarios, scenario files, --data and flags, ETag/privacy tests"
   },
   "C017": {
    "pct": 0.95,
@@ -232,6 +232,10 @@
   "C056": {
    "pct": 0.95,
    "note": "CT-CRYPTO module in @centcom/net: vectors match bit for bit (ciphertext, signature, path MAC, fingerprint), frame encrypt/decrypt/sign/verify with tamper matrix, chunks, device keys in the OS keychain, key ring with rotation and encrypted persistence, grants, invite bundles, TOFU trust store; real keychain only checked through a fake in tests"
+  },
+  "C012": {
+   "pct": 0.0,
+   "note": "not started"
   }
  },
  "next": [

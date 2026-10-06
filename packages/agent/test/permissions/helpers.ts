@@ -6,7 +6,7 @@ import { FileTrustStore, createPermissionEngine, createRuleStore, nodePermFs, ty
 
 export const req = (o: Partial<ApprovalRequest> = {}): ApprovalRequest => ({ approval_id: 'apr_01JTEST0000000000000000001', agent_id: 'agt_01JTEST0000000000000000001', tool_id: 't1', tool: 'Bash', summary: 'run', command: 'git status', risk: 'medium', ...o });
 export function rig(o: { mode?: AgentCtx['mode']; prompter?: ApprovalPrompter; config?: Partial<PermConfig>; fs?: PathFs & typeof nodePermFs; os?: 'posix' | 'win32'; home?: string; root?: string } = {}) {
-  const base = realpathSync(mkdtempSync(join(tmpdir(), 'perm-'))); const root = o.root ?? join(base, 'work'); mkdirSync(root, { recursive: true }); mkdirSync(join(root, '.git', 'info'), { recursive: true }); const home = o.home ?? join(base, 'home'); mkdirSync(home, { recursive: true });
+  const base = realpathSync(mkdtempSync(join(tmpdir(), 'perm-'))); const root = o.root ?? join(base, 'work'); mkdirSync(root, { recursive: true }); mkdirSync(join(root, '.git', 'info'), { recursive: true }); const home = o.home ?? join(base, 'home'); if (!o.home) mkdirSync(home, { recursive: true }); /* a given home (e.g. a Windows path in a test) is never created on disk */
   const clock = new VirtualClock(); const audit: AuditEvent[] = []; const userRulesPath = join(base, 'cfg', 'permissions.json'); const trust = new FileTrustStore(join(base, 'cfg', 'trust.json'));
   const config: PermConfig = { home, userRulesPath, os: o.os, ...o.config }; const fs = (o.fs ?? nodePermFs) as typeof nodePermFs;
   const rules = createRuleStore({ fs, clock, trust, userRulesPath, audit: (e) => audit.push(e) });
