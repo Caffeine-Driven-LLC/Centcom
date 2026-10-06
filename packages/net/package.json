@@ -1,1 +1,14 @@
-{ "name": "@centcom/net", "version": "0.0.0", "private": true, "type": "module", "main": "src/index.ts", "types": "src/index.ts", "dependencies": { "@centcom/protocol": "workspace:*" } }
+{
+  "name": "@centcom/net",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@centcom/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@centcom/testkit": "workspace:*"
+  }
+}

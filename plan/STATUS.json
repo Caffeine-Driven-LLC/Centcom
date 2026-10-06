@@ -30,16 +30,16 @@
    "note": "state machine (pure reducer, EVENT_STATE_TABLE), emitter (dedupe, 2/s, coalescing, wire-only), attachStateMachine on the bus, timers, golden claude/codex transcripts; contract gap: prompt-received and sleeping are not in the agent-level list so they stay local. Nothing wires it into the TUI mascot yet (C046)"
   },
   "C015": {
-   "pct": 0.85,
-   "note": "modes incl. dangerously-skip-permissions, session rules, real approval bridge; no persisted \"always\" rules"
+   "pct": 0.95,
+   "note": "permission engine: hard denies (symlink/.. safe, credentials, .git, shell write targets, POSIX and Windows), rule precedence, 5 modes, broker (expiry, remote approvers, duplicates, cancel), always/session rules, persistence with trust gate and fail-closed files, Claude rule syntax and Claude/Codex arg translation, wire shape. Not wired into the TUI prompt (C038) or the engines yet"
   },
   "C016": {
-   "pct": 0.8,
-   "note": "command risk classes; Codex sandbox/approval policy per mode"
+   "pct": 0.9,
+   "note": "shell reader and command classifier (fail closed, depth 4), tool and path classification, protected paths, engine settings for claude and codex (bypass needs opt-in, capability notes), risk classifier adapter; 640-command corpus. Not wired into the TUI/web yet; flag spellings to re-check against C102/C103 recordings"
   },
   "C019": {
-   "pct": 0.6,
-   "note": "usage and context % shown; no compaction request"
+   "pct": 0.85,
+   "note": "context view: engine-reported usage only, warn/full thresholds with hysteresis, compaction request through the engine (capability, idle and approval checks, 60 s backoff), optional auto compaction, de-duplicating ledger, 1/s context events. Not yet: centcom context, /compact, meter UI, state machine mapping of context-full"
   },
   "C020": {
    "pct": 0.8,
@@ -200,6 +200,30 @@
   "C027": {
    "pct": 0.8,
    "note": "checkpoints on shadow refs (temporary index, nothing of the user touched), end markers to tell agent and user edits apart, preview/rewind (files, conversation, both), safety checkpoint and undo ref, cap 100, merge/rebase refusal, non-git handling, event bus wiring, rewind command logic. Not yet: /rewind slash, esc-esc action and picker (TUI lanes), real C026 transcript store adapter"
+  },
+  "C024": {
+   "pct": 0.8,
+   "note": "fleet manager: worktree and branch per agent, plan/config limit with fair FIFO queue (32), per-engine stagger and pause on provider limits, stop/stopAll/wall clock, cleanup (branch ready, needs attention, orphans, merge preview), native subagent nodes, spawn/exit payloads. centcom fleet command logic. Not yet: wiring to the real engine registry in the app, TUI fleet view"
+  },
+  "C023": {
+   "pct": 0.95,
+   "note": "memory files: quick add with diff and confirmation, edit with conflict detection, atomic writes preserving mode and line endings, secret guard and size caps, marker-based sync with drift status (source_changed/target_edited/conflict), import hint, centcom memory CLI, # line routing in the TUI. Not done: web app hook; Codex user-level AGENTS.md path unconfirmed"
+  },
+  "C021": {
+   "pct": 0.85,
+   "note": "MCP manager: neutral definitions, Claude .mcp.json and Codex config.toml edits that keep every other byte, secret refusal (only variable names written), plan/confirm/backup/apply, built-in approvals entry, status mapping, testServer with fake-clock timeout, centcom mcp CLI. Not done: real test sessions (need engine adapters), Codex key names unverified against the installed version, TUI panel"
+  },
+  "C022": {
+   "pct": 0.85,
+   "note": "hooks manager for Claude Code settings: byte-preserving JSON patch of only the hooks object, validation, 4 templates, hash-bound confirmed edits with backups (keep 5), user-scope confirmation, review flags for shared files, per-session --settings payload, centcom hooks CLI. Codex: reports unsupported. Not yet: Codex notify editing, TUI view"
+  },
+  "C010": {
+   "pct": 0.9,
+   "note": "telemetry client: gate (config + DO_NOT_TRACK + CENTCOM_TELEMETRY), allow-list sanitiser per event, bounded buffer, batching (100 events, 64 KiB, 1/min on a monotonic clock), silent sender with one re-queue, install id (0600, reset), tested against the mock backend. Not wired into the app: opt-in prompt, centcom telemetry command, emit calls (other lanes)"
+  },
+  "C018": {
+   "pct": 0.85,
+   "note": "advisory lock client: hashed local lock files with exclusive create and stale takeover, canonical path keys (case, NFC, symlinks), warn/block modes and permission gate, renewal and expiry, remote table by path hash on the receiver clock, conflict events and payload, wire shape checked against the contract, bounded offline queue. Not yet: real transport/path key (session and crypto lanes), C015 wiring of lockGate"
   }
  },
  "next": [

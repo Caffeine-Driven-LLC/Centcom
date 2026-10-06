@@ -36,6 +36,7 @@ export interface TrustStore {
 }
 
 export interface AgentSpec {
+  /** An id chosen by the caller (the fleet needs it for the worktree before the agent exists). Must be a valid `agt_` id that no live agent has. */ id?: AgentId;
   engine: EngineId; cwd: string; prompt: string; model?: string; permissionMode?: PermissionMode; resume?: string;
   restart?: 'never' | 'on-crash'; parentAgentId?: AgentId; allowSharedCwd?: boolean;
   /** Finish with `agent:exited{outcome}` after the first turn (print mode). */

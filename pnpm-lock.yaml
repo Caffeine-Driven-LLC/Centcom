@@ -211,6 +211,10 @@ importers:
       react:
         specifier: ^19.0.0
         version: 19.3.0
+    devDependencies:
+      '@centcom/testkit':
+        specifier: workspace:*
+        version: link:../../packages/testkit
 
   apps/web:
     dependencies:
@@ -293,6 +297,10 @@ importers:
       '@centcom/protocol':
         specifier: workspace:*
         version: link:../protocol
+    devDependencies:
+      '@centcom/testkit':
+        specifier: workspace:*
+        version: link:../testkit
 
   packages/protocol:
     dependencies:

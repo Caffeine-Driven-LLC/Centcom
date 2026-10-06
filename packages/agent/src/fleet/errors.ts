@@ -1,0 +1,3 @@
+export class FleetError extends Error { constructor(readonly code: 'queue_full' | 'engine_paused' | 'invalid_spec' | 'not_found' | 'still_running' | 'no_owner', message: string) { super(message); this.name = 'FleetError'; } }
+export class FleetQueueFull extends FleetError { constructor(readonly max: number) { super('queue_full', `${max} agents are already waiting. Try again when some have finished.`); this.name = 'FleetQueueFull'; } }
+export class FleetEnginePaused extends FleetError { constructor(readonly engine: string, readonly toolMessage: string) { super('engine_paused', toolMessage ? `New ${engine} agents are paused: ${toolMessage}` : `New ${engine} agents are paused after it reported a limit.`); this.name = 'FleetEnginePaused'; } }

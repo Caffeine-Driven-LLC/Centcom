@@ -1,0 +1,15 @@
+import { describe, expect, it } from 'vitest';
+import { lockGate } from '../../src/index.js';
+import { A, B, lockFiles, rig } from './helpers.js';
+
+describe('warn and block (acceptance 1)', () => {
+  it('warn: both succeed and the second is told who has it', async () => { const r = rig({ mode: 'warn' }); expect(await r.client.acquire('src/a.ts', { agentId: A })).toEqual({ ok: true }); expect(await r.client.acquire('src/a.ts', { agentId: B })).toEqual({ ok: true, heldBy: A }); expect(r.client.check('src/a.ts')).toMatchObject({ heldBy: A, remote: false }); });
+  it('block: the second fails fast with held, naming the holder and when it ends', async () => { const r = rig({ mode: 'block' }); await r.client.acquire('src/a.ts', { agentId: A }); const res = await r.client.acquire('src/a.ts', { agentId: B }); expect(res).toEqual({ ok: false, reason: 'held', heldBy: A, expiresAt: new Date(r.clock.now() + 120_000).toISOString() }); expect(lockFiles(r.dir)).toHaveLength(1); });
+  it('the same agent can acquire again (that renews) and different files do not clash', async () => { const r = rig({ mode: 'block' }); await r.client.acquire('a', { agentId: A }); expect(await r.client.acquire('a', { agentId: A })).toEqual({ ok: true }); expect(await r.client.acquire('b', { agentId: B })).toEqual({ ok: true }); });
+  it('after a release the next agent gets it clean', async () => { const r = rig({ mode: 'block' }); await r.client.acquire('a', { agentId: A }); await r.client.release('a', A); expect(r.client.check('a')).toBeNull(); expect(lockFiles(r.dir)).toEqual([]); expect(await r.client.acquire('a', { agentId: B })).toEqual({ ok: true }); });
+  it('the permission gate denies with file_locked in block mode only, and never the holder', async () => { const b = rig({ mode: 'block' }); await b.client.acquire('a', { agentId: A }); const gate = lockGate(b.client, 'block'); expect(gate(B, 'a')).toEqual({ deny: true, reason: 'file_locked', heldBy: A }); expect(gate(A, 'a')).toBeUndefined(); expect(gate(B, 'other')).toBeUndefined(); expect(lockGate(b.client, 'warn')(B, 'a')).toBeUndefined(); });
+  it('the ttl is capped at 600 s and defaults to the config', async () => { const r = rig(); await r.client.acquire('a', { agentId: A, ttlMs: 99_999_999 }); expect(Date.parse(r.client.check('a')!.expiresAt) - r.clock.now()).toBe(600_000); await r.client.acquire('b', { agentId: A }); expect(Date.parse(r.client.check('b')!.expiresAt) - r.clock.now()).toBe(120_000); });
+  it('a wait that takes too long never blocks the agent: warn lets it through, block says timeout', async () => {
+    const slow = async () => new Promise<never>(() => undefined); const fs = { realpath: slow } as never; for (const [mode, want] of [['warn', { ok: true }], ['block', { ok: false, reason: 'timeout' }]] as const) { const r = rig({ mode, fs, waitMs: 5000 }); const p = r.client.acquire('a', { agentId: A }); await r.clock.advance(5000); expect(await p).toEqual(want); expect(r.logs.some((l) => l.level === 'warn')).toBe(true); expect(r.clock.pending()).toBe(0); }
+  });
+});

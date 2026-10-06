@@ -2,6 +2,7 @@
  *  Fields marked `wire-safe` hold only ids, enums, numbers and timestamps; everything else may hold local text or paths and must never be forwarded as is. */
 import type { Id, StateName } from '@centcom/protocol';
 import type { NormalisedEvent, Risk } from '../types.js';
+import type { BranchReady, FleetNode } from '../fleet/types.js';
 
 export type AgentId = Id<'agt'>;
 export type ApprovalId = Id<'apr'>;
@@ -21,8 +22,11 @@ export type AgentEventMap = {
   'agent:approval_resolved': { agent_id: AgentId; approval_id: ApprovalId; decision: 'allow' | 'deny' | 'timeout' | 'cancel'; by?: MemberId };
   /** wire-safe */
   'agent:state_changed': { agent_id: AgentId; state: StateName; since: Iso };
-  'agent:context': { agent_id: AgentId; used_tokens: number; window_tokens: number };
-  'agent:compaction': { agent_id: AgentId; before_tokens: number; after_tokens: number };
+  /** Exactly what the engine reported, at most once per second per agent; every field may be missing. */
+  'agent:context': { agent_id: AgentId; used?: number; window?: number; pct?: number };
+  /** `warn` and `full` fire once per cycle (until the engine's own number drops 10 points); `ok` says full has cleared. `full` is the local `context-full` state. */
+  'agent:context_alert': { agent_id: AgentId; level: 'warn' | 'full' | 'ok'; pct: number };
+  'agent:compaction': { agent_id: AgentId; phase: 'start' | 'end'; before?: number; after?: number };
   /** Every normalised event of one agent, stamped by the runner with a gap-free per-agent `seq`. */
   'agent:event': { agent_id: AgentId; seq: number; event: NormalisedEvent };
   /** wire-safe: the outcome and, for a crash, the exit code or signal name. `reason` is a local error code, never text from the model. */
@@ -31,6 +35,11 @@ export type AgentEventMap = {
   'worktree:removed': { agent_id: AgentId; path: string };
   'lock:changed': { agent_id: AgentId; path: string; action: 'acquire' | 'release' | 'expire'; ttl_ms?: number };
   'lock:conflict': { agent_id: AgentId; other_agent_id: AgentId; path: string };
+  /** A node of the fleet tree appeared or changed. Local only: it holds labels and branch names. */
+  'fleet:node': { node: FleetNode };
+  'fleet:branch_ready': BranchReady;
+  /** The MCP servers one tool reports, as the manager understands them. */
+  'mcp:status': { engine: 'claude-code' | 'codex'; servers: { name: string; state: string; tools?: number; error?: string; builtin?: boolean }[] };
   'subagent:spawned': { agent_id: AgentId; parent_id: AgentId; role?: string };
   'subagent:finished': { agent_id: AgentId; parent_id: AgentId; ok: boolean };
 };
