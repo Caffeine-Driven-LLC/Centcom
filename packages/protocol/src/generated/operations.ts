@@ -239,7 +239,7 @@ export const OPERATIONS = {
     "tags": [
       "Flags"
     ],
-    "public": false
+    "public": true
   },
   "getHealth": {
     "method": "GET",
@@ -383,7 +383,7 @@ export const OPERATIONS = {
     "tags": [
       "Telemetry"
     ],
-    "public": false
+    "public": true
   },
   "ingestUsageEvents": {
     "method": "POST",

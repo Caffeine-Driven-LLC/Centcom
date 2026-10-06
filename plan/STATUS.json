@@ -216,6 +216,10 @@
   "C022": {
    "pct": 0.85,
    "note": "hooks manager for Claude Code settings: byte-preserving JSON patch of only the hooks object, validation, 4 templates, hash-bound confirmed edits with backups (keep 5), user-scope confirmation, review flags for shared files, per-session --settings payload, centcom hooks CLI. Codex: reports unsupported. Not yet: Codex notify editing, TUI view"
+  },
+  "C010": {
+   "pct": 0.9,
+   "note": "telemetry client: gate (config + DO_NOT_TRACK + CENTCOM_TELEMETRY), allow-list sanitiser per event, bounded buffer, batching (100 events, 64 KiB, 1/min on a monotonic clock), silent sender with one re-queue, install id (0600, reset), tested against the mock backend. Not wired into the app: opt-in prompt, centcom telemetry command, emit calls (other lanes)"
   }
  },
  "next": [
