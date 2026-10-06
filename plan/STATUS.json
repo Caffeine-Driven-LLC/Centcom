@@ -82,8 +82,8 @@
    "note": "half-block renderer; card gaps: golden output, Cento component with frame durations, cache, budget"
   },
   "C034": {
-   "pct": 0.5,
-   "note": "TUI shell works; card gaps: renderApp/useLayout, safe alt-screen on signals, focus stack, grapheme text module"
+   "pct": 0.65,
+   "note": "Shell frame (header/scrollback/toast/prompt/footer, 100-col rail, overlay, too-small state), renderApp with debounced resize, alt-screen guard for exit/SIGINT/SIGTERM/uncaught error, action registry with focus stack, grapheme-aware text helpers; gaps: App.tsx not moved onto the Shell, --no-alt-screen/config not wired, no lint rule for raw Text"
   },
   "C035": {
    "pct": 0.6,

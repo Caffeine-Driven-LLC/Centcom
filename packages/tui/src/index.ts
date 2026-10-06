@@ -11,3 +11,5 @@ export * from './onboarding/index.js';
 export * from './tasks/index.js';
 export * from './keys/index.js';
 export * from './transcript/index.js';
+export * from './shell/index.js';
+export { stringWidth, wrapText, truncate as truncateText, sanitizeForTerminal as sanitizeText } from './text/index.js';
