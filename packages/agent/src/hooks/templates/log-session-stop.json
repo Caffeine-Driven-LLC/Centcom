@@ -1,0 +1,1 @@
+{ "id": "log-session-stop", "title": "Log when a session stops", "description": "Appends a time stamp to .centcom/session-stops.log each time the agent finishes.", "event": "Stop", "command": "mkdir -p .centcom && date -u +%Y-%m-%dT%H:%M:%SZ >> .centcom/session-stops.log", "timeout_s": 10 }

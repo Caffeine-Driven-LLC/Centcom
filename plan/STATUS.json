@@ -196,6 +196,10 @@
   "C021": {
    "pct": 0.85,
    "note": "MCP manager: neutral definitions, Claude .mcp.json and Codex config.toml edits that keep every other byte, secret refusal (only variable names written), plan/confirm/backup/apply, built-in approvals entry, status mapping, testServer with fake-clock timeout, centcom mcp CLI. Not done: real test sessions (need engine adapters), Codex key names unverified against the installed version, TUI panel"
+  },
+  "C022": {
+   "pct": 0.85,
+   "note": "hooks manager for Claude Code settings: byte-preserving JSON patch of only the hooks object, validation, 4 templates, hash-bound confirmed edits with backups (keep 5), user-scope confirmation, review flags for shared files, per-session --settings payload, centcom hooks CLI. Codex: reports unsupported. Not yet: Codex notify editing, TUI view"
   }
  },
  "next": [

@@ -13,7 +13,7 @@ export const BUILTIN_NAME = 'centcom-approvals';
 export const BUILTIN: McpServerDef = { name: BUILTIN_NAME, transport: 'stdio', command: 'centcom-approvals' };
 /** The contract's secret list has no GitHub, Slack, Stripe or npm tokens; MCP configs are where these most often get pasted, so they are caught here as well. */
 const EXTRA_SECRETS = [/\bgh[pousr]_[A-Za-z0-9]{30,}/, /\bgithub_pat_[A-Za-z0-9_]{30,}/, /\bxox[baprs]-[A-Za-z0-9-]{10,}/, /\b[sr]k_live_[A-Za-z0-9]{20,}/, /\bnpm_[A-Za-z0-9]{30,}/, /\bglpat-[A-Za-z0-9_-]{20,}/];
-const isSecret = (t: string) => looksLikeSecret(t) || /-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(t) || EXTRA_SECRETS.some((r) => r.test(t));
+export const looksLikeSecretText = (t: string) => looksLikeSecret(t) || /-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(t) || EXTRA_SECRETS.some((r) => r.test(t));
 const NAME = /^[a-z][a-z0-9_-]{0,31}$/; const VAR = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/; const SECRET_KEY = /token|secret|password|passwd|api[_-]?key|credential|private/i;
 export const isLoopbackUrl = (u: URL) => u.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(u.hostname);
 /** https anywhere, or http only to this computer. */
@@ -28,7 +28,7 @@ export function validateDef(d: McpServerDef): void {
   if (d.args !== undefined && (!Array.isArray(d.args) || d.args.some((a) => typeof a !== 'string' || a.includes('\0')) || d.args.length > 100)) bad('The arguments have to be a list of text.');
   for (const [k, v] of Object.entries(d.env ?? {})) { if (!VAR.test(k) || typeof v !== 'string') bad('A setting is NAME -> text.'); if (SECRET_KEY.test(k) && !/^\$\{[A-Za-z_][A-Za-z0-9_]*\}$/.test(v)) throw new McpSecretRejected(); }
   // everything that could end up in a file is scanned, including the "names" in references: a pasted token is not a variable name
-  const texts = [d.command ?? '', d.url ?? '', ...(d.args ?? []), ...Object.values(d.env ?? {}), ...Object.entries(d.env_refs ?? {}).flat(), ...Object.entries(d.header_refs ?? {}).flat(), ...Object.keys(d.env ?? {})]; if (texts.some(isSecret)) throw new McpSecretRejected();
+  const texts = [d.command ?? '', d.url ?? '', ...(d.args ?? []), ...Object.values(d.env ?? {}), ...Object.entries(d.env_refs ?? {}).flat(), ...Object.entries(d.header_refs ?? {}).flat(), ...Object.keys(d.env ?? {})]; if (texts.some(looksLikeSecretText)) throw new McpSecretRejected();
   if (d.url && /^[a-z]+:\/\/[^/]*:[^/@]*@/i.test(d.url)) throw new McpSecretRejected(); // a password inside the URL
   for (const [k, v] of Object.entries(d.env_refs ?? {})) if (!VAR.test(k) || !VAR.test(v)) bad('An environment reference is NAME -> VARIABLE, both plain names.');
   for (const [k, v] of Object.entries(d.header_refs ?? {})) if (!/^[A-Za-z0-9-]{1,64}$/.test(k) || !VAR.test(v)) bad('A header reference is Header-Name -> VARIABLE.');
