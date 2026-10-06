@@ -132,7 +132,7 @@ async function main() {
   const { logger } = createAppLogger({ level: cc.cfg.log.level, maxBytes: cc.cfg.log.max_file_bytes, maxFiles: cc.cfg.log.max_files });
   logger.info('app.start', { version: VERSION, engine: engine.id, demo, mode });
   let instance: ReturnType<typeof render> | undefined;
-  const rt = await buildRuntime({ cwd: process.cwd(), engineId: engine.id, demo, dangerous: dangerous || mode === 'bypassPermissions', checkpoints: !has('--no-checkpoints') });
+  const rt = await buildRuntime({ cwd: process.cwd(), engineId: engine.id, demo, dangerous: dangerous || mode === 'bypassPermissions', checkpoints: !has('--no-checkpoints'), sessionUsd: cfg0?.budget?.session_usd || undefined, stateDir: stateDir(defaultDeps()) });
   const ctl = new AppController({ ...rt.options, views: appViews(process.cwd()),
     engine, demo, cwd: process.cwd(), branch, version: VERSION, permissionMode: mode, dangerous: dangerous || mode === 'bypassPermissions', ghosts: has('--demo-team'),
     logger, settings, ...cc.options({ ...initialSettings(), ...settings }, { saveHistory: !has('--no-save') }),

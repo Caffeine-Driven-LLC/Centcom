@@ -7,6 +7,7 @@ export const SCHEMA = {
   'relay.url': { kind: 'string', default: 'wss://relay.centcom.dev/v1/ws', doc: 'Hosted relay WebSocket URL' },
   'net.timeout_ms': { kind: 'number', default: 15000, min: 1000, max: 600000, doc: 'Per-request network timeout' },
   'net.max_attempts': { kind: 'number', default: 5, min: 1, max: 20, doc: 'Retry attempts for network calls' },
+  'budget.session_usd': { kind: 'number', default: 0, min: 0, max: 100000, doc: 'Warn when a session\'s reported cost passes 80 % and 100 % of this (0 = off). Only warns; nothing is stopped' },
   'telemetry.enabled': { kind: 'boolean', default: false, doc: 'Anonymous usage reporting (off unless you turn it on)' },
   'log.level': { kind: 'enum', default: 'info', enum: ['debug', 'info', 'warn', 'error', 'silent'], project: true, doc: 'How much to write to the log file' },
   'log.max_file_bytes': { kind: 'number', default: 5242880, min: 65536, max: 268435456, doc: 'Rotate the log file at this size' },

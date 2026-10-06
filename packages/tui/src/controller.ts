@@ -4,7 +4,8 @@
  * The React tree only reads the store and calls the controller's methods.
  */
 import { CLAUDE_MODELS, createAgentBus, createCheckpointManager, createContextView, modelLabel, newId, nodeGit } from '@centcom/agent';
-import type { AgentBus, AgentId, FleetManager, FleetNode, Checkpoint, CheckpointManager, ContextConfig, ContextView, EngineId, EngineStartOptions, GitRunner, PermissionEngine, PolicyMode, RewindMode } from '@centcom/agent';
+import { usageTable } from '@centcom/agent';
+import type { AgentBus, AgentId, FleetManager, FleetNode, Ledger, Checkpoint, CheckpointManager, ContextConfig, ContextView, EngineId, EngineStartOptions, GitRunner, PermissionEngine, PolicyMode, RewindMode } from '@centcom/agent';
 import type { PendingApproval as PolicyPending } from '@centcom/agent';
 import type { Logger } from '@centcom/net';
 import { SessionStore, ago, titleFrom, type SessionMeta } from './sessions.js';
@@ -52,6 +53,8 @@ export interface ControllerOptions {
   views?: Partial<Record<'mcp' | 'hooks' | 'memory', (args: string[]) => Promise<string[]>>>;
   /** Called with the main agent's events too (file locks between agents use it). */
   observers?: ((agentId: string, ev: NormalisedEvent) => void)[];
+  /** Usage as the engines reported it (lane C029): `/usage`, budget warnings, the informational outbox. Its cost alerts arrive on `ledgerBus`. */
+  ledger?: Ledger; ledgerBus?: AgentBus;
 }
 const FLEET_COLORS: CentoColor[] = ['green', 'yellow', 'red', 'brown', 'violet'];
 const FLEET_STATE: Record<string, string> = { queued: 'queued', starting: 'prompt-received', running: 'thinking', waiting: 'idle', done: 'success', failed: 'error', canceled: 'idle' };
@@ -95,6 +98,7 @@ export class AppController {
     this.ctxView = createContextView({ bus: this.bus, clock, config: o.context, engines: { capabilities: () => o.engine.capabilities(), status: () => (this.state.busy ? 'running' : this.session ? 'waiting' : 'starting'), send: async (_id, prompt) => { await this.session?.send(prompt); } } });
     this.bus.on('agent:context_alert', (a) => { if (a.level === 'warn') this.notice('warn', `The context is ${Math.round(a.pct)}% full.`, 'Type /compact to have the agent compact it.'); else if (a.level === 'full') { this.notice('warn', 'The context is almost full.', 'Type /compact now, or start fresh with /new.'); this.driver.setState('context-full'); } });
     if (o.fleet) this.watchFleet(o.fleet);
+    o.ledgerBus?.on('cost.alert', (a) => { if (a.session_id !== this.state.sessionId) return; this.notice(a.level === 'error' ? 'warn' : 'info', a.level === 'error' ? `This conversation has reached its cost budget (${a.pct}% of it, as the tools reported it).` : `This conversation is at ${a.pct}% of its cost budget (as the tools reported it).`, 'Budgets only warn: nothing was stopped. Change it with budget.session_usd in your settings.'); this.driver.setState('cost-alert'); });
     if (o.checkpoints) this.cp = createCheckpointManager({ worktree: o.cwd, agentId: this.me, git: o.checkpoints.git ?? nodeGit, clock,
       store: { markRewind: async (seq) => this.rewindTranscript(seq), summarize: async (seq, max) => this.summaryUpTo(seq, max) },
       engine: { capabilities: () => o.engine.capabilities(), start: (so) => o.engine.start({ ...this.startOptions(so.resume?.engine_session_id), ...so }) } });
@@ -192,7 +196,7 @@ export class AppController {
   }
 
   stop() {
-    this.persist();
+    this.persist(); void this.o.ledger?.flush().catch(() => undefined);
     this.driver.stop(); this.ghostTimers.forEach(clearTimeout); if (this.verbTimer) clearInterval(this.verbTimer);
     this.toastTimers.forEach(clearTimeout);
     for (const a of this.state.approvals) a.resolve({ decision: 'deny', scope: 'once', reason: 'exit' });
@@ -210,6 +214,7 @@ export class AppController {
     this.logEvent(ev);
     try { this.ctxView?.onEvent(ev); } catch { /* the meter never breaks the transcript */ }
     for (const ob of this.o.observers ?? []) { try { ob(this.me, ev); } catch { /* an observer never breaks the transcript */ } }
+    this.account(this.me, ev, this.o.engine.id);
     if (ev.type === 'turn.done') void this.cp?.endTurn().catch(() => undefined);
     const me = this.me;
     switch (ev.type) {
@@ -399,7 +404,7 @@ export class AppController {
   }
 
   /** Leave the app (the `app.quit` action). */
-  quit() { this.o.onExit?.(); }
+  quit() { void this.o.ledger?.flush().catch(() => undefined); this.o.onExit?.(); }
   /** Ctrl+C: interrupt if busy, otherwise press twice within 2 s to quit. */
   ctrlC() {
     const now = Date.now();
@@ -445,6 +450,7 @@ export class AppController {
       case 'rewind': await this.rewindCommand(arg); break;
       case 'compact': await this.compactCommand(); break;
       case 'fleet': await this.fleetCommand(arg); break;
+      case 'usage': this.usageCommand(); break;
       case 'mcp': case 'hooks': case 'memory': {
         const view = this.o.views?.[cmd]; if (!view) { this.toast('info', `/${cmd} is not available here. Use \`centcom ${cmd}\` in a terminal.`); break; }
         const lines = await view(arg.split(/\s+/).filter(Boolean)).catch((e: unknown) => [String((e as Error)?.message ?? e)]); this.notice('info', lines[0] ?? `(nothing to show)`, lines.slice(1).join('\n') || undefined); break;
@@ -491,12 +497,32 @@ export class AppController {
     }
   }
 
+  /* ------------------------------------------------------------------ usage (lane C029) */
+  private engineSession = new Map<string, string>();
+  /** Feeds the ledger: Claude Code reports cost as a running total for its session and tokens per turn; Codex reports per turn. */
+  private account(agentId: string, ev: NormalisedEvent, engine: string) {
+    const l = this.o.ledger; if (!l) return;
+    try {
+      if (ev.type === 'session.started') this.engineSession.set(agentId, ev.engine_session_id);
+      else if (ev.type === 'usage.report') l.onUsageReport({ agentId, engine: engine as EngineId, engineSessionId: this.engineSession.get(agentId) ?? 'unknown', sessionId: agentId === this.me ? this.state.sessionId : undefined, cumulative: false, costCumulative: engine === 'claude-code', tokensIn: ev.input_tokens, tokensOut: ev.output_tokens, cacheRead: ev.cache_read_tokens, costUsd: ev.cost_usd });
+      else if (ev.type === 'status') l.onAgentState(agentId, ev.state, new Date());
+      else if (ev.type === 'turn.done') l.onAgentState(agentId, 'idle', new Date());
+      else if (ev.type === 'error' && (ev.code === 'provider_cap_reached' || ev.code === 'provider_rate_limited')) l.onLimitEvent(agentId);
+    } catch { /* the ledger never breaks the transcript */ }
+  }
+  private usageCommand() {
+    const l = this.o.ledger; if (!l) { this.toast('info', 'Usage is not recorded in this session.'); return; }
+    const rows = [{ label: 'this conversation', t: l.snapshot({ sessionId: this.state.sessionId }) }, ...this.fleetIds.filter(Boolean).map((id, i) => ({ label: `agent ${i + 1}`, t: l.snapshot({ agentId: id }) })), { label: 'all of today', t: l.snapshot({ day: l.byDay(1)[0]!.day }) }];
+    this.notice('info', 'Usage as the tools reported it', usageTable(rows, l.byDay(7).slice(1).filter((d) => d.tokensIn || d.tokensOut || d.agentMs)).join('\n'));
+  }
+
   /* ------------------------------------------------------------------ fleet */
   private fleetIds: string[] = [];
   private watchFleet(f: NonNullable<ControllerOptions['fleet']>) {
     f.bus.on('fleet:node', ({ node }) => { if (node.kind === 'agent') this.upsertFleetAgent(node); });
     f.bus.on('agent:event', ({ agent_id, event: ev }) => {
       if (!this.fleetIds.includes(agent_id)) return;
+      this.account(agent_id, ev, this.o.engine.id);
       if (ev.type === 'status') this.updateAgent(agent_id, () => ({ state: ev.state, mini: stateToMini(ev.state), busy: isBusyState(ev.state) }));
       else if (ev.type === 'session.started') this.updateAgent(agent_id, () => ({ model: ev.model, loginKind: ev.login_kind }));
       else if (ev.type === 'usage.report') this.updateAgent(agent_id, () => ({ cost: ev.cost_usd ?? 0, inTok: ev.input_tokens, outTok: ev.output_tokens })); /* the engines report the session's running totals, the same as for the main agent */

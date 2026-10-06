@@ -58,8 +58,8 @@
    "note": "model picker with a fixed Claude list; card gaps: model registry from the engines, precedence, rollback, cache"
   },
   "C029": {
-   "pct": 0.4,
-   "note": "usage shown from engine reports; card gaps: ledger, /usage, budget alert, outbox"
+   "pct": 0.9,
+   "note": "ledger (reported cost only, running-total deltas, agent minutes, budget alerts, outbox with cap and drop order), /usage, wired into the app; gap: ledger replay from the golden transcripts of real CLIs"
   },
   "C030": {
    "pct": 0.5,

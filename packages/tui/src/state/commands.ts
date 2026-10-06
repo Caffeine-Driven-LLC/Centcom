@@ -20,6 +20,7 @@ export const COMMANDS: SlashCommand[] = [
   { name: 'interrupt', desc: 'Stop the running agent' },
   { name: 'rewind', args: '[number] [files|conversation|both]', desc: 'Go back to before an earlier prompt (Esc Esc when idle)' },
   { name: 'compact', desc: 'Ask the agent to compact its context' },
+  { name: 'usage', desc: 'Tokens, agent time and the cost the tools reported, by conversation, agent and day' },
   { name: 'mcp', args: '[list|status]', desc: 'Show the MCP servers Claude Code and Codex use' },
   { name: 'hooks', args: '[list|validate|templates]', desc: 'Show the Claude Code hooks and check them' },
   { name: 'memory', args: '[show|status]', desc: 'Show the memory files (CLAUDE.md, AGENTS.md); # note adds one' },

@@ -38,6 +38,8 @@ export type AgentEventMap = {
   /** A node of the fleet tree appeared or changed. Local only: it holds labels and branch names. */
   'fleet:node': { node: FleetNode };
   'fleet:branch_ready': BranchReady;
+  /** The reported cost of a session passed 80 % (warn) or 100 % (error) of `budget.sessionUsd`. Warns only; nothing is stopped. */
+  'cost.alert': { level: 'warn' | 'error'; pct: number; session_id: string };
   /** Something long-running that a progress bar can follow (`total` 0 or missing with no value: unknown). */
   'progress': { id: string; value: number; total?: number; label: string };
   /** The MCP servers one tool reports, as the manager understands them. */

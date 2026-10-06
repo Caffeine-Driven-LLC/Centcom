@@ -2,7 +2,7 @@
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { ClaudeCodeEngine, CodexEngine, FileTrustStore, createLockClient, nodeLockFs, toolKind, type NormalisedEvent, createAgentBus, createFleetManager, createPermissionEngine, createPermissionGate, createRiskClassifier, createRuleStore, createRunner, createWorktreeManager, nodeGit, nodePermFs, nodeWtFs, type AgentEngine, type EngineId, type PermissionEngine, type PermissionMode, type PolicyMode } from '@centcom/agent';
+import { ClaudeCodeEngine, CodexEngine, FileTrustStore, createLedger, createLockClient, nodeLockFs, toolKind, type NormalisedEvent, createAgentBus, createFleetManager, createPermissionEngine, createPermissionGate, createRiskClassifier, createRuleStore, createRunner, createWorktreeManager, nodeGit, nodePermFs, nodeWtFs, type AgentEngine, type EngineId, type PermissionEngine, type PermissionMode, type PolicyMode } from '@centcom/agent';
 import { newIdGenerator } from '@centcom/protocol';
 import { userInfo } from 'node:os';
 import { defaultDeps, userConfigPath } from '@centcom/config';
@@ -15,10 +15,11 @@ export interface RuntimeOptions {
   /** No one can answer an approval (print mode): anything that would ask is denied. */ headless?: boolean;
   /** Where permissions.json and trust.json live; defaults to the user config folder. */ configDir?: string; home?: string;
   checkpoints?: boolean;
+  /** `budget.session_usd` (0 = no budget). */ sessionUsd?: number; /** Where the usage outbox lives (default ~/.centcom). */ stateDir?: string;
   /** Run parallel agents in their own worktrees (`/fleet`). On unless turned off. */ fleet?: boolean;
   /** At most this many fleet agents at once (the plan's limit once accounts exist). */ maxParallel?: number;
 }
-export interface Runtime { options: Pick<ControllerOptions, 'policy' | 'checkpoints' | 'fleet' | 'observers'>; /** Connect the controller once it exists: approvals are shown by it. */ bind(ctl: AppController): void; warnings: string[] }
+export interface Runtime { options: Pick<ControllerOptions, 'policy' | 'checkpoints' | 'fleet' | 'observers' | 'ledger' | 'ledgerBus'>; /** Connect the controller once it exists: approvals are shown by it. */ bind(ctl: AppController): void; warnings: string[] }
 
 export async function buildRuntime(o: RuntimeOptions): Promise<Runtime> {
   if (o.demo) return { options: {}, bind: () => undefined, warnings: [] }; // the demo engine keeps its simple built-in rules
@@ -55,7 +56,13 @@ export async function buildRuntime(o: RuntimeOptions): Promise<Runtime> {
     bus.on('agent:event', ({ agent_id, event }) => touch(agent_id, event, roots.get(agent_id) ?? o.cwd)); observers.push((id, ev) => touch(id, ev, o.cwd));
     fleet = { manager, bus, ownerSlug: (() => { try { return userInfo().username || 'me'; } catch { return 'me'; } })() };
   }
-  return { options: { policy: { engine, root: o.cwd }, ...(o.checkpoints === false ? {} : { checkpoints: {} }), ...(fleet ? { fleet, observers } : {}) }, bind: (c) => { ctl = c; }, warnings };
+  // usage as the engines reported it; the outbox only fills a local file (sending it is the usage-client lane)
+  const ledgerBus = createAgentBus({ onError: () => undefined }); const ids = newIdGenerator({ now: () => Date.now(), random: (n) => new Uint8Array(randomBytes(n)) });
+  const ledger = createLedger({ clock, ids: { next: () => ids.next('use') }, bus: ledgerBus, fs: o.demo ? memoryFs() : { read: async (p) => { try { return (await import('node:fs/promises')).readFile(p, 'utf8'); } catch { return undefined; } }, writeAtomic: async (p, t) => { const fsp = await import('node:fs/promises'); await fsp.mkdir(dirname(p), { recursive: true }); const tmp = `${p}.${randomBytes(4).toString('hex')}.tmp`; await fsp.writeFile(tmp, t, { mode: 0o600 }); await fsp.rename(tmp, p); } }, outboxPath: join(o.stateDir ?? join(home, '.centcom'), 'usage', 'outbox.jsonl'), config: { sessionUsd: o.sessionUsd || undefined } });
+  await ledger.ready().catch(() => undefined);
+  return { options: { ledger, ledgerBus, policy: { engine, root: o.cwd }, ...(o.checkpoints === false ? {} : { checkpoints: {} }), ...(fleet ? { fleet, observers } : {}) }, bind: (c) => { ctl = c; }, warnings };
 }
 const MODE_MAP: Record<PermissionMode, PolicyMode> = { default: 'ask', acceptEdits: 'accept-edits', plan: 'plan', bypassPermissions: 'bypass' };
+/** The demo keeps its usage in memory. */
+const memoryFs = () => { const m = new Map<string, string>(); return { read: async (p: string) => m.get(p), writeAtomic: async (p: string, t: string) => { m.set(p, t); } }; };
 export const policyMode = (m: PermissionMode): PolicyMode => MODE_MAP[m] ?? 'ask';
