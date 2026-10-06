@@ -28,3 +28,10 @@ describe('childEnv', () => {
     const parent = { PATH: 'p', LC_ALL: 'C', CENTCOM_TOKEN: 't', GITHUB_TOKEN: 'g', SystemRoot: 'C:\\Windows' }; expect(childEnv(parent, 'agt_1', 'linux')).toEqual({ PATH: 'p', LC_ALL: 'C', CENTCOM_AGENT_ID: 'agt_1' }); expect(childEnv(parent, 'agt_1', 'win32')).toMatchObject({ SystemRoot: 'C:\\Windows' });
   });
 });
+
+describe('childEnv on Windows', () => {
+  it('matches names case-insensitively and keeps the original casing', () => {
+    expect(childEnv({ Path: 'x', Systemroot: 'C:\\W', lc_all: 'C', GITHUB_TOKEN: 'g' }, 'agt_1', 'win32')).toEqual({ Path: 'x', Systemroot: 'C:\\W', lc_all: 'C', CENTCOM_AGENT_ID: 'agt_1' });
+    expect(childEnv({ Path: 'x' }, 'agt_1', 'linux')).toEqual({ CENTCOM_AGENT_ID: 'agt_1' });
+  });
+});

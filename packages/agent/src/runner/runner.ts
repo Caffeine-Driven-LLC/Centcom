@@ -1,6 +1,7 @@
-import { stat } from 'node:fs/promises';
+import { realpath, stat } from 'node:fs/promises';
 import type { EngineSession, NormalisedEvent, PermissionGate, ApprovalRequest, ApprovalDecision, EngineId } from '../types.js';
 import { ProviderError } from '../types.js';
+import { resolve as resolvePath } from 'node:path';
 import { childEnv } from './env.js';
 import { RunnerBusy, RunnerError } from './errors.js';
 import { Subscriber } from './subscribers.js';
@@ -22,7 +23,7 @@ export function createRunner(deps: RunnerDeps): AgentRunner {
     private queue: string[] = []; private turnActive = false; turns = 0; private stopping = false; private finished = false; private restarts = 0;
     private lastEventAt = 0; private watchdog?: unknown; private escalation: unknown[] = []; private pumpDone: Promise<void> = Promise.resolve(); private exitedSeen = false;
     private pending = new Map<string, (d: ApprovalDecision) => void>(); private forced?: { outcome: ExitOutcome; reason?: string };
-    private halting?: Promise<void>;
+    cwdKey = ''; private halting?: Promise<void>; private open = new Set<string>(); // approval ids the engine is waiting on, whichever gate answers them
 
     constructor(readonly spec: AgentSpec) { this.id = deps.ids.next('agt'); this.engine = spec.engine; this.since = new Date(clock.now()).toISOString(); }
     status() { return this.state; }
@@ -82,6 +83,8 @@ export function createRunner(deps: RunnerDeps): AgentRunner {
       bus.emit('agent:event', { agent_id: this.id, seq, event: ev });
       if (ev.type === 'session.started' && this.state === 'starting') this.state = this.turnActive ? 'running' : 'waiting';
       if (ev.type === 'turn.started') { this.turnActive = true; if (this.state === 'waiting') this.state = 'running'; }
+      if (ev.type === 'approval.resolved') this.open.delete(ev.approval_id);
+      if (ev.type === 'approval.requested') this.open.add(ev.approval_id);
       if (ev.type === 'approval.requested') bus.emit('agent:approval_needed', { agent_id: this.id, approval_id: ev.approval_id as never, risk: ev.risk, expires_at: new Date(clock.now() + cfg.approvalTimeoutMs).toISOString() });
       if (ev.type === 'error' && ev.fatal) this.lastFatal = ev.code;
       if (ev.type === 'turn.done') this.onTurnDone(ev.outcome, ev);
@@ -93,8 +96,10 @@ export function createRunner(deps: RunnerDeps): AgentRunner {
       const fatal = this.lastFatal; this.lastFatal = undefined;
       if (outcome === 'error' && fatal === 'provider_protocol_error' && ev.type === 'turn.done' && ev.stop_reason === 'line_too_long') { void this.finish('error', 'provider_protocol_error'); return; }
       if (this.spec.oneShot) { void this.finish(outcome === 'ok' ? 'ok' : outcome === 'canceled' ? 'canceled' : 'error'); return; }
-      const next = this.queue.shift(); if (next !== undefined) void this.dispatch(next).catch((e) => log.warn('agent.queue_send_failed', { agent_id: this.id, err: errName(e) }));
+      this.drainQueue();
     }
+    /** Sends the oldest queued prompt, if any. Later ones follow from each turn.done, so order is kept and a new send() queues behind them. */
+    private drainQueue() { if (this.turnActive || this.finished || this.stopping || !this.session) return; const next = this.queue.shift(); if (next !== undefined) void this.dispatch(next).catch((e) => log.warn('agent.queue_send_failed', { agent_id: this.id, err: errName(e) })); }
     private lastFatal?: string;
 
     async dispatch(prompt: string): Promise<void> {
@@ -143,11 +148,13 @@ export function createRunner(deps: RunnerDeps): AgentRunner {
       const delay = cfg.restartDelaysMs[this.restarts];
       if (this.spec.restart === 'on-crash' && delay !== undefined) {
         this.restarts++; this.state = 'starting';
-        clock.setTimeout(() => { if (this.finished || this.stopping) return; this.begin(token).then(() => { this.attach(); this.state = 'waiting'; }).catch((e) => { log.warn('agent.restart_failed', { agent_id: this.id, err: errName(e) }); this.onCrash(); }); }, delay);
+        clock.setTimeout(() => { if (this.finished || this.stopping) return; this.begin(token).then(() => { this.attach(); this.state = 'waiting'; this.drainQueue(); }).catch((e) => { log.warn('agent.restart_failed', { agent_id: this.id, err: errName(e) }); this.onCrash(); }); }, delay);
         return;
       }
       void this.finish('crash', undefined, code, signal);
     }
+    /** Grace ran out: SIGKILL the engine and end the agent as canceled without waiting for it to say goodbye. */
+    async kill(): Promise<void> { const s = this.session; try { s?.signal?.('SIGKILL'); } catch { /* already gone */ } this.stopping = true; await this.finish('canceled', 'stop_grace_expired'); }
     /** The start failed before anyone was told about this agent: release what it holds, say nothing. */
     abort() { if (this.finished) return; this.finished = true; this.stopping = true; this.clearEscalation(); this.disarmWatchdog(); const s = this.session; this.session = undefined; void Promise.resolve().then(() => s?.stop()).catch(() => undefined); this.state = 'exited'; }
     async finish(outcome: ExitOutcome, reason?: string, code?: number, signal?: string): Promise<void> {
@@ -163,25 +170,36 @@ export function createRunner(deps: RunnerDeps): AgentRunner {
 
     /* ---------------- approvals ---------------- */
     readonly gate: PermissionGate = {
-      decide: (req: ApprovalRequest) => deps.permissions ? deps.permissions.decide(req) : new Promise<ApprovalDecision>((resolve) => {
+      decide: (req: ApprovalRequest) => deps.permissions ? this.viaBroker(deps.permissions, req) : new Promise<ApprovalDecision>((resolve) => {
         const timer = clock.setTimeout(() => this.settle(req.approval_id, { decision: 'deny', scope: 'once', reason: 'timeout' }, 'timeout'), cfg.approvalTimeoutMs);
         this.pending.set(req.approval_id, (d) => { clock.clearTimeout(timer as never); resolve(d); });
       }),
     };
+    private viaBroker(b: PermissionGate, req: ApprovalRequest): Promise<ApprovalDecision> {
+      this.open.add(req.approval_id); return Promise.resolve(b.decide(req)).finally(() => this.open.delete(req.approval_id));
+    }
     settle(id: string, d: ApprovalDecision, label: 'allow' | 'deny' | 'timeout' | 'cancel') { const r = this.pending.get(id); if (!r) return false; this.pending.delete(id); r(d); bus.emit('agent:approval_resolved', { agent_id: this.id, approval_id: id as never, decision: label }); return true; }
     resolve(id: string, d: { decision: 'approve' | 'deny'; scope?: 'once' | 'session' | 'always' }) { return this.settle(id, { decision: d.decision, scope: d.scope ?? 'once' }, d.decision === 'approve' ? 'allow' : 'deny'); }
-    private denyAllPending(why: 'cancel' | 'interrupt') { for (const id of [...this.pending.keys()]) this.settle(id, { decision: 'deny', scope: 'once', reason: why }, 'cancel'); }
+    private denyAllPending(why: 'cancel' | 'interrupt') {
+      for (const id of [...this.open]) { try { deps.permissions?.cancel?.(id); } catch (e) { log.warn('agent.cancel_failed', { agent_id: this.id, err: errName(e) }); } } this.open.clear();
+      for (const id of [...this.pending.keys()]) this.settle(id, { decision: 'deny', scope: 'once', reason: why }, 'cancel'); }
     }
 
+  /** The folder as the one-agent-per-folder rule sees it: symlinks resolved, trailing slashes gone, case folded where the filesystem ignores case. A folder that cannot be resolved falls back to its normalised path (start() then rejects it as cwd_invalid). */
+  const cwdKey = async (cwd: string) => {
+    let p = await realpath(cwd).catch(() => resolvePath(cwd)); p = p.length > 1 ? p.replace(/[\\/]+$/, '') || p : p;
+    return (deps.platform ?? process.platform) === 'darwin' || (deps.platform ?? process.platform) === 'win32' ? p.toLowerCase() : p;
+  };
   const errName = (e: unknown) => (e instanceof Error ? e.name : typeof e);
 
   const runner: AgentRunner = {
     async start(spec) {
       if (deps.providerEnabled && !deps.providerEnabled(spec.engine)) throw new ProviderError('provider_method_disabled', spec.engine, 'This way of using the provider is turned off.');
       if (!deps.engines.get(spec.engine)) throw new RunnerError('engine_unknown', `No engine named ${spec.engine}.`);
+      const key = await cwdKey(spec.cwd); // resolved before the checks below, which must run with no await until the agent is counted
       if (liveAgents().length + starting.size >= cfg.maxParallel) throw new RunnerBusy(cfg.maxParallel);
-      if (!spec.allowSharedCwd && [...liveAgents(), ...starting].some((a) => a.spec.cwd === spec.cwd)) throw new RunnerError('cwd_in_use', 'Another agent is already working in that folder.');
-      const agent = new Agent(spec); starting.add(agent); // counted from now on, so two racing starts cannot both take the last slot
+      if (!spec.allowSharedCwd && [...liveAgents(), ...starting].some((a) => a.cwdKey === key)) throw new RunnerError('cwd_in_use', 'Another agent is already working in that folder.');
+      const agent = new Agent(spec); agent.cwdKey = key; starting.add(agent); // counted from now on, so two racing starts cannot both take the last slot
       try {
         const st = await stat(spec.cwd).catch(() => undefined); if (!st?.isDirectory()) throw new RunnerError('cwd_invalid', 'The folder does not exist.');
         await deps.engines.preflight?.(spec.engine);
@@ -189,14 +207,18 @@ export function createRunner(deps: RunnerDeps): AgentRunner {
         agents.set(agent.id, agent); agent.state = 'waiting'; starting.delete(agent);
         bus.emit('agent:started', { agent_id: agent.id, engine: spec.engine, ...(spec.model ? { model: spec.model } : {}), cwd: spec.cwd, at: agent.since }); agent.attach();
         log.info('agent.started', { agent_id: agent.id, engine: spec.engine });
-        if (spec.prompt) await agent.dispatch(spec.prompt);
+        if (spec.prompt) { try { await agent.dispatch(spec.prompt); } catch (e) { await agent.finish('error', 'start_failed'); agents.delete(agent.id); throw e; } }
         return agent;
       } catch (e) { starting.delete(agent); agents.delete(agent.id); agent.abort(); throw e; }
     },
     get: (id) => agents.get(id),
     list: () => [...agents.values()].map((a) => a.info()),
     resolveApproval: (agentId, approvalId, d) => agents.get(agentId)?.resolve(approvalId, d) ?? false,
-    async stopAll() { await Promise.all(liveAgents().map((a) => a.stop())); },
+    async stopAll(o = {}) {
+      const live = liveAgents(); const all = Promise.all(live.map((a) => a.stop())); if (o.graceMs === undefined) return all.then(() => undefined);
+      let timer: unknown; const late = new Promise<'late'>((res) => { timer = clock.setTimeout(() => res('late'), o.graceMs!); });
+      if ((await Promise.race([all.then(() => 'done' as const), late])) === 'late') { await Promise.all(live.map((a) => a.kill())); } clock.clearTimeout(timer as never);
+    },
   };
   return runner;
 }

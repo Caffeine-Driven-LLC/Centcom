@@ -16,7 +16,7 @@ export const SCHEMA = {
   'ui.reduced_motion': { kind: 'boolean', default: false, project: true, doc: 'Turn animation off' },
   'ui.color': { kind: 'enum', default: 'auto', enum: ['auto', 'truecolor', '256', '16', 'never'], project: true, doc: 'Terminal color depth' },
   'lan.enabled': { kind: 'boolean', default: true, doc: 'Allow LAN sessions' },
-  'agent.max_parallel': { kind: 'number', default: 4, min: 1, max: 64, project: true, doc: 'Most agents running at once' },
+  'agent.max_parallel': { kind: 'number', default: 4, min: 1, max: 16, project: true, doc: 'Most agents running at once' },
   'agent.approval_timeout_ms': { kind: 'number', default: 600000, min: 1000, max: 86400000, project: true, doc: 'How long an approval waits before it is declined' },
   // what the client remembers between sessions (never secrets; "skip permissions" is deliberately not storable)
   'client.engine': { kind: 'enum', default: 'claude-code', enum: ['claude-code', 'codex'], doc: 'Last agent you used' },

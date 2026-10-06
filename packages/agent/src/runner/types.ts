@@ -62,6 +62,7 @@ export interface AgentRunner {
   start(spec: AgentSpec): Promise<AgentHandle>;
   get(id: AgentId): AgentHandle | undefined;
   list(): AgentInfo[];
+  /** Stops every live agent in parallel. With `graceMs`, agents still running when it passes are SIGKILLed and ended as canceled. */
   stopAll(o?: { graceMs?: number }): Promise<void>;
   /** Answers an approval the engine is waiting on (used by the UI and the IPC `approve` command). */
   resolveApproval(agentId: AgentId, approvalId: string, d: { decision: 'approve' | 'deny'; scope?: 'once' | 'session' | 'always' }): boolean;
@@ -70,7 +71,10 @@ export interface AgentRunner {
 export interface RunnerDeps {
   engines: EngineRegistry; bus: AgentBus; ids: IdGenerator; clock: RunnerClock; log: RunnerLog; config?: Partial<RunnerConfig>; trust?: TrustStore;
   /** Defaults to the runner's own pending-approval gate; C015 supplies the real policy broker. */
-  permissions?: PermissionGate;
+  permissions?: PermissionGate & {
+    /** Optional. Called with an approval id when the agent that asked ends, crashes, is stopped or has its turn cut short before an answer arrived, so the broker can drop the pending prompt and settle its `decide()` promise (as a deny). The runner tracks the ids from `approval.requested` / `approval.resolved` events and from `decide()` calls. */
+    cancel?(approval_id: string): void;
+  };
   /** The `provider.*` kill switch (C105). Return false to refuse an engine. */
   providerEnabled?: (engine: EngineId) => boolean;
   /** The parent environment the child env is built from. Defaults to process.env. */
