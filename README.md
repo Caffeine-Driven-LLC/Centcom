@@ -1,5 +1,7 @@
 # Centcom
 
+<p align="left"><img src="assets/brand/icon.png" alt="Centcom: Cento the octopus with headphones" width="128" height="128"></p>
+
 Command many hands. A terminal-first, multiplayer platform for running coding agents (it drives your own Claude Code and Codex CLIs; we never touch your login): several people and several agents in one workspace, over LAN or a hosted relay. Mascot: **Cento** the octopus.
 
 > Status: **building.** The terminal app (with Cento), the Claude Code and Codex engines, real approvals, the local web app and auto skills work today. Multiplayer, accounts and the backend are still plans. See [Progress](#progress) and [`plan/`](plan/README.md).
