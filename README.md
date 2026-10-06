@@ -35,7 +35,7 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 | [C026](plan/client/C026.md) | Local transcript persistence and engine session resume | 85% | conversations saved and resumed (-c, --resume, /resume, /new, web launcher and palette), verified with real Claude; Codex resume untested |
 | [C035](plan/client/C035.md) | Prompt input: multiline, history, paste, slash commands | 85% | multiline, history, paste, slash popup; no external editor |
 
-+14 more in [`plan/STATUS.json`](plan/STATUS.json).
++13 more in [`plan/STATUS.json`](plan/STATUS.json).
 
 ### Ready to pick up (all dependencies done)
 
@@ -45,6 +45,7 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 | [C071](plan/client/C071.md) | LAN discovery over mDNS | M | M2 |
 | [C096](plan/client/C096.md) | Documentation site, README, man pages, built-in help | M | M6 |
 | [C097](plan/client/C097.md) | Opt-in crash reporting and the doctor command | S | M6 |
+| [C098](plan/client/C098.md) | Performance budgets and benchmarks | M | M6 |
 
 Each lane card lists its goal, contracts, acceptance criteria and tests. Read [`plan/START_HERE.md`](plan/START_HERE.md) first.
 

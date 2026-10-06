@@ -11,7 +11,7 @@ export interface AgentView {
 }
 
 export type Item =
-  | { kind: 'user'; id: string; text: string; ts: number }
+  | { kind: 'user'; id: string; text: string; ts: number; /** Someone else in a shared session (slot = their colour). */ member?: { name: string; slot: number } }
   | { kind: 'assistant'; id: string; messageId: string; agentId: string; text: string; done: boolean }
   | { kind: 'thinking'; id: string; messageId: string; agentId: string; text: string; ms: number; done: boolean }
   | { kind: 'tool'; id: string; toolId: string; agentId: string; name: string; summary: string; risk: Risk; status: 'running' | 'ok' | 'error' | 'denied' | 'canceled'; result?: string; diff?: string; approval?: 'pending' | 'approved' | 'denied'; path?: string; command?: string; startedAt: number }

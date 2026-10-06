@@ -14,7 +14,7 @@ import { Approval, approvalHeight } from './components/Approval.js';
 import { Prompt, SlashPopup, promptRows, slashMatches } from './components/Prompt.js';
 import { StatusLine } from './components/StatusLine.js';
 import { FleetPanel, FLEET_W } from './components/FleetPanel.js';
-import { Transcript, useTranscriptLines } from './components/Transcript.js';
+import { Transcript, useTranscriptLayout } from './components/Transcript.js';
 import { Palette, Gallery, ModelPicker, galleryList, paletteItems } from './components/Overlays.js';
 import { Toasts } from './components/Toasts.js';
 import { COMMANDS } from './state/commands.js';
@@ -50,12 +50,17 @@ export function App({ ctl, tier, keys }: AppProps) {
   const tasksH = showTasks ? Math.min(s.tasks.length, rows >= 34 ? 10 : 5) + 1 + (s.tasks.length > (rows >= 34 ? 10 : 5) ? 1 : 0) : 0;
   const bottomH = pending ? approvalHeight(pending, mainW, maxDiff) : promptH + popupH + tasksH;
   const bodyH = Math.max(3, rows - 2 - stripH - bottomH);
-  const lines = useTranscriptLines(s.items, mainW - 2);
-  const total = lines.length;
+  const layout = useTranscriptLayout(s.items, mainW - 2);
+  const total = layout.total;
 
-  // keep the view anchored while the user is scrolled up and new lines arrive
-  const prevTotal = useRef(total);
-  useEffect(() => { const d = total - prevTotal.current; prevTotal.current = total; if (d > 0 && ctl.state.scroll > 0) ctl.patch({ scroll: ctl.state.scroll + d }); }, [total, ctl]);
+  // keep the view anchored while the user is scrolled up and new lines arrive; count the new messages; keep the top block in place on a resize
+  const prevTotal = useRef(total); const prevW = useRef(mainW); const prevCount = useRef(s.items.length); const anchor = useRef<{ id: string; offset: number } | undefined>(undefined); const [unseen, setUnseen] = useState(0);
+  useEffect(() => {
+    if (prevW.current !== mainW) { prevW.current = mainW; prevTotal.current = total; const a = anchor.current; if (a && ctl.state.scroll > 0) { const row = layout.rowOf(a); if (row !== undefined) ctl.patch({ scroll: Math.max(0, total - row - bodyH) }); } return; }
+    const d = total - prevTotal.current; prevTotal.current = total; if (d > 0 && ctl.state.scroll > 0) ctl.patch({ scroll: ctl.state.scroll + d });
+  }, [total, mainW, ctl, layout, bodyH]);
+  useEffect(() => { const added = s.items.length - prevCount.current; prevCount.current = s.items.length; if (s.scroll > 0 && added > 0) setUnseen((u) => u + added); else if (s.scroll === 0) setUnseen(0); }, [s.items.length, s.scroll]);
+  useEffect(() => { if (s.scroll > 0) anchor.current = layout.anchorAt(Math.max(0, total - s.scroll - bodyH)); else anchor.current = undefined; });
   const maxScroll = Math.max(0, total - bodyH);
   const setScroll = (n: number) => ctl.patch({ scroll: Math.max(0, Math.min(maxScroll, n)) });
 
@@ -134,8 +139,9 @@ export function App({ ctl, tier, keys }: AppProps) {
         case 'tasks.toggle': ctl.patch({ tasksOpen: !s.tasksOpen }); return;
         case 'fleet.toggle': ctl.patch({ fleet: !s.fleet }); return;
         case 'transcript.bottom': setScroll(0); return;
-        case 'transcript.page_up': setScroll(s.scroll + page); return;
-        case 'transcript.page_down': setScroll(s.scroll - page); return;
+        case 'transcript.top': setScroll(maxScroll); return;
+        case 'transcript.page_up': setScroll(s.scroll + Math.max(1, bodyH - 2)); return;
+        case 'transcript.page_down': setScroll(s.scroll - Math.max(1, bodyH - 2)); return;
         case 'transcript.line_up': setScroll(s.scroll + 3); return;
         case 'transcript.line_down': setScroll(s.scroll - 3); return;
         default: break;
@@ -192,7 +198,7 @@ export function App({ ctl, tier, keys }: AppProps) {
                 : s.mode === 'help' ? <HelpScreen actions={allActions()} keymap={keymap} warnings={keys?.warnings ?? []} onClose={() => ctl.patch({ mode: 'chat' })} width={mainW} height={bodyH} />
                   : s.mode === 'gallery' ? <Gallery cat={s.gallery.cat} idx={s.gallery.idx} color={s.gallery.color} width={mainW} height={gallerySize} reduced={s.settings.reducedMotion} />
                     : welcome ? <Welcome s={s} width={mainW} height={bodyH} color={s.settings.color} reduced={s.settings.reducedMotion} />
-                      : <Box paddingX={1}><Transcript lines={lines} width={mainW - 2} height={bodyH} scroll={s.scroll} /></Box>}
+                      : <Box paddingX={1}><Transcript layout={layout} width={mainW - 2} height={bodyH} scroll={s.scroll} unseen={unseen} /></Box>}
             </Box>
             {stripH > 0 ? <Box paddingX={1} height={stripH}><LiveStrip s={s} driver={ctl.driver} width={mainW - 2} size={stripSize as 'large' | 'small' | 'off'} /></Box> : null}
             {pending ? <Approval a={pending} width={mainW} confirming={confirming} maxDiff={maxDiff} /> : (

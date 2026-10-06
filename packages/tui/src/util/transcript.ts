@@ -2,11 +2,16 @@
 import type { Item } from '../state/model.js';
 import { renderMarkdown } from './markdown.js';
 import { renderDiff, parseDiff, diffStats } from './diff.js';
-import { formatElapsed, sp, truncate, truncateMiddle, wrapLine, type Line } from './text.js';
+import { formatElapsed, sp, truncate, truncateMiddle, wrapLine, type Line, type Colour } from './text.js';
+import { sanitizeForTerminal as clean } from '../transcript/sanitize.js';
+
+/** Member colours by slot (0 is you). Identity is always initial and name too, never colour alone. */
+const SLOT: Colour[] = ['accent.hover', 'status.info', 'status.danger', 'status.success', 'status.warning'];
 
 const IND = '  ';
 
-function userLines(text: string, width: number): Line[] {
+function userLines(text: string, width: number, member?: { name: string; slot: number }): Line[] {
+  if (member) { const c = SLOT[member.slot % SLOT.length]!; const name = clean(member.name).slice(0, 40) || 'member'; const tag = `${name[0]!.toUpperCase()} · ${name}`; const body = wrapLine([sp(text, { c: 'text.primary' })], width - 4); return [[sp('▎ ', { c }), sp(tag, { c, b: true })], ...body.map((l) => [sp('▎ ', { c }), ...l])]; }
   const head: Line = [sp('● ', { c: 'signal' }), sp('you  ', { c: 'accent.hover', b: true })];
   const body = wrapLine([sp(text, { c: 'text.primary' })], width - 8);
   return body.map((l, i) => (i === 0 ? [...head, ...l] : [sp('        '), ...l]));
@@ -38,9 +43,19 @@ function toolLines(it: Extract<Item, { kind: 'tool' }>, width: number): Line[] {
   return out;
 }
 
-export function itemLines(it: Item, width: number, now = Date.now()): Line[] {
+/** Every string from an item goes through the terminal sanitiser first: escape codes in model output or tool results are shown inert. */
+function cleanItem(it: Item): Item {
   switch (it.kind) {
-    case 'user': return userLines(it.text, width);
+    case 'user': return { ...it, text: clean(it.text) };
+    case 'assistant': case 'thinking': return { ...it, text: clean(it.text) };
+    case 'tool': return { ...it, name: clean(it.name), summary: clean(it.summary), ...(it.result !== undefined ? { result: clean(it.result) } : {}), ...(it.path !== undefined ? { path: clean(it.path) } : {}), ...(it.command !== undefined ? { command: clean(it.command) } : {}), ...(it.diff !== undefined ? { diff: clean(it.diff) } : {}) };
+    case 'notice': return { ...it, text: clean(it.text), ...(it.detail !== undefined ? { detail: clean(it.detail) } : {}) };
+  }
+}
+export function itemLines(raw: Item, width: number, now = Date.now()): Line[] {
+  const it = cleanItem(raw);
+  switch (it.kind) {
+    case 'user': return userLines(it.text, width, it.member);
     case 'assistant': return assistantLines(it.text, width, it.done);
     case 'thinking': {
       if (it.done) return [[sp('∴ ', { c: 'text.muted' }), sp(`thought for ${formatElapsed(Math.max(1000, it.ms))}`, { c: 'text.muted', i: true })]];

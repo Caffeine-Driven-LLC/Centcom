@@ -86,8 +86,8 @@
    "note": "multiline, history, paste, slash popup; no external editor"
   },
   "C036": {
-   "pct": 0.7,
-   "note": "own wrapping and scroll anchoring; not virtualised yet"
+   "pct": 0.95,
+   "note": "virtualised layout with per-block cache (10k blocks), follow tail with \"N new\" indicator, ctrl+home/end, resize anchor, 5,000-block cap, terminal sanitising of every string, session-event reducer (seq order, delta reorder/dedupe/gap) and member identity rendering; loadRange for older blocks waits for remote history"
   },
   "C037": {
    "pct": 1,
