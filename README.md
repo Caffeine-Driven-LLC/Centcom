@@ -36,6 +36,15 @@ Flags: `--mode plan|acceptEdits`, `--mascot large|small|off`, `--cento-color red
 
 `tools/dev/shot.py` runs the app in a pseudo-terminal and saves a screenshot (needs `pip install pyte pillow`). Checks: `pnpm typecheck && pnpm test`.
 
+## Web UI and desktop app
+
+```sh
+pnpm web          # builds the client, starts http://127.0.0.1:58008 and opens the launcher
+pnpm web:app      # same, but opens it as a chromeless app window
+```
+
+The launcher lets you pick a project folder, then **Start on web** (a browser tab) or **Start as app** (a window with no browser chrome, own profile). Both show the same workspace and share the same running agent. The server listens on 127.0.0.1 only, checks Host and Origin, and needs the token in `~/.centcom/token` (the first visit sets a cookie).
+
 ## Try the mascot
 
 ```bash
