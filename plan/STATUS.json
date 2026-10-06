@@ -252,6 +252,10 @@
   "C057": {
    "pct": 0.75,
    "note": "session client against the mock relay: create/join/leave/end/claim-host/list/share-link REST, a new join token per attempt, host key grants (share_history on/off), rotation on kick and scheduled, guest waiting_for_key and held frames, sign-verify-decrypt before any event, forged server frames and bad frames dropped, TOFU key-changed with held frames and trustDevice, snapshot upload cadence and restore with history fill, 47 event fixtures round-trip; gaps: re-encrypting unsent frames after rotation, chunking over 192 KiB, share-link guests end to end, host hand-over key transfer; contract gaps noted (key.grant frame key, snapshot blob format); adds resumeFrom({ask:false}) and flush() to the C055 channel"
+  },
+  "C058": {
+   "pct": 0.8,
+   "note": "queue client: submit (hybrid frame, size = ciphertext bytes, idempotent item/frame id), cancel, host controls, deterministic reducer with held items while paused, relay queue.state replacement, ignored forged host frames, local pre-checks and server error mapping; tested between two clients on the mock relay plus property tests; gaps: no TUI wiring, auto-approve policies not exercised, frame id is msg_ (contract says que_)"
   }
  },
  "next": [

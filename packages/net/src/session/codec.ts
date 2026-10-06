@@ -25,15 +25,16 @@ export class FrameCodec {
   private header(t: string, id: string, k: string, fromDev: string): FrameHeader { return { v: 1, t, id, sid: this.o.sid, from_dev: fromDev, k }; }
 
   /** Clear kinds go out as they are; encrypted and hybrid kinds are encrypted under the current epoch and signed with the device key. */
-  encode(kind: string, id: string, body: { p?: Record<string, unknown>; secret?: Record<string, unknown> }, o: { kid?: string } = {}): Outbound {
+  /** `p` may be a function of the ciphertext size (queue.submit carries it in the clear and signs it). */
+  encode(kind: string, id: string, body: { p?: Record<string, unknown> | ((info: { ctBytes: number }) => Record<string, unknown>); secret?: Record<string, unknown> }, o: { kid?: string } = {}): Outbound {
     const mode = payloadMode(kind); const t = frameTypeOf(kind);
-    if (mode === 'clear') return { t, id, k: kind, ...(body.p !== undefined ? { p: body.p } : {}) };
+    if (mode === 'clear') { const p = typeof body.p === 'function' ? body.p({ ctBytes: 0 }) : body.p; return { t, id, k: kind, ...(p !== undefined ? { p } : {}) }; }
     if (!this.o.device) throw new SessionError('view_only', 'You joined with a view-only link, so you cannot send this.');
     const secret = body.secret ?? {}; const header = this.header(t, id, kind, this.o.deviceId); let key: Uint8Array; let kid: string;
-    if (kind === 'key.grant') { const to = String(body.p?.to_device ?? ''); const kids = (body.p?.kids as string[] | undefined) ?? []; kid = o.kid ?? kids.at(-1) ?? 'k1'; key = grantTransportKey(this.o.sid, to); }
+    if (kind === 'key.grant') { const bp = typeof body.p === 'function' ? {} : body.p; const to = String(bp?.to_device ?? ''); const kids = (bp?.kids as string[] | undefined) ?? []; kid = o.kid ?? kids.at(-1) ?? 'k1'; key = grantTransportKey(this.o.sid, to); }
     else { const cur = o.kid ? { kid: o.kid, key: this.o.ring.get(o.kid) } : this.o.ring.current(); if (!cur.key) throw new SessionError('no_key', 'There is no key for that epoch yet.'); kid = cur.kid; key = cur.key; }
     let ct: Ciphertext; try { ct = encryptPayload({ key, kid, header, secret }); } catch (e) { if (e instanceof CryptoError && e.code === 'too_large') throw new SessionError('too_large', 'That message is too large to send in one piece.'); throw e; }
-    const p = mode === 'hybrid' ? body.p ?? {} : undefined; const sig = signFrame(this.o.device.signingKey(), { header, ct, ...(p !== undefined ? { p } : {}) });
+    const ctBytes = Math.floor((ct.c.length * 3) / 4); const rawP = typeof body.p === 'function' ? body.p({ ctBytes }) : body.p; const p = mode === 'hybrid' ? rawP ?? {} : undefined; const sig = signFrame(this.o.device.signingKey(), { header, ct, ...(p !== undefined ? { p } : {}) });
     const out: Outbound = { t, id, k: kind, ct, sig, ...(p !== undefined ? { p } : {}) }; assertWritableFrame({ v: 1, sid: this.o.sid, ...out }); return out;
   }
 

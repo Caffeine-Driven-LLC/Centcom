@@ -32,17 +32,17 @@ export interface SessionClientDeps {
 }
 export interface SessionOptions { /** listeners attached before the connection starts, so early states are not missed */ on?: { [K in LifecycleName]?: (...a: LifecycleEvents[K]) => void }; /** host: builds the checkpoint at this position; without it no snapshots are uploaded */ buildSnapshot?(ctx: { seq: number }): Promise<Omit<SnapshotDoc, 'fmt' | 'v' | 'seq'> | undefined>; }
 export type LifecycleEvents = {
-  state: [SessionState]; roster: [MemberInfo[], number]; 'key-changed': [{ device: string; member: string; old?: string; new?: string }]; 'waiting-for-key': []; 'protocol-warning': [{ reason: string }]; ended: [{ code: number | string }]; snapshot: [{ doc: SnapshotDoc; seq: number }]; notice: [Record<string, unknown>];
+  state: [SessionState]; roster: [MemberInfo[], number]; 'key-changed': [{ device: string; member: string; old?: string; new?: string }]; 'waiting-for-key': []; 'protocol-warning': [{ reason: string }]; ended: [{ code: number | string }]; snapshot: [{ doc: SnapshotDoc; seq: number }]; notice: [Record<string, unknown>]; error: [{ code: string; status?: number; retryAfterS?: number }];
 };
 export type LifecycleName = keyof LifecycleEvents;
 class Lifecycle extends TypedEmitter<LifecycleEvents> { fire<K extends LifecycleName>(ev: K, ...a: LifecycleEvents[K]): void { this.emit(ev, ...a); } }
-const LIFECYCLE = new Set<string>(['state', 'roster', 'key-changed', 'waiting-for-key', 'protocol-warning', 'ended', 'snapshot', 'notice']);
+const LIFECYCLE = new Set<string>(['state', 'roster', 'key-changed', 'waiting-for-key', 'protocol-warning', 'ended', 'snapshot', 'notice', 'error']);
 export interface SessionHandle {
   readonly id: string; readonly me: MemberInfo; readonly state: SessionState; readonly policy: SessionPolicy;
   roster(): MemberInfo[];
   /** the epochs (key ids) this device can read, oldest first */
   heldEpochs(): string[];
-  sendEvent(kind: string, body: { p?: EventP; secret?: EventSecret }): Promise<{ id: string; seq: number }>;
+  sendEvent(kind: string, body: { p?: EventP | ((info: { ctBytes: number }) => EventP); secret?: EventSecret; /** the frame id (a `msg_` id); a retry with the same id is the same frame */ id?: string }): Promise<{ id: string; seq: number }>;
   on<K extends LifecycleName>(name: K, fn: (...a: LifecycleEvents[K]) => void): () => void;
   on(kind: string, fn: (e: DecodedEvent) => void): () => void;
   onAny(fn: (e: DecodedEvent) => void): () => void;
@@ -55,6 +55,8 @@ export interface SessionHandle {
   createShareLink(): Promise<{ token: string; url: string; expires_at: string; fragment: string }>;
 }
 const realClock: RelayClock = { now: () => Date.now(), setTimeout: (fn, ms) => setTimeout(fn, ms), clearTimeout: (h) => clearTimeout(h as unknown as ReturnType<typeof setTimeout>) };
+/** sys.error codes that mean the relay refused the frame we just sent (it does not say which, so the oldest unechoed one). */
+const FRAME_REFUSALS = new Set<string>(['queue_full', 'queue_item_gone', 'queue_not_allowed', 'forbidden', 'role_insufficient', 'muted', 'session_locked', 'host_required', 'frame_too_large', 'invalid_frame', 'lock_denied']);
 const KEY_WAIT_MS = 10_000; const MAX_PENDING = 1000;
 
 class Connection implements SessionHandle {
@@ -88,11 +90,12 @@ class Connection implements SessionHandle {
     this.relay.on('link', (l) => { if (this.st === 'ended') return; if (l === 'reconnecting' || l === 'offline') this.setState('reconnecting'); else this.setState(this.guest.hasKey() ? 'live' : 'waiting_for_key'); });
     this.relay.on('closed', (c) => { if (!c.willReconnect && !this.closed) { if (c.code === 1000 || c.code === 4410 || c.code === 4409) this.finish(c.code); } });
     this.relay.on('protocol_warning', (w) => this.warn(w.reason)); this.relay.on('notice', (n) => this.life.fire('notice', n));
+    this.relay.on('error', (e) => { if (FRAME_REFUSALS.has(e.code)) this.channel.refuseOldest(e); this.life.fire('error', { code: e.code, ...(e.status !== undefined ? { status: e.status } : {}), ...(e.retryAfterS !== undefined ? { retryAfterS: e.retryAfterS } : {}) }); });
     this.channel.on('frame', (f) => { this.chain = this.chain.then(() => this.onFrame(f)).catch(() => this.warn('frame_handler_failed')); });
     this.channel.on('snapshot-required', (e) => this.needCatchUp(e.snapshotSeq)); this.relay.on('welcome', (w) => { if (w.resume?.snapshot_required === true) this.needCatchUp(); });
     const w = await this.relay.connect(); this.me = { ...this.me, id: w.member.id, role: w.role as Role, slot: w.slot, ...(w.member.name ? { name: w.member.name } : {}) }; this.roster_.upsert({ ...this.me, ...(keys ? { keys: { device: this.d.deviceId, ...keys } } : {}) });
     await this.refreshMembers(); this.setState(this.guest.hasKey() ? 'live' : 'waiting_for_key');
-    if (this.me.role === 'host') { this.scheduleHostTimers(); for (const m of this.roster_.recipients(this.d.deviceId)) await this.host!.grantTo(m).catch(() => undefined); }
+    if (this.me.role === 'host') { if (!this.host) this.becomeHost(); else this.scheduleHostTimers(); await this.persistKeys(); if (this.guest.hasKey()) for (const m of this.roster_.recipients(this.d.deviceId)) await this.host!.grantTo(m).catch(() => undefined); }
   }
 
   /* ------------------------------------------------------------- members and trust */
@@ -150,12 +153,12 @@ class Connection implements SessionHandle {
   /** Wait (briefly) for the key of an epoch the relay announced. */
   private waitForKey(kid: string): Promise<void> { if (this.ring.get(kid)) return Promise.resolve(); return new Promise((res, rej) => { const timer = this.clock.setTimeout(() => { this.keyWaiters = this.keyWaiters.filter((w) => w.res !== res); rej(new SessionError('timeout', 'The new session key has not arrived yet.')); }, KEY_WAIT_MS); this.keyWaiters.push({ kid, res, rej, timer }); }); }
   private releaseWaiters(): void { for (const w of [...this.keyWaiters]) if (this.ring.get(w.kid)) { this.clock.clearTimeout(w.timer as never); w.res(); this.keyWaiters = this.keyWaiters.filter((x) => x !== w); } }
-  private async sendRaw(kind: string, body: { p?: Record<string, unknown>; secret?: Record<string, unknown> }, kid?: string): Promise<{ id: string; seq: number }> {
-    const id = this.ids.next('msg'); const o = this.codec.encode(kind, id, body, kid ? { kid } : {});
+  private async sendRaw(kind: string, body: { p?: Record<string, unknown> | ((info: { ctBytes: number }) => Record<string, unknown>); secret?: Record<string, unknown>; id?: string }, kid?: string): Promise<{ id: string; seq: number }> {
+    const id = body.id ?? this.ids.next('msg'); const o = this.codec.encode(kind, id, body, kid ? { kid } : {});
     if (o.t === 'presence') { this.channel.sendEphemeral({ t: 'presence', k: o.k, ...(o.p ? { p: o.p } : {}), ...(o.ct ? { ct: o.ct } : {}), ...(o.sig ? { sig: o.sig } : {}) }); return { id, seq: 0 }; }
     return this.channel.send({ t: o.t as 'event', k: o.k, id, ...(o.p ? { p: o.p } : {}), ...(o.ct ? { ct: o.ct } : {}), ...(o.sig ? { sig: o.sig } : {}) });
   }
-  async sendEvent(kind: string, body: { p?: EventP; secret?: EventSecret }): Promise<{ id: string; seq: number }> {
+  async sendEvent(kind: string, body: { p?: EventP | ((info: { ctBytes: number }) => EventP); secret?: EventSecret; id?: string }): Promise<{ id: string; seq: number }> {
     if (this.st === 'ended') throw new SessionError('ended', 'This session has ended.'); const mode = payloadMode(kind); if (mode === 'unknown') throw new TypeError(`unknown event kind ${kind}`);
     if (mode !== 'clear') {
       if (this.viewOnly) throw new SessionError('view_only', 'You joined with a view-only link, so you cannot send this.'); if (!this.guest.hasKey()) throw new SessionError('waiting_for_key', 'Waiting for the host to let you in.');
@@ -170,7 +173,7 @@ class Connection implements SessionHandle {
   onAny(fn: (e: DecodedEvent) => void): () => void { this.any.add(fn); return () => { this.any.delete(fn); }; }
 
   /* ------------------------------------------------------------- host duties */
-  private becomeHost(): void { this.host = new HostDuties({ ring: this.ring, deviceId: this.d.deviceId, policy: () => this.policy, now: () => new Date(this.clock.now()), recipients: () => this.roster_.recipients(this.d.deviceId), persist: () => this.persistKeys(), log: (m, c) => this.d.logger?.info(m, c), sendGrant: async (p, secret) => { await this.sendRaw('key.grant', { p, secret }); } }); this.scheduleHostTimers(); }
+  private becomeHost(): void { if (this.host) return; this.host = new HostDuties({ ring: this.ring, deviceId: this.d.deviceId, policy: () => this.policy, now: () => new Date(this.clock.now()), recipients: () => this.roster_.recipients(this.d.deviceId), persist: () => this.persistKeys(), log: (m, c) => this.d.logger?.info(m, c), sendGrant: async (p, secret) => { await this.sendRaw('key.grant', { p, secret }); } }); this.scheduleHostTimers(); }
   private scheduleHostTimers(): void {
     const tick = (): void => { if (this.closed || !this.host) return; if (this.host.rotationDue() && !this.rotationRequested) { this.rotationRequested = true; void this.sendRaw('control.rotate_request', { p: { reason: 'scheduled' } }).catch(() => { this.rotationRequested = false; }); } this.rotateTimer = this.clock.setTimeout(tick, 3_600_000); }; this.rotateTimer = this.clock.setTimeout(tick, 3_600_000);
     if (this.opts.buildSnapshot) { const snap = (): void => { if (this.closed) return; if (this.framesSinceSnapshot > 0) void this.autoSnapshot(); this.snapTimer = this.clock.setTimeout(snap, SNAPSHOT_EVERY_MS); }; this.snapTimer = this.clock.setTimeout(snap, SNAPSHOT_EVERY_MS); }
