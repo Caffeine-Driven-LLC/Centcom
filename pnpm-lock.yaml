@@ -316,6 +316,9 @@ importers:
       '@types/libsodium-wrappers':
         specifier: 0.8.2
         version: 0.8.2
+      ajv:
+        specifier: 8.20.0
+        version: 8.20.0
       yaml:
         specifier: 2.9.1
         version: 2.9.1
