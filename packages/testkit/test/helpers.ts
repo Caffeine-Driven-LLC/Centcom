@@ -8,6 +8,10 @@ export async function api(m: MockBackend, method: string, path: string, o: { tok
   const text = await r.text(); let body: any; try { body = text ? JSON.parse(text) : undefined; } catch { body = text; }
   return { status: r.status, body, headers: r.headers };
 }
+/** An encrypted-kind event as a client would send it: opaque `ct` and a signature, no `p`. `c` is distinctive so privacy tests can look for it. */
+export const sealed = (id: string, k = 'message.user', c = 'SECRETCIPHERTEXT') => ({ v: 1, t: 'event', id, k, ct: { alg: 'xchacha20poly1305', kid: 'k1', n: 'N'.repeat(32), c }, sig: 'S'.repeat(86) });
+/** Wait until `cond` holds, polling real time (sockets need real time to deliver even when the mock's clock is virtual). */
+export async function eventually(cond: () => boolean, ms = 3000): Promise<void> { const end = Date.now() + ms; while (!cond()) { if (Date.now() > end) throw new Error('condition not met in time'); await new Promise((r) => setTimeout(r, 10)); } }
 /** Run the whole device login against the mock and return real tokens. */
 export async function login(m: MockBackend) {
   const dc = (await api(m, 'POST', '/v1/auth/device/code', { body: DEVICE_BODY })).body;

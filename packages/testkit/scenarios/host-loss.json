@@ -1,0 +1,8 @@
+{
+  "name": "host-loss",
+  "steps": [
+    { "do": "peer_send", "args": { "name": "Host", "role": "host", "k": "message.user" } },
+    { "at_ms": 2000, "do": "disconnect", "args": { "role": "host", "code": 1001 } },
+    { "at_ms": 900000, "do": "peer_send", "args": { "name": "Host", "k": "message.user" } }
+  ]
+}

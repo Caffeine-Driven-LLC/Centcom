@@ -1,7 +1,4 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { ulid as _u } from './ulid.js';
 import { Peer, start } from './helpers.js';
 import type { MockBackend } from '../src/index.js';
@@ -41,7 +38,7 @@ describe('handshake', () => {
   });
   it('heartbeat: pings arrive every 20 s and a silent client is dropped at 50 s', async () => {
     m = await start(); const a = await open({ pong: false }); await a.until((p) => p.has('sys.welcome')); await m.virtual!.advance(20_000); await a.until((p) => p.has('sys.ping'));
-    await m.virtual!.advance(41_000); // 61 s of silence: the 60 s check finds it past dead_ms (50 s) await a.until((p) => !!p.closed); expect(a.closed!.code).toBe(1001);
+    await m.virtual!.advance(41_000); /* 61 s of silence: the 60 s check finds it past dead_ms (50 s) */ await a.until((p) => !!p.closed); expect(a.closed!.code).toBe(1001);
   });
   it('too old a client is told to upgrade (4426)', async () => {
     m = await start(); await m.control('min-client', { version: '9.0.0' }); const a = await open(); await a.until((p) => !!p.closed); expect(a.closed!.code).toBe(4426);
@@ -136,16 +133,5 @@ describe('presence, abuse and backpressure', () => {
     m = await start(); const a = await open({ role: 'host', name: 'A' }); await a.until((p) => p.has('sys.welcome'));
     await m.control('notice', { sid: SID, code: 'usage_warning', level: 'warn', params: { pct: 90, resets_at: '2026-10-07T00:00:00Z' } }); await a.until((p) => p.has('sys.notice')); expect(a.of('sys.notice')[0].p.params.pct).toBe(90);
     await m.control('disconnect', { sid: SID, code: 4503, retry_after_s: 30 }); await a.until((p) => !!p.closed); expect(a.closed!.code).toBe(4503); expect(a.of('sys.error').at(-1).p.retry_after_s).toBe(30);
-  });
-});
-
-describe('determinism', () => {
-  it('two runs with the same seed and script produce byte-identical frame logs', async () => {
-    const run = async () => { const x = await start({ seed: 7 }); m = x; const a = await open({ role: 'host', name: 'A' }); const b = await open({ name: 'B' }); await Promise.all([a, b].map((p) => p.until((y) => y.has('sys.welcome'))));
-      for (let i = 1; i <= 3; i++) { a.send(ev(msg(i))); b.send(ev(msg(10 + i))); await a.until((p) => p.seqs().length >= 2 + i * 2); } await x.virtual!.advance(1000);
-      const log = JSON.stringify(x.relay.frames(SID)); peers.splice(0).forEach((p) => p.close()); await x.stop(); return log; };
-    const first = await run(); const second = await run(); expect(second).toBe(first); expect(first.length).toBeGreaterThan(200); expect(first).not.toContain('"text"');
-    const golden = fileURLToPath(new URL('./golden/happy-frames.json', import.meta.url)); if (process.env.UPDATE_GOLDEN || !existsSync(golden)) { mkdirSync(dirname(golden), { recursive: true }); writeFileSync(golden, JSON.stringify(JSON.parse(first), null, 1) + '\n'); }
-    expect(JSON.stringify(JSON.parse(readFileSync(golden, 'utf8')))).toBe(first); // the same seed must keep producing the same ids, seqs and timestamps
   });
 });

@@ -1,0 +1,6 @@
+{
+  "name": "flaky-start",
+  "steps": [
+    { "do": "error", "args": { "code": "service_unavailable", "count": 2, "retry_after_s": 1 } }
+  ]
+}

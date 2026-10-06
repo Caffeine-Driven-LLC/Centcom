@@ -1,0 +1,9 @@
+{
+  "name": "maintenance",
+  "steps": [
+    { "do": "notice", "args": { "code": "maintenance_soon", "params": { "starts_at": "2026-10-05T18:00:05Z", "minutes": 30 } } },
+    { "on": { "kind": "sys.hello" }, "do": "notice", "args": { "code": "maintenance_soon", "params": { "starts_at": "2026-10-05T18:00:05Z", "minutes": 30 } } },
+    { "at_ms": 5000, "do": "error", "args": { "code": "service_unavailable", "sticky": true, "retry_after_s": 30 } },
+    { "at_ms": 5000, "do": "disconnect", "args": { "code": 4503, "retry_after_s": 30 } }
+  ]
+}

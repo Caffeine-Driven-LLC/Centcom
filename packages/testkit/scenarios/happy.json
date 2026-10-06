@@ -1,0 +1,11 @@
+{
+  "name": "happy",
+  "seed": 7,
+  "steps": [
+    { "do": "peer_send", "args": { "name": "Host", "role": "host", "k": "message.user", "id": "msg_01JTEST0000000000000000001" } },
+    { "at_ms": 1000, "do": "peer_send", "args": { "name": "Ada", "role": "editor", "k": "comment.add" } },
+    { "at_ms": 2000, "do": "peer_send", "args": { "name": "Host", "k": "message.assistant.delta", "count": 3 } },
+    { "at_ms": 2500, "do": "peer_send", "args": { "name": "Host", "k": "message.assistant.done" } },
+    { "at_ms": 3000, "do": "peer_send", "args": { "name": "Ada", "k": "reaction", "p": { "target": "msg_01JTEST0000000000000000001", "code": "thumbs", "op": "add" } } }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "name": "client-too-old",
+  "steps": [
+    { "do": "error", "args": { "code": "client_too_old", "min_version": "99.0.0" } },
+    { "do": "disconnect", "args": { "code": 4426 } }
+  ]
+}

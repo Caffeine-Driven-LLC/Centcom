@@ -1,3 +1,4 @@
+/** The mock's whole mutable world, owned by one startMockBackend call. Plain data only: no sockets, no timers. */
 import type { ErrorCode, Id } from '@centcom/protocol';
 
 export interface MemberRec { id: Id<'mem'>; user: Id<'usr'>; name: string; slot: number; role: 'host' | 'editor' | 'viewer'; device: Id<'dev'>; muted?: boolean; joined: boolean }
@@ -16,4 +17,12 @@ export interface MockState {
   devices: Map<string, { id: Id<'dev'>; name: string; revoked: boolean }>; revokedTokens: Set<string>; families: Map<string, FamilyRec>; deviceCodes: Map<string, DeviceCodeRec>;
   usedJti: Set<string>; idem: Map<string, IdemRec>; sessions: Map<string, SessionRec>; entitlements: Map<string, Record<string, unknown>>; etags: Map<string, string>; datasets: Map<string, unknown[]>;
   pendingErrors: { code: ErrorCode; retryAfterS?: number }[]; rateLimit?: { remaining: number; retryAfterS: number }; minClient?: string; maintenance: boolean; counters: Map<string, number>;
+  /** Every REST call (except status and health) answers this error until cleared. */
+  sticky?: { code: ErrorCode; retryAfterS?: number };
+  /** Seed data loaded with `--data` (lists and lookups answer from it). */
+  seed: SeedData;
+  /** Generic resources, generated on first read and kept, so a second GET (and its ETag) is stable until a write. */
+  resources: Map<string, unknown>;
 }
+/** The `--data` directory, already validated: each array matches its OpenAPI component schema. */
+export interface SeedData { users?: Record<string, unknown>[]; workspaces?: Record<string, unknown>[]; sessions?: Record<string, unknown>[]; entitlements?: Record<string, unknown>[] }

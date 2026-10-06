@@ -35,13 +35,15 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 | [C102](plan/client/C102.md) | Claude Code engine: drive the user’s own claude binary (stream-json, resume, approvals bridge) | 80% | claude engine with a secured approval bridge (per-run token, private socket, timeout, fail closed); gaps: prompt over stdin, bypass gate, spawn/first-event timeouts, version check, subagent.done, fake CLI and goldens |
 | [C103](plan/client/C103.md) | Codex engine: drive the user’s own codex binary (app-server JSON-RPC, exec fallback) | 75% | codex app-server engine tested against a protocol-faithful fake; no real turn yet. Real-Codex checklist: docs/codex-verification.md, recorder: tools/codex/record.ts |
 
-+30 more in [`plan/STATUS.json`](plan/STATUS.json).
++29 more in [`plan/STATUS.json`](plan/STATUS.json).
 
 ### Ready to pick up (all dependencies done)
 
 | Lane | What | Size | Milestone |
 |---|---|---|---|
 | [C071](plan/client/C071.md) | LAN discovery over mDNS | M | M2 |
+| [C051](plan/client/C051.md) | HTTP API client generated from OpenAPI | L | M2 |
+| [C054](plan/client/C054.md) | Relay WebSocket client: handshake, envelope, heartbeat | L | M2 |
 | [C096](plan/client/C096.md) | Documentation site, README, man pages, built-in help | M | M6 |
 
 Each lane card lists its goal, contracts, acceptance criteria and tests. Read [`plan/START_HERE.md`](plan/START_HERE.md) first.

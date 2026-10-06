@@ -1,0 +1,8 @@
+{
+  "name": "busy-session",
+  "steps": [
+    { "do": "peer_send", "args": { "name": "Host", "role": "host", "k": "message.user" } },
+    { "do": "peer_send", "args": { "name": "Ada", "role": "editor", "k": "comment.add" } },
+    { "do": "peer_send", "args": { "name": "Bo", "role": "editor", "k": "comment.add" } }
+  ]
+}

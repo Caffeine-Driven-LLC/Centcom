@@ -190,8 +190,8 @@
    "note": "redacting logger and file sink; gaps: redaction table size, real-fs sink test, injected clock in sink"
   },
   "C007": {
-   "pct": 0.75,
-   "note": "mock backend with all REST operations and relay; gaps: 13 of 16 scenarios, scenario files, --data and flags, ETag/privacy tests"
+   "pct": 0.95,
+   "note": "mock backend: all REST operations, relay, validated scenario files (at_ms/on triggers, 9 actions) with all 16 card scenarios bundled, --data seed loader, CLI per card ({http,ws} line, --ping-ms/--dead-ms, exit 0/1/2, 1001 on SIGINT); every acceptance item has a test. Gaps: tests grouped in fewer files than the card names, contract-fixture replay through the mock and coverage not measured"
   },
   "C017": {
    "pct": 0.95,

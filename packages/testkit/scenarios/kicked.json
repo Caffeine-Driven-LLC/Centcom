@@ -1,0 +1,7 @@
+{
+  "name": "kicked",
+  "steps": [
+    { "do": "peer_send", "args": { "name": "Host", "role": "host", "k": "message.user" } },
+    { "at_ms": 2000, "do": "disconnect", "args": { "role": "editor", "code": 4403, "reason": "kicked" } }
+  ]
+}

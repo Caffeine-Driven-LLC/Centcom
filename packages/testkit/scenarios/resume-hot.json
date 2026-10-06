@@ -1,0 +1,8 @@
+{
+  "name": "resume-hot",
+  "steps": [
+    { "do": "peer_send", "args": { "name": "Host", "role": "host", "k": "message.user" } },
+    { "at_ms": 2000, "do": "disconnect", "args": { "code": 1001, "reason": "server_restart" } },
+    { "at_ms": 2100, "do": "peer_send", "args": { "name": "Host", "k": "message.assistant.delta", "count": 3 } }
+  ]
+}

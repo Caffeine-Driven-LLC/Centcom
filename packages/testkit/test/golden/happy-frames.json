@@ -1,66 +1,119 @@
 [
  {
   "seq": 1,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "t": "control",
+  "k": "control.member_joined",
+  "id": "msg_01M46KHY80NVVSZTYK18P5PV0B",
+  "from": "srv",
+  "bytes": 306
+ },
+ {
+  "seq": 2,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "t": "event",
+  "k": "message.user",
+  "id": "msg_01JTEST0000000000000000001",
+  "from": "mem_01M46KHY80NVVSZTYK18P5PV08",
+  "bytes": 444
+ },
+ {
+  "seq": 3,
+  "ts": "2026-10-05T18:00:00.000Z",
   "t": "control",
   "k": "control.member_joined",
   "id": "msg_01M46KHY80NVVSZTYK18P5PV0G",
   "from": "srv",
-  "bytes": 303
- },
- {
-  "seq": 2,
-  "t": "control",
-  "k": "control.member_joined",
-  "id": "msg_01M46KHY80NVVSZTYK18P5PV0H",
-  "from": "srv",
-  "bytes": 305
- },
- {
-  "seq": 3,
-  "t": "event",
-  "k": "message.user",
-  "id": "msg_01JTEST0000000000000000001",
-  "from": "mem_01M46KHY80NVVSZTYK18P5PV0A",
-  "bytes": 212
+  "bytes": 310
  },
  {
   "seq": 4,
+  "ts": "2026-10-05T18:00:00.000Z",
   "t": "event",
   "k": "message.user",
-  "id": "msg_01JTEST000000000000000000B",
+  "id": "msg_01JTEST0000000000000000035",
   "from": "mem_01M46KHY80NVVSZTYK18P5PV0E",
-  "bytes": 212
+  "bytes": 396
  },
  {
   "seq": 5,
+  "ts": "2026-10-05T18:00:00.000Z",
   "t": "event",
   "k": "message.user",
-  "id": "msg_01JTEST0000000000000000002",
-  "from": "mem_01M46KHY80NVVSZTYK18P5PV0A",
-  "bytes": 212
+  "id": "msg_01JTEST0000000000000000036",
+  "from": "mem_01M46KHY80NVVSZTYK18P5PV0E",
+  "bytes": 396
  },
  {
   "seq": 6,
+  "ts": "2026-10-05T18:00:00.000Z",
   "t": "event",
   "k": "message.user",
-  "id": "msg_01JTEST000000000000000000C",
+  "id": "msg_01JTEST0000000000000000037",
   "from": "mem_01M46KHY80NVVSZTYK18P5PV0E",
-  "bytes": 212
+  "bytes": 396
  },
  {
   "seq": 7,
-  "t": "event",
-  "k": "message.user",
-  "id": "msg_01JTEST0000000000000000003",
-  "from": "mem_01M46KHY80NVVSZTYK18P5PV0A",
-  "bytes": 212
+  "ts": "2026-10-05T18:00:01.000Z",
+  "t": "control",
+  "k": "control.member_joined",
+  "id": "msg_01M46KHZ78BR7EPH9791CCQMQ0",
+  "from": "srv",
+  "bytes": 307
  },
  {
   "seq": 8,
+  "ts": "2026-10-05T18:00:01.000Z",
   "t": "event",
-  "k": "message.user",
-  "id": "msg_01JTEST000000000000000000D",
-  "from": "mem_01M46KHY80NVVSZTYK18P5PV0E",
-  "bytes": 212
+  "k": "comment.add",
+  "id": "msg_01M46KHZ78BR7EPH9791CCQMQ1",
+  "from": "mem_01M46KHZ78BR7EPH9791CCQMPX",
+  "bytes": 443
+ },
+ {
+  "seq": 9,
+  "ts": "2026-10-05T18:00:02.000Z",
+  "t": "event",
+  "k": "message.assistant.delta",
+  "id": "msg_01M46KJ06G0CS3ATBP4XT5W0G1",
+  "from": "mem_01M46KHY80NVVSZTYK18P5PV08",
+  "bytes": 455
+ },
+ {
+  "seq": 10,
+  "ts": "2026-10-05T18:00:02.000Z",
+  "t": "event",
+  "k": "message.assistant.delta",
+  "id": "msg_01M46KJ06G0CS3ATBP4XT5W0G2",
+  "from": "mem_01M46KHY80NVVSZTYK18P5PV08",
+  "bytes": 456
+ },
+ {
+  "seq": 11,
+  "ts": "2026-10-05T18:00:02.000Z",
+  "t": "event",
+  "k": "message.assistant.delta",
+  "id": "msg_01M46KJ06G0CS3ATBP4XT5W0G3",
+  "from": "mem_01M46KHY80NVVSZTYK18P5PV08",
+  "bytes": 456
+ },
+ {
+  "seq": 12,
+  "ts": "2026-10-05T18:00:02.500Z",
+  "t": "event",
+  "k": "message.assistant.done",
+  "id": "msg_01M46KJ0P4F8MMDR4GRKT7GMKG",
+  "from": "mem_01M46KHY80NVVSZTYK18P5PV08",
+  "bytes": 455
+ },
+ {
+  "seq": 13,
+  "ts": "2026-10-05T18:00:03.000Z",
+  "t": "event",
+  "k": "reaction",
+  "id": "msg_01M46KJ15RKM0QN7SB9J81B34B",
+  "from": "mem_01M46KHZ78BR7EPH9791CCQMPX",
+  "bytes": 267
  }
 ]

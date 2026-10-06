@@ -1,0 +1,13 @@
+{
+  "name": "quota-warning",
+  "steps": [
+    { "do": "peer_send", "args": { "name": "Host", "role": "host", "k": "message.user" } },
+    { "at_ms": 1000, "do": "notice", "args": { "code": "usage_warning", "params": { "pct": 80, "resets_at": "2026-11-01T00:00:00Z" } } },
+    { "at_ms": 1000, "do": "set_entitlement", "args": { "entitlements": { "warnings": [{ "limit": "hosted_minutes_month", "pct": 80 }] } } },
+    { "at_ms": 3000, "do": "notice", "args": { "code": "usage_warning", "params": { "pct": 95, "resets_at": "2026-11-01T00:00:00Z" } } },
+    { "at_ms": 3000, "do": "set_entitlement", "args": { "entitlements": { "warnings": [{ "limit": "hosted_minutes_month", "pct": 95 }] } } },
+    { "at_ms": 5000, "do": "notice", "args": { "code": "quota_reached", "params": { "resets_at": "2026-11-01T00:00:00Z" } } },
+    { "at_ms": 5000, "do": "set_entitlement", "args": { "entitlements": { "warnings": [{ "limit": "hosted_minutes_month", "pct": 100 }] } } },
+    { "at_ms": 5000, "do": "error", "args": { "code": "quota_exceeded" } }
+  ]
+}

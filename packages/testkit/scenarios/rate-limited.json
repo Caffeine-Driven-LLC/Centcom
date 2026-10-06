@@ -1,0 +1,6 @@
+{
+  "name": "rate-limited",
+  "steps": [
+    { "do": "error", "args": { "code": "rate_limited", "after": 3, "retry_after_s": 7 } }
+  ]
+}
