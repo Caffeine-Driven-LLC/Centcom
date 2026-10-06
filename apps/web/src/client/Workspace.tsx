@@ -95,7 +95,7 @@ export function Workspace({ c }: { c: Conn }) {
   const feed = useRef<HTMLDivElement>(null); const box = useRef<HTMLTextAreaElement>(null);
   const history = useRef<string[]>([]); const hIdx = useRef(-1);
   const seeded = useRef(false);
-  useEffect(() => { if (!seeded.current && c.state) { history.current = [...c.state.history]; seeded.current = true; } }, [c.state]);
+  useEffect(() => { if (!seeded.current && c.state) { history.current = [...c.history]; seeded.current = true; } }, [c.state]);
 
   useEffect(() => { const i = setInterval(() => tick((x) => x + 1), 1000); return () => clearInterval(i); }, []);
   useEffect(() => { const el = feed.current; if (el && stuck) el.scrollTop = el.scrollHeight; }, [items, s?.approvals.length, stuck]);

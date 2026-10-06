@@ -1,9 +1,9 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { createLogger, type Level, type Logger, type Sink } from './logger.js';
+import { createLogger, type LogLevel, type Logger, type Sink } from './logger.js';
 import { createFileSink, createRingSink, createStderrSink, nodeLogFs } from './sinks.js';
 
-export interface AppLoggerOptions { level: Level; /** where logs/ lives (default ~/.centcom) */ stateDir?: string; maxBytes?: number; maxFiles?: number; /** only for non-interactive use: a terminal UI owns the screen */ stderr?: boolean; home?: string }
+export interface AppLoggerOptions { level: LogLevel; /** where logs/ lives (default ~/.centcom) */ stateDir?: string; maxBytes?: number; maxFiles?: number; /** only for non-interactive use: a terminal UI owns the screen */ stderr?: boolean; home?: string }
 
 /** The logger the apps use: a rotating private file, an in-memory ring for diagnostics, optionally stderr. */
 export function createAppLogger(o: AppLoggerOptions): { logger: Logger; ring: ReturnType<typeof createRingSink>; file: string } {
