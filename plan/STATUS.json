@@ -21,6 +21,10 @@
    "pct": 0.1,
    "note": "demo engine only; dev seed, mock launcher and fixture repo missing"
   },
+  "C012": {
+   "pct": 0.9,
+   "note": "dry-run release skeleton: Changesets fixed group (@changesets/cli 3.0.3), build-meta.mjs (channels, injected date, contract version), sign.mjs (Ed25519 over the raw SHA-256 digest per CT-API-RELEASES, 0600 key check, fail closed), manifest.mjs (5 targets, validated by the generated validator), release.yml (workflow_dispatch, release environment, SHA-pinned, publish steps commented), docs/releasing.md. Missing: real per-platform binaries (C094), a real key in the release environment, never run on GitHub yet"
+  },
   "C013": {
    "pct": 0.85,
    "note": "runner and runnerd; gaps: windows pipe, preflight wiring, runnerd logs, daemon-level tests"

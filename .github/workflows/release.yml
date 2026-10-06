@@ -1,0 +1,96 @@
+# Release dry run (C012): build, stamp build metadata, sign, assemble the manifest and upload the result as a
+# workflow artifact. It never publishes: the npm, GitHub release, Homebrew and CDN steps below are commented stubs.
+# Runs by hand only, inside the protected `release` environment. See docs/releasing.md.
+name: Release (dry run)
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Release channel
+        type: choice
+        options: [nightly, beta, stable]
+        default: nightly
+
+concurrency:
+  group: release-${{ inputs.channel }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  dry-run:
+    name: Build, sign and assemble (no publish)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: release
+    env:
+      CHANNEL: ${{ inputs.channel }}
+      RUN_NUMBER: ${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with: { persist-credentials: false }
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0, reads the pnpm version from package.json
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version-file: .node-version, cache: pnpm }
+      - name: Install (lockfile must be up to date)
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck and test
+        run: pnpm typecheck && pnpm test
+      - name: Build the web app
+        run: pnpm web:build
+      - name: Stamp build metadata
+        run: node tools/release/build-meta.mjs --channel "$CHANNEL" --beta-number "$RUN_NUMBER" --out dist/build-meta.json
+      - name: Package placeholder artifacts
+        # Stand-ins until the packaging lane (C094) builds real per-platform binaries.
+        run: |
+          mkdir -p artifacts
+          for target in linux-x64 linux-arm64 darwin-x64 darwin-arm64 win32-x64; do
+            tar -czf "artifacts/centcom-$target.tar.gz" dist/build-meta.json apps/web/dist package.json
+          done
+      - name: Sign artifacts
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          umask 077
+          key="$RUNNER_TEMP/release-signing.key"
+          if [ -n "$RELEASE_SIGNING_KEY" ]; then
+            printf '%s\n' "$RELEASE_SIGNING_KEY" > "$key"
+          else
+            echo "::warning::RELEASE_SIGNING_KEY is not set; signing with a throwaway key for this dry run only"
+            openssl genpkey -algorithm ed25519 -out "$key"
+          fi
+          chmod 600 "$key"
+          openssl pkey -in "$key" -pubout -out "$RUNNER_TEMP/release-signing.pub"
+          for f in artifacts/centcom-*.tar.gz; do
+            node tools/release/sign.mjs --file "$f" --key-file "$key"
+            node tools/release/sign.mjs --verify --file "$f" --sig "$f.sig" --pub "$RUNNER_TEMP/release-signing.pub"
+          done
+          rm -f "$key"
+      - name: Assemble the release manifest
+        run: node tools/release/manifest.mjs --channel "$CHANNEL" --dir artifacts --out artifacts/manifest.json --meta dist/build-meta.json --pub "$RUNNER_TEMP/release-signing.pub"
+      - name: Upload dry-run artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-dry-run-${{ inputs.channel }}-${{ github.run_number }}
+          path: |
+            artifacts/
+            dist/build-meta.json
+          if-no-files-found: error
+          retention-days: 7
+
+      # Publishing is deliberately absent. Each stub stays commented until its lane lands.
+      # TODO(https://github.com/Caffeine-Driven-LLC/Centcom/blob/main/plan/client/C094.md): publish to npm.
+      # - name: Publish to npm
+      #   run: pnpm -r publish --access restricted --tag "$CHANNEL"
+      #   env: { NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} }
+      # TODO(https://github.com/Caffeine-Driven-LLC/Centcom/blob/main/plan/client/C094.md): GitHub release.
+      # - name: Create the GitHub release
+      #   run: gh release create "v$VERSION" artifacts/* --prerelease
+      # TODO(https://github.com/Caffeine-Driven-LLC/Centcom/blob/main/plan/client/C094.md): Homebrew tap.
+      # - name: Bump the Homebrew formula
+      #   run: brew bump-formula-pr centcom --url "$URL" --sha256 "$SHA256"
+      # TODO(https://github.com/Caffeine-Driven-LLC/Centcom/blob/main/plan/client/C068.md): upload to the CDN the update client reads.
+      # - name: Upload to the CDN
+      #   run: aws s3 cp artifacts/ "s3://$RELEASE_BUCKET/releases/$CHANNEL/$VERSION/" --recursive

@@ -17,7 +17,9 @@
     "web:build": "pnpm --filter @centcom/web exec vite build",
     "web": "pnpm web:build && tsx apps/web/src/server/main.ts",
     "web:app": "pnpm web:build && tsx apps/web/src/server/main.ts --app",
-    "skills:sync": "tsx tools/skills/sync.ts"
+    "skills:sync": "tsx tools/skills/sync.ts",
+    "changeset": "changeset",
+    "release:meta": "node tools/release/build-meta.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
@@ -25,6 +27,7 @@
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0",
-    "fast-check": "^3.23.0"
+    "fast-check": "^3.23.0",
+    "@changesets/cli": "3.0.3"
   }
 }
