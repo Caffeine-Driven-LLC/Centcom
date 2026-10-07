@@ -26,7 +26,7 @@ export function requestHandoff(host: HandoffSession, to: MemberId, opts: Handoff
   const target = host.members().find((m) => m.id === to); if (!target || target.role !== 'editor' || to === host.me) return fail('not_editor'); if (target.missingKeys) return fail('keys_missing');
   return new Promise<HandoffResult>((resolve) => {
     let settled = false; let timer: unknown; let off: Unsubscribe | undefined; let mySeq: number | undefined;
-    const done = (r: HandoffResult, p: HandoffProgress): void => { if (settled) return; settled = true; if (timer !== undefined) host.clock.clearTimeout(timer as never); off?.(); opts.onProgress?.(p); resolve(r); };
+    const done = (r: HandoffResult, p: HandoffProgress): void => { if (settled) return; settled = true; if (!r.ok) opts.gate?.thaw(); /* the old host stays host */ if (timer !== undefined) host.clock.clearTimeout(timer as never); off?.(); opts.onProgress?.(p); resolve(r); };
     opts.onProgress?.('requested');
     timer = host.clock.setTimeout(() => done({ ok: false, code: 'timeout' }, 'failed'), opts.timeoutMs ?? HANDOFF_TIMEOUT_MS);
     off = host.onFrame((f: HandoffFrame) => {

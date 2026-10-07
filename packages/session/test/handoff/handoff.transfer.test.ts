@@ -20,6 +20,9 @@ describe('transfer (acceptance 1, 2)', () => {
   it('times out after 10 s with no host_changed and stays host', async () => {
     const s = fakeSession(); const p = requestHandoff(s, 'ed1'); await tick(); s.clock.advance(9999); let r: unknown; void p.then((x) => { r = x; }); await tick(); expect(r).toBeUndefined(); s.clock.advance(1); expect(await p).toEqual({ ok: false, code: 'timeout' }); expect(s.role()).toBe('host');
   });
+  it('a timed-out handoff thaws the gate so the old host can act again', async () => {
+    const s = fakeSession(); const gate = new HostActionGate(); const p = requestHandoff(s, 'ed1', { gate }); await tick(); expect(gate.allowed()).toBe(false); s.clock.advance(10_000); expect((await p).ok).toBe(false); expect(gate.allowed()).toBe(true);
+  });
   it('a send that is refused resolves forbidden', async () => { const s = fakeSession({ sendError: { code: 'forbidden' } }); expect(await requestHandoff(s, 'ed1')).toEqual({ ok: false, code: 'forbidden' }); });
   it('onHostChanged reports transfers and failovers', () => { const s = fakeSession(); const got: unknown[] = []; const off = onHostChanged(s, (e) => got.push([e.host, e.code])); s.push({ kind: 'control.host_changed', from: 'srv', p: { host: 'a', code: 'transfer' } }); s.push({ kind: 'control.host_changed', from: 'srv', p: { host: 'b', code: 'failover' } }); s.push({ kind: 'reaction', from: 'x' }); off(); s.push({ kind: 'control.host_changed', from: 'srv', p: { host: 'c', code: 'transfer' } }); expect(got).toEqual([['a', 'transfer'], ['b', 'failover']]); });
 });
