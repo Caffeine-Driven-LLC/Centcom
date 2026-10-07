@@ -46,7 +46,16 @@ export class InviteDialog {
   }
 }
 /** Role change with the select reverting when the server says no. */
-export async function changeRole(http: Http, ws: string, member: string, role: string): Promise<{ ok: true } | { ok: false; reason: string; message?: string }> { try { await http.call('updateMember', { id: ws, mem: member, body: { role } }); return { ok: true }; } catch (e) { return { ok: false, ...failure(e) }; } }
+export async function changeRole(http: Http, ws: string, member: string, role: string): Promise<{ ok: true } | { ok: false; reason: string; retryAfterS?: number }> { try { await http.call('updateMember', { id: ws, mem: member, body: { role } }); return { ok: true }; } catch (e) { return { ok: false, ...failure(e) }; } }
 export async function removeMember(http: Http, ws: string, member: string): Promise<{ ok: true } | { ok: false; reason: string }> { try { await http.call('removeMember', { id: ws, mem: member }); return { ok: true }; } catch (e) { return { ok: false, ...failure(e) }; } }
 export async function transferOwnership(http: Http, ws: string, to: string): Promise<{ ok: true } | { ok: false; reason: string }> { try { await http.call('transferOwnership', { id: ws, body: { to } }, { idempotencyKey: ulid() }); return { ok: true }; } catch (e) { return { ok: false, ...failure(e) }; } }
 export async function deleteWorkspace(http: Http, ws: string): Promise<{ ok: true } | { ok: false; reason: string }> { try { await http.call('deleteWorkspace', { id: ws }); return { ok: true }; } catch (e) { return { ok: false, ...failure(e) }; } }
+export interface Invite { id: string; email?: string | null; role: string; status: string; share_history?: boolean; created_at: string; expires_at: string }
+export const invitesPager = (http: Http, ws: string): Pager<Invite> => new Pager<Invite>((cursor, limit) => http.listPage('listInvites', { id: ws, limit, ...(cursor ? { cursor } : {}) }) as never);
+export async function revokeInvite(http: Http, id: string): Promise<{ ok: true } | { ok: false; reason: string; retryAfterS?: number }> { try { await http.call('revokeInvite', { id }); return { ok: true }; } catch (e) { return { ok: false, ...failure(e) }; } }
+export async function renameWorkspace(http: Http, ws: string, name: string): Promise<{ ok: true; name: string } | { ok: false; reason: string; retryAfterS?: number }> { try { const r = await http.call('updateWorkspace', { id: ws, body: { name } }); return { ok: true, name: (r.data as { name: string }).name ?? name }; } catch (e) { return { ok: false, ...failure(e) }; } }
+/** The invite link, when the server made one (a link invite has no email). */
+export const inviteLink = (invite: unknown): string | undefined => { const i = invite as { link?: unknown; url?: unknown } | undefined; return typeof i?.link === 'string' ? i.link : typeof i?.url === 'string' ? i.url : undefined; };
+export interface MeLite { user?: { id?: string } }
+/** Who is asking, from `GET /v1/me`: the member rows with this user id are "you". */
+export async function whoAmI(http: Http): Promise<string | undefined> { try { const r = await http.call('getMe', {}); return (r.data as MeLite).user?.id; } catch { return undefined; } }
