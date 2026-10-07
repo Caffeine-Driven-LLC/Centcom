@@ -99,6 +99,7 @@
  "error.webhook_limit_reached": "Webhook limit reached.",
  "error.webhook_url_invalid": "Webhook URL not allowed.",
  "error.workspace_not_found": "Workspace not found.",
+ "nav.billing": "Billing",
  "nav.details": "Details",
  "nav.home": "Home",
  "nav.label": "Main",

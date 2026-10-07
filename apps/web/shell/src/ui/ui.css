@@ -44,3 +44,4 @@ body { margin: 0; background: var(--bg-base); color: var(--text-primary); font-f
 .cc-skip { position: absolute; left: 8px; top: -48px; z-index: 100; padding: 8px 12px; background: var(--accent-fill); color: var(--accent-on); } .cc-skip:focus { top: 8px; }
 @media (forced-colors: active) { .cc-btn, .cc-input, .cc-card, .cc-tab, .cc-banner, .cc-modal { border: 1px solid CanvasText; } :focus-visible { outline: 2px solid Highlight; } .cc-tab--on { border-bottom-color: Highlight; } .cc-dot, .cc-avatar { border: 1px solid CanvasText; forced-color-adjust: none; } }
 [data-theme="hc"] { --border-default: var(--text-primary); }
+.cc-num { font-variant-numeric: tabular-nums; text-align: right; display: inline-block; min-width: 3ch; } td:has(> .cc-num) { text-align: right; }

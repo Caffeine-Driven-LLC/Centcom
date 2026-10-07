@@ -29,5 +29,6 @@ export { format };
 export const fmt = {
   date: (d: Date | number, o: Intl.DateTimeFormatOptions = { dateStyle: 'medium' }): string => new Intl.DateTimeFormat(locale === 'en-XA' ? 'en' : locale, o).format(d),
   number: (n: number, o?: Intl.NumberFormatOptions): string => new Intl.NumberFormat(locale === 'en-XA' ? 'en' : locale, o).format(n),
-  money: (cents: number, currency: string): string => new Intl.NumberFormat(locale === 'en-XA' ? 'en' : locale, { style: 'currency', currency }).format(cents / 100),
+  /** From integer minor units, with no floating-point arithmetic: the amount is written as an exact decimal string and Intl formats that. */
+  money: (minor: number, currency: string): string => { if (!Number.isSafeInteger(minor)) throw new RangeError('money is in whole minor units'); const abs = Math.abs(minor); const whole = (abs - (abs % 100)) / 100; const frac = String(abs % 100).padStart(2, '0'); return new Intl.NumberFormat(locale === 'en-XA' ? 'en' : locale, { style: 'currency', currency }).format(`${minor < 0 ? '-' : ''}${whole}.${frac}` as unknown as number); },
 };
