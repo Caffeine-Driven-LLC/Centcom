@@ -35,7 +35,7 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 | [C014](plan/client/C014.md) | Agent session state machine emitting contract state names | 85% | state machine and emitter; gaps: not wired into the app, golden transcripts from real parsers, combined property test |
 | [C030](plan/client/C030.md) | Interrupt and cancel semantics | 85% | interrupt controller, 3 s/8 s signal ladder to whole process groups, registered pids only, Codex protocol-then-ladder with restart on the same thread, approvals denied and late ones refused, partial answer kept, ctrl+c semantics with exit 130 in the app and -p; gaps: turn timeout, interrupt receipt, stale index.lock cleanup |
 
-+33 more in [`plan/STATUS.json`](plan/STATUS.json).
++34 more in [`plan/STATUS.json`](plan/STATUS.json).
 
 ### Ready to pick up (all dependencies done)
 

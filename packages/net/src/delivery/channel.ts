@@ -71,6 +71,8 @@ export class ReliableChannel extends TypedEmitter<ChannelEvents> {
     try { const v = await this.o.seqStore.load(this.sid); if (this.inbox.lastSeq === null && int(v) && v >= 0) this.inbox.setLastSeq(v); } catch { this.log?.warn('delivery.seq_load_failed'); }
   }
 
+  /** Send an ack for everything processed now (and so save the position): used before leaving. */
+  async flush(): Promise<void> { if (this.connected) await this.acks.flush(); }
   /** Highest contiguous seq processed (for hello's last_seq), or null. */
   lastSeq(): number | null { return this.inbox.lastSeq; }
   /** Sequenced frames sent and not echoed yet. */
@@ -94,11 +96,11 @@ export class ReliableChannel extends TypedEmitter<ChannelEvents> {
   }
 
   /** After a snapshot (or to skip ahead): lastSeq becomes `seq`, held frames above it are delivered, then sys.resume {last_seq} asks for the rest (a reconnect when the server has no resume cap). */
-  async resumeFrom(seq: number): Promise<void> {
+  async resumeFrom(seq: number, o: { ask?: boolean } = {}): Promise<void> {
     if (!int(seq) || seq < 0) throw new TypeError('resumeFrom() needs a seq >= 0');
     this.clearGap(); this.deliver(this.inbox.setLastSeq(seq)); this.save(seq);
     this.log?.info('delivery.resume_from', { seq });
-    await this.askResume(seq);
+    if (o.ask !== false) await this.askResume(seq); /* `ask: false` sets the position only: REST history fills the gap before the relay is asked for the rest */
     if (this.inbox.held) this.armGap();
   }
 

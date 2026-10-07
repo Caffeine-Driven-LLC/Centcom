@@ -312,6 +312,10 @@
   "C070": {
    "pct": 0.8,
    "note": "centcom audit list and export: cursor paging (<=200 per request, no offset), filters, RFC 3339 and relative times, sanitised table, exit 4 on no match, export with Idempotency-Key, 2/4/8/10 s polling and 5 minute limit, 0600 download with partial-file cleanup and no overwrite without --force, plan and role messages, no token or signed URL in output; gaps: not wired into main.tsx until the auth lane lands, not run against the mock backend audit data (tests use scripted answers)"
+  },
+  "C057": {
+   "pct": 0.75,
+   "note": "session client against the mock relay: create/join/leave/end/claim-host/list/share-link REST, a new join token per attempt, host key grants (share_history on/off), rotation on kick and scheduled, guest waiting_for_key and held frames, sign-verify-decrypt before any event, forged server frames and bad frames dropped, TOFU key-changed with held frames and trustDevice, snapshot upload cadence and restore with history fill, 47 event fixtures round-trip; gaps: re-encrypting unsent frames after rotation, chunking over 192 KiB, share-link guests end to end, host hand-over key transfer; contract gaps noted (key.grant frame key, snapshot blob format); adds resumeFrom({ask:false}) and flush() to the C055 channel"
   }
  },
  "next": [

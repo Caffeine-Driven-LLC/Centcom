@@ -15,3 +15,4 @@ export * from './usage/index.js';
 export * from './flags/index.js';
 export * from './update/index.js';
 export * from './notify/index.js';
+export * from './session/index.js';
