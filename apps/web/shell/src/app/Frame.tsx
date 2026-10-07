@@ -5,15 +5,17 @@ import { useTheme } from '../theme/theme.js';
 import { t } from '../lib/t.js';
 import type { Connectivity } from '../lib/connectivity.js';
 import type { NavItem } from './types.js';
+import { unread } from '../settings/model.js';
 
 export const ShellCtx = createContext<{ nav: NavItem[]; connectivity: Connectivity; inspector: React.ReactNode }>({ nav: [], connectivity: 'unknown', inspector: null });
 export const useShell = (): React.ContextType<typeof ShellCtx> => useContext(ShellCtx);
 /** 48 px top bar, 240 px left rail (a drawer under 1024), 320 px inspector (a bottom sheet under 768). */
 export function Frame({ children }: { children: React.ReactNode }): React.JSX.Element {
+  const n = React.useSyncExternalStore((f) => unread.subscribe(f), () => unread.count, () => 0);
   const { nav, connectivity, inspector } = useShell(); const [rail, setRail] = useState(false); const [insp, setInsp] = useState(false); const { theme, set } = useTheme();
   return (
     <div className="cc-frame">
-      <header className="cc-top"><button type="button" className="cc-btn cc-btn--ghost cc-railtoggle" aria-expanded={rail} aria-controls="cc-rail" onClick={() => setRail((v) => !v)}>{t('nav.menu', 'Menu')}</button><strong>Centcom</strong><span style={{ flex: 1 }} />
+      <header className="cc-top"><button type="button" className="cc-btn cc-btn--ghost cc-railtoggle" aria-expanded={rail} aria-controls="cc-rail" onClick={() => setRail((v) => !v)}>{t('nav.menu', 'Menu')}</button><strong>Centcom</strong><span style={{ flex: 1 }} /><Link to={'/notifications' as never} className="cc-btn cc-btn--ghost" aria-label={n ? `Notifications, ${n} unread` : 'Notifications, none unread'}><PixelIcon name="alert" />{n ? <span className="cc-chip cc-chip--info">{n}</span> : null}</Link>
         <label className="cc-label" htmlFor="cc-theme">{t('theme.label', 'Theme')}</label><select id="cc-theme" className="cc-input" value={theme} onChange={(e) => set(e.target.value as 'dark' | 'light' | 'auto')}><option value="auto">Auto</option><option value="dark">Dark</option><option value="light">Light</option></select>
         {inspector ? <button type="button" className="cc-btn cc-btn--ghost" aria-expanded={insp} aria-controls="cc-inspector" onClick={() => setInsp((v) => !v)}>{t('nav.details', 'Details')}</button> : null}</header>
       {connectivity === 'offline' ? <Banner tone="info" title={t('net.unavailable', 'Status unavailable')}>{t('net.unavailable.hint', 'The service status could not be read. You can keep working.')}</Banner> : connectivity === 'degraded' ? <Banner tone="warning" title={t('net.degraded', 'Some services are slow')}>{t('net.degraded.hint', 'Centcom is working on it.')}</Banner> : null}
