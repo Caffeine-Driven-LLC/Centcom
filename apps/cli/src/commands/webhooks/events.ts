@@ -1,0 +1,4 @@
+/** The v1 event types of CT-WEBHOOKS (the `WebhookEventType` enum of the REST contract). `webhook.test` is only ever sent by the test endpoint. */
+export const WEBHOOK_EVENTS = ['workspace.member.joined', 'workspace.member.left', 'workspace.member.role_changed', 'workspace.invite.created', 'workspace.invite.accepted', 'workspace.invite.revoked', 'session.created', 'session.started', 'session.ended', 'session.member.joined', 'session.member.left', 'agent.completed', 'billing.subscription.updated', 'billing.invoice.paid', 'billing.invoice.payment_failed', 'usage.threshold', 'api_key.created', 'api_key.revoked'] as const;
+export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
+export const isWebhookEvent = (s: string): s is WebhookEvent => (WEBHOOK_EVENTS as readonly string[]).includes(s);

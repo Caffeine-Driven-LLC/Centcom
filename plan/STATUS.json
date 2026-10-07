@@ -304,6 +304,10 @@
   "C099": {
    "pct": 0.7,
    "note": "security baseline: pnpm security:check (secret scan, install scripts, exact pinning [waived to 2026-12-31 until C001], lockfile integrity, workflow lint, licence allow-list, audit with 3 retries, fails closed), waivers with issue URL and 90-day expiry, CycloneDX 1.5 SBOM per artifact (pnpm sbom, validated against a schema subset), keystore scan, redaction fuzz, Renovate config, threat model, checklist, review log; ci.yml pinned by SHA; gaps: SBOM not attached to a real release, full CycloneDX schema, keystore scan not yet run after a real login flow (C052 PR), web CSP review, runner env review"
+  },
+  "C069": {
+   "pct": 0.8,
+   "note": "centcom webhooks list/show/create/update/rotate-secret/delete/test/deliveries/redeliver/verify: https-only and event-type validation from the contract list, show-once secret (TTY or --show-secret, never in --json otherwise), confirm/--yes on delete, friendly error mapping, local signature verification with overlap and tolerance (constant-time, exit 3); gaps: not wired into main.tsx until the auth lane (C052) lands, no webhook fixtures in contracts/fixtures (tests generate signatures), 18 event types in the contract vs 20+ in the card"
   }
  },
  "next": [
