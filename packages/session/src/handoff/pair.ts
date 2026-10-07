@@ -14,13 +14,13 @@ export function mergeSelections(a: Selection, b: Selection): Selection | undefin
 const toSelection = (c: Record<string, unknown> | undefined): Selection | undefined => { if (!c) return undefined; const line = num(c.line); if (line === undefined) return undefined; const col = num(c.col) ?? 0; return { ...(typeof c.path === 'string' ? { path: c.path } : {}), line, col, selEndLine: num(c.sel_end_line) ?? line, selEndCol: num(c.sel_end_col) ?? col }; };
 
 export interface PairHandle { stop(): void; readonly sharedSelection$: Observable<Selection | null>; readonly active: boolean; /** call with your own cursor whenever it moves */ setLocal(sel: Selection | null): void }
-export interface PairOptions { /** publishes (or, with `null`, clears) your own cursor as an independent one */ publishCursor?: (sel: Selection | null) => void }
+export interface PairOptions { /** only follow the partner's cursor after it announced `pair-working` (default: follow it from the first cursor, because the announcement may be refused for an editor outside branch mode) */ requireAnnounce?: boolean; /** publishes (or, with `null`, clears) your own cursor as an independent one */ publishCursor?: (sel: Selection | null) => void }
 export function startPair(session: HandoffSession, agent: AgentId, partner: MemberId, opts: PairOptions = {}): PairHandle {
   let mine: Selection | undefined; let theirs: Selection | undefined; let active = true; const subs = new Set<(v: Selection | null) => void>(); let last: Selection | null = null; let theirsWorking = false;
   const emit = (): void => { const v = active && mine && theirs ? mergeSelections(mine, theirs) ?? null : null; if (JSON.stringify(v) === JSON.stringify(last)) return; last = v; for (const f of [...subs]) { try { f(v); } catch { /* a listener must not break pairing */ } } };
   const off: Unsubscribe = session.onFrame((f) => {
     if (!active) return;
-    if (f.kind === 'presence.cursor' && f.from === partner) { theirs = toSelection(f.secret); emit(); }
+    if (f.kind === 'presence.cursor' && f.from === partner && (!opts.requireAnnounce || theirsWorking)) { theirs = toSelection(f.secret); emit(); }
     else if (f.kind === 'agent.state' && f.p?.agent_id === agent && f.from === partner) { theirsWorking = f.p.state === PAIR_STATE; if (!theirsWorking) { theirs = undefined; emit(); } }
     else if (f.kind === 'control.member_left' && f.p?.member === partner) { theirs = undefined; theirsWorking = false; emit(); }
   });
