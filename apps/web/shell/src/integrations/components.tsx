@@ -5,7 +5,7 @@ import { detailText, validateUrl, type AuditEvent, type Delivery, type SecretVau
 
 /** The events as checkboxes grouped by prefix; what is checked is what is sent. */
 export function EventPicker({ value, onChange }: { value: string[]; onChange(v: string[]): void }): React.JSX.Element {
-  return <fieldset className="cc-card"><legend>Events</legend>{groupEvents().map((g) => <div key={g.group}><strong>{g.group}</strong>{g.types.map((t) => <label key={t} style={{ display: 'block' }}><input type="checkbox" checked={value.includes(t)} onChange={(e) => onChange(e.target.checked ? [...value, t] : value.filter((x) => x !== t))} /> {t}</label>)}</div>)}<p className="cc-help">{WEBHOOK_EVENT_TYPES.length} event types.</p></fieldset>;
+  return <fieldset className="cc-card"><legend>Events</legend>{groupEvents().map((g) => <div key={g.group}><strong>{g.group}</strong>{g.types.map((t) => <label key={t} className="cc-block"><input type="checkbox" checked={value.includes(t)} onChange={(e) => onChange(e.target.checked ? [...value, t] : value.filter((x) => x !== t))} /> {t}</label>)}</div>)}<p className="cc-help">{WEBHOOK_EVENT_TYPES.length} event types.</p></fieldset>;
 }
 export function WebhookForm({ onSubmit, disabledReason, testMode }: { onSubmit(v: { url: string; events: string[] }): void | Promise<void>; disabledReason?: string; testMode?: boolean }): React.JSX.Element {
   const [url, setUrl] = useState(''); const [events, setEvents] = useState<string[]>([]); const [error, setError] = useState<string>();
