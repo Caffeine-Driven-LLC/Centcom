@@ -4,7 +4,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { CONTRACT_VERSION } from '../../packages/protocol/src/index.js';
-import { buildReport, exitCode, loadFixtures, runSuites, validateReport, validateWaivers } from '../../packages/testkit/src/index.js';
+import { buildReport, exitCode, loadFixtures, runSuites, validateReport, validateWaivers } from '../../packages/testkit/src/conformance/index.js';
 import { SUITES } from './suites.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..'); const contractsDir = join(root, 'contracts');

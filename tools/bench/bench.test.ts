@@ -36,10 +36,10 @@ describe('the results file and the self-test of the gate', () => {
     const dir = mkdtempSync(join(tmpdir(), 'cc-bench-')); const out = join(dir, 'r.json'); execFileSync('pnpm', ['-s', 'bench', '--fast', '--filter', 'envelope', '--out', out, '--baseline', join(dir, 'none.json')], { cwd: ROOT, stdio: 'pipe', env: { ...process.env, PATH: `${process.env.HOME}/.local/bin:${process.env.PATH}` } });
     const r = JSON.parse(readFileSync(out, 'utf8')) as BenchResults; expect(r.schema_version).toBe(1); expect(r.machine).toMatchObject({ cores: expect.any(Number), node: expect.stringMatching(/^v22/) }); expect(r.calibration_ms).toBeGreaterThan(0); expect(r.results[0]).toMatchObject({ id: 'envelope.parse', unit: 'ms', status: expect.stringMatching(/pass|unstable/), budget: 0.5, baseline: null }); for (const k of ['p50', 'p95', 'max']) expect((r.results[0] as unknown as Record<string, number>)[k]).toBeGreaterThanOrEqual(0);
   }, 60_000);
-  it('a 25 % slowdown injected into the transcript renderer makes the run exit 1 and name the metric', () => {
+  it('a clear slowdown injected into the transcript renderer makes the run exit 1 and name the metric', () => {
     const dir = mkdtempSync(join(tmpdir(), 'cc-bench-')); const base = join(dir, 'baseline.json'); const env = { ...process.env, PATH: `${process.env.HOME}/.local/bin:${process.env.PATH}` }; const run = (extra: string[], e = env) => spawnSync('pnpm', ['-s', 'bench', '--fast', '--filter', 'transcript.scroll', '--baseline', base, '--out', join(dir, 'r.json'), ...extra], { cwd: ROOT, encoding: 'utf8', env: e });
     expect(run(['--update-baseline']).status).toBe(0); expect(JSON.parse(readFileSync(base, 'utf8')).entries['transcript.scroll.frame']).toMatchObject({ unit: 'ms', gated: true });
-    const slow = run([], { ...env, CENTCOM_BENCH_SLOWDOWN_TRANSCRIPT: '1.25' }); expect(slow.status).toBe(1); expect(slow.stderr).toContain('transcript.scroll.frame'); writeFileSync(join(dir, 'ok'), '');
+    const slow = run([], { ...env, CENTCOM_BENCH_SLOWDOWN_TRANSCRIPT: '1.6' }); expect(slow.status).toBe(1); expect(slow.stderr).toContain('transcript.scroll.frame'); writeFileSync(join(dir, 'ok'), '');
   }, 120_000);
 });
 

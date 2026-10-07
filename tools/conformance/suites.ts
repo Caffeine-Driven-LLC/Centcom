@@ -2,7 +2,7 @@
  *  A suite returns one case per fixture or check; the runner turns that into pass / fail / skipped / waived per contract. */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { CaseResult, Suite, SuiteResult } from '../../packages/testkit/src/index.js';
+import type { CaseResult, Suite, SuiteResult } from '../../packages/testkit/src/conformance/index.js';
 import { AGENT_WIRE_STATES, compareVersions, isClientTooOld, userAgent, ID_PREFIXES, STATE_NAMES, assertWritableFrame, isId, parseEventPayload, parseFrame, parseSecretPayload, payloadMode, validateAgainst, type EventKind } from '../../packages/protocol/src/index.js';
 import { KeyRing, decryptPayload, encryptPayload, fingerprint, initCrypto, pathHmac, pathMacKey, retryDecision, signFrame, sodium, verifyFrame, parseProblem, canonicalJson, b64, unb64, type FrameHeader } from '../../packages/net/src/index.js';
 

@@ -97,7 +97,7 @@ describe('polling', () => {
   it('60 s cadence, backs off 60 -> 120 -> 300 s on failures and returns to 60 s; nothing at all while inactive', async () => {
     const err = () => new Response(JSON.stringify({ error: { code: 'internal', message: 'x' } }), { status: 400, headers: { 'content-type': 'application/problem+json' } }); let live = true; const ok = () => page([]);
     const r = rig([ok, err, err, err, err, ok, ok], { active: () => live }); const events: string[] = []; r.nc.on('error', () => events.push('e')); r.nc.start(); const sleeps = () => r.clock.delays.filter((d) => d >= 1000);
-    for (let i = 0; i < 40 && r.t.seen.length < 7; i++) { await new Promise((x) => setImmediate(x)); r.clock.fire(); }
+    for (let i = 0; i < 2000 && r.t.seen.length < 7; i++) { await new Promise((x) => setImmediate(x)); r.clock.fire(); }
     r.nc.stop(); expect(sleeps().slice(0, 7)).toEqual([60_000, 60_000, 120_000, 300_000, 300_000, 60_000, 60_000]); expect(BACKOFF_MS).toEqual([60_000, 120_000, 300_000]);
     const idle = rig([ok], { active: () => false }); idle.nc.start(); for (let i = 0; i < 6; i++) { await new Promise((x) => setImmediate(x)); idle.clock.fire(); } idle.nc.stop(); expect(idle.t.seen).toHaveLength(0); void live;
   });

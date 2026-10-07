@@ -33,6 +33,14 @@ export const COMMANDS: CommandMeta[] = [
   { name: 'hooks', summary: 'manage Claude Code hooks', usage: 'centcom hooks list|add|remove|validate|templates', description: 'Edits the hook settings; Claude Code runs the hooks, Centcom only edits them.', flags: [] },
   { name: 'provider', summary: 'check, sign in or out of the agents', usage: 'centcom provider status|login|logout|doctor', description: 'Checks Claude Code and Codex and hands over to their own sign-in; Centcom never reads their credentials.', flags: [] },
   { name: 'telemetry', summary: 'anonymous usage counts', usage: 'centcom telemetry status|on|off|reset', description: 'Anonymous counts of which commands run. Off unless you turn it on; DO_NOT_TRACK=1 and CENTCOM_TELEMETRY=off always win.', flags: [] },
+  { name: 'skills', summary: 'install and manage skills', usage: 'centcom skills list|add|remove', description: 'Lists, installs and removes skills for Claude Code and Codex.', flags: [] },
+  { name: 'login', summary: 'sign in to Centcom', usage: 'centcom login [--no-browser] [--device-name <name>] [--api-key-stdin] [--json]', description: 'Signs this computer in to Centcom (needed for hosted sessions only).', flags: [] },
+  { name: 'logout', summary: 'sign out of Centcom', usage: 'centcom logout [--revoke-device]', description: 'Signs out of Centcom on this computer.', flags: [] },
+  { name: 'whoami', summary: 'who is signed in', usage: 'centcom whoami [--json]', description: 'Shows who is signed in, the plan and the active workspace.', flags: [] },
+  { name: 'devices', summary: 'computers signed in to your account', usage: 'centcom devices list [--json] | revoke <dev_id> [--yes]', description: 'Lists the computers signed in to your account and revokes one.', flags: [] },
+  { name: 'lan', summary: 'find sessions on this network', usage: 'centcom lan scan [--timeout 3] [--json]', description: 'Lists Centcom sessions on this network (mDNS; no account needed).', flags: [] },
+  { name: 'doctor', summary: 'check this computer', usage: 'centcom doctor [--json] [--bundle <file>]', description: 'Checks node, terminal, keychain, git, network and clock.', flags: [] },
+  { name: 'crash', summary: 'crash reports on this computer', usage: 'centcom crash list|show <id>|delete <id|--all>', description: 'Crash reports are kept on this computer and never sent.', flags: [] },
   { name: 'help', summary: 'help on a command or topic', usage: 'centcom help [topic]', description: 'Prints help for a command or a topic (env, privacy, exit-codes).', flags: [] },
 ];
 export const find = (name: string): CommandMeta | undefined => COMMANDS.find((c) => c.name === name);

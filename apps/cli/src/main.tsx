@@ -6,7 +6,6 @@ import { detectColorTier } from '@centcom/theme';
 import { ClaudeCodeEngine, CodexEngine, DemoEngine, detectClaude, detectCodex, type AgentEngine, type PermissionMode } from '@centcom/agent';
 import { App, AppController, ClientConfig, FirstRun, SessionStore, buildRuntime, initialSettings, isFirstRun, markFirstRunDone, settingsFromConfig } from '@centcom/tui';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join as pathJoin, resolve as pathResolve } from 'node:path';
 import { basename as pathBase, join as pathJoin, resolve as pathResolve } from 'node:path';
 import { homedir } from 'node:os';
 import { stateDir } from '@centcom/config';
@@ -38,52 +37,6 @@ import { runAccountCli } from './commands/account/cli.js';
 import { ACCOUNT_COMMANDS } from './commands/account/index.js';
 
 const VERSION = '0.1.0';
-const HELP = `centcom ${VERSION}: command many hands
-
-Usage
-  centcom [options]            start the terminal app in this directory
-  centcom init [--yes] [--force] [--dry-run]   set this project up (config, memory file, git exclude); safe to run again
-  centcom keys [--json]        list every shortcut (change them in keybindings.json)
-  centcom memory show|add|edit|status|sync   edit CLAUDE.md and AGENTS.md (a line starting with "# " in the app adds a note)
-  centcom mcp list|add|remove|status|test   manage MCP servers for Claude Code and Codex
-  centcom hooks list|add|remove|validate|templates   manage Claude Code hooks (the tool runs them, Centcom only edits the settings)
-  centcom provider status|login|logout|doctor   check, sign in or out of Claude Code and Codex (the tools do the signing in)
-  centcom telemetry status|on|off|reset   anonymous usage counts (off unless you turn them on)
-  centcom login [--no-browser] [--device-name <name>] [--api-key-stdin] [--json]   sign in to Centcom (needed for hosted sessions only)
-  centcom logout [--revoke-device]   sign out of Centcom on this computer
-  centcom whoami [--json]      who is signed in, the plan and the active workspace
-  centcom devices list [--json] | revoke <dev_id> [--yes]   the computers signed in to your account
-  centcom lan scan [--timeout 3] [--json]   list Centcom sessions on this network (mDNS; no account needed)
-  centcom doctor [--json] [--bundle <file>]   check this computer (node, terminal, keychain, git, network, clock)
-  centcom crash list|show <id>|delete <id|--all>   crash reports kept on this computer (never sent)
-
-Scripting
-  centcom -p "task"             run once, print the answer, exit (no screen). Piped input is added to the prompt.
-  --output-format <text|json|stream-json>   what -p prints (default text)
-  cat error.log | centcom -p "what went wrong?"
-  Anything that needs an approval is declined and reported (exit code 3); allow it with --mode acceptEdits or --dangerously-skip-permissions.
-  Exit codes: 0 done, 1 error, 2 bad usage, 3 an action was declined.
-
-Options
-  --demo                       scripted demo agent (no login, no model)
-  --engine <claude-code|codex|demo>  choose the agent engine (default: claude-code if installed)
-  -c, --continue               continue the most recent conversation in this folder
-  --resume <id>                continue a specific saved conversation (see /resume)
-  --no-save                    do not save this conversation or your prompt history
-  --no-checkpoints             do not snapshot the folder before each prompt (/rewind then has nothing to go back to)
-  --model <name>               model to use (same ids as /model)
-  --mode <default|plan|acceptEdits|bypassPermissions>  start in a permission mode
-  --dangerously-skip-permissions   never ask: run commands and edit files freely (alias: --yolo)
-  --mascot <large|small|off>   Cento size (default: auto from terminal height)
-  --cento-color <violet|red|yellow|green|brown>
-  --theme <dark|light>         Graphite (default) or Paper (for light terminals)
-  --colors <truecolor|256|16|never>  force a colour tier (NO_COLOR is honoured)
-  --demo-team                  with --demo: also show two pretend teammates (previews multiplayer)
-  --debug                      write detailed logs to ~/.centcom/logs/centcom.log
-  --no-motion                  turn animation off (also CENTCOM_REDUCED_MOTION=1; the older CENTCOM_REDUCE_MOTION works too)
-  -v, --version   -h, --help
-
-Centcom drives your own Claude Code; it never sees your login.`;
 const HELP = topHelp(VERSION);
 
 function arg(name: string): string | undefined { const i = process.argv.indexOf(name); return i >= 0 ? process.argv[i + 1] : undefined; }

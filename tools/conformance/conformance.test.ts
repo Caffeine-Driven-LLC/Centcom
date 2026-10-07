@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { buildReport, exitCode, loadFixtures, runSuites, validateReport, validateWaivers, type ContractReport, type Suite } from '../../packages/testkit/src/index.js';
+import { allowConsole } from '../../packages/testkit/src/index.js';
 import { conformance } from './run.js';
 import { SUITES } from './suites.js';
 
@@ -55,6 +56,7 @@ describe('the real run', () => {
     expect(by['CT-WS-SESSION-EVENTS'].fixtures_total).toBeGreaterThanOrEqual(45); expect(by['CT-CRYPTO'].status).toBe('pass'); expect(by['CT-STATE-MAP'].status).toBe('pass');
   }, 60_000);
   it('--contract runs only that contract; an unknown one is a usage error; --strict passes while the waivers hold', async () => {
+    allowConsole(); /* the usage error is printed to stderr on purpose */
     const lines: string[] = []; expect(await conformance(['--json', '--contract', 'CT-WS-QUEUE'], new Date(NOW), (l) => lines.push(l))).toBe(0); expect(JSON.parse(lines[0]!).contracts.map((c: ContractReport) => c.id)).toEqual(['CT-WS-QUEUE']); expect(await conformance(['--contract', 'CT-NOPE'], new Date(NOW), () => undefined)).toBe(2);
     expect(await conformance(['--strict', '--json'], new Date(NOW), () => undefined)).toBe(0); expect(await conformance(['--strict', '--json'], new Date(NOW + 90 * DAY), () => undefined)).toBe(3);
   });

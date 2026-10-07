@@ -5,7 +5,8 @@
       "Apache-2.0",
       "BSD-2-Clause",
       "BSD-3-Clause",
-      "ISC"
+      "ISC",
+      "BlueOak-1.0.0"
     ],
     "exceptions": [
       {
@@ -35,7 +36,9 @@
       "actions",
       "pnpm"
     ],
-    "allowActions": []
+    "allowActions": [
+      "anthropics/claude-code-action"
+    ]
   },
   "secrets": {
     "allow": [
@@ -70,6 +73,10 @@
       {
         "path": "plan/lanes/client/C023.json",
         "reason": "the lane card quotes the PEM header as text"
+      },
+      {
+        "path": "apps/cli/test/crash/crash.test.ts",
+        "reason": "labelled test values for the crash-report redaction tests (not real secrets)"
       }
     ]
   }

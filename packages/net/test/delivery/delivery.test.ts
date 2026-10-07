@@ -55,7 +55,7 @@ describe('sending and resending', () => {
     const r = rig({ maxUnacked: 3 }); for (let i = 0; i < 3; i++) void r.ch.send(D()); await expect(r.ch.send(D())).rejects.toBeInstanceOf(OutboxFullError);
     const big = rig({ maxUnackedBytes: 500 }); void big.ch.send({ ...D(), p: { t: 'x'.repeat(300) } }); await expect(big.ch.send({ ...D(), p: { t: 'y'.repeat(300) } })).rejects.toBeInstanceOf(OutboxFullError);
     const p = rig(); p.link.connect(); p.ch.sendEphemeral({ t: 'presence', k: 'cursor', p: { x: 1 } }); expect(p.ch.pending()).toBe(0); p.link.drop(); p.link.sent = []; p.link.connect(); expect(p.link.sent.filter((f) => f.t === 'presence')).toEqual([]); const off = rig(); off.ch.sendEphemeral({ t: 'presence', k: 'cursor' }); expect(off.link.sent).toEqual([]);
-    expect(() => p.ch.sendEphemeral({ t: 'event' } as never)).toThrow(TypeError); expect(p.ch.send({ t: 'presence' } as never)).rejects.toBeInstanceOf(TypeError);
+    expect(() => p.ch.sendEphemeral({ t: 'event' } as never)).toThrow(TypeError); await expect(p.ch.send({ t: 'presence' } as never)).rejects.toBeInstanceOf(TypeError);
   });
   it('drain waits for the echoes and times out with a clear error', async () => { const r = rig(); r.link.connect(); void r.ch.send(D()); await flush(); const d = r.ch.drain(2000); const assertion = expect(d).rejects.toMatchObject({ message: expect.stringContaining('unacked') }); await r.clock.advance(2001); await assertion; });
 });
