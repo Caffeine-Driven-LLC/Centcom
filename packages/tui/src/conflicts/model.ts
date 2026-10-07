@@ -43,7 +43,7 @@ export class ConflictStore implements ConflictSource {
   private applyConflict(e: ConflictEvent): void {
     const agents = strs(e.p?.agent_ids); if (!agents.length) return; const hm = strs(e.p?.path_hmacs); const id = `${[...agents].sort().join('+')}|${[...hm].sort().join('+')}`; const paths = strs(e.secret?.paths);
     const cur = this.conflicts_.get(id); if (cur && cur.seq >= e.seq) return; this.conflicts_.set(id, { id, agents, pathHmacs: hm, ...(paths.length ? { displayPaths: paths } : cur?.displayPaths ? { displayPaths: cur.displayPaths } : {}), at: e.ts, seq: e.seq });
-    paths.forEach((p, i) => { if (hm[i]) this.labels.set(hm[i]!, p); }); if (this.conflicts_.size > MAX_CONFLICTS) this.conflicts_.delete(this.conflicts_.keys().next().value as string); this.o.logger?.debug('conflicts.detected', { seq: e.seq, agents: agents.length }); this.changed();
+    paths.forEach((p, i) => { if (hm[i]) this.labels.set(hm[i]!, p); }); this.resolveQuiet(''); if (this.conflicts_.size > MAX_CONFLICTS) this.conflicts_.delete(this.conflicts_.keys().next().value as string); this.o.logger?.debug('conflicts.detected', { seq: e.seq, agents: agents.length }); this.changed();
   }
   /** A conflict ends when every agent in it has said something newer than the conflict that is not `merge-conflict`. */
   private resolveQuiet(_agent: AgentId): void { for (const [id, c] of this.conflicts_) if (c.agents.every((a) => { const s = this.agentState.get(a); return !!s && s.seq > c.seq && s.state !== 'merge-conflict'; })) this.conflicts_.delete(id); }
@@ -51,7 +51,7 @@ export class ConflictStore implements ConflictSource {
   markResolved(id: string): void { if (this.conflicts_.delete(id)) this.changed(); }
 
   private compute(): ConflictSnapshot {
-    const now = this.o.now?.() ?? Date.now(); const locks: LockView[] = [];
+    const locks: LockView[] = [];
     for (const [hmac, list] of this.log) {
       let holder: LockEv | undefined; let waiting: AgentId[] = [];
       for (const ev of list) {
@@ -59,7 +59,7 @@ export class ConflictStore implements ConflictSource {
         else if (ev.action === 'deny') { if (holder && holder.agent !== ev.agent && !waiting.includes(ev.agent)) waiting.push(ev.agent); else if (!holder && !waiting.includes(ev.agent)) waiting.push(ev.agent); }
         else if (!holder || holder.agent === ev.agent || ev.action === 'expire') { holder = undefined; waiting = []; }
       }
-      if (!holder) continue; const expiresAt = holder.ttlMs !== undefined ? holder.at + holder.ttlMs : undefined; if (expiresAt !== undefined && expiresAt <= now && !this.o.now) { /* the host sends `expire`; until it arrives the chip shows 0 s */ }
+      if (!holder) continue; const expiresAt = holder.ttlMs !== undefined ? holder.at + holder.ttlMs : undefined;
       locks.push({ pathHmac: hmac, ...(this.labels.get(hmac) ? { displayPath: this.labels.get(hmac) } : {}), holder: holder.from, agent: holder.agent, ...(expiresAt !== undefined ? { expiresAt } : {}), waiting });
     }
     return { locks, conflicts: [...this.conflicts_.values()].map((c) => ({ ...c, displayPaths: c.pathHmacs.map((h, i) => c.displayPaths?.[i] ?? this.labels.get(h) ?? '') .map((p, i) => p || fileLabel(c.pathHmacs[i] ?? '')) })) };

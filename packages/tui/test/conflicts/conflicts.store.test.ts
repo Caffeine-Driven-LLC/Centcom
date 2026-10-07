@@ -51,3 +51,9 @@ describe('conflicts (acceptance 3, 5)', () => {
     const w = new ConflictStore(); w.apply(lock(1, 'acquire', 'a1')); w.apply(lock(2, 'deny', 'a2')); expect(cardState('a2', 'thinking', w.getSnapshot())).toEqual({ state: 'thinking', animation: 'waiting' }); expect(cardState('a2', 'awaiting-approval', w.getSnapshot()).animation).toBeUndefined();
   });
 });
+
+describe('stale conflict frames', () => {
+  it('a conflict that arrives after newer non-conflict agent states is not shown', () => {
+    const s = new ConflictStore(); s.apply(agentState(20, 'a1', 'idle')); s.apply(agentState(21, 'a2', 'idle')); s.apply(conflict(10, ['a1', 'a2'])); expect(s.getSnapshot().conflicts).toEqual([]);
+  });
+});
