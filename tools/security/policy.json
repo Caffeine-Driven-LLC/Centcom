@@ -6,7 +6,10 @@
       "BSD-2-Clause",
       "BSD-3-Clause",
       "ISC",
-      "BlueOak-1.0.0"
+      "BlueOak-1.0.0",
+      "MIT-0",
+      "Unlicense",
+      "CC0-1.0"
     ],
     "exceptions": [
       {

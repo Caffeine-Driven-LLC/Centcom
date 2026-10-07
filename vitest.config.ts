@@ -17,5 +17,5 @@ export default defineConfig({
       '@centcom/tui': r('./packages/tui/src/index.ts'),
     },
   },
-  test: { setupFiles: [r('./packages/testkit/src/vitest/setup.ts')], include: ['packages/*/test/**/*.test.ts', 'packages/*/test/**/*.test.tsx', 'apps/*/test/**/*.test.ts', 'tools/**/*.test.ts'], environment: 'node' },
+  test: { setupFiles: [r('./packages/testkit/src/vitest/setup.ts')], include: ['packages/*/test/**/*.test.ts', 'packages/*/test/**/*.test.tsx', 'apps/*/test/**/*.test.ts', 'apps/*/test/**/*.test.tsx', 'tools/**/*.test.ts'], environment: 'node' },
 });
