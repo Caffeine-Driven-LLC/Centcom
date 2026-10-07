@@ -41,7 +41,7 @@ export function layoutCursors(p: { cursors: ReadonlyMap<MemberId, CursorState>; 
     let col = edge ? (edge === 'up' ? upAt : downAt) : Math.max(0, Math.min(v.cols - 1, Math.floor(c.col ?? 0))); if (edge) { if (edge === 'up') upAt += textWidth(tag) + 1; else downAt += textWidth(tag) + 1; }
     col = Math.min(col, Math.max(0, v.cols - 1));
     const selection: SelectionSegment[] = [];
-    if (!edge && typeof c.selEndLine === 'number' && Number.isFinite(c.selEndLine)) {
+    if (typeof c.selEndLine === 'number' && Number.isFinite(c.selEndLine)) {
       const a = Math.floor(c.line); const aCol = Math.max(0, Math.floor(c.col ?? 0)); const b = Math.floor(c.selEndLine); const bCol = Math.max(0, Math.floor(c.selEndCol ?? 0));
       const [l0, c0, l1, c1] = a < b || (a === b && aCol <= bCol) ? [a, aCol, b, bCol] : [b, bCol, a, aCol];
       for (let l = Math.max(l0, v.firstLine); l <= Math.min(l1, v.firstLine + v.lines - 1); l++) { const from = l === l0 ? c0 : 0; const to = l === l1 ? c1 : v.cols; const f = Math.min(from, v.cols); const t = Math.min(Math.max(to, f), v.cols); if (t > f) selection.push({ row: l - v.firstLine, from: f, to: t }); }
