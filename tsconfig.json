@@ -44,6 +44,21 @@
       ],
       "@centcom/mascot-browser": [
         "./packages/mascot/src/browser.ts"
+      ],
+      "@centcom/net-session": [
+        "./packages/net/src/session/index.ts"
+      ],
+      "@centcom/net-session-sodium": [
+        "./packages/net/src/crypto/sodium.ts"
+      ],
+      "@centcom/net-crypto": [
+        "./packages/net/src/crypto/index.ts"
+      ],
+      "@centcom/guest": [
+        "./packages/session/src/guest/browser.ts"
+      ],
+      "@centcom/net-relay-types": [
+        "./packages/net/src/relay/client.ts"
       ]
     }
   }
