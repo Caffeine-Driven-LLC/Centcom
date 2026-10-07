@@ -12,7 +12,8 @@ describe('pairing codes (acceptance 1)', () => {
   });
   it('10 000 codes are roughly uniform (chi-square p > 0.001, df 30)', () => {
     const counts = new Map<string, number>(); let n = 0;
-    for (let i = 0; i < 10_000; i++) for (const ch of generatePairingCode().code) { counts.set(ch, (counts.get(ch) ?? 0) + 1); n++; }
+    let seed = 0x9e3779b9; const rng = (len = 32): Uint8Array => { const out = new Uint8Array(len); for (let k = 0; k < len; k++) { seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; out[k] = ((t ^ (t >>> 14)) >>> 0) & 255; } return out; }; /* a fixed seed: with real randomness this test fails about once in a thousand runs */
+    for (let i = 0; i < 10_000; i++) for (const ch of generatePairingCode(rng).code) { counts.set(ch, (counts.get(ch) ?? 0) + 1); n++; }
     const expected = n / 31; let chi = 0; for (const ch of CODE_ALPHABET) chi += ((counts.get(ch) ?? 0) - expected) ** 2 / expected;
     expect(counts.size).toBe(31); expect(chi).toBeLessThan(59.7); // critical value of chi-square with 30 degrees of freedom at p = 0.001
   });
