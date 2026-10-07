@@ -1,0 +1,6 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`bar (acceptance 4, 6; snapshots) > 80 columns: glyph plus count for each code, the picker for people who can react, viewers included 1`] = `
+"+1 2  <3 1  • 3
+1 +1  2 <3  3 *  4 :D  5 oo  6 ✓"
+`;

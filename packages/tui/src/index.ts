@@ -26,3 +26,4 @@ export { computeLayout, MIN_COLS, MIN_ROWS, TOO_SMALL, type Layout, createAction
 export { stringWidth, wrapText, truncate as truncateText, sanitizeForTerminal as sanitizeText } from './text/index.js';
 export * from './cursors/index.js';
 export * from './conflicts/index.js';
+export * from './reactions/index.js';
