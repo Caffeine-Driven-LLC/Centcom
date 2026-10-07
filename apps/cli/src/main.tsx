@@ -26,6 +26,10 @@ import { CrashStore, installCrashHandlers, runCrash } from './crash/index.js';
 import { realDoctorContext, runDoctor } from './doctor/index.js';
 import { CONTRACT_VERSION } from '@centcom/protocol';
 import { find as findCommand, helpFor, renderHelp, topHelp } from './help/index.js';
+import { runUpdate } from './commands/update/index.js';
+import { createInterface } from 'node:readline';
+import { dirname as pathDirname } from 'node:path';
+import { PRODUCTION_KEYS, UpdateClient, createHttpClient, defaultUserAgent } from '@centcom/net';
 import { makeTelemetry, runTelemetry } from './commands/telemetry.js';
 import { defaultDeps, loadConfig } from '@centcom/config';
 import { runMcpCli } from './commands/mcp/cli.js';
@@ -120,7 +124,7 @@ async function main() {
   // anonymous counts of which command ran, only when you turned telemetry on (docs/telemetry.md)
   const cfg0 = await loadConfig(defaultDeps()).catch(() => undefined); const tm = makeTelemetry({ enabled: !!cfg0?.telemetry.enabled, baseUrl: cfg0?.api.base_url ?? 'https://api.centcom.dev', version: VERSION });
   const isAccount = (ACCOUNT_COMMANDS as readonly string[]).includes(process.argv[2] ?? '');
-  const sub = ['provider', 'memory', 'mcp', 'hooks', 'init', 'keys', 'skills', 'lan', 'doctor', 'crash'].includes(process.argv[2] ?? '') || isAccount ? process.argv[2]! : has('-p') || has('--print') ? 'print' : 'tui'; tm.appStart(); tm.commandRun(sub);
+  const sub = ['provider', 'memory', 'mcp', 'hooks', 'init', 'keys', 'skills', 'lan', 'doctor', 'crash', 'update'].includes(process.argv[2] ?? '') || isAccount ? process.argv[2]! : has('-p') || has('--print') ? 'print' : 'tui'; tm.appStart(); tm.commandRun(sub);
   const done = async (code: number) => { tm.appExit(); await tm.flush(2000); process.exit(code); };
   // anything nobody caught is written (redacted) to ~/.centcom/crashes and never sent anywhere
   const crashes = new CrashStore(stateDir(defaultDeps()));
@@ -129,6 +133,10 @@ async function main() {
   if (process.argv[2] === 'doctor') await done(await runDoctor(process.argv.slice(3), realDoctorContext({ version: VERSION, contract: CONTRACT_VERSION, apiBase: cfg0?.api.base_url ?? 'https://api.centcom.dev', stateDir: stateDir(defaultDeps()) }), { out: (l) => console.log(l), err: (l) => console.error(l) }, { crashes }));
   if (process.argv[2] === 'provider') await done(await runProviderCli(process.argv.slice(3)));
   if (process.argv[2] === 'skills') await done(await runSkills(process.argv.slice(3), { out: (l) => console.log(l), err: (l) => console.error(l), ask: ttyAsk, cwd: process.cwd() }));
+  if (process.argv[2] === 'update') {
+    const base = cfg0?.api.base_url ?? 'https://api.centcom.dev'; const http = createHttpClient({ baseUrl: base, getAccessToken: async () => undefined, userAgent: defaultUserAgent(VERSION) });
+    await done(await runUpdate(process.argv.slice(3), { version: VERSION, defaultChannel: 'stable', client: (channel) => new UpdateClient({ http, currentVersion: VERSION, platform: process.platform, arch: process.arch, channel, keys: PRODUCTION_KEYS, installDir: pathDirname(process.execPath), install: { execPath: process.execPath, scriptPath: process.argv[1] } }) }, { out: (l) => console.log(l), err: (l) => console.error(l), progress: (p) => { if (process.stdout.isTTY) process.stdout.write(`\r${Math.round((p.received / p.total) * 100)}%`); }, confirm: (q) => new Promise((res) => { const rl = createInterface({ input: process.stdin, output: process.stdout }); rl.question(q, (a) => { rl.close(); res(/^y(es)?$/i.test(a.trim())); }); }) }));
+  }
   if (process.argv[2] === 'keys') await done(runKeys(process.argv.slice(3), { out: (l) => console.log(l), err: (l) => console.error(l) }));
   if (process.argv[2] === 'init') await done(await runInitCli(process.argv.slice(3)));
   if (process.argv[2] === 'memory') await done(await runMemoryCli(process.argv.slice(3)));

@@ -13,3 +13,4 @@ export { backoffDelayMs as relayBackoffDelayMs } from './relay/index.js';
 export * from './billing/index.js';
 export * from './usage/index.js';
 export * from './flags/index.js';
+export * from './update/index.js';

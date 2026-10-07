@@ -288,6 +288,10 @@
   "C096": {
    "pct": 0.6,
    "note": "one command list drives centcom --help (80 columns), centcom help [topic], per-command --help, the CLI reference pages and the man pages (docs:gen, docs:check fails on drift); docs site pages written (guide, privacy page from the crypto contract, env and exit codes); link/anchor, flag and env-var checks; gaps: VitePress build/Lighthouse and the link checker for external links are not set up (VitePress is not installed), no spell check, install-page command test, /help text source for the TUI"
+  },
+  "C068": {
+   "pct": 0.8,
+   "note": "update client: check (channel, platform, arch, pre-release and downgrade rules, required flag), resumable size-capped download, hash + Ed25519 verification before apply (two keys), atomic apply with .prev and rollback, managed-install detection, background-check schedule, centcom update with exit 10; reads both manifest spellings (contract mismatch noted); gaps: production keys empty, no run against real signed artifacts, startup background check not wired into the app"
   }
  },
  "next": [
