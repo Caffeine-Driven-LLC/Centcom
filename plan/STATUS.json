@@ -1,5 +1,5 @@
 {
- "updated": "2026-10-06",
+ "updated": "2026-10-07",
  "lanes": {
   "C001": {
    "pct": 0.5,
@@ -34,11 +34,11 @@
    "note": "state machine and emitter; gaps: not wired into the app, golden transcripts from real parsers, combined property test"
   },
   "C015": {
-   "pct": 1.0,
+   "pct": 1,
    "note": "permission engine wired into the terminal, print mode and web through buildRuntime: hard denies, saved user/project rules (always), project rules behind /trust, Centcom risk classifier, prompter in the app, /permissions"
   },
   "C016": {
-   "pct": 1.0,
+   "pct": 1,
    "note": "risk classifier feeds the permission engine in the app (risk shown in approvals), engineSettings for claude/codex; Codex flag spellings to confirm on a real Codex (docs/codex-verification.md)"
   },
   "C019": {
@@ -122,7 +122,7 @@
    "note": "toast controller (ttl, queue 20, severity preemption, persistence for actions/errors, dedupe (xN), never drops warn/error), sys.notice message table for all 7 codes with local time and cleaned params, ToastLine/ToastView, toast.dismiss action (ctrl+y instead of the card ctrl+x, which is a chord prefix); gap: the app still shows toasts through its older controller.toast path, bus event toast.dismissed not wired"
   },
   "C045": {
-   "pct": 1.0,
+   "pct": 1,
    "note": "keymap of named actions with contexts and chords, keybindings.json overrides (validated, unbind, conflicts, protected quit/help, ctrl+c reserved), raw and Ink key decoding, dispatcher wired into the app, live help screen with filter, centcom keys [--json]"
   },
   "C046": {
@@ -134,7 +134,7 @@
    "note": "settings store with env overrides and sources, /theme /mascot /spinner /motion /density with the card copy (no-arg line, unknown value, env override notice, failed save keeps the value), useSettings/useDensity/blockGap; gap: the app still handles these commands in controller.ts, density not yet fed into the transcript layout, hc theme not in the theme engine"
   },
   "C048": {
-   "pct": 1.0,
+   "pct": 1,
    "note": "first-run screen (once, interactive only, Cento waving or ASCII, one sentence, one command), state.json, centcom init (config, memory file, exclude, idempotent, dry run, force with .bak, non-TTY rules), empty states in the app and web"
   },
   "C049": {
@@ -210,7 +210,7 @@
    "note": "fleet in the app: /fleet start [n] <task>, list, stop, preview, remove, clean; agents in the fleet panel with live states; branch-ready notices; approvals through the same policy, limited to each worktree; stopped on exit"
   },
   "C023": {
-   "pct": 1.0,
+   "pct": 1,
    "note": "memory files: centcom memory show|add|edit|status|sync, \"# note\" quick add with diff and confirmation in the app, /memory view"
   },
   "C021": {
@@ -222,7 +222,7 @@
    "note": "hooks manager: centcom hooks list|add|remove|validate|templates, /hooks view in the app (read only); Codex notify editing waits for a version that documents it"
   },
   "C010": {
-   "pct": 1.0,
+   "pct": 1,
    "note": "telemetry client wired into the CLI (app start/exit, command names, flush on exit) and `centcom telemetry status|on|off|reset`; off by default, DO_NOT_TRACK and CENTCOM_TELEMETRY=off always win; only allow-listed counts"
   },
   "C018": {
@@ -230,7 +230,7 @@
    "note": "local advisory locks wired into the app: two agents changing the same file are warned their branches will conflict; remote file.lock events wait for the session layer"
   },
   "C043": {
-   "pct": 1.0,
+   "pct": 1,
    "note": "TaskList, ProgressBar (determinate, indeterminate, reduced motion, ASCII), reduceTasks, useProgress; engines send their plans (Claude TodoWrite, Codex plan updates) as tasks.updated; task panel above the prompt on ctrl+t, saved with the conversation"
   },
   "C056": {
@@ -356,6 +356,10 @@
   "C076": {
    "pct": 0.65,
    "note": "guest engine: GuestSession over any transport, pure total reducer, ordering and dedupe, key-wait buffer with caps, queue submit/cancel with local gating and idempotent resend, close-code handling, spoofed control frames ignored; tested with fixtures, a property test, a hand-driven transport and the C075 host over loopback; gaps: crypto and signature checks sit behind an injected decoder (not wired to the C057 session client yet), no acks here, no snapshot restore, not tested against the mock relay"
+  },
+  "C077": {
+   "pct": 1,
+   "note": "merged in #71"
   }
  },
  "next": [
