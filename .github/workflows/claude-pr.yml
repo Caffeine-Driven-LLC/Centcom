@@ -136,6 +136,7 @@ jobs:
     outputs:
       local: ${{ steps.final.outputs.local }}
       outcome: ${{ steps.claude.outcome }}
+      error: ${{ steps.error.outputs.text }}
       verdict: ${{ fromJSON(steps.claude.outputs.structured_output || '{}').verdict }}
       summary: ${{ fromJSON(steps.claude.outputs.structured_output || '{}').summary }}
     env:
@@ -230,6 +231,20 @@ jobs:
             --disallowedTools "Bash(git add -A:*),Bash(git add --all:*),Bash(git add .:*),Bash(git commit -a:*),Bash(git commit -am:*)"
             --json-schema '{"type":"object","properties":{"verdict":{"enum":["approve","fixed","needs_human"]},"summary":{"type":"string"}},"required":["verdict","summary"]}'
 
+      # The action hides Claude's output; keep only the final result's error text (one line, at most
+      # 500 characters) so the handoff comment can say why the step failed.
+      - name: Claude's error
+        id: error
+        if: always() && steps.claude.outcome == 'failure'
+        run: |
+          f="$RUNNER_TEMP/claude-execution-output.json"
+          text=""
+          if [ -f "$f" ]; then
+            text="$(node -e "const r = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')).filter((m) => m.type === 'result').pop(); if (r) console.log(String(r.is_error || r.subtype !== 'success' ? r.result || (r.errors || []).join('; ') || r.subtype : 'Claude finished without returning a verdict').replace(/\s+/g, ' ').slice(0, 500));" "$f" || true)"
+          fi
+          echo "text=$text" >> "$GITHUB_OUTPUT"
+          if [ -n "$text" ]; then echo "::error::Claude: $text"; fi
+
       - name: Final head
         id: final
         if: always()
@@ -269,6 +284,7 @@ jobs:
           VERDICT: ${{ needs.claude.outputs.verdict }}
           SUMMARY: ${{ needs.claude.outputs.summary }}
           CLAUDE_OUTCOME: ${{ needs.claude.outputs.outcome || needs.claude.result }}
+          CLAUDE_ERROR: ${{ needs.claude.outputs.error }}
         run: node tools/ci/claude-pr-state.mjs "$PR" --record
 
   handoff:
