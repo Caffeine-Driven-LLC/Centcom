@@ -4,12 +4,17 @@
   "private": true,
   "type": "module",
   "description": "The Centcom desktop app: an Electron window around the app in apps/web.",
-  "main": "dist/main.cjs",
+  "main": "dist/main.mjs",
   "scripts": {
     "build": "tsx scripts/build.ts",
     "start": "electron ."
   },
-  "dependencies": {},
+  "dependencies": {
+    "@centcom/agent": "workspace:*",
+    "@centcom/config": "workspace:*",
+    "@centcom/net": "workspace:*",
+    "@centcom/tui": "workspace:*"
+  },
   "devDependencies": {
     "electron": "^44.5.1",
     "esbuild": "^0.28.2"

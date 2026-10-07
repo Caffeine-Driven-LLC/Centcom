@@ -1,7 +1,7 @@
 import { parseDeepLink, routeFor } from '../invite/deeplink.js';
 
 /** What the desktop app's preload offers the page (absent in a plain browser). */
-export interface DesktopBridge { desktop: true; platform: string; onLink(cb: (url: string) => void): () => void; openExternal(url: string): Promise<boolean> }
+export interface DesktopBridge { desktop: true; platform: string; onLink(cb: (url: string) => void): () => void; openExternal(url: string): Promise<boolean>; local?: { send(msg: unknown): void; onMessage(cb: (m: unknown) => void): () => void } }
 declare global { interface Window { centcom?: DesktopBridge } }
 export interface Nav { navigate(o: { to: string }): unknown }
 /** A centcom:// link arrives from the system: sign-in links finish sign-in, the others open their screen. Anything that does not parse is dropped. */
