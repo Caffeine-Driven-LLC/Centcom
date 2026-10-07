@@ -1,0 +1,16 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { setup } from './setup.js';
+
+afterEach(cleanup); beforeEach(() => { window.scrollTo = () => undefined; });
+const seatApi = (c: { op: string; args: Record<string, unknown> }) => (c.op === 'changeSeats' ? (c.args.preview ? { seats: c.args.body && (c.args.body as { seats: number }).seats, preview: true, proration: { amount: { amount: 2450, currency: 'USD' }, effective_at: '2026-10-07T00:00:00Z' } } : { seats: (c.args.body as { seats: number }).seats, preview: false }) : undefined);
+describe('seat changes (acceptance 4)', () => {
+  it('shows the price, currency, period and tax note before the button that spends, then confirms without preview and with a key', async () => {
+    const { http } = setup('/billing/seats', { extra: seatApi }); const input = (await screen.findByRole('spinbutton')) as HTMLInputElement; await waitFor(() => expect(input.value).toBe('3')); fireEvent.change(input, { target: { value: '5' } }); fireEvent.click(screen.getByText('See the price'));
+    const status = await screen.findByRole('status'); expect(status.textContent).toContain('$24.50'); expect(status.textContent).toContain('USD'); expect(status.textContent).toContain('Nov 1, 2026'); expect(status.textContent).toContain('Tax is added when it applies'); expect(http.calls.find((c) => c.op === 'changeSeats')!.args).toMatchObject({ id: 'wsp_1', preview: true, body: { seats: 5 } }); expect(http.calls.find((c) => c.op === 'changeSeats')!.o?.idempotencyKey).toBeUndefined();
+    fireEvent.click(screen.getByText('Change to 5 seats')); await waitFor(() => expect(http.calls.filter((c) => c.op === 'changeSeats')).toHaveLength(2)); const confirm = http.calls.filter((c) => c.op === 'changeSeats')[1]!; expect(confirm.args.preview).toBeUndefined(); expect(confirm.o!.idempotencyKey).toMatch(/^[0-9A-Z]{26}$/); await screen.findByText('Seats updated.');
+  });
+  it('cancelling takes as many clicks as confirming (two), and sends no change', async () => { const { http } = setup('/billing/seats', { extra: seatApi }); const input = (await screen.findByRole('spinbutton')) as HTMLInputElement; await waitFor(() => expect(input.value).toBe('3')); fireEvent.change(input, { target: { value: '4' } }); let clicks = 0; fireEvent.click(screen.getByText('See the price')); clicks++; await screen.findByRole('status'); fireEvent.click(screen.getByText('Cancel')); clicks++; expect(clicks).toBe(2); expect(screen.queryByRole('status')).toBeNull(); expect(http.calls.filter((c) => c.op === 'changeSeats' && !c.args.preview)).toHaveLength(0); });
+  it('the current number of seats cannot be previewed, a viewer-role is told why, and editing the number clears an old price', async () => { setup('/billing/seats', { extra: seatApi }); const input = (await screen.findByRole('spinbutton')) as HTMLInputElement; await waitFor(() => expect(input.value).toBe('3')); expect(screen.getByText('See the price').getAttribute('aria-disabled')).toBe('true'); fireEvent.change(input, { target: { value: '6' } }); fireEvent.click(screen.getByText('See the price')); await screen.findByRole('status'); fireEvent.change(input, { target: { value: '7' } }); expect(screen.queryByRole('status')).toBeNull(); });
+});
