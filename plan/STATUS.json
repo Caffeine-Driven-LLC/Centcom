@@ -324,6 +324,10 @@
   "C059": {
    "pct": 0.8,
    "note": "presence client: coalesced presence.update (1/s, latest wins), typing refresh and idle, auto-away and busy rules, encrypted cursors (10/s, deduped, null clears), receiver model with 10 s cursor expiry and offline on member_left, roster check, best-effort ephemeral frames, session reads presence off the socket and drops unverifiable ones with a counter; tested with a fake clock and two clients on the mock relay; gaps: no UI, nudge not implemented, burst seeding checked against the stub only"
+  },
+  "C060": {
+   "pct": 0.8,
+   "note": "control client: host kick/mute/unmute/role/transfer/end/policy/rotation requests with local NotHost, self-action and policy-schema checks, server-only frame authenticity and roster versioning, state model (mute expiry, host change, policy merge, effective-from-seq), removal handling (keys wiped, no reconnect, once), session-side mute and role handling; gaps: failover tested on the state model only (the mock does not emit failover), no UI"
   }
  },
  "next": [

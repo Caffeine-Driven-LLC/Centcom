@@ -18,3 +18,4 @@ export * from './notify/index.js';
 export * from './session/index.js';
 export * from './queue/index.js';
 export * from './presence/index.js';
+export { ControlClient, ControlStateModel, ControlError, ForbiddenError, InvalidPolicyError, SelfActionError, NotHostError as ControlNotHostError, readServerFrame, SERVER_KINDS, type KickCode, type EndCode, type ControlEvents, type ControlClock, type ControlState, type ServerEvent } from './control/index.js';

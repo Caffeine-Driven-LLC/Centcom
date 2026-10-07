@@ -32,16 +32,18 @@ export interface SessionClientDeps {
 }
 export interface SessionOptions { /** listeners attached before the connection starts, so early states are not missed */ on?: { [K in LifecycleName]?: (...a: LifecycleEvents[K]) => void }; /** host: builds the checkpoint at this position; without it no snapshots are uploaded */ buildSnapshot?(ctx: { seq: number }): Promise<Omit<SnapshotDoc, 'fmt' | 'v' | 'seq'> | undefined>; }
 export type LifecycleEvents = {
-  state: [SessionState]; roster: [MemberInfo[], number]; 'key-changed': [{ device: string; member: string; old?: string; new?: string }]; 'waiting-for-key': []; 'protocol-warning': [{ reason: string }]; ended: [{ code: number | string }]; snapshot: [{ doc: SnapshotDoc; seq: number }]; notice: [Record<string, unknown>]; error: [{ code: string; status?: number; retryAfterS?: number }];
+  state: [SessionState]; roster: [MemberInfo[], number]; 'key-changed': [{ device: string; member: string; old?: string; new?: string }]; 'waiting-for-key': []; 'protocol-warning': [{ reason: string }]; ended: [{ code: number | string }]; snapshot: [{ doc: SnapshotDoc; seq: number }]; notice: [Record<string, unknown>]; removed: [{ code: string }]; error: [{ code: string; status?: number; retryAfterS?: number }];
 };
 export type LifecycleName = keyof LifecycleEvents;
 class Lifecycle extends TypedEmitter<LifecycleEvents> { fire<K extends LifecycleName>(ev: K, ...a: LifecycleEvents[K]): void { this.emit(ev, ...a); } }
-const LIFECYCLE = new Set<string>(['state', 'roster', 'key-changed', 'waiting-for-key', 'protocol-warning', 'ended', 'snapshot', 'notice', 'error']);
+const LIFECYCLE = new Set<string>(['state', 'roster', 'key-changed', 'waiting-for-key', 'protocol-warning', 'ended', 'snapshot', 'notice', 'error', 'removed']);
 export interface SessionHandle {
   readonly id: string; readonly me: MemberInfo; readonly state: SessionState; readonly policy: SessionPolicy;
   roster(): MemberInfo[];
   /** presence frames dropped because they did not verify (best effort, never an error) */
   presenceDropped(): number;
+  /** whether the host has silenced us, and until when (it ends by itself at that time) */
+  muted(): { muted: boolean; until?: string };
   /** the epochs (key ids) this device can read, oldest first */
   heldEpochs(): string[];
   sendEvent(kind: string, body: { p?: EventP | ((info: { ctBytes: number }) => EventP); secret?: EventSecret; /** the frame id (a `msg_` id); a retry with the same id is the same frame */ id?: string }): Promise<{ id: string; seq: number }>;
@@ -66,7 +68,7 @@ class Connection implements SessionHandle {
   private readonly life = new Lifecycle(); private readonly handlers = new Map<string, Set<(e: DecodedEvent) => void>>(); private readonly any = new Set<(e: DecodedEvent) => void>();
   private relay!: RelayClient; private channel!: ReliableChannel; private codec!: FrameCodec; private host?: HostDuties; private guest!: GuestKeys;
   private chain: Promise<void> = Promise.resolve(); private pending: SequencedFrame[] = []; private pendingKid?: string; private keyWaiters: { kid: string; res: () => void; rej: (e: unknown) => void; timer: unknown }[] = [];
-  private presenceDrops = 0; private catchUps: number[] = []; private catchUpWanted = false; private catchingUp = false; private catchUpHead?: number; private unreadable = new Set<string>(); private rotationRequested = false; private lastSeq = 0; private framesSinceSnapshot = 0; private snapTimer?: unknown; private rotateTimer?: unknown; private snapshotting = false; private closed = false; 
+  private presenceDrops = 0; private mutedUntil?: number; private mutedIso?: string; private removedFired = false; private catchUps: number[] = []; private catchUpWanted = false; private catchingUp = false; private catchUpHead?: number; private unreadable = new Set<string>(); private rotationRequested = false; private lastSeq = 0; private framesSinceSnapshot = 0; private snapTimer?: unknown; private rotateTimer?: unknown; private snapshotting = false; private closed = false; 
   private readonly clock: RelayClock; private readonly ids: IdGenerator; private readonly fetchFn: typeof fetch;
 
   constructor(private readonly d: SessionClientDeps, private readonly rest: SessionRest, readonly id: string, role: Role, memberId: string, private readonly ring: KeyRing, private readonly viewOnly: boolean, policy: SessionPolicy, private readonly opts: SessionOptions, private readonly relayUrl: string) {
@@ -76,6 +78,7 @@ class Connection implements SessionHandle {
   }
   get state(): SessionState { return this.st; }
   roster(): MemberInfo[] { return this.roster_.list(); }
+  muted(): { muted: boolean; until?: string } { if (this.mutedUntil !== undefined && this.mutedUntil !== Infinity && this.clock.now() >= this.mutedUntil) { this.mutedUntil = undefined; this.mutedIso = undefined; } return this.mutedUntil === undefined ? { muted: false } : { muted: true, ...(this.mutedIso ? { until: this.mutedIso } : {}) }; }
   heldEpochs(): string[] { return this.ring.kids(); }
   private setState(s: SessionState): void { if (this.st === s || this.st === 'ended') return; this.st = s; this.life.fire('state', s); if (s === 'waiting_for_key') this.life.fire('waiting-for-key'); }
   private warn(reason: string): void { this.d.logger?.warn('session.protocol_warning', { reason }); this.life.fire('protocol-warning', { reason }); }
@@ -90,7 +93,7 @@ class Connection implements SessionHandle {
     this.channel = new ReliableChannel({ link: this.relay, sessionId: this.id, seqStore: this.d.seqStore, clock: this.d.relayClock, ids: this.ids, logger: this.d.logger, memberId: () => this.me.id });
     await this.channel.init();
     this.relay.on('link', (l) => { if (this.st === 'ended') return; if (l === 'reconnecting' || l === 'offline') this.setState('reconnecting'); else this.setState(this.guest.hasKey() ? 'live' : 'waiting_for_key'); });
-    this.relay.on('closed', (c) => { if (!c.willReconnect && !this.closed) { if (c.code === 1000 || c.code === 4410 || c.code === 4409) this.finish(c.code); } });
+    this.relay.on('closed', (c) => { if (!c.willReconnect && !this.closed) { if (c.code === 4403) void this.removed('forbidden'); else if (c.code === 1000 || c.code === 4410 || c.code === 4409) this.finish(c.code); } });
     this.relay.on('protocol_warning', (w) => this.warn(w.reason)); this.relay.on('frame', (f) => { if (f.t === 'presence') this.onPresence(f); }); this.relay.on('notice', (n) => this.life.fire('notice', n));
     this.relay.on('error', (e) => { if (FRAME_REFUSALS.has(e.code)) this.channel.refuseOldest(e); this.life.fire('error', { code: e.code, ...(e.status !== undefined ? { status: e.status } : {}), ...(e.retryAfterS !== undefined ? { retryAfterS: e.retryAfterS } : {}) }); });
     this.channel.on('frame', (f) => { this.chain = this.chain.then(() => this.onFrame(f)).catch(() => this.warn('frame_handler_failed')); });
@@ -134,8 +137,11 @@ class Connection implements SessionHandle {
     const p = (e.p ?? {}) as Record<string, any>;
     switch (e.kind) {
       case 'control.member_joined': { const m = memberOf({ id: p.member, role: p.role, slot: p.slot, display_name: p.name, device: p.device }); this.roster_.upsert(m); await this.refreshMembers(); const full = this.roster_.get(m.id); if (this.host && full && full.id !== this.me.id) await this.host.grantTo(full).catch(() => this.warn('grant_failed')); break; }
-      case 'control.member_left': { this.roster_.remove(String(p.member)); this.life.fire('roster', this.roster_.list(), this.roster_.version); if (p.member === this.me.id) this.finish(String(p.code ?? 'left')); break; }
-      case 'control.roster': { this.roster_.replace((Array.isArray(p.members) ? p.members : []).map((x: Record<string, unknown>) => memberOf(x)), typeof p.version === 'number' ? p.version : undefined); await this.refreshMembers(); break; }
+      case 'control.member_left': { this.roster_.remove(String(p.member)); this.life.fire('roster', this.roster_.list(), this.roster_.version); if (p.member === this.me.id) { if (p.code === 'kicked' || p.code === 'revoked') await this.removed(String(p.code)); else this.finish(String(p.code ?? 'left')); } break; }
+      case 'control.role': { const m = this.roster_.get(String(p.member)); if (m && (p.role === 'editor' || p.role === 'viewer')) { this.roster_.setRole(m.id, p.role); if (m.id === this.me.id) this.me = { ...this.me, role: p.role }; this.life.fire('roster', this.roster_.list(), this.roster_.version); } break; }
+      case 'control.mute': { if (p.member === this.me.id) { const t = typeof p.until === 'string' ? Date.parse(p.until) : NaN; this.mutedUntil = Number.isFinite(t) ? t : Infinity; this.mutedIso = typeof p.until === 'string' ? p.until : undefined; } break; }
+      case 'control.unmute': { if (p.member === this.me.id) { this.mutedUntil = undefined; this.mutedIso = undefined; } break; }
+      case 'control.roster': { if (typeof p.version === 'number' && p.version <= this.roster_.version) { this.warn('stale_roster'); break; } this.roster_.replace((Array.isArray(p.members) ? p.members : []).map((x: Record<string, unknown>) => memberOf(x)), typeof p.version === 'number' ? p.version : undefined); await this.refreshMembers(); break; }
       case 'control.host_changed': { for (const m of this.roster_.list()) if (m.role === 'host' && m.id !== p.host) this.roster_.setRole(m.id, 'editor'); this.roster_.setRole(String(p.host), 'host'); if (p.host === this.me.id) { this.me.role = 'host'; if (!this.host) this.becomeHost(); } else if (this.me.role === 'host') this.me.role = 'editor'; this.life.fire('roster', this.roster_.list(), this.roster_.version); break; }
       case 'control.session_state': { const s = p.state; if (s === 'ended' || s === 'expired') this.finish('ended'); else if (s === 'paused') this.setState('paused'); else if (s === 'live') this.setState(this.guest.hasKey() ? 'live' : 'waiting_for_key'); break; }
       case 'control.policy': { this.policy = { ...this.policy, ...p }; break; }
@@ -166,7 +172,7 @@ class Connection implements SessionHandle {
     return this.channel.send({ t: o.t as 'event', k: o.k, id, ...(o.p ? { p: o.p } : {}), ...(o.ct ? { ct: o.ct } : {}), ...(o.sig ? { sig: o.sig } : {}) });
   }
   async sendEvent(kind: string, body: { p?: EventP | ((info: { ctBytes: number }) => EventP); secret?: EventSecret; id?: string }): Promise<{ id: string; seq: number }> {
-    if (this.st === 'ended') throw new SessionError('ended', 'This session has ended.'); const mode = payloadMode(kind); if (mode === 'unknown') throw new TypeError(`unknown event kind ${kind}`);
+    if (this.st === 'ended') throw new SessionError('ended', 'This session has ended.'); if (!kind.startsWith('presence.') && this.muted().muted) throw new SessionError('muted', 'The host has muted you, so you cannot send this right now.'); const mode = payloadMode(kind); if (mode === 'unknown') throw new TypeError(`unknown event kind ${kind}`);
     if (mode !== 'clear') {
       if (this.viewOnly) throw new SessionError('view_only', 'You joined with a view-only link, so you cannot send this.'); if (!this.guest.hasKey()) throw new SessionError('waiting_for_key', 'Waiting for the host to let you in.');
       if (this.pendingKid && !this.ring.get(this.pendingKid)) await this.waitForKey(this.pendingKid);
@@ -214,6 +220,8 @@ class Connection implements SessionHandle {
     if (this.me.role !== 'host') throw new SessionError('not_host', 'Only the host can make a share link.'); const l = await this.rest.createShareLink(this.id); const { kid, key } = this.ring.current();
     return { ...l, fragment: `#k=${b64(key)}&kid=${kid}` };
   }
+  /** The host removed us: stop for good, forget the keys of this session and say so once. */
+  private async removed(code: string): Promise<void> { if (this.removedFired) return; this.removedFired = true; this.cleanup(); this.ring.clear(); void this.d.crypto.keyringStore?.(this.id)?.write('').catch?.(() => undefined); this.setState('ended'); this.life.fire('removed', { code }); this.life.fire('ended', { code }); await this.relay.close(1000, 'removed').catch(() => undefined); }
   private finish(code: number | string): void { if (this.st === 'ended') return; this.setState('ended'); this.cleanup(); this.life.fire('ended', { code }); }
   private cleanup(): void { this.closed = true; if (this.snapTimer) this.clock.clearTimeout(this.snapTimer as never); if (this.rotateTimer) this.clock.clearTimeout(this.rotateTimer as never); for (const w of this.keyWaiters) { this.clock.clearTimeout(w.timer as never); w.rej(new SessionError('ended', 'This session has ended.')); } this.keyWaiters = []; }
   async leave(): Promise<void> { if (this.closed) return; await this.channel.flush().catch(() => undefined); this.cleanup(); this.setState('ended'); await this.relay.close(1000, 'leave'); }

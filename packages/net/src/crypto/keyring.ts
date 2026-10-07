@@ -12,6 +12,8 @@ export class KeyRing {
   static create(now = new Date()): KeyRing { const r = new KeyRing({ now }); r.addEpoch('k1', sodium().crypto_aead_xchacha20poly1305_ietf_keygen()); return r; }
   current(): { kid: string; key: Uint8Array } { if (!this.cur) throw new CryptoError('unknown_kid', 'There is no key yet.'); const kid = `k${this.cur}`; return { kid, key: this.keys.get(kid)! }; }
   get(kid: string): Uint8Array | undefined { return this.keys.get(kid); }
+  /** Forget every key (the member was removed from the session): the bytes are zeroed before the map is emptied. */
+  clear(): void { for (const k of this.keys.values()) k.fill(0); this.keys.clear(); this.cur = 0; }
   kids(): string[] { return [...this.keys.keys()].sort((a, b) => epochOf(a) - epochOf(b)); }
   addEpoch(kid: string, key: Uint8Array): void { const e = epochOf(kid); if (key.length !== 32) throw new CryptoError('bad_input', 'A session key is 32 bytes.'); this.keys.set(kid, new Uint8Array(key)); if (e > this.cur) this.cur = e; }
   /** A new epoch with a fresh key; frames after this use it. */
