@@ -17,3 +17,4 @@ conformance-report.json
 release-gate-report.json
 release-gate-inputs/
 coverage/
+apps/web/dist-shell
