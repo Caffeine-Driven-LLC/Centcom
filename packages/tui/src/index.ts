@@ -24,3 +24,4 @@ export * from './theme/index.js';
 export { Cento, type CentoProps, faceFor, asciiCento, miniRows, createFrameCache, type CentoSize, type Frame, type FrameCache, createAnimationBudget, type AnimationBudget, sharedBudget } from './pixel/index.js';
 export { computeLayout, MIN_COLS, MIN_ROWS, TOO_SMALL, type Layout, createActionRegistry, DuplicateActionError, FocusStack, type ShellAction, type ActionRegistry, type FocusContext, Shell, useLayout, useFocus, type ShellSlots, renderApp, type AppHandle, watchSizeOf, createScreenGuard, ENTER, LEAVE, type ProcLike, type Guard } from './shell/index.js';
 export { stringWidth, wrapText, truncate as truncateText, sanitizeForTerminal as sanitizeText } from './text/index.js';
+export * from './cursors/index.js';
