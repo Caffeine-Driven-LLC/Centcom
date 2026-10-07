@@ -21,3 +21,4 @@ export * from './permission/index.js';
 export * from './fleet/index.js';
 export * from './mascot/index.js';
 export * from './theme/index.js';
+export * from './pixel/index.js';
