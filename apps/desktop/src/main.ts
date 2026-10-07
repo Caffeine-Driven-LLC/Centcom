@@ -12,7 +12,9 @@ let win: BrowserWindow | undefined; let pending: string | undefined; let ready =
 const send = (raw: string): void => { if (win && ready) { win.webContents.send('centcom:link', raw); if (win.isMinimized()) win.restore(); win.focus(); } else pending = raw; };
 function createWindow(): void {
   win = new BrowserWindow({ width: 1280, height: 820, minWidth: 420, minHeight: 520, title: 'Centcom', backgroundColor: '#0A0A0C', show: false, webPreferences: { ...WEB_PREFERENCES, preload: join(__dirname, 'preload.cjs') } });
-  win.once('ready-to-show', () => win?.show());
+  const smoke = process.env.CENTCOM_SMOKE === '1'; /* a check that loads the page without showing a window, prints what it found and quits */
+  win.once('ready-to-show', () => { if (!smoke) win?.show(); });
+  if (smoke) { win.webContents.on('did-fail-load', (_e, code, desc) => { console.log(JSON.stringify({ ok: false, code, desc })); app.exit(1); }); win.webContents.on('did-finish-load', () => { void win?.webContents.executeJavaScript(`JSON.stringify({ href: location.href, title: document.title, bridge: typeof window.centcom === 'object' && window.centcom.desktop === true, root: !!document.getElementById('root') && document.getElementById('root').childElementCount > 0, node: typeof require === 'undefined' && typeof process === 'undefined' })`).then((r: string) => { console.log(JSON.stringify({ ok: true, ...JSON.parse(r) })); app.exit(0); }); }); setTimeout(() => { console.log(JSON.stringify({ ok: false, desc: 'timeout' })); app.exit(2); }, 20_000); }
   win.webContents.setWindowOpenHandler(({ url }) => { if (isSafeExternal(url)) void shell.openExternal(url); return { action: 'deny' }; });
   win.webContents.on('will-navigate', (e, url) => { if (!isAppUrl(url)) { e.preventDefault(); if (isSafeExternal(url)) void shell.openExternal(url); } });
   win.on('closed', () => { win = undefined; ready = false; }); void win.loadURL(`${APP_ORIGIN}/`);
