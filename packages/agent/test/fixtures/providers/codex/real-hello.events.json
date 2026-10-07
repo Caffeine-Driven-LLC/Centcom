@@ -1,0 +1,174 @@
+[
+ {
+  "type": "session.started",
+  "engine": "codex",
+  "engine_session_id": "01a11807-a3b7-7b03-b948-98c67e796c53",
+  "model": "gpt-6.1-sol",
+  "tools": [
+   "shell",
+   "apply_patch"
+  ],
+  "mcp_servers": [],
+  "capabilities": [
+   "streaming",
+   "approvals",
+   "resume",
+   "mcp",
+   "thinking",
+   "usage",
+   "interrupt",
+   "compact",
+   "models.list"
+  ],
+  "login_kind": "subscription",
+  "v": 1,
+  "seq": 1,
+  "ts": "2026-10-07T20:21:56.904Z",
+  "agent_id": "agt_01JREC00000000000000000000"
+ },
+ {
+  "type": "turn.started",
+  "turn_id": "trn_01M4C0F9MDAHH6CTR7K9BNRQGH",
+  "v": 1,
+  "seq": 2,
+  "ts": "2026-10-07T20:21:57.006Z",
+  "agent_id": "agt_01JREC00000000000000000000"
+ },
+ {
+  "type": "status",
+  "state": "prompt-received",
+  "v": 1,
+  "seq": 3,
+  "ts": "2026-10-07T20:21:57.006Z",
+  "agent_id": "agt_01JREC00000000000000000000",
+  "turn_id": "trn_01M4C0F9MDAHH6CTR7K9BNRQGH"
+ },
+ {
+  "type": "status",
+  "state": "streaming",
+  "v": 1,
+  "seq": 4,
+  "ts": "2026-10-07T20:21:59.960Z",
+  "agent_id": "agt_01JREC00000000000000000000",
+  "turn_id": "trn_01M4C0F9MDAHH6CTR7K9BNRQGH"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_09a92c32640ab745016ac6a9e8064887d2b62c1eb1d1cd5b40",
+  "index": 0,
+  "text": "Hello",
+  "v": 1,
+  "seq": 5,
+  "ts": "2026-10-07T20:21:59.961Z",
+  "agent_id": "agt_01JREC00000000000000000000",
+  "turn_id": "trn_01M4C0F9MDAHH6CTR7K9BNRQGH"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_09a92c32640ab745016ac6a9e8064887d2b62c1eb1d1cd5b40",
+  "index": 1,
+  "text": " from",
+  "v": 1,
+  "seq": 6,
+  "ts": "2026-10-07T20:22:00.002Z",
+  "agent_id": "agt_01JREC00000000000000000000",
+  "turn_id": "trn_01M4C0F9MDAHH6CTR7K9BNRQGH"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_09a92c32640ab745016ac6a9e8064887d2b62c1eb1d1cd5b40",
+  "index": 2,
+  "text": " Cod",
+  "v": 1,
+  "seq": 7,
+  "ts": "2026-10-07T20:22:00.065Z",
+  "agent_id": "agt_01JREC00000000000000000000",
+  "turn_id": "trn_01M4C0F9MDAHH6CTR7K9BNRQGH"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_09a92c32640ab745016ac6a9e8064887d2b62c1eb1d1cd5b40",
+  "index": 3,
+  "text": "ex",
+  "v": 1,
+  "seq": 8,
+  "ts": "2026-10-07T20:22:00.127Z",
+  "agent_id": "agt_01JREC00000000000000000000",
+  "turn_id": "trn_01M4C0F9MDAHH6CTR7K9BNRQGH"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_09a92c32640ab745016ac6a9e8064887d2b62c1eb1d1cd5b40",
+  "index": 4,
+  "text": ".",
+  "v": 1,
+  "seq": 9,
+  "ts": "2026-10-07T20:22:00.190Z",
+  "agent_id": "agt_01JREC00000000000000000000",
+  "turn_id": "trn_01M4C0F9MDAHH6CTR7K9BNRQGH"
+ },
+ {
+  "type": "text.done",
+  "message_id": "msg_09a92c32640ab745016ac6a9e8064887d2b62c1eb1d1cd5b40",
+  "text": "Hello from Codex.",
+  "v": 1,
+  "seq": 10,
+  "ts": "2026-10-07T20:22:00.366Z",
+  "agent_id": "agt_01JREC00000000000000000000",
+  "turn_id": "trn_01M4C0F9MDAHH6CTR7K9BNRQGH"
+ },
+ {
+  "type": "usage.report",
+  "input_tokens": 16686,
+  "output_tokens": 9,
+  "cache_read_tokens": 13184,
+  "cost_is_estimate": true,
+  "context_used_pct": 6,
+  "context_tokens": 16695,
+  "context_window": 258400,
+  "v": 1,
+  "seq": 11,
+  "ts": "2026-10-07T20:22:00.397Z",
+  "agent_id": "agt_01JREC00000000000000000000",
+  "turn_id": "trn_01M4C0F9MDAHH6CTR7K9BNRQGH"
+ },
+ {
+  "type": "limits.report",
+  "windows": [
+   {
+    "name": "five_hour",
+    "utilization": 0.08,
+    "resets_at": 1791420089
+   },
+   {
+    "name": "seven_day",
+    "utilization": 0.01,
+    "resets_at": 1792006889
+   }
+  ],
+  "v": 1,
+  "seq": 12,
+  "ts": "2026-10-07T20:22:00.398Z",
+  "agent_id": "agt_01JREC00000000000000000000",
+  "turn_id": "trn_01M4C0F9MDAHH6CTR7K9BNRQGH"
+ },
+ {
+  "type": "status",
+  "state": "idle",
+  "v": 1,
+  "seq": 13,
+  "ts": "2026-10-07T20:22:00.402Z",
+  "agent_id": "agt_01JREC00000000000000000000",
+  "turn_id": "trn_01M4C0F9MDAHH6CTR7K9BNRQGH"
+ },
+ {
+  "type": "turn.done",
+  "outcome": "ok",
+  "stop_reason": "completed",
+  "v": 1,
+  "seq": 14,
+  "ts": "2026-10-07T20:22:00.402Z",
+  "agent_id": "agt_01JREC00000000000000000000",
+  "turn_id": "trn_01M4C0F9MDAHH6CTR7K9BNRQGH"
+ }
+]

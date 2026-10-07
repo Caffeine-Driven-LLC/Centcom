@@ -1,0 +1,549 @@
+[
+ {
+  "type": "session.started",
+  "engine": "codex",
+  "engine_session_id": "01a11807-b579-7eb2-95b0-13cf1b8274a4",
+  "model": "gpt-6.1-sol",
+  "tools": [
+   "shell",
+   "apply_patch"
+  ],
+  "mcp_servers": [],
+  "capabilities": [
+   "streaming",
+   "approvals",
+   "resume",
+   "mcp",
+   "thinking",
+   "usage",
+   "interrupt",
+   "compact",
+   "models.list"
+  ],
+  "login_kind": "subscription",
+  "v": 1,
+  "seq": 1,
+  "ts": "2026-10-07T20:22:00.900Z",
+  "agent_id": "agt_01JREC00000000000000000001"
+ },
+ {
+  "type": "turn.started",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ",
+  "v": 1,
+  "seq": 2,
+  "ts": "2026-10-07T20:22:01.002Z",
+  "agent_id": "agt_01JREC00000000000000000001"
+ },
+ {
+  "type": "status",
+  "state": "prompt-received",
+  "v": 1,
+  "seq": 3,
+  "ts": "2026-10-07T20:22:01.002Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "status",
+  "state": "streaming",
+  "v": 1,
+  "seq": 4,
+  "ts": "2026-10-07T20:22:04.140Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0f98c1462d52abd2016ac6a9ec3cc081a1833ae2184d85daa7",
+  "index": 0,
+  "text": "I",
+  "v": 1,
+  "seq": 5,
+  "ts": "2026-10-07T20:22:04.145Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0f98c1462d52abd2016ac6a9ec3cc081a1833ae2184d85daa7",
+  "index": 1,
+  "text": "’ll",
+  "v": 1,
+  "seq": 6,
+  "ts": "2026-10-07T20:22:04.145Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0f98c1462d52abd2016ac6a9ec3cc081a1833ae2184d85daa7",
+  "index": 2,
+  "text": " read",
+  "v": 1,
+  "seq": 7,
+  "ts": "2026-10-07T20:22:04.145Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0f98c1462d52abd2016ac6a9ec3cc081a1833ae2184d85daa7",
+  "index": 3,
+  "text": " `",
+  "v": 1,
+  "seq": 8,
+  "ts": "2026-10-07T20:22:04.352Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0f98c1462d52abd2016ac6a9ec3cc081a1833ae2184d85daa7",
+  "index": 4,
+  "text": "src",
+  "v": 1,
+  "seq": 9,
+  "ts": "2026-10-07T20:22:04.469Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0f98c1462d52abd2016ac6a9ec3cc081a1833ae2184d85daa7",
+  "index": 5,
+  "text": "/a",
+  "v": 1,
+  "seq": 10,
+  "ts": "2026-10-07T20:22:04.469Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0f98c1462d52abd2016ac6a9ec3cc081a1833ae2184d85daa7",
+  "index": 6,
+  "text": ".ts",
+  "v": 1,
+  "seq": 11,
+  "ts": "2026-10-07T20:22:04.469Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0f98c1462d52abd2016ac6a9ec3cc081a1833ae2184d85daa7",
+  "index": 7,
+  "text": "`",
+  "v": 1,
+  "seq": 12,
+  "ts": "2026-10-07T20:22:04.469Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0f98c1462d52abd2016ac6a9ec3cc081a1833ae2184d85daa7",
+  "index": 8,
+  "text": " to",
+  "v": 1,
+  "seq": 13,
+  "ts": "2026-10-07T20:22:04.469Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0f98c1462d52abd2016ac6a9ec3cc081a1833ae2184d85daa7",
+  "index": 9,
+  "text": " check",
+  "v": 1,
+  "seq": 14,
+  "ts": "2026-10-07T20:22:04.469Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0f98c1462d52abd2016ac6a9ec3cc081a1833ae2184d85daa7",
+  "index": 10,
+  "text": " the",
+  "v": 1,
+  "seq": 15,
+  "ts": "2026-10-07T20:22:04.469Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0f98c1462d52abd2016ac6a9ec3cc081a1833ae2184d85daa7",
+  "index": 11,
+  "text": " constant",
+  "v": 1,
+  "seq": 16,
+  "ts": "2026-10-07T20:22:04.471Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0f98c1462d52abd2016ac6a9ec3cc081a1833ae2184d85daa7",
+  "index": 12,
+  "text": ".",
+  "v": 1,
+  "seq": 17,
+  "ts": "2026-10-07T20:22:04.474Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "text.done",
+  "message_id": "msg_0f98c1462d52abd2016ac6a9ec3cc081a1833ae2184d85daa7",
+  "text": "I’ll read `src/a.ts` to check the constant.",
+  "v": 1,
+  "seq": 18,
+  "ts": "2026-10-07T20:22:04.481Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "status",
+  "state": "running-command",
+  "v": 1,
+  "seq": 19,
+  "ts": "2026-10-07T20:22:05.023Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "tool.requested",
+  "tool_id": "exec-396e6edd-561b-47bb-b6b6-6498cd1671bb",
+  "name": "Bash",
+  "input_summary": "/bin/zsh -lc 'cat src/a.ts'",
+  "risk": "medium",
+  "command": "/bin/zsh -lc 'cat src/a.ts'",
+  "v": 1,
+  "seq": 20,
+  "ts": "2026-10-07T20:22:05.023Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "approval.requested",
+  "approval_id": "apr_01M4C0FHF0CWS02C8EBBNYQJ8S",
+  "tool_id": "exec-396e6edd-561b-47bb-b6b6-6498cd1671bb",
+  "summary": "Bash: /bin/zsh -lc 'cat src/a.ts'",
+  "risk": "medium",
+  "command": "/bin/zsh -lc 'cat src/a.ts'",
+  "cwd": "$WORK",
+  "v": 1,
+  "seq": 21,
+  "ts": "2026-10-07T20:22:05.024Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "status",
+  "state": "awaiting-approval",
+  "v": 1,
+  "seq": 22,
+  "ts": "2026-10-07T20:22:05.024Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "approval.resolved",
+  "approval_id": "apr_01M4C0FHF0CWS02C8EBBNYQJ8S",
+  "decision": "deny",
+  "scope": "once",
+  "by": "user",
+  "v": 1,
+  "seq": 23,
+  "ts": "2026-10-07T20:22:05.024Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "tool.result",
+  "tool_id": "exec-396e6edd-561b-47bb-b6b6-6498cd1671bb",
+  "status": "denied",
+  "summary": "Not allowed",
+  "v": 1,
+  "seq": 24,
+  "ts": "2026-10-07T20:22:05.024Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "usage.report",
+  "input_tokens": 16693,
+  "output_tokens": 50,
+  "cache_read_tokens": 13184,
+  "cost_is_estimate": true,
+  "context_used_pct": 6,
+  "context_tokens": 16743,
+  "context_window": 258400,
+  "v": 1,
+  "seq": 25,
+  "ts": "2026-10-07T20:22:05.031Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "limits.report",
+  "windows": [
+   {
+    "name": "five_hour",
+    "utilization": 0.08,
+    "resets_at": 1791420089
+   },
+   {
+    "name": "seven_day",
+    "utilization": 0.01,
+    "resets_at": 1792006889
+   }
+  ],
+  "v": 1,
+  "seq": 26,
+  "ts": "2026-10-07T20:22:05.031Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "status",
+  "state": "streaming",
+  "v": 1,
+  "seq": 27,
+  "ts": "2026-10-07T20:22:07.631Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0f98c1462d52abd2016ac6a9efb87c81a18b4fae048ace1dcc",
+  "index": 0,
+  "text": "I",
+  "v": 1,
+  "seq": 28,
+  "ts": "2026-10-07T20:22:07.636Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0f98c1462d52abd2016ac6a9efb87c81a18b4fae048ace1dcc",
+  "index": 1,
+  "text": " couldn",
+  "v": 1,
+  "seq": 29,
+  "ts": "2026-10-07T20:22:07.637Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0f98c1462d52abd2016ac6a9efb87c81a18b4fae048ace1dcc",
+  "index": 2,
+  "text": "’t",
+  "v": 1,
+  "seq": 30,
+  "ts": "2026-10-07T20:22:07.637Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0f98c1462d52abd2016ac6a9efb87c81a18b4fae048ace1dcc",
+  "index": 3,
+  "text": " read",
+  "v": 1,
+  "seq": 31,
+  "ts": "2026-10-07T20:22:07.637Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0f98c1462d52abd2016ac6a9efb87c81a18b4fae048ace1dcc",
+  "index": 4,
+  "text": " `",
+  "v": 1,
+  "seq": 32,
+  "ts": "2026-10-07T20:22:07.637Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0f98c1462d52abd2016ac6a9efb87c81a18b4fae048ace1dcc",
+  "index": 5,
+  "text": "src",
+  "v": 1,
+  "seq": 33,
+  "ts": "2026-10-07T20:22:07.637Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0f98c1462d52abd2016ac6a9efb87c81a18b4fae048ace1dcc",
+  "index": 6,
+  "text": "/a",
+  "v": 1,
+  "seq": 34,
+  "ts": "2026-10-07T20:22:07.835Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0f98c1462d52abd2016ac6a9efb87c81a18b4fae048ace1dcc",
+  "index": 7,
+  "text": ".ts",
+  "v": 1,
+  "seq": 35,
+  "ts": "2026-10-07T20:22:07.835Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0f98c1462d52abd2016ac6a9efb87c81a18b4fae048ace1dcc",
+  "index": 8,
+  "text": "`",
+  "v": 1,
+  "seq": 36,
+  "ts": "2026-10-07T20:22:07.835Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0f98c1462d52abd2016ac6a9efb87c81a18b4fae048ace1dcc",
+  "index": 9,
+  "text": " because",
+  "v": 1,
+  "seq": 37,
+  "ts": "2026-10-07T20:22:07.835Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0f98c1462d52abd2016ac6a9efb87c81a18b4fae048ace1dcc",
+  "index": 10,
+  "text": " file",
+  "v": 1,
+  "seq": 38,
+  "ts": "2026-10-07T20:22:07.835Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0f98c1462d52abd2016ac6a9efb87c81a18b4fae048ace1dcc",
+  "index": 11,
+  "text": " access",
+  "v": 1,
+  "seq": 39,
+  "ts": "2026-10-07T20:22:07.835Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0f98c1462d52abd2016ac6a9efb87c81a18b4fae048ace1dcc",
+  "index": 12,
+  "text": " was",
+  "v": 1,
+  "seq": 40,
+  "ts": "2026-10-07T20:22:07.835Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0f98c1462d52abd2016ac6a9efb87c81a18b4fae048ace1dcc",
+  "index": 13,
+  "text": " denied",
+  "v": 1,
+  "seq": 41,
+  "ts": "2026-10-07T20:22:07.835Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0f98c1462d52abd2016ac6a9efb87c81a18b4fae048ace1dcc",
+  "index": 14,
+  "text": ".",
+  "v": 1,
+  "seq": 42,
+  "ts": "2026-10-07T20:22:07.835Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "text.done",
+  "message_id": "msg_0f98c1462d52abd2016ac6a9efb87c81a18b4fae048ace1dcc",
+  "text": "I couldn’t read `src/a.ts` because file access was denied.",
+  "v": 1,
+  "seq": 43,
+  "ts": "2026-10-07T20:22:07.846Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "usage.report",
+  "input_tokens": 16788,
+  "output_tokens": 19,
+  "cache_read_tokens": 16512,
+  "cost_is_estimate": true,
+  "context_used_pct": 13,
+  "context_tokens": 33550,
+  "context_window": 258400,
+  "v": 1,
+  "seq": 44,
+  "ts": "2026-10-07T20:22:07.884Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "limits.report",
+  "windows": [
+   {
+    "name": "five_hour",
+    "utilization": 0.08,
+    "resets_at": 1791420089
+   },
+   {
+    "name": "seven_day",
+    "utilization": 0.01,
+    "resets_at": 1792006889
+   }
+  ],
+  "v": 1,
+  "seq": 45,
+  "ts": "2026-10-07T20:22:07.884Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "status",
+  "state": "idle",
+  "v": 1,
+  "seq": 46,
+  "ts": "2026-10-07T20:22:07.888Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ },
+ {
+  "type": "turn.done",
+  "outcome": "ok",
+  "stop_reason": "completed",
+  "v": 1,
+  "seq": 47,
+  "ts": "2026-10-07T20:22:07.888Z",
+  "agent_id": "agt_01JREC00000000000000000001",
+  "turn_id": "trn_01M4C0FDHA35M9NK0NM04F8KNJ"
+ }
+]
