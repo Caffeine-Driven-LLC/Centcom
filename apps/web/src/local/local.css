@@ -1,0 +1,13 @@
+.lc-grid { display: grid; gap: 12px; }
+.lc-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.lc-grow { flex: 1 1 auto; min-width: 0; }
+.lc-dirs { max-height: 280px; overflow: auto; border: 1px solid var(--border-subtle); border-radius: var(--r-m, 4px); }
+.lc-dir { display: block; width: 100%; text-align: left; padding: 6px 10px; background: none; border: 0; color: var(--text-primary); font: inherit; cursor: pointer; }
+.lc-dir:hover, .lc-dir:focus-visible { background: var(--bg-hover); }
+.lc-log { display: grid; gap: 10px; max-height: 60vh; overflow: auto; padding: 4px; }
+.lc-msg { padding: 8px 10px; border-radius: var(--r-m, 4px); background: var(--bg-surface); white-space: pre-wrap; overflow-wrap: anywhere; }
+.lc-user { background: var(--bg-raised); }
+.lc-tool { font-family: var(--mono, monospace); font-size: 12px; color: var(--text-secondary); }
+.lc-diff { font-family: var(--mono, monospace); font-size: 12px; margin: 4px 0 0; white-space: pre-wrap; }
+.lc-approval { border: 1px solid var(--border-strong); padding: 10px; border-radius: var(--r-m, 4px); }
+.lc-composer { width: 100%; min-height: 64px; resize: vertical; font: inherit; color: var(--text-primary); background: var(--bg-sunken); border: 1px solid var(--border-default); border-radius: var(--r-m, 4px); padding: 8px; }
