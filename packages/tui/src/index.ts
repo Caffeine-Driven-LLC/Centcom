@@ -18,3 +18,4 @@ export * from './prompt/index.js';
 export * from './status/index.js';
 export * from './diff/index.js';
 export * from './permission/index.js';
+export * from './fleet/index.js';
