@@ -8,8 +8,8 @@ export const WS = 'wsp_01JA3Z8K2M5N7P9Q0R1S2T3V4W';
 const ids = newIdGenerator({ now: () => 1_790_000_000_000, random: (n) => Uint8Array.from({ length: n }, (_, i) => (i * 37 + 11) & 255) });
 let counter = 0; const devId = () => { const a = ids.next('dev'); return `dev_${a.slice(4, 29)}${'0123456789ABCDEFGHJKMNPQRSTVWXYZ'[counter++ % 32]}`; };
 
-export interface Registry { members: Map<string, { id: string; role: 'host' | 'editor' | 'viewer'; slot: number; display_name: string; device: string; device_keys: Record<string, unknown> }>; blobs: Map<string, Uint8Array>; snapshots: { snp: string; seq: number; size: number; sha256: string; kid: string }[]; history: unknown[] }
-export const newRegistry = (): Registry => ({ members: new Map(), blobs: new Map(), snapshots: [], history: [] });
+export interface Registry { policy: Record<string, unknown>; members: Map<string, { id: string; role: 'host' | 'editor' | 'viewer'; slot: number; display_name: string; device: string; device_keys: Record<string, unknown> }>; blobs: Map<string, Uint8Array>; snapshots: { snp: string; seq: number; size: number; sha256: string; kid: string }[]; history: unknown[] }
+export const newRegistry = (): Registry => ({ policy: {}, members: new Map(), blobs: new Map(), snapshots: [], history: [] });
 
 const safeJson = (b: BodyInit): unknown => { try { return JSON.parse(typeof b === 'string' ? b : new TextDecoder().decode(b as Uint8Array)); } catch { return undefined; } };
 export class Peer {
@@ -26,7 +26,8 @@ export class Peer {
       call: async (op: string, args: never, o?: never) => {
         const r = await (base.call as (...a: unknown[]) => Promise<{ data: Record<string, unknown> }>)(op, args, o);
         if (op === 'createJoinToken' && self.register) { const mem = String(r.data.member); reg.members.set(mem, { id: mem, role: self.role, slot: reg.members.size, display_name: self.name, device: self.deviceId, device_keys: { device: self.deviceId, x25519: keys.x25519, ed25519: keys.ed25519, fingerprint: self.device.fingerprint() } }); }
-        if (op === 'createSession') { const b = (args as { body?: { policy?: Record<string, unknown> } }).body; return { ...r, data: { ...r.data, policy: { ...(b?.policy ?? {}) } } } as never; }
+        if (op === 'createSession') { const b = (args as { body?: { policy?: Record<string, unknown> } }).body; reg.policy = { ...(b?.policy ?? {}) }; return { ...r, data: { ...r.data, policy: reg.policy } } as never; }
+        if (op === 'getSession') return { ...r, data: { ...r.data, policy: reg.policy } } as never;
         if (op === 'getSnapshot') { const s = reg.snapshots.at(-1); if (!s) throw Object.assign(new Error('none'), { status: 404 }); return { ...r, data: { ...s, download_url: `https://blobs.example/${s.snp}`, expires_in: 60 } } as never; }
         if (op === 'beginSnapshotUpload') { const snp = `snp_${String(reg.snapshots.length + 1).padStart(26, '0')}`; return { ...r, data: { snp, upload_url: `https://blobs.example/${snp}`, expires_in: 60 } } as never; }
         if (op === 'commitSnapshot') { const a = args as { path: { snp: string }; body: { seq: number; size: number; sha256: string; kid: string } }; reg.snapshots.push({ snp: a.path.snp, ...a.body }); return { ...r, data: { snp: a.path.snp, ...a.body } } as never; }

@@ -1,0 +1,10 @@
+# queue client (lane C058)
+
+`new QueueClient(session)` gives the command-post queue of a session (C057).
+
+- **Submit** (`submit({ body, kind?, attachments?, item? })`): a `que_` item id, one hybrid `queue.submit` frame whose clear part is only `{ item, size, kind }` (`size` is the byte length of the decoded ciphertext) and whose encrypted part is `{ body, attachments? }`. The frame id is `msg_<same ULID>` (the envelope requires `msg_` ids), so one item is one frame to the relay: the outbox resends it after a reconnect, the relay ignores the replay, and calling `submit` again with the same `item` is also a no-op. A body that cannot fit in one frame is refused before anything is sent.
+- **Cancel** your own item while it is queued or approved. **Host:** `approve`, `reject(item, code, note?)` (the note is encrypted), `reorder`, `drop`, `claim(item, agentId)`, `done(item, outcome)`; anyone else gets `NotHostError` and nothing is sent.
+- **Model** (`QueueModel`, a pure reducer): the same frames in seq order always give the same view. A later `reorder` wins, `queue.state` from the relay with a newer version replaces everything, unknown states count as queued, and while the session is paused approved and running items show as `held`. Host-only frames from anyone but the host (checked against the roster) are ignored, logged and reported as an `ignored` event.
+- **Local checks** (`prechecks: false` switches them off to see the server's own answer): viewer, muted, locked session, 5 live items per member, the session's `queue_limit`. The relay's `queue_full`, `queue_item_gone` and `forbidden` become `QueueFullError`, `ItemGoneError` (not fatal; the model stays as it was) and `NotAllowedError`.
+
+Contract notes: the contract says the item id is the frame `id`, but frame ids must be `msg_` ids, so the `que_` id travels in `p.item` (as in the mock). The relay's `sys.error` does not name the frame it refused; the delivery channel fails the oldest frame still waiting for its echo (`refuseOldest`).
