@@ -1,0 +1,50 @@
+import { Link, createRoute, useNavigate, useParams } from '@tanstack/react-router';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { rootRoute } from '../app/root.js';
+import type { RouteModule } from '../app/types.js';
+import { useHttp } from '../lib/http-context.js';
+import { Banner, Button, Card, EmptyState, Input, Skeleton, Table, Tabs, useToast } from '../ui/index.js';
+import { ConfirmByName, MembersTable, SeatBanner } from './components.js';
+import { InviteDialog, SettingsForm, deleteWorkspace, errCode, errStatus, membersPager, removeMember, transferOwnership, type Member, type WorkspaceSettings } from './data.js';
+import { REASON, can, type WorkspaceRole } from './rbac.js';
+
+interface Ws { id: string; name: string; role: WorkspaceRole; member_count?: number }
+function useWs(id: string): { ws?: Ws; error?: unknown; reload(): void } {
+  const http = useHttp(); const nav = useNavigate(); const { toast } = useToast(); const [ws, setWs] = useState<Ws>(); const [error, setError] = useState<unknown>(); const [n, setN] = useState(0);
+  useEffect(() => { let on = true; http.call('getWorkspace', { id }).then((r) => { if (on) setWs(r.data as Ws); }).catch((e: unknown) => { if (!on) return; if (errStatus(e) === 404) { toast('info', 'That workspace no longer exists.'); void nav({ to: '/workspaces' as never }); } else setError(e); }); return () => { on = false; }; }, [http, id, n, nav, toast]);
+  return { ws, error, reload: () => setN((x) => x + 1) };
+}
+function Workspaces(): React.JSX.Element {
+  const http = useHttp(); const nav = useNavigate(); const { toast } = useToast(); const [rows, setRows] = useState<Ws[]>(); const [name, setName] = useState(''); const [busy, setBusy] = useState(false);
+  useEffect(() => { void http.listPage('listWorkspaces', {}).then((p) => setRows(p.data as Ws[])).catch(() => setRows([])); }, [http]);
+  const create = (): void => { if (busy || !name.trim()) return; setBusy(true); void http.call('createWorkspace', { body: { name: name.trim() } }).then((r) => nav({ to: `/w/${(r.data as Ws).id}` as never })).catch(() => toast('danger', 'The workspace could not be created.')).finally(() => setBusy(false)); };
+  return <Card title="Workspaces">{rows === undefined ? <Skeleton lines={3} /> : rows.length ? <Table caption="Your workspaces" rows={rows} rowKey={(w) => w.id} columns={[{ key: 'n', header: 'Name', cell: (w) => <Link to={`/w/${w.id}` as never}>{w.name}</Link> }, { key: 'r', header: 'Your role', cell: (w) => w.role }]} /> : <EmptyState title="No workspaces yet">Create one to invite your team.</EmptyState>}<form onSubmit={(e) => { e.preventDefault(); create(); }}><Input label="New workspace" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} /><Button variant="primary" type="submit" disabledReason={name.trim() ? undefined : 'Give it a name first.'}>Create workspace</Button></form></Card>;
+}
+function Overview(): React.JSX.Element { const { wsp } = useParams({ strict: false }) as { wsp: string }; const { ws } = useWs(wsp); return ws ? <Card title={ws.name}><p>Your role: {ws.role}. {ws.member_count ?? '?'} members.</p><nav aria-label="Workspace"><Link to={`/w/${wsp}/members` as never}>Members</Link> · <Link to={`/w/${wsp}/projects` as never}>Projects</Link> · <Link to={`/w/${wsp}/settings` as never}>Settings</Link></nav></Card> : <Skeleton lines={2} />; }
+function Members(): React.JSX.Element {
+  const { wsp } = useParams({ strict: false }) as { wsp: string }; const http = useHttp(); const nav = useNavigate(); const { toast } = useToast(); const { ws } = useWs(wsp); const pager = useMemo(() => membersPager(http, wsp), [http, wsp]); const [, bump] = useState(0); const [me] = useState<string>('');
+  const load = useCallback(() => { void pager.loadMore().finally(() => bump((x) => x + 1)); }, [pager]); useEffect(() => { load(); }, [load]);
+  const [dlg, setDlg] = useState<InviteDialog>(); const [email, setEmail] = useState(''); const [invMsg, setInvMsg] = useState<string>(); const [noSeats, setNoSeats] = useState(false); const [target, setTarget] = useState<{ kind: 'remove' | 'transfer'; m: Member }>();
+  const invite = (): void => { const d = dlg ?? new InviteDialog(http, wsp); setDlg(d); void d.create({ email, role: 'member' }).then((r) => { if (r.ok) { setInvMsg('Invite sent.'); toast('success', 'Invite sent.'); } else if (r.reason === 'no_seats') setNoSeats(true); else if (r.reason === 'rate_limited') setInvMsg(`Too many requests. Try again in ${r.retryAfterS ?? 1}s.`); else setInvMsg('The invite could not be sent.'); }); };
+  const done = (): void => { setTarget(undefined); pager.reset(); load(); };
+  return <Card title="Members">{noSeats ? <SeatBanner billingHref={`/w/${wsp}/billing`} /> : null}
+    <MembersTable members={pager.items} me={me} myRole={ws?.role} http={http} ws={wsp} onChanged={() => undefined} onRemove={(m) => setTarget({ kind: 'remove', m })} onTransfer={(m) => setTarget({ kind: 'transfer', m })} />
+    {pager.hasMore ? <Button onClick={load} disabledReason={pager.loading ? 'Loading…' : undefined}>Load more</Button> : null}
+    <form onSubmit={(e) => { e.preventDefault(); invite(); }}><Input label="Invite by email" type="email" value={email} onChange={(e) => { setEmail(e.target.value); setDlg(undefined); setInvMsg(undefined); }} /><Button variant="primary" type="submit" disabledReason={!can(ws?.role, 'invite') ? REASON.invite : !email ? 'Enter an email first.' : undefined}>Send invite</Button>{invMsg ? <p role="status">{invMsg}</p> : null}</form>
+    <ConfirmByName open={target?.kind === 'remove'} verb={target?.m.id === me ? 'Leave workspace' : 'Remove member'} name={ws?.name ?? ''} onClose={() => setTarget(undefined)} onConfirm={() => void removeMember(http, wsp, target!.m.id).then((r) => (r.ok ? done() : toast('danger', 'That could not be done.')))} />
+    <ConfirmByName open={target?.kind === 'transfer'} verb="Transfer ownership" name={ws?.name ?? ''} detail="The new owner can delete the workspace. You become an admin." onClose={() => setTarget(undefined)} onConfirm={() => void transferOwnership(http, wsp, target!.m.id).then((r) => { if (r.ok) { done(); void nav({ to: `/w/${wsp}` as never }); } else toast('danger', 'That could not be done.'); })} /></Card>;
+}
+function Projects(): React.JSX.Element { const { wsp } = useParams({ strict: false }) as { wsp: string }; const http = useHttp(); const [rows, setRows] = useState<{ id: string; name: string; repo?: string }[]>(); useEffect(() => { void http.listPage('listProjects', { id: wsp }).then((p) => setRows(p.data as never)).catch(() => setRows([])); }, [http, wsp]); return <Card title="Projects">{rows === undefined ? <Skeleton lines={2} /> : rows.length ? <Table caption="Projects" rows={rows} rowKey={(p) => p.id} columns={[{ key: 'n', header: 'Name', cell: (p) => p.name }, { key: 'r', header: 'Repository', cell: (p) => p.repo ?? '' }]} /> : <EmptyState title="No projects yet">Projects appear when someone hosts a session from a repository.</EmptyState>}</Card>; }
+function Settings(): React.JSX.Element {
+  const { wsp } = useParams({ strict: false }) as { wsp: string }; const http = useHttp(); const nav = useNavigate(); const { toast } = useToast(); const { ws } = useWs(wsp); const form = useMemo(() => new SettingsForm(http, wsp), [http, wsp]); const [v, setV] = useState<WorkspaceSettings>(); const [conflict, setConflict] = useState(false); const [del, setDel] = useState(false); const on = useRef(true);
+  useEffect(() => { on.current = true; void form.load().then(() => on.current && setV(form.value)); return () => { on.current = false; }; }, [form]); const allowed = can(ws?.role, 'update_settings');
+  const save = (): void => { if (!v) return; void form.save(v).then((r) => { if (r.ok) toast('success', 'Saved.'); else if (r.reason === 'changed_elsewhere') setConflict(true); else toast('danger', 'The settings could not be saved.'); }); };
+  return <Card title="Settings">{conflict ? <Banner tone="warning" title="Changed elsewhere">Someone else changed these settings. <Button onClick={() => void form.reapply().then((r) => { if (r.ok) { setConflict(false); setV(form.value); toast('success', 'Saved.'); } })}>Refresh and reapply my changes</Button></Banner> : null}
+    {v ? <form onSubmit={(e) => { e.preventDefault(); save(); }}><label className="cc-label" htmlFor="aa">Default approvals</label><select id="aa" className="cc-input" value={v.auto_approve} disabled={!allowed} onChange={(e) => setV({ ...v, auto_approve: e.target.value as WorkspaceSettings['auto_approve'] })}><option value="ask">Ask the host</option><option value="trusted">Trusted members</option><option value="everyone">Everyone</option></select><label><input type="checkbox" checked={v.share_history} disabled={!allowed} onChange={(e) => setV({ ...v, share_history: e.target.checked })} /> Share history with new members</label><Button variant="primary" type="submit" disabledReason={allowed ? undefined : REASON.update_settings}>Save settings</Button></form> : <Skeleton lines={3} />}
+    <h3>Delete workspace</h3><Button variant="danger" onClick={() => setDel(true)} disabledReason={can(ws?.role, 'delete_workspace') ? undefined : REASON.delete_workspace}>Delete workspace…</Button>
+    <ConfirmByName open={del} verb="Delete workspace" name={ws?.name ?? ''} detail="Billing winds down over 7 days. Sessions and history are removed." onClose={() => setDel(false)} onConfirm={() => void deleteWorkspace(http, wsp).then((r) => (r.ok ? nav({ to: '/workspaces' as never }) : toast('danger', 'The workspace could not be deleted.')))} /></Card>;
+}
+void Tabs; void errCode;
+const r = (path: string, component: () => React.JSX.Element) => createRoute({ getParentRoute: () => rootRoute, path, component });
+export const routeModule: RouteModule = { routes: [r('/workspaces', Workspaces), r('/w/$wsp', Overview), r('/w/$wsp/members', Members), r('/w/$wsp/projects', Projects), r('/w/$wsp/settings', Settings)], nav: [{ id: 'workspaces', labelKey: 'nav.workspaces', to: '/workspaces', icon: 'people' }] };
+export default routeModule;
