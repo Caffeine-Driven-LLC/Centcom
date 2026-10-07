@@ -10,8 +10,8 @@
    "note": "error model complete; gap: end-to-end run against a mock errors scenario"
   },
   "C008": {
-   "pct": 0.3,
-   "note": "VirtualClock and FakeEngine exist; gaps: harness, renderInk, pty harness, network guard, coverage preset"
+   "pct": 0.8,
+   "note": "test toolkit: defineCentcomConfig preset (80% floor proved by a failing fixture), network guard (loopback only) and console guard in the root vitest setup, fakeClock, seededRng (xoshiro128**), fixedIds, tmpDir, memFs, loadContractFixture, PtyHarness on Python pty with xterm headless screen and cells (no native add-on), renderInk with colour tiers, expectScreen snapshots, docs/testing.md; gaps: Windows pty, not every package opted into the preset yet, card says green at truecolor gives 38;2; but named colours stay basic ANSI so hex is used"
   },
   "C009": {
    "pct": 1,
