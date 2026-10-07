@@ -5,7 +5,7 @@ import { sp, type Line } from '../util/text.js';
 import type { Theme } from '@centcom/theme';
 import { blend, layoutCursors, tagLine, type CursorColour, type CursorMark, type CursorRosterEntry, type CursorState, type MemberId, type Viewport } from './model.js';
 
-const HEX_ORDER: Record<CursorColour, number> = { violet: 0, red: 1, yellow: 2, green: 3, brown: 4, 'violet-outlined': 0 };
+export const HEX_ORDER: Record<CursorColour, number> = { violet: 0, red: 1, yellow: 2, green: 3, brown: 4, 'violet-outlined': 0 };
 export interface Painted { row: number; col: number; line: Line; key: string }
 /** Colours for the marks on this theme: a pure step the component and the tier tests share. */
 export function paintCursors(marks: CursorMark[], theme: Theme): { selections: Painted[]; tags: Painted[] } {

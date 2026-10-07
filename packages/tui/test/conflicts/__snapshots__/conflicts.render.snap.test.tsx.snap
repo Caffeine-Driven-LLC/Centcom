@@ -1,0 +1,33 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`banner (acceptance 3, 7) > at most two banners; the rest fold into +N more 1`] = `
+"! conflict in src/app.ts
+between an agent
+w Wait  t Take turns  b Branch off  r Resolve with Cento
+! conflict in src/app.ts
+between an agent
+w Wait  t Take turns  b Branch off  r Resolve with Cento
++2 more"
+`;
+
+exports[`banner (acceptance 3, 7) > lists both agent owners, the file, the four actions with their keys, at 80x24 and 120x40 1`] = `
+"! conflict in src/app.ts
+between Ada's agent and Ben's agent
+w Wait  t Take turns  b Branch off  r Resolve with Cento"
+`;
+
+exports[`banner (acceptance 3, 7) > lists both agent owners, the file, the four actions with their keys, at 80x24 and 120x40 2`] = `
+"! conflict in src/app.ts
+between Ada's agent and Ben's agent
+w Wait  t Take turns  b Branch off  r Resolve with Cento"
+`;
+
+exports[`lock chip and inspector (acceptance 1) > 80x24: holder, countdown and the waiting agent, with the word and the glyph 1`] = `
+"! locked src/app.ts · held by Ada · 12s left · review-bot waiting
+! locked file zz99… · held by Ada · held"
+`;
+
+exports[`lock chip and inspector (acceptance 1) > 120x40: holder, countdown and the waiting agent, with the word and the glyph 1`] = `
+"! locked src/app.ts · held by Ada · 12s left · review-bot waiting
+! locked file zz99… · held by Ada · held"
+`;
