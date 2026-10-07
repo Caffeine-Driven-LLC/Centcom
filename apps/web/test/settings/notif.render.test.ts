@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { CATEGORIES, linkFor, textFor, UNKNOWN_TITLE } from '../../shell/src/settings/model.js';
+import { CATEGORIES, linkFor, textFor, UNKNOWN_TITLE } from '../../src/settings/model.js';
 
 const ses = 'ses_01JA3Z8K2M5N7P9Q0R1S2T3V4W';
 const note = (category: string, o: Record<string, unknown> = {}) => ({ id: 'ntf_1', created_at: 'x', read_at: null, category, title_key: `notif.${category}.title`, body_key: `notif.${category}.body`, params: { session: ses, pct: 80 }, priority: 'normal', ...o }) as never;

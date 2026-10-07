@@ -1,14 +1,14 @@
 import { RouterProvider, createMemoryHistory } from '@tanstack/react-router';
 import { render } from '@testing-library/react';
 import React from 'react';
-import { buildRouter } from '../../shell/src/app/router.js';
-import { reset, setState } from '../../shell/src/auth/store.js';
+import { buildRouter } from '../../src/app/router.js';
+import { reset, setState } from '../../src/auth/store.js';
 import { initialGuestState, reduceGuestState, SERVER, type DecodedFrame, type GuestState } from '@centcom/guest';
-import { HttpProvider } from '../../shell/src/lib/http-context.js';
-import { routeModule } from '../../shell/src/session/routes.js';
-import { setSessionLoader } from '../../shell/src/session/lazy.js';
-import type { SessionConnection } from '../../shell/src/session/engine.js';
-import { ToastProvider } from '../../shell/src/ui/index.js';
+import { HttpProvider } from '../../src/lib/http-context.js';
+import { routeModule } from '../../src/session/routes.js';
+import { setSessionLoader } from '../../src/session/lazy.js';
+import type { SessionConnection } from '../../src/session/engine.js';
+import { ToastProvider } from '../../src/ui/index.js';
 import { fakeHttp } from '../workspace/helpers.js';
 
 export const ME = 'mem_me'; export const HOST = 'mem_host'; export const SES = 'ses_01JA3Z8K2M5N7P9Q0R1S2T3V4W';

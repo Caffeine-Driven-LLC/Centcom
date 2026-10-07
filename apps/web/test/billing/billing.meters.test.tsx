@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { banners, limitRows, limitText, meters, pips } from '../../shell/src/billing/model.js';
+import { banners, limitRows, limitText, meters, pips } from '../../src/billing/model.js';
 import { baseEnt, baseSub, setup } from './setup.js';
 
 afterEach(cleanup); beforeEach(() => { window.scrollTo = () => undefined; });

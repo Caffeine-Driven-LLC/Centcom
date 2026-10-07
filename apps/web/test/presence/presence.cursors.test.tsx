@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { RosterStore } from '../../shell/src/presence/roster.js';
-import { visibleCursors } from '../../shell/src/presence/cursors.js';
+import { RosterStore } from '../../src/presence/roster.js';
+import { visibleCursors } from '../../src/presence/cursors.js';
 
 const members = [{ id: 'me', name: 'Me', slot: 0 }, { id: 'ada', name: 'Ada', slot: 1 }, { id: 'ben', name: 'Ben', slot: 3 }];
 const cur = (member: string, at = 0, o: Record<string, unknown> = {}) => ({ member, path: 'a.ts', line: 3, col: 1, receivedAt: at, ...o });

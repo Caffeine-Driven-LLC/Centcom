@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { AuthError } from '../../shell/src/auth/errors.js';
-import { completeLogin, startLogin } from '../../shell/src/auth/login.js';
-import { peekToken, reset } from '../../shell/src/auth/store.js';
+import { AuthError } from '../../src/auth/errors.js';
+import { completeLogin, startLogin } from '../../src/auth/login.js';
+import { peekToken, reset } from '../../src/auth/store.js';
 import { deps, fixedRandom, json, loginEnv } from './helpers.js';
 
 beforeEach(reset);

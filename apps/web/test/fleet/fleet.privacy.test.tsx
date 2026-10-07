@@ -3,7 +3,7 @@ import { cleanup, render } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { allowConsole } from '../../../../packages/testkit/src/vitest/guards.js';
-import { FleetBoard } from '../../shell/src/fleet/components.js';
+import { FleetBoard } from '../../src/fleet/components.js';
 import { ev, spawn, state, store } from './helpers.js';
 
 afterEach(cleanup);

@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { appUrl, isToken, parseDeepLink } from '../../shell/src/invite/deeplink.js';
+import { appUrl, isToken, parseDeepLink } from '../../src/invite/deeplink.js';
 
 const T = 'AbCdEfGhIjKlMnOpQrStUvWxYz0'; const SES = 'ses_01JA3Z8K2M5N7P9Q0R1S2T3V4W';
 describe('every row of the CT-DEEPLINK table (acceptance 2, 6)', () => {

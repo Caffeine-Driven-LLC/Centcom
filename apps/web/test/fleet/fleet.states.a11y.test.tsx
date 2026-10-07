@@ -3,11 +3,11 @@ import { RouterProvider, createMemoryHistory } from '@tanstack/react-router';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { expectNoA11yViolations } from '../../shell/src/a11y/index.js';
-import { buildRouter } from '../../shell/src/app/router.js';
-import { FleetProvider } from '../../shell/src/fleet/routes.js';
-import { routeModule } from '../../shell/src/fleet/routes.js';
-import { ToastProvider } from '../../shell/src/ui/index.js';
+import { expectNoA11yViolations } from '../../src/a11y/index.js';
+import { buildRouter } from '../../src/app/router.js';
+import { FleetProvider } from '../../src/fleet/routes.js';
+import { routeModule } from '../../src/fleet/routes.js';
+import { ToastProvider } from '../../src/ui/index.js';
 import { ev, spawn, state, store } from './helpers.js';
 
 afterEach(cleanup); beforeEach(() => { window.scrollTo = () => undefined; });

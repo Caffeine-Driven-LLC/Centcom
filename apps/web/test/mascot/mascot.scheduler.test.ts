@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BRIDGE_MS, COLLAPSED_STATE, MAX_ANIMATING, MIN_DWELL, MascotScheduler, StateGate } from '../../shell/src/mascot/scheduler.js';
+import { BRIDGE_MS, COLLAPSED_STATE, MAX_ANIMATING, MIN_DWELL, MascotScheduler, StateGate } from '../../src/mascot/scheduler.js';
 
 const clock = () => { let t = 0; const q: { at: number; fn: () => void; h: number }[] = []; let id = 0; return { now: () => t, setTimeout: (fn: () => void, ms: number) => { const h = ++id; q.push({ at: t + ms, fn, h }); return h; }, clearTimeout: (h: unknown) => { const i = q.findIndex((x) => x.h === h); if (i >= 0) q.splice(i, 1); }, advance(ms: number) { const end = t + ms; for (;;) { q.sort((a, b) => a.at - b.at); const n = q[0]; if (!n || n.at > end) break; q.shift(); t = n.at; n.fn(); } t = end; } }; };
 describe('at most six move (acceptance 3, 8)', () => {

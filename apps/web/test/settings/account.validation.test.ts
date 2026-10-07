@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { TELEMETRY_TEXT, validateAccount } from '../../shell/src/settings/model.js';
-import { updateAccount } from '../../shell/src/settings/data.js';
+import { TELEMETRY_TEXT, validateAccount } from '../../src/settings/model.js';
+import { updateAccount } from '../../src/settings/data.js';
 import { fakeHttp } from '../workspace/helpers.js';
 
 describe('account (acceptance 7)', () => {

@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { QueueStrip, composerState } from '../../shell/src/session/queue.js';
+import { QueueStrip, composerState } from '../../src/session/queue.js';
 
 afterEach(cleanup);
 const items = [{ item: 'que_1', submitter: 'mem_me', state: 'queued', position: 0, size: 5, kind: 'message', ts: 't' }, { item: 'que_2', submitter: 'mem_b', state: 'queued', position: 1, size: 5, kind: 'message', ts: 't' }, { item: 'que_3', submitter: 'mem_b', state: 'running', position: null, size: 5, kind: 'message', ts: 't' }];

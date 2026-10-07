@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { completeLogin, startLogin } from '../../shell/src/auth/login.js';
-import { ensureDeviceKeys, type KeyStore } from '../../shell/src/auth/devicekeys.js';
-import { refreshAccessToken } from '../../shell/src/auth/refresh.js';
-import { peekToken } from '../../shell/src/auth/store.js';
+import { completeLogin, startLogin } from '../../src/auth/login.js';
+import { ensureDeviceKeys, type KeyStore } from '../../src/auth/devicekeys.js';
+import { refreshAccessToken } from '../../src/auth/refresh.js';
+import { peekToken } from '../../src/auth/store.js';
 import { deps, json, loginEnv } from './helpers.js';
 
 describe('no token in any web storage (acceptance 3)', () => {

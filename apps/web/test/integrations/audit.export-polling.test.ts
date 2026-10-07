@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { runExport } from '../../shell/src/integrations/data.js';
+import { runExport } from '../../src/integrations/data.js';
 import { fakeHttp } from '../workspace/helpers.js';
 
 function world(script: (n: number) => { status: string; download_url?: string }) { let polls = 0; let t = 0; const http = fakeHttp((c) => (c.op === 'createAuditExport' ? { id: 'exp_1', status: 'pending', format: 'csv', created_at: 'x' } : { id: 'exp_1', format: 'csv', created_at: 'x', ...script(++polls) })); return { http, polls: () => polls, o: { now: () => t, sleep: async (ms: number) => { t += ms; } } }; }

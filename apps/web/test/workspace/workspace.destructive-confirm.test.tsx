@@ -2,8 +2,8 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MembersTable, ConfirmByName } from '../../shell/src/workspace/components.js';
-import { ToastProvider } from '../../shell/src/ui/index.js';
+import { MembersTable, ConfirmByName } from '../../src/workspace/components.js';
+import { ToastProvider } from '../../src/ui/index.js';
 import { HttpErr, fakeHttp } from './helpers.js';
 
 afterEach(cleanup);

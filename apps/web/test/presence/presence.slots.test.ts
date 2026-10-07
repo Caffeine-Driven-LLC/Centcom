@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { INITIAL_ON, STATUS_GLYPH, STATUS_WORD, activityText, rosterLine, roleChip, slotColour } from '../../shell/src/presence/slots.js';
+import { INITIAL_ON, STATUS_GLYPH, STATUS_WORD, activityText, rosterLine, roleChip, slotColour } from '../../src/presence/slots.js';
 
 describe('slots to colours (acceptance 5)', () => {
   it('slots 0 to 7, with you at slot 0 and at slot 3', () => { expect([0, 1, 2, 3, 4, 5, 6, 7].map((s) => slotColour(s, 0))).toEqual(['violet', 'red', 'yellow', 'green', 'brown', 'violet-outlined', 'violet-outlined', 'violet-outlined']); expect([0, 1, 2, 3, 4, 5].map((s) => slotColour(s, 3))).toEqual(['red', 'yellow', 'green', 'violet', 'brown', 'violet-outlined']); });

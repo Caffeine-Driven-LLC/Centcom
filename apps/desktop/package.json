@@ -1,0 +1,17 @@
+{
+  "name": "@centcom/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The Centcom desktop app: an Electron window around the app in apps/web.",
+  "main": "dist/main.cjs",
+  "scripts": {
+    "build": "tsx scripts/build.ts",
+    "start": "electron ."
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "^44.5.1",
+    "esbuild": "^0.28.2"
+  }
+}

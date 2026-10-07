@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ShortcutHost, eventKeys, listShortcuts, normaliseKeys, registerShortcut, remapShortcut, resetShortcuts, setConflictLogger } from '../../shell/src/a11y/index.js';
+import { ShortcutHost, eventKeys, listShortcuts, normaliseKeys, registerShortcut, remapShortcut, resetShortcuts, setConflictLogger } from '../../src/a11y/index.js';
 
 afterEach(() => { cleanup(); resetShortcuts(); setConflictLogger((m) => console.error(m)); });
 describe('shortcut registry (acceptance 8)', () => {

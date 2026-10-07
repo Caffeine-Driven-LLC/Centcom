@@ -9,4 +9,4 @@ export function split(src: string, outDir: string): { index: Record<string, stri
   for (const [cat, list] of byCat) writeFileSync(join(outDir, `${cat}.json`), JSON.stringify(Object.fromEntries(list.map((a) => [a.name, { w: a.w, h: a.h, frames: a.frames }]))));
   writeFileSync(join(outDir, 'index.json'), JSON.stringify({ index, palette: all.palette, palmap: all.palmap })); return { index, categories: [...byCat.keys()] };
 }
-if (process.argv[1]?.endsWith('split-animations.ts')) { const root = new URL('../../..', import.meta.url).pathname; const r = split(join(root, 'assets/mascot/animations.json'), join(root, 'apps/web/shell/public/mascot')); console.log(`split ${Object.keys(r.index).length} animations into ${r.categories.length} categories`); }
+if (process.argv[1]?.endsWith('split-animations.ts')) { const root = new URL('../../..', import.meta.url).pathname; const r = split(join(root, 'assets/mascot/animations.json'), join(root, 'apps/web/public/mascot')); console.log(`split ${Object.keys(r.index).length} animations into ${r.categories.length} categories`); }

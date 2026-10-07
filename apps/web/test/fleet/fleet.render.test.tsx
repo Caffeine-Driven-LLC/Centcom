@@ -2,9 +2,9 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { setMotion } from '../../shell/src/a11y/index.js';
-import { ConflictList, FleetBoard } from '../../shell/src/fleet/components.js';
-import { elapsed, middleTruncate, motionPlan } from '../../shell/src/fleet/model.js';
+import { setMotion } from '../../src/a11y/index.js';
+import { ConflictList, FleetBoard } from '../../src/fleet/components.js';
+import { elapsed, middleTruncate, motionPlan } from '../../src/fleet/model.js';
 import { ev, spawn, state, store } from './helpers.js';
 
 afterEach(() => { cleanup(); setMotion(undefined); });

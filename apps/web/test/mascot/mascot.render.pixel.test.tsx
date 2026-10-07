@@ -2,10 +2,10 @@
 import { cleanup, render } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { setMotion } from '../../shell/src/a11y/index.js';
-import { Mascot, SCALES, configureMascot, drawFrame } from '../../shell/src/mascot/Mascot.js';
-import { MascotScheduler } from '../../shell/src/mascot/scheduler.js';
-import { paletteFor } from '../../shell/src/mascot/catalog.js';
+import { setMotion } from '../../src/a11y/index.js';
+import { Mascot, SCALES, configureMascot, drawFrame } from '../../src/mascot/Mascot.js';
+import { MascotScheduler } from '../../src/mascot/scheduler.js';
+import { paletteFor } from '../../src/mascot/catalog.js';
 import { all, fakeCatalog, idx, stubCanvas } from './helpers.js';
 
 afterEach(() => { cleanup(); setMotion(undefined); });

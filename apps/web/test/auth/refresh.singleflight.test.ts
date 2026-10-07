@@ -6,7 +6,7 @@ function world() {
   let held: Promise<void> = Promise.resolve(); const locks = { request: async <T>(_n: string, cb: () => Promise<T>): Promise<T> => { const prev = held; let done!: () => void; held = new Promise<void>((r) => (done = r)); await prev; try { return await cb(); } finally { done(); } } };
   const hubs: ((m: unknown) => void)[] = []; const channel = () => { let fn: ((e: { data: unknown }) => void) | undefined; const me = (m: unknown) => fn?.({ data: m }); hubs.push(me); return { postMessage: (m: unknown) => { for (const h of hubs) if (h !== me) queueMicrotask(() => h(m)); }, addEventListener: (_t: 'message', f: (e: { data: unknown }) => void) => { fn = f; } }; };
   let refreshes = 0; const server = async (url: string): Promise<Response> => { if (url.endsWith('/v1/auth/token')) { refreshes++; await new Promise((r) => setTimeout(r, 20)); return json(200, { access_token: `AT-${refreshes}`, expires_in: 900 }); } return json(404, {}); };
-  async function tab() { vi.resetModules(); const store = await import('../../shell/src/auth/store.js'); const refresh = await import('../../shell/src/auth/refresh.js'); const d = deps(server, { locks, channel: channel() as never }); refresh.listen(d, () => undefined); return { store, refresh, d }; }
+  async function tab() { vi.resetModules(); const store = await import('../../src/auth/store.js'); const refresh = await import('../../src/auth/refresh.js'); const d = deps(server, { locks, channel: channel() as never }); refresh.listen(d, () => undefined); return { store, refresh, d }; }
   return { tab, refreshes: () => refreshes };
 }
 beforeEach(() => vi.resetModules());

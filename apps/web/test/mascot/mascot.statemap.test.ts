@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { STATES, STARTLING, isStartling, stateToAnimation } from '../../shell/src/mascot/statemap.js';
+import { STATES, STARTLING, isStartling, stateToAnimation } from '../../src/mascot/statemap.js';
 import { all } from './helpers.js';
 
 describe('every state has an animation (acceptance 1)', () => {

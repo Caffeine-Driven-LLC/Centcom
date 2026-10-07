@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { ACTIONS, REASON, ROLES, can, roleOptions, type WorkspaceAction, type WorkspaceRole } from '../../shell/src/workspace/rbac.js';
+import { ACTIONS, REASON, ROLES, can, roleOptions, type WorkspaceAction, type WorkspaceRole } from '../../src/workspace/rbac.js';
 
 /** The matrix is read from the contract text itself, so the mirror cannot drift. */
 const md = readFileSync(new URL('../../../../contracts/01-auth-rbac.md', import.meta.url), 'utf8');

@@ -2,9 +2,9 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { AuditTable, DeliveriesTable, EventPicker, SecretModal, WebhookForm } from '../../shell/src/integrations/components.js';
-import { SecretVault } from '../../shell/src/integrations/data.js';
-import { ToastProvider } from '../../shell/src/ui/index.js';
+import { AuditTable, DeliveriesTable, EventPicker, SecretModal, WebhookForm } from '../../src/integrations/components.js';
+import { SecretVault } from '../../src/integrations/data.js';
+import { ToastProvider } from '../../src/ui/index.js';
 
 afterEach(cleanup);
 describe('structure for assistive tech (no axe run here; roles, names and keyboard order are checked directly)', () => {

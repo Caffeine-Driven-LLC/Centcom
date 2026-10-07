@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PAGE_LIMIT, membersPager } from '../../shell/src/workspace/data.js';
+import { PAGE_LIMIT, membersPager } from '../../src/workspace/data.js';
 import { fakeHttp } from './helpers.js';
 
 const people = (from: number, n: number) => Array.from({ length: n }, (_, i) => ({ id: `mem_${from + i}`, role: 'member' }));

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { statusView } from '../../shell/src/billing/model.js';
+import { statusView } from '../../src/billing/model.js';
 import { baseSub } from './setup.js';
 
 const NOW = Date.UTC(2026, 9, 7, 12); const day = 86_400_000;
