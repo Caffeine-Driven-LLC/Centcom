@@ -11,14 +11,14 @@ import { can, REASON } from '../workspace/rbac.js';
 
 const Forbidden = (): React.JSX.Element => <Card title="Not available"><p>You do not have access to this page.</p></Card>;
 function Webhooks(): React.JSX.Element {
-  const { wsp } = useParams({ strict: false }) as { wsp: string }; const http = useHttp(); const { toast } = useToast(); const { role, ent, loaded } = useWsRole(wsp); const vault = useRef(new SecretVault()).current; const [rows, setRows] = useState<Webhook[]>(); const [, bump] = useState(0); const [key] = useState(() => ulid());
+  const { wsp } = useParams({ strict: false }) as { wsp: string }; const http = useHttp(); const { toast } = useToast(); const { role, ent, loaded } = useWsRole(wsp); const vault = useRef(new SecretVault()).current; const [rows, setRows] = useState<Webhook[]>(); const [, bump] = useState(0); const key = useRef(ulid());
   const allowed = can(role, 'manage_webhooks'); const st = entitlementState(ent);
   const load = useCallback(() => { if (!allowed) return; void http.listPage('listWebhooks', { id: wsp }).then((p) => setRows(p.data as Webhook[])).catch(() => setRows([])); }, [http, wsp, allowed]); useEffect(load, [load]);
   if (loaded && !allowed) return <Forbidden />; if (!loaded) return <Skeleton lines={3} />;
   const atLimit = st.webhooksOff || (st.webhooksMax !== undefined && rows !== undefined && rows.length >= st.webhooksMax);
   return <Card title="Webhooks">{st.webhooksOff ? <EmptyState title="Webhooks are not in your plan" action={<Link to={`/w/${wsp}/billing` as never}>See billing</Link>}>Upgrade to send events to your own servers.</EmptyState> : null}
     {rows === undefined ? <Skeleton lines={2} /> : rows.length ? <Table caption="Endpoints" rows={rows} rowKey={(w) => w.id} columns={[{ key: 'u', header: 'Address', cell: (w) => <Link to={`/w/${wsp}/webhooks/${w.id}` as never}>{w.url}</Link> }, { key: 'e', header: 'Events', cell: (w) => w.events.length }, { key: 's', header: 'Health', cell: (w) => <HealthChip status={w.status} enabled={w.enabled} /> }]} /> : null}
-    {!st.webhooksOff ? <WebhookForm disabledReason={atLimit ? 'Your plan has reached its number of endpoints.' : undefined} onSubmit={async (v) => { const r = await createWebhook(http, wsp, v, vault, key); if (r.ok) { bump((x) => x + 1); load(); } else toast('danger', r.reason === 'limit' ? 'Your plan has reached its number of endpoints.' : r.message ?? 'The endpoint could not be created.'); }} /> : null}
+    {!st.webhooksOff ? <WebhookForm disabledReason={atLimit ? 'Your plan has reached its number of endpoints.' : undefined} onSubmit={async (v) => { const r = await createWebhook(http, wsp, v, vault, key.current); if (r.ok) { key.current = ulid(); bump((x) => x + 1); load(); } else toast('danger', r.reason === 'limit' ? 'Your plan has reached its number of endpoints.' : r.message ?? 'The endpoint could not be created.'); }} /> : null}
     {vault.open ? <SecretModal vault={vault} onClose={() => bump((x) => x + 1)} /> : null}</Card>;
 }
 function WebhookDetail(): React.JSX.Element {
