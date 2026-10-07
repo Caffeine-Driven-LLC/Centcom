@@ -38,6 +38,9 @@
       ],
       "@centcom/states": [
         "./packages/protocol/src/generated/agent-state.ts"
+      ],
+      "@centcom/fleet": [
+        "./packages/net/src/fleet/model.ts"
       ]
     }
   }

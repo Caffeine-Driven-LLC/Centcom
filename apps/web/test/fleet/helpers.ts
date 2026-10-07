@@ -1,0 +1,7 @@
+import { FleetStore, type MemberInfo } from '../../shell/src/fleet/model.js';
+export const members: MemberInfo[] = [{ id: 'mem_me', name: 'Ada', slot: 0 }, { id: 'mem_b', name: 'Ben', slot: 1 }, { id: 'mem_c', name: 'Cy', slot: 2 }];
+let seq = 0;
+export const ev = (kind: string, from: string, p: Record<string, unknown>, secret?: Record<string, unknown>, at = Date.UTC(2026, 9, 7, 12)) => ({ kind, seq: ++seq, from, ts: new Date(at).toISOString(), p, ...(secret ? { secret } : {}) });
+export function store(n = 0, log?: (m: string) => void): FleetStore { const s = new FleetStore({ members: () => members, me: 'mem_me', log }); for (let i = 0; i < n; i++) { const owner = members[i % 3]!.id; s.apply(ev('agent.spawn', owner, { agent_id: `agt_${i}`, owner, mode: 'branch' }, { label: `task-${i}`, branch: `agent/secret-branch-${i}` })); s.apply(ev('agent.state', owner, { agent_id: `agt_${i}`, state: i % 4 === 0 ? 'awaiting-approval' : 'editing-file', since: new Date(Date.UTC(2026, 9, 7, 12, 0, i)).toISOString() })); } return s; }
+export const spawn = (s: FleetStore, id: string, owner = 'mem_me', secret?: Record<string, unknown>) => s.apply(ev('agent.spawn', owner, { agent_id: id, owner, mode: 'branch' }, secret));
+export const state = (s: FleetStore, id: string, st: string, owner = 'mem_me', at?: number) => s.apply(ev('agent.state', owner, { agent_id: id, state: st, since: new Date(at ?? Date.UTC(2026, 9, 7, 12)).toISOString() }));
