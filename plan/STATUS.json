@@ -142,16 +142,16 @@
    "note": "mode resolution, MotionProvider, sentences for all 64 states, linear renderer with y/n/a permission prompt and Status:/Error: announcements, no-colour/no-escape test helpers, conformance for task list and progress bar; gaps: linear mode not started from main.tsx, a11y.screenReader config key, conformance for the other components"
   },
   "C081": {
-   "pct": 0.5,
-   "note": "local web app (different design from the hosted shell in the card); gaps: router, CSP, budget and a11y checks"
+   "pct": 0.85,
+   "note": "hosted web shell beside the local app: router, theme, 17 primitives, frame, CSP, budgets; gaps: no Tailwind, Silkscreen font, axe and Lighthouse runs"
   },
   "C083": {
-   "pct": 0.3,
-   "note": "local single-session web view; card is the relay session view (blocked on session lanes)"
+   "pct": 0.7,
+   "note": "session page: windowed transcript, safe Markdown, approvals, queue strip, composer, close-code screens, browser engine from the net session client in a lazy chunk; gaps: device-key registration, invite and roster wiring, no browser traces or real-browser crypto vectors"
   },
   "C086": {
-   "pct": 0.5,
-   "note": "web Cento from the driver; card gaps: state-map coverage, scheduler, lazy data, aria-hidden"
+   "pct": 0.85,
+   "note": "canvas player: state map, scheduler cap of 6, dwell and collapse, lazy categories, five colours, reduced motion; gaps: bridge and one-shot rules, real pixel-diff and timing benchmark"
   },
   "C101": {
    "pct": 0.8,
@@ -372,6 +372,42 @@
   "C091": {
    "pct": 1,
    "note": "merged in #82"
+  },
+  "C079": {
+   "pct": 0.85,
+   "note": "handoff, failover watching, queue continuity helpers, epoch tracking, pair mode; gaps: not wired into the engines, the C075 engine keeps running items as running"
+  },
+  "C082": {
+   "pct": 0.85,
+   "note": "PKCE sign-in, single-flight refresh across tabs, 401 rules, outage backoff and queue, sign-out; gaps: WebCrypto device keys are not the keys the session engine uses, no mock-backend device check"
+  },
+  "C084": {
+   "pct": 0.85,
+   "note": "fleet board on the shared reducer: priority order, words and glyphs, filters, compact table, keys, mascot cap; gaps: inspector panel, colour-blind screenshots"
+  },
+  "C085": {
+   "pct": 0.8,
+   "note": "roster store, presence publisher, cursor fade and expiry, avatar stack, roster dialog, announcements; gaps: pixel-arrow drawing over code views, enter and leave motion"
+  },
+  "C087": {
+   "pct": 0.85,
+   "note": "workspace pages: rbac mirror from the contract, members, invites, settings with ETag, destructive confirmations, 429 countdown; gaps: link-invite options, axe run"
+  },
+  "C088": {
+   "pct": 0.8,
+   "note": "invite and share-link pages, deep-link parser, fragment key handling, key bundle flow; gaps: sealed-box opening is a seam for C056, the CT-DEEPLINK fragment question"
+  },
+  "C089": {
+   "pct": 0.85,
+   "note": "billing pages: money, meters, statuses, checkout polling, seat preview, portal, invoices; gaps: claim and notice wiring, Lighthouse run"
+  },
+  "C090": {
+   "pct": 0.85,
+   "note": "inbox, preferences matrix, push registration, account, appearance, devices; gaps: missing-session follow, axe run"
+  },
+  "C092": {
+   "pct": 0.8,
+   "note": "typed message table, plurals, pseudo-locale, error and state words, focus and shortcut helpers, reduced motion, structural a11y check; gaps: axe-core (licence), eslint rule, forced-colour browser run"
   }
  },
  "next": [
