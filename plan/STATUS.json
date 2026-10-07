@@ -86,8 +86,8 @@
    "note": "TUI shell works; card gaps: renderApp/useLayout, safe alt-screen on signals, focus stack, grapheme text module"
   },
   "C035": {
-   "pct": 0.6,
-   "note": "prompt with history and slash popup; card gaps: graphemes, bracketed paste chip, length cap, jsonl history, ctrl+r"
+   "pct": 0.7,
+   "note": "prompt logic: grapheme-aware TextBuffer with word/line keys and wide-character cursor, submit checks (empty, 65,536 limit, backslash continuation), paste chips with 256 KiB cap, history store (jsonl, 1,000 lines, per project, 8 KiB cap, search), slash registry with ranking, aliases, availability and /clear /exit; gap: no new bordered PromptInput drawing yet (components/Prompt.tsx still has its own editor), suggestion list and ctrl+r line drawing"
   },
   "C036": {
    "pct": 0.95,

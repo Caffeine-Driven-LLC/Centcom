@@ -14,3 +14,4 @@ export * from './transcript/index.js';
 export * from './terminal/index.js';
 export * from './settings/index.js';
 export * from './a11y/index.js';
+export * from './prompt/index.js';
