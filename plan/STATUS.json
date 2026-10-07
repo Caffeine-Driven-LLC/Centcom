@@ -126,8 +126,8 @@
    "note": "keymap of named actions with contexts and chords, keybindings.json overrides (validated, unbind, conflicts, protected quit/help, ctrl+c reserved), raw and Ink key decoding, dispatcher wired into the app, live help screen with filter, centcom keys [--json]"
   },
   "C046": {
-   "pct": 0.5,
-   "note": "mascot driver; card gaps: full state map, priorities and chips, bursts, idle/night, visibility"
+   "pct": 0.7,
+   "note": "driver with state map for all 64 states, 8 priority tiers and chips, 600 ms dwell, tool-call burst collapse, prompt beat, idle timeline and night sleep, one-shot error/worried/thumbs_up/celebrate caps, visibility policy and suppression, reduced-motion substitution, MascotSlot; gap: the app does not create or feed this driver yet, tier table duplicated in fleet lane"
   },
   "C047": {
    "pct": 0.7,
