@@ -20,15 +20,17 @@
     "skills:sync": "tsx tools/skills/sync.ts",
     "changeset": "changeset",
     "release:meta": "node tools/release/build-meta.mjs",
-    "dev:mock": "tsx tools/dev/mock.mjs"
+    "dev:mock": "tsx tools/dev/mock.mjs",
+    "bench": "tsx tools/bench/run.ts",
+    "bench:compare": "tsx tools/bench/compare-cli.ts"
   },
   "devDependencies": {
+    "@changesets/cli": "3.0.3",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
+    "fast-check": "^3.23.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
-    "vitest": "^3.0.0",
-    "fast-check": "^3.23.0",
-    "@changesets/cli": "3.0.3"
+    "vitest": "^3.0.0"
   }
 }

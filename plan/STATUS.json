@@ -280,6 +280,10 @@
   "C097": {
    "pct": 0.85,
    "note": "centcom doctor (9 checks in parallel with 3 s network limits, one next step per problem, exit codes 0/1/2, JSON schema, --check, --bundle tar.gz) and local crash reports (redaction corpus of 30, retention of 10, no egress, one error.shown code with telemetry on), centcom crash list/show/delete; gap: doctor does not yet check the relay upgrade or /v1/me, and recent log lines are not yet fed from the app logger"
+  },
+  "C098": {
+   "pct": 0.6,
+   "note": "bench harness (calibration, stats, budgets, baseline compare with normalisation, noise handling, results schema, pnpm bench/bench:compare, baseline-commit check, nightly workflow) with 9 metrics: crypto, envelope, mascot, transcript scroll and layout, version, memory; self-test of the gate passes; gaps: first-prompt, keypress-to-paint, diff, resume and reducer rates, leak check not measured yet; version/memory not gating until the packaged CLI"
   }
  },
  "next": [
