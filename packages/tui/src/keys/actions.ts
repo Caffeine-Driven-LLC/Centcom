@@ -15,6 +15,7 @@ def('palette.open', 'General', 'Open the command palette', ['ctrl+k', 'global'])
 def('models.open', 'General', 'Choose the model', ['ctrl+o', 'global']);
 def('mode.cycle', 'General', 'Cycle permission mode', ['shift+tab', 'global']);
 def('agent.interrupt', 'Agent', 'Stop the agent / clear (twice: rewind)', ['esc', 'prompt']);
+def('toast.dismiss', 'General', 'Dismiss the notice above the prompt', ['esc', 'toast'], ['ctrl+y', 'global']);
 def('tasks.toggle', 'Panels', 'Show or hide the task list', ['ctrl+t', 'global']);
 def('fleet.toggle', 'Panels', 'Show or hide the fleet', ['ctrl+b', 'global']);
 def('transcript.bottom', 'Transcript', 'Jump to the newest message', ['ctrl+l', 'global'], ['ctrl+end', 'global']);
