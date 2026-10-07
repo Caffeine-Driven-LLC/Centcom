@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { AuthError } from '../../shell/src/auth/errors.js';
-import { BACKOFF_CAP_MS, QUEUE_MAX, QUEUE_WAIT_MS, RefreshOutage, backoffMs } from '../../shell/src/auth/outage.js';
-import { resetRefresh } from '../../shell/src/auth/refresh.js';
-import { makeAuthedFetch, startRefreshTimer } from '../../shell/src/auth/session.js';
-import { getState, peekToken, reset, setState, setToken } from '../../shell/src/auth/store.js';
+import { AuthError } from '../../src/auth/errors.js';
+import { BACKOFF_CAP_MS, QUEUE_MAX, QUEUE_WAIT_MS, RefreshOutage, backoffMs } from '../../src/auth/outage.js';
+import { resetRefresh } from '../../src/auth/refresh.js';
+import { makeAuthedFetch, startRefreshTimer } from '../../src/auth/session.js';
+import { getState, peekToken, reset, setState, setToken } from '../../src/auth/store.js';
 import { deps, json, problem } from './helpers.js';
 
 /** A clock the test moves by hand. */

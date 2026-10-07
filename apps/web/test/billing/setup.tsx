@@ -1,10 +1,10 @@
 import { RouterProvider, createMemoryHistory } from '@tanstack/react-router';
 import { render } from '@testing-library/react';
 import React from 'react';
-import { buildRouter } from '../../shell/src/app/router.js';
-import { HttpProvider } from '../../shell/src/lib/http-context.js';
-import { routeModule } from '../../shell/src/billing/routes.js';
-import { ToastProvider } from '../../shell/src/ui/index.js';
+import { buildRouter } from '../../src/app/router.js';
+import { HttpProvider } from '../../src/lib/http-context.js';
+import { routeModule } from '../../src/billing/routes.js';
+import { ToastProvider } from '../../src/ui/index.js';
 import { fakeHttp, type Call } from '../workspace/helpers.js';
 
 export const baseEnt = (o: Record<string, unknown> = {}) => ({ workspace: 'wsp_1', rev: 5, plan: 'team', status: 'active', limits: { relay_access: true, lan_multiplayer: true, max_seats: 5, max_session_members: 8, max_concurrent_sessions: 3, max_parallel_agents: 4, history_days: 30, queue_items_month: null, audit_log_days: 0, webhooks_max: 5, api_keys_max: 10, hosted_minutes_month: 1000, mystery_limit: 7 }, usage: { seats: 3, queue_items_month: 40, hosted_minutes_month: 100 }, warnings: [], ...o });

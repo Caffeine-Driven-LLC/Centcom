@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EntCache, pollEntitlements, startCheckout } from '../../shell/src/billing/data.js';
+import { EntCache, pollEntitlements, startCheckout } from '../../src/billing/data.js';
 import { HttpErr, fakeHttp } from '../workspace/helpers.js';
 import { baseEnt } from './setup.js';
 

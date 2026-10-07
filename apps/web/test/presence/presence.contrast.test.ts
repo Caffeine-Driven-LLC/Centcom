@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { contrast } from '../../shell/src/theme/theme.js';
-import { INITIAL_ON } from '../../shell/src/presence/slots.js';
+import { contrast } from '../../src/theme/theme.js';
+import { INITIAL_ON } from '../../src/presence/slots.js';
 
 const t = JSON.parse(readFileSync(new URL('../../../../assets/theme/tokens.json', import.meta.url), 'utf8')) as { presence: Record<string, string>; palette: { ink: Record<string, string> }; semantic: Record<string, { dark: string; light: string }> };
 describe('contrast of the initial on its colour (acceptance 2)', () => {

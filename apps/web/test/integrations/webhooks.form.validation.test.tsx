@@ -2,9 +2,9 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { WebhookForm } from '../../shell/src/integrations/components.js';
-import { SecretVault, createWebhook, validateUrl } from '../../shell/src/integrations/data.js';
-import { WEBHOOK_EVENT_TYPES, groupEvents } from '../../shell/src/integrations/events.js';
+import { WebhookForm } from '../../src/integrations/components.js';
+import { SecretVault, createWebhook, validateUrl } from '../../src/integrations/data.js';
+import { WEBHOOK_EVENT_TYPES, groupEvents } from '../../src/integrations/events.js';
 import { fakeHttp } from '../workspace/helpers.js';
 
 afterEach(cleanup);

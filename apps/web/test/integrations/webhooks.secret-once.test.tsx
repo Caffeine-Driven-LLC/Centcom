@@ -2,9 +2,9 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { SecretModal } from '../../shell/src/integrations/components.js';
-import { SecretVault, createWebhook, rotateSecret } from '../../shell/src/integrations/data.js';
-import { ToastProvider } from '../../shell/src/ui/index.js';
+import { SecretModal } from '../../src/integrations/components.js';
+import { SecretVault, createWebhook, rotateSecret } from '../../src/integrations/data.js';
+import { ToastProvider } from '../../src/ui/index.js';
 import { fakeHttp } from '../workspace/helpers.js';
 
 afterEach(cleanup);

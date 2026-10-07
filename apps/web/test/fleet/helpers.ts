@@ -1,4 +1,4 @@
-import { FleetStore, type MemberInfo } from '../../shell/src/fleet/model.js';
+import { FleetStore, type MemberInfo } from '../../src/fleet/model.js';
 export const members: MemberInfo[] = [{ id: 'mem_me', name: 'Ada', slot: 0 }, { id: 'mem_b', name: 'Ben', slot: 1 }, { id: 'mem_c', name: 'Cy', slot: 2 }];
 let seq = 0;
 export const ev = (kind: string, from: string, p: Record<string, unknown>, secret?: Record<string, unknown>, at = Date.UTC(2026, 9, 7, 12)) => ({ kind, seq: ++seq, from, ts: new Date(at).toISOString(), p, ...(secret ? { secret } : {}) });

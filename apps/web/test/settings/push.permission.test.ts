@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PushRegistrar, pushSupported, type PushEnv } from '../../shell/src/settings/push.js';
+import { PushRegistrar, pushSupported, type PushEnv } from '../../src/settings/push.js';
 import { fakeHttp } from '../workspace/helpers.js';
 import { readFileSync, statSync } from 'node:fs';
 
@@ -9,5 +9,5 @@ describe('push (acceptance 6)', () => {
   it('a refusal is respected and the prompt is not shown again in the same session', async () => { const x = env({ answer: 'denied' }); const r = new PushRegistrar(x.e, fakeHttp(() => ({}))); expect(await r.enable({ fromClick: true })).toEqual({ ok: false, reason: 'denied' }); expect(await r.enable({ fromClick: true })).toEqual({ ok: false, reason: 'already_asked' }); expect(x.asked).toHaveLength(1); });
   it('a browser without the Push API is told so and nothing is requested', async () => { const x = env({ hasPush: false }); expect(pushSupported(x.e)).toBe(false); expect(await new PushRegistrar(x.e, fakeHttp(() => ({}))).enable({ fromClick: true })).toEqual({ ok: false, reason: 'unsupported' }); expect(x.asked).toHaveLength(0); });
   it('turning it off deletes the subscription on the server and in the browser', async () => { const x = env({ perm: 'granted' }); const http = fakeHttp(() => ({ id: 'psub_7' })); const r = new PushRegistrar(x.e, http); await r.enable({ fromClick: true }); expect(x.asked).toHaveLength(0); expect(await r.disable()).toBe(true); expect(http.calls.at(-1)).toMatchObject({ op: 'deletePushSubscription', args: { id: 'psub_7' } }); expect(x.subs).toEqual(['off']); });
-  it('the service worker is small, same-origin, and only shows text from its own table', () => { const f = new URL('../../shell/public/sw.js', import.meta.url); expect(statSync(f).size).toBeLessThanOrEqual(4096); const s = readFileSync(f, 'utf8'); expect(s).not.toMatch(/fetch\(|importScripts|XMLHttpRequest|http:\/\/|https:\/\//); expect(s).toContain('Update from Centcom'); expect(s).not.toMatch(/\.body\b|json\(\)\.(body|title)\b/); expect((s.match(/'notif\.[a-z_]+\.title'/g) ?? []).length).toBe(14); });
+  it('the service worker is small, same-origin, and only shows text from its own table', () => { const f = new URL('../../public/sw.js', import.meta.url); expect(statSync(f).size).toBeLessThanOrEqual(4096); const s = readFileSync(f, 'utf8'); expect(s).not.toMatch(/fetch\(|importScripts|XMLHttpRequest|http:\/\/|https:\/\//); expect(s).toContain('Update from Centcom'); expect(s).not.toMatch(/\.body\b|json\(\)\.(body|title)\b/); expect((s.match(/'notif\.[a-z_]+\.title'/g) ?? []).length).toBe(14); });
 });

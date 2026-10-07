@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { b64url, challengeS256, constantTimeEqual, randomState, randomVerifier, safeReturnTo } from '../../shell/src/auth/pkce.js';
+import { b64url, challengeS256, constantTimeEqual, randomState, randomVerifier, safeReturnTo } from '../../src/auth/pkce.js';
 
 describe('PKCE (acceptance 1)', () => {
   it('matches the RFC 7636 appendix B vector', async () => { expect(await challengeS256('dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk')).toBe('E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM'); });

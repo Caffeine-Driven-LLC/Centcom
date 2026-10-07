@@ -82,14 +82,14 @@ Flags: `--mode plan|acceptEdits`, `--mascot large|small|off`, `--cento-color red
 
 `tools/dev/shot.py` runs the app in a pseudo-terminal and saves a screenshot (needs `pip install pyte pillow`). Checks: `pnpm typecheck && pnpm test`.
 
-## Web UI and desktop app
+## Desktop app
 
 ```sh
-pnpm web          # builds the client, starts http://127.0.0.1:58008 and opens the launcher
-pnpm web:app      # same, but opens it as a chromeless app window
+pnpm app          # builds the app and opens it as a desktop window (Electron)
+pnpm web:dev      # the same screens in a browser tab, for development
 ```
 
-The launcher lets you pick a project folder, then **Start on web** (a browser tab) or **Start as app** (a window with no browser chrome, own profile). Both show the same workspace and share the same running agent. The server listens on 127.0.0.1 only, checks Host and Origin, and needs the token in `~/.centcom/token` (the first visit sets a cookie).
+The desktop app (`apps/desktop`, screens in `apps/web`) is a window around the Centcom screens: sign in, workspaces, sessions, the fleet board, billing and settings. It opens `centcom://` links, keeps the page sandboxed, and sends outside links to your browser. Electron's binary needs one extra step the first time: see [`apps/desktop/README.md`](apps/desktop/README.md). The terminal app (`pnpm centcom`) is where agents run today.
 
 ## Scripting and saved conversations
 

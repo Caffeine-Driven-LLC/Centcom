@@ -2,8 +2,8 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { AuditTable } from '../../shell/src/integrations/components.js';
-import { auditPager, detailText, filterFromQuery, filterToQuery } from '../../shell/src/integrations/data.js';
+import { AuditTable } from '../../src/integrations/components.js';
+import { auditPager, detailText, filterFromQuery, filterToQuery } from '../../src/integrations/data.js';
 import { fakeHttp } from '../workspace/helpers.js';
 
 afterEach(cleanup);

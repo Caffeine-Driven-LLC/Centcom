@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { errorText } from '../../shell/src/i18n/errors.js';
-import { STATE_COUNT, stateText } from '../../shell/src/i18n/states.js';
+import { errorText } from '../../src/i18n/errors.js';
+import { STATE_COUNT, stateText } from '../../src/i18n/states.js';
 import { STATE_NAMES } from '@centcom/states';
 
 const errors = JSON.parse(readFileSync(new URL('../../../../contracts/errors.json', import.meta.url), 'utf8')) as { errors: { code: string; status: number; title: string }[] };

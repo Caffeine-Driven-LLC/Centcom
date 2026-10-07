@@ -2,8 +2,8 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DeliveriesTable, HealthChip } from '../../shell/src/integrations/components.js';
-import { redeliver, testWebhook, type Delivery } from '../../shell/src/integrations/data.js';
+import { DeliveriesTable, HealthChip } from '../../src/integrations/components.js';
+import { redeliver, testWebhook, type Delivery } from '../../src/integrations/data.js';
 import { HttpErr, fakeHttp } from '../workspace/helpers.js';
 
 afterEach(cleanup);

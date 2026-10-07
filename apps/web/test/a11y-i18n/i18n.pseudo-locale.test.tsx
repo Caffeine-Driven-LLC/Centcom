@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import React from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { detectLocale, fmt, format, registerLocale, setLocale, t, tp, useLocale } from '../../shell/src/i18n/index.js';
-import { pseudo } from '../../shell/src/i18n/pseudo.js';
+import { detectLocale, fmt, format, registerLocale, setLocale, t, tp, useLocale } from '../../src/i18n/index.js';
+import { pseudo } from '../../src/i18n/pseudo.js';
 
 afterEach(async () => { cleanup(); await setLocale('en'); });
 describe('pseudo-locale en-XA (acceptance 2)', () => {
@@ -23,5 +23,5 @@ describe('language handling', () => {
   });
   it('detection: the person\'s choice, then the browser, then English', () => { registerLocale('de', async () => ({ default: {} })); expect(detectLocale({ me: 'de', navigator: ['en-US'] })).toBe('de'); expect(detectLocale({ navigator: ['de-CH', 'en'] })).toBe('de'); expect(detectLocale({ navigator: ['ja'] })).toBe('en'); expect(detectLocale({})).toBe('en'); });
   it('dates, numbers and money follow the language', async () => { expect(fmt.number(1234.5)).toBe('1,234.5'); expect(fmt.money(1999, 'USD')).toBe('$19.99'); expect(fmt.date(Date.UTC(2026, 9, 7), { dateStyle: 'medium', timeZone: 'UTC' })).toBe('Oct 7, 2026'); });
-  it('English is small: the table is well under 10 KB gzip', () => { expect(gzipSync(readFileSync(join(process.cwd(), 'apps/web/shell/src/i18n/en.json'))).length).toBeLessThanOrEqual(10 * 1024); });
+  it('English is small: the table is well under 10 KB gzip', () => { expect(gzipSync(readFileSync(join(process.cwd(), 'apps/web/src/i18n/en.json'))).length).toBeLessThanOrEqual(10 * 1024); });
 });

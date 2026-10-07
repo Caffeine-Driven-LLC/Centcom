@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { Catalog, type Index, type Sprite } from '../../shell/src/mascot/catalog.js';
+import { Catalog, type Index, type Sprite } from '../../src/mascot/catalog.js';
 
 const root = join(process.cwd(), 'assets/mascot/animations.json');
 interface A { name: string; cat: string; w: number; h: number; frames: { d: number; rows: string[] }[] }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SettingsForm } from '../../shell/src/workspace/data.js';
+import { SettingsForm } from '../../src/workspace/data.js';
 import { HttpErr, fakeHttp } from './helpers.js';
 
 const base = { auto_approve: 'ask', share_history: true, history_retention_days: 30 };

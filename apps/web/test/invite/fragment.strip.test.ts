@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { KeyHolder, decodeB64u, takeFragmentKey } from '../../shell/src/invite/fragment.js';
+import { KeyHolder, decodeB64u, takeFragmentKey } from '../../src/invite/fragment.js';
 
 const K = 'AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA'; /* 32 bytes, base64url */
 describe('the key fragment (acceptance 1)', () => {

@@ -3,9 +3,9 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { TranscriptEntry } from '@centcom/guest';
-import { Markdown } from '../../shell/src/session/markdown.js';
-import { Entry, TranscriptView } from '../../shell/src/session/transcript.js';
-import { MAX_ROWS, estimate, throttled, windowRange } from '../../shell/src/session/window.js';
+import { Markdown } from '../../src/session/markdown.js';
+import { Entry, TranscriptView } from '../../src/session/transcript.js';
+import { MAX_ROWS, estimate, throttled, windowRange } from '../../src/session/window.js';
 
 afterEach(cleanup);
 const u = (seq: number, text = `message ${seq}`): TranscriptEntry => ({ kind: 'user', seq, id: `m${seq}`, from: 'x', ts: 't', text });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { InviteDialog, ulid } from '../../shell/src/workspace/data.js';
+import { InviteDialog, ulid } from '../../src/workspace/data.js';
 import { HttpErr, fakeHttp } from './helpers.js';
 
 describe('invites (acceptance 4)', () => {

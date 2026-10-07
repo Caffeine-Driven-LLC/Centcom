@@ -19,3 +19,4 @@ release-gate-inputs/
 coverage/
 apps/web/dist-shell
 apps/web/shell/public/mascot
+apps/desktop/dist

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { BACKOFF_BASE_MS, BACKOFF_CAP_MS, backoffDelayMs } from '../../../../packages/net/src/relay/reconnect.js';
 import { GuestIngest, initialGuestState, reduceGuestState, type DecodedFrame } from '@centcom/guest';
-import { bridge } from '../../shell/src/session/engine.js';
-import { PhaseScreen, StatusScreens } from '../../shell/src/session/transcript.js';
+import { bridge } from '../../src/session/engine.js';
+import { PhaseScreen, StatusScreens } from '../../src/session/transcript.js';
 import { ME, HOST, fr, roster } from './helpers.js';
 
 describe('reconnect (acceptance 2)', () => {

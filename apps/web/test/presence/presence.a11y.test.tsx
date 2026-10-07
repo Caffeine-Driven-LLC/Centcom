@@ -2,10 +2,10 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import React, { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { expectNoA11yViolations } from '../../shell/src/a11y/index.js';
-import { JoinAnnouncer, PresenceAvatar, PresenceStack, RosterDialog } from '../../shell/src/presence/components.js';
-import type { Member } from '../../shell/src/presence/roster.js';
-import type { Status } from '../../shell/src/presence/slots.js';
+import { expectNoA11yViolations } from '../../src/a11y/index.js';
+import { JoinAnnouncer, PresenceAvatar, PresenceStack, RosterDialog } from '../../src/presence/components.js';
+import type { Member } from '../../src/presence/roster.js';
+import type { Status } from '../../src/presence/slots.js';
 
 afterEach(cleanup);
 const m = (id: string, name: string, slot: number, role: Member['role'] = 'editor'): Member => ({ id, name, slot, role, connected: true });

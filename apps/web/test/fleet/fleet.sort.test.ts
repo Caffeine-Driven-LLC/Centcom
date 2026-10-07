@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { priorityOf as tuiPriority, knownState } from '../../../../packages/tui/src/mascot/priority.js';
 import { STATE_NAMES } from '@centcom/states';
-import { allTiered, glyphFor, priorityOf } from '../../shell/src/fleet/priority.js';
-import { sortCards } from '../../shell/src/fleet/model.js';
+import { allTiered, glyphFor, priorityOf } from '../../src/fleet/priority.js';
+import { sortCards } from '../../src/fleet/model.js';
 import { members, spawn, state, store } from './helpers.js';
 
 describe('priority (DESIGN.md 11.2)', () => {

@@ -3,10 +3,10 @@ import { RouterProvider, createMemoryHistory } from '@tanstack/react-router';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { buildRouter } from '../../shell/src/app/router.js';
-import { HttpProvider } from '../../shell/src/lib/http-context.js';
-import { routeModule } from '../../shell/src/integrations/routes.js';
-import { ToastProvider } from '../../shell/src/ui/index.js';
+import { buildRouter } from '../../src/app/router.js';
+import { HttpProvider } from '../../src/lib/http-context.js';
+import { routeModule } from '../../src/integrations/routes.js';
+import { ToastProvider } from '../../src/ui/index.js';
 import { fakeHttp, type Call } from '../workspace/helpers.js';
 
 afterEach(cleanup); beforeEach(() => { window.scrollTo = () => undefined; });

@@ -14,9 +14,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "plan:check": "python3 tools/plan/validate_plan.py && python3 tools/plan/validate_contracts.py && python3 tools/plan/lock.py --check",
-    "web:build": "pnpm --filter @centcom/web exec vite build && pnpm web:shell:build",
-    "web": "pnpm web:build && tsx apps/web/src/server/main.ts",
-    "web:app": "pnpm web:build && tsx apps/web/src/server/main.ts --app",
+    "web:build": "pnpm --filter @centcom/web split-animations && pnpm --filter @centcom/web exec vite build",
     "skills:sync": "tsx tools/skills/sync.ts",
     "changeset": "changeset",
     "release:meta": "node tools/release/build-meta.mjs",
@@ -31,8 +29,10 @@
     "release-gate": "tsx tools/release-gate/run.ts",
     "security:check": "tsx tools/security/run.ts",
     "sbom": "tsx tools/security/sbom-cli.ts",
-    "web:shell": "pnpm --filter @centcom/web exec vite --config vite.shell.config.ts",
-    "web:shell:build": "pnpm --filter @centcom/web split-animations && pnpm --filter @centcom/web exec vite build --config vite.shell.config.ts"
+    "web:dev": "pnpm --filter @centcom/web exec vite",
+    "app:build": "pnpm web:build && pnpm --filter @centcom/desktop build",
+    "app": "pnpm app:build && pnpm --filter @centcom/desktop start",
+    "app:dev": "pnpm --filter @centcom/desktop build && pnpm --filter @centcom/desktop start"
   },
   "devDependencies": {
     "@changesets/cli": "3.0.3",

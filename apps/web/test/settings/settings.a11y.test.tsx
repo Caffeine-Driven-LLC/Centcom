@@ -3,11 +3,11 @@ import { RouterProvider, createMemoryHistory } from '@tanstack/react-router';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { buildRouter } from '../../shell/src/app/router.js';
-import { HttpProvider } from '../../shell/src/lib/http-context.js';
-import { routeModule } from '../../shell/src/settings/routes.js';
-import { unread } from '../../shell/src/settings/model.js';
-import { ToastProvider } from '../../shell/src/ui/index.js';
+import { buildRouter } from '../../src/app/router.js';
+import { HttpProvider } from '../../src/lib/http-context.js';
+import { routeModule } from '../../src/settings/routes.js';
+import { unread } from '../../src/settings/model.js';
+import { ToastProvider } from '../../src/ui/index.js';
 import { HttpErr, fakeHttp, type Call } from '../workspace/helpers.js';
 
 afterEach(cleanup); beforeEach(() => { window.scrollTo = () => undefined; unread.set(0); });
@@ -27,5 +27,5 @@ describe('account, appearance and devices pages', () => {
   it('account: an invalid name is refused on the page with no request; a good save sends the fields; the telemetry box is off and labelled', async () => { const http = setup('/settings/account'); const name = (await screen.findByLabelText('Display name')) as HTMLInputElement; await waitFor(() => expect(name.value).toBe('Ada')); expect((screen.getByLabelText('Share anonymous usage statistics') as HTMLInputElement).checked).toBe(false); fireEvent.change(name, { target: { value: '' } }); fireEvent.click(screen.getByText('Save')); expect(await screen.findByText(/1 to 40/)).toBeTruthy(); expect(http.calls.some((c) => c.op === 'updateMe')).toBe(false); fireEvent.change(name, { target: { value: 'Ada L' } }); fireEvent.click(screen.getByText('Save')); await waitFor(() => expect(http.calls.some((c) => c.op === 'updateMe')).toBe(true)); expect(http.calls.find((c) => c.op === 'updateMe')!.args.body).toEqual({ display_name: 'Ada L', locale: 'en' }); });
   it('devices: lists, the current one cannot be revoked here, another can', async () => { const http = setup('/settings/devices', undefined, { listDevices: () => ({ data: [{ id: 'dev_1', name: 'Laptop', created_at: '2026-10-01T00:00:00Z', current: true }, { id: 'dev_2', name: 'Phone', created_at: '2026-10-02T00:00:00Z' }], has_more: false }) }); await screen.findByText('Laptop (this one)'); const rows = screen.getAllByRole('row'); expect(within(rows[1]!).getByText('Revoke').getAttribute('aria-disabled')).toBe('true'); fireEvent.click(within(rows[2]!).getByText('Revoke')); await waitFor(() => expect(http.calls.some((c) => c.op === 'revokeDevice' && c.args.id === 'dev_2')).toBe(true)); });
   it('appearance: theme and density controls are labelled and the density choice sticks', async () => { setup('/settings/appearance'); const d = (await screen.findByLabelText('Density')) as HTMLSelectElement; fireEvent.change(d, { target: { value: 'compact' } }); expect(document.documentElement.getAttribute('data-density')).toBe('compact'); expect(within(screen.getByRole('main')).getByLabelText('Theme')).toBeTruthy(); });
-  it('the top bar badge has an accessible name with the count', async () => { unread.set(3); const { ShellCtx } = await import('../../shell/src/app/Frame.js'); const { router } = buildRouter({ './settings/routes.tsx': { routeModule } }, createMemoryHistory({ initialEntries: ['/settings/appearance'] })); render(<ShellCtx.Provider value={{ nav: [], connectivity: 'online', inspector: null }}><ToastProvider><HttpProvider http={fakeHttp(() => ({}))}><RouterProvider router={router} /></HttpProvider></ToastProvider></ShellCtx.Provider>); expect(await screen.findByRole('link', { name: 'Notifications, 3 unread' })).toBeTruthy(); });
+  it('the top bar badge has an accessible name with the count', async () => { unread.set(3); const { ShellCtx } = await import('../../src/app/Frame.js'); const { router } = buildRouter({ './settings/routes.tsx': { routeModule } }, createMemoryHistory({ initialEntries: ['/settings/appearance'] })); render(<ShellCtx.Provider value={{ nav: [], connectivity: 'online', inspector: null }}><ToastProvider><HttpProvider http={fakeHttp(() => ({}))}><RouterProvider router={router} /></HttpProvider></ToastProvider></ShellCtx.Provider>); expect(await screen.findByRole('link', { name: 'Notifications, 3 unread' })).toBeTruthy(); });
 });

@@ -2,7 +2,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-const root = new URL('../shell/src/', import.meta.url).pathname;
+const root = new URL('../src/', import.meta.url).pathname;
 const walk = (d: string): string[] => readdirSync(d).flatMap((f) => (statSync(join(d, f)).isDirectory() ? walk(join(d, f)) : [join(d, f)]));
 export function check(src: string = root): { missing: { key: string; file: string }[]; unused: string[] } {
   const en = JSON.parse(readFileSync(join(src, 'i18n/en.json'), 'utf8')) as Record<string, string>; const used = new Set<string>(); const missing: { key: string; file: string }[] = [];

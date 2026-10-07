@@ -2,9 +2,9 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import React, { useState } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { FocusTrap, SkipLink, useFocusReturn, useRoving } from '../../shell/src/a11y/index.js';
-import { ConfirmByName } from '../../shell/src/workspace/components.js';
-import { Modal } from '../../shell/src/ui/index.js';
+import { FocusTrap, SkipLink, useFocusReturn, useRoving } from '../../src/a11y/index.js';
+import { ConfirmByName } from '../../src/workspace/components.js';
+import { Modal } from '../../src/ui/index.js';
 
 afterEach(cleanup);
 describe('skip link and focus (acceptance 5)', () => {
