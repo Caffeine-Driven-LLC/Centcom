@@ -41,3 +41,15 @@ describe('animation (acceptance 7)', () => {
     expect(new ReactionAnimator(c, { reducedMotion: () => true }).request('g', 'reaction_heart')).toEqual({ kind: 'glyph' }); expect(new ReactionAnimator(c).request('h', undefined)).toEqual({ kind: 'glyph' });
   });
 });
+
+describe('review nits', () => {
+  it('two overlapping toggles on one code: when the first is taken back the second still shows', () => {
+    const { ctl, c } = make(); ctl.toggle('msg_T', 'heart'); c.advance(2000); ctl.toggle('msg_T', 'heart'); expect(summarize(ctl.reactions, 'msg_T', 'me')).toEqual([]); c.advance(3001); expect(summarize(ctl.reactions, 'msg_T', 'me')).toEqual([]);
+  });
+  it('a confirmed state under a guess comes back when the guess is taken back', () => {
+    const { ctl, c } = make(); ctl.onFrame({ k: 'reaction', id: 'msg_real', seq: 1, from: 'me', p: { target: 'msg_T', code: 'heart', op: 'add' } }); ctl.toggle('msg_T', 'heart'); expect(summarize(ctl.reactions, 'msg_T', 'me')).toEqual([]); c.advance(5000); expect(summarize(ctl.reactions, 'msg_T', 'me')).toEqual([{ code: 'heart', count: 1, mine: true }]);
+  });
+  it('comments wait too while the host says slow down', async () => {
+    const { ctl, c } = make(); ctl.onSysError({ code: 'slow_down', for_ms: 2000 }); expect(await ctl.comment('msg_T', 'hello')).toEqual({ ok: false, reason: 'rate' }); c.advance(2000); expect(await ctl.comment('msg_T', 'hello')).toEqual({ ok: true });
+  });
+});
