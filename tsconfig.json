@@ -32,6 +32,9 @@
       ],
       "@centcom/commands": [
         "./packages/tui/src/state/commands.ts"
+      ],
+      "@centcom/notify": [
+        "./packages/net/src/notify/browser.ts"
       ]
     }
   }

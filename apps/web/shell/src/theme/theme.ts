@@ -9,3 +9,7 @@ export function useTheme(): { theme: ThemeChoice; set(t: ThemeChoice): void } { 
 export const initTheme = (): void => { current = read(); applyTheme(current); };
 /** WCAG contrast of two #rrggbb colours (used by the token test). */
 export function contrast(a: string, b: string): number { const lum = (h: string): number => { const c = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * c[0]! + 0.7152 * c[1]! + 0.0722 * c[2]!; }; const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p) as [number, number]; return (x + 0.05) / (y + 0.05); }
+
+export type Density = 'comfortable' | 'compact'; const DKEY = 'centcom.density';
+export const readDensity = (): Density => { try { return localStorage.getItem(DKEY) === 'compact' ? 'compact' : 'comfortable'; } catch { return 'comfortable'; } };
+export function setDensity(d: Density, root: { setAttribute(k: string, v: string): void } = document.documentElement): void { try { localStorage.setItem(DKEY, d); } catch { /* kept for this visit only */ } root.setAttribute('data-density', d); }

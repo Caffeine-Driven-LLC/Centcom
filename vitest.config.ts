@@ -11,6 +11,7 @@ export default defineConfig({
       '@centcom/config': r('./packages/config/src/index.ts'),
       '@centcom/protocol': r('./packages/protocol/src/index.ts'),
       '@centcom/net': r('./packages/net/src/index.ts'),
+      '@centcom/notify': r('./packages/net/src/notify/browser.ts'),
       '@centcom/lan': r('./packages/lan/src/index.ts'),
       '@centcom/session': r('./packages/session/src/index.ts'),
       '@centcom/testkit': r('./packages/testkit/src/index.ts'),
