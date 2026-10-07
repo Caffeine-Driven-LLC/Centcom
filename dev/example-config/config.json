@@ -1,0 +1,8 @@
+{
+  "api": { "base_url": "http://127.0.0.1:8787" },
+  "relay": { "url": "ws://127.0.0.1:8787/v1/ws" },
+  "telemetry": { "enabled": false },
+  "ui": { "theme": "dark", "mascot": true, "reduced_motion": false },
+  "agent": { "max_parallel": 4 },
+  "client": { "engine": "claude-code", "permission_mode": "default" }
+}

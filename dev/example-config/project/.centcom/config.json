@@ -1,0 +1,5 @@
+{
+  "ui": { "theme": "dark", "mascot": true },
+  "agent": { "max_parallel": 2 },
+  "client": { "cento_color": "violet", "auto_skills": true }
+}

@@ -1,0 +1,227 @@
+[
+ {
+  "id": "ntf_01JA3Z8K2M5N7P9Q0R1S2T00E2",
+  "created_at": "2026-10-06T10:00:00.000Z",
+  "read_at": "2026-10-06T11:00:00.000Z",
+  "category": "trial_ending",
+  "title_key": "notif.trial_ending.title",
+  "body_key": "notif.trial_ending.body",
+  "params": {},
+  "priority": "normal",
+  "action": {
+   "type": "open_billing",
+   "deeplink": "centcom://billing"
+  }
+ },
+ {
+  "id": "ntf_01JA3Z8K2M5N7P9Q0R1S2T00F9",
+  "created_at": "2026-10-06T10:01:00.000Z",
+  "read_at": null,
+  "category": "approval_needed",
+  "title_key": "notif.approval_needed.title",
+  "body_key": "notif.approval_needed.body",
+  "params": {
+   "session": "ses_01JA3Z8K2M5N7P9Q0R1S2T00BD"
+  },
+  "priority": "high",
+  "action": {
+   "type": "open_session",
+   "deeplink": "centcom://session/ses_01JA3Z8K2M5N7P9Q0R1S2T00BD?focus=approval"
+  }
+ },
+ {
+  "id": "ntf_01JA3Z8K2M5N7P9Q0R1S2T00GG",
+  "created_at": "2026-10-06T10:02:00.000Z",
+  "read_at": null,
+  "category": "queue_turn",
+  "title_key": "notif.queue_turn.title",
+  "body_key": "notif.queue_turn.body",
+  "params": {
+   "session": "ses_01JA3Z8K2M5N7P9Q0R1S2T00BD"
+  },
+  "priority": "normal",
+  "action": {
+   "type": "open_session",
+   "deeplink": "centcom://session/ses_01JA3Z8K2M5N7P9Q0R1S2T00BD"
+  }
+ },
+ {
+  "id": "ntf_01JA3Z8K2M5N7P9Q0R1S2T00HQ",
+  "created_at": "2026-10-06T10:03:00.000Z",
+  "read_at": "2026-10-06T11:00:00.000Z",
+  "category": "mention",
+  "title_key": "notif.mention.title",
+  "body_key": "notif.mention.body",
+  "params": {
+   "session": "ses_01JA3Z8K2M5N7P9Q0R1S2T00BD"
+  },
+  "priority": "normal",
+  "action": {
+   "type": "open_session",
+   "deeplink": "centcom://session/ses_01JA3Z8K2M5N7P9Q0R1S2T00BD"
+  }
+ },
+ {
+  "id": "ntf_01JA3Z8K2M5N7P9Q0R1S2T00JY",
+  "created_at": "2026-10-06T10:04:00.000Z",
+  "read_at": null,
+  "category": "member_joined",
+  "title_key": "notif.member_joined.title",
+  "body_key": "notif.member_joined.body",
+  "params": {
+   "session": "ses_01JA3Z8K2M5N7P9Q0R1S2T00BD"
+  },
+  "priority": "normal",
+  "action": {
+   "type": "open_session",
+   "deeplink": "centcom://session/ses_01JA3Z8K2M5N7P9Q0R1S2T00BD"
+  }
+ },
+ {
+  "id": "ntf_01JA3Z8K2M5N7P9Q0R1S2T00K5",
+  "created_at": "2026-10-06T10:05:00.000Z",
+  "read_at": null,
+  "category": "member_left",
+  "title_key": "notif.member_left.title",
+  "body_key": "notif.member_left.body",
+  "params": {
+   "session": "ses_01JA3Z8K2M5N7P9Q0R1S2T00BD"
+  },
+  "priority": "normal",
+  "action": {
+   "type": "open_session",
+   "deeplink": "centcom://session/ses_01JA3Z8K2M5N7P9Q0R1S2T00BD"
+  }
+ },
+ {
+  "id": "ntf_01JA3Z8K2M5N7P9Q0R1S2T00MC",
+  "created_at": "2026-10-06T10:06:00.000Z",
+  "read_at": "2026-10-06T11:00:00.000Z",
+  "category": "agent_done",
+  "title_key": "notif.agent_done.title",
+  "body_key": "notif.agent_done.body",
+  "params": {
+   "session": "ses_01JA3Z8K2M5N7P9Q0R1S2T00BD"
+  },
+  "priority": "normal",
+  "action": {
+   "type": "open_session",
+   "deeplink": "centcom://session/ses_01JA3Z8K2M5N7P9Q0R1S2T00BD"
+  }
+ },
+ {
+  "id": "ntf_01JA3Z8K2M5N7P9Q0R1S2T00NK",
+  "created_at": "2026-10-06T10:07:00.000Z",
+  "read_at": null,
+  "category": "ci_failed",
+  "title_key": "notif.ci_failed.title",
+  "body_key": "notif.ci_failed.body",
+  "params": {
+   "session": "ses_01JA3Z8K2M5N7P9Q0R1S2T00BD"
+  },
+  "priority": "normal",
+  "action": {
+   "type": "open_session",
+   "deeplink": "centcom://session/ses_01JA3Z8K2M5N7P9Q0R1S2T00BD"
+  }
+ },
+ {
+  "id": "ntf_01JA3Z8K2M5N7P9Q0R1S2T00PT",
+  "created_at": "2026-10-06T10:08:00.000Z",
+  "read_at": null,
+  "category": "pr_merged",
+  "title_key": "notif.pr_merged.title",
+  "body_key": "notif.pr_merged.body",
+  "params": {
+   "session": "ses_01JA3Z8K2M5N7P9Q0R1S2T00BD"
+  },
+  "priority": "normal",
+  "action": {
+   "type": "open_session",
+   "deeplink": "centcom://session/ses_01JA3Z8K2M5N7P9Q0R1S2T00BD"
+  }
+ },
+ {
+  "id": "ntf_01JA3Z8K2M5N7P9Q0R1S2T00Q1",
+  "created_at": "2026-10-06T10:09:00.000Z",
+  "read_at": "2026-10-06T11:00:00.000Z",
+  "category": "usage_warning",
+  "title_key": "notif.usage_warning.title",
+  "body_key": "notif.usage_warning.body",
+  "params": {},
+  "priority": "normal",
+  "action": {
+   "type": "open_billing",
+   "deeplink": "centcom://billing"
+  }
+ },
+ {
+  "id": "ntf_01JA3Z8K2M5N7P9Q0R1S2T00R8",
+  "created_at": "2026-10-06T10:10:00.000Z",
+  "read_at": null,
+  "category": "quota_reached",
+  "title_key": "notif.quota_reached.title",
+  "body_key": "notif.quota_reached.body",
+  "params": {},
+  "priority": "high",
+  "action": {
+   "type": "open_billing",
+   "deeplink": "centcom://billing"
+  }
+ },
+ {
+  "id": "ntf_01JA3Z8K2M5N7P9Q0R1S2T00SF",
+  "created_at": "2026-10-06T10:11:00.000Z",
+  "read_at": null,
+  "category": "billing_issue",
+  "title_key": "notif.billing_issue.title",
+  "body_key": "notif.billing_issue.body",
+  "params": {},
+  "priority": "high",
+  "action": {
+   "type": "open_billing",
+   "deeplink": "centcom://billing"
+  }
+ },
+ {
+  "id": "ntf_01JA3Z8K2M5N7P9Q0R1S2T00TP",
+  "created_at": "2026-10-06T10:12:00.000Z",
+  "read_at": "2026-10-06T11:00:00.000Z",
+  "category": "invite_received",
+  "title_key": "notif.invite_received.title",
+  "body_key": "notif.invite_received.body",
+  "params": {},
+  "priority": "normal",
+  "action": {
+   "type": "open_invite",
+   "deeplink": "centcom://invite/seed"
+  }
+ },
+ {
+  "id": "ntf_01JA3Z8K2M5N7P9Q0R1S2T00VX",
+  "created_at": "2026-10-06T10:13:00.000Z",
+  "read_at": null,
+  "category": "update_available",
+  "title_key": "notif.update_available.title",
+  "body_key": "notif.update_available.body",
+  "params": {},
+  "priority": "normal",
+  "action": {
+   "type": "open_update",
+   "deeplink": "centcom://update"
+  }
+ },
+ {
+  "id": "ntf_01JA3Z8K2M5N7P9Q0R1S2T00W4",
+  "created_at": "2026-10-06T10:14:00.000Z",
+  "read_at": null,
+  "category": "security_alert",
+  "title_key": "notif.security_alert.title",
+  "body_key": "notif.security_alert.body",
+  "params": {},
+  "priority": "high",
+  "action": {
+   "type": "none"
+  }
+ }
+]

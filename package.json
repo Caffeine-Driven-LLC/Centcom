@@ -19,7 +19,8 @@
     "web:app": "pnpm web:build && tsx apps/web/src/server/main.ts --app",
     "skills:sync": "tsx tools/skills/sync.ts",
     "changeset": "changeset",
-    "release:meta": "node tools/release/build-meta.mjs"
+    "release:meta": "node tools/release/build-meta.mjs",
+    "dev:mock": "tsx tools/dev/mock.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
