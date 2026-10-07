@@ -1,0 +1,11 @@
+# guest session engine (lane C076)
+
+`GuestSession.join({ transport, decoder, clock, ids, sealBody, sign, sid, refreshTicket? })` gives a guest a live, ordered copy of a command post over any `SessionTransport` (relay, LAN, local). `state$.subscribe(fn)` and `state` hold a `GuestState` that the TUI and web render: `phase`, `me` (member, slot, role, muted), `roster`, `queue {version, items}`, `transcript`, `agents`, `lastSeq`, `warnings` (ring of 100).
+
+- `reduceGuestState(state, frame)` is pure and total (never throws, unknown kinds become `other` entries, unknown agent states show as `working`). It expects frames in order; `GuestIngest` puts frames in order and drops duplicates, so any shuffle or duplication gives the same state and `lastSeq` is the highest contiguous seq.
+- Authority: the role comes from `control.roster` / `control.role` / `control.host_changed`, never from a ticket. Server-only control kinds from anyone else, `queue.state` from anyone else, and host-only controls from a non-host are ignored and recorded as warnings.
+- `submit(body)` refuses locally with `forbidden` (viewer, muted, ended) or `queue_full` (5 live items), otherwise seals the body, signs the frame, sends `queue.submit` (`p.item` is the `que_` id, the frame id is a `msg_` id, `p.size` is the ciphertext length) and resolves with the item id when the echo arrives. An unacknowledged frame is sent again after a reconnect with the same id. `cancel(item)` is for your own queued or approved item.
+- Crypto stays behind `FrameDecoder` (verify `sig` first, then open `ct`; `ok`, `wait_key` or `drop`). Frames that wait for a key sit in `KeyWaitBuffer` (2 000 frames or 8 MiB, oldest evicted with a warning) and are decoded in order, in one pass, by `keyArrived()`.
+- Close codes: 4403 `kicked` (no reconnect), 4404/4410/1000 `ended`, 4426 `ended` with a warning, 4401 refresh the ticket once then reconnect, anything else reconnects after 250 ms plus jitter unless the transport already reconnects.
+
+Not here: the decoder itself (it belongs to the session client's crypto, lane C057), acknowledgements (the reliable channel of C055 sends them when the transport is wrapped by it), snapshot download and restore on `snapshot_required`, handoff and reactions.

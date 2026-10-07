@@ -268,6 +268,10 @@
   "C075": {
    "pct": 0.75,
    "note": "host session engine over the LAN server: role matrix, queue machine with caps and auto-approval, kick/mute/role/transfer/policy/end, approvals, locks with ttl, roster, file history with snapshots (latest 3), host actions through the loopback link; tested with unit tests and host plus guests over loopback; gaps: no host failover, no payload schema check per kind, the history window and snapshot serving to late joiners are tested only at the persistence level, the agent runner and event bus are not wired"
+  },
+  "C076": {
+   "pct": 0.65,
+   "note": "guest engine: GuestSession over any transport, pure total reducer, ordering and dedupe, key-wait buffer with caps, queue submit/cancel with local gating and idempotent resend, close-code handling, spoofed control frames ignored; tested with fixtures, a property test, a hand-driven transport and the C075 host over loopback; gaps: crypto and signature checks sit behind an injected decoder (not wired to the C057 session client yet), no acks here, no snapshot restore, not tested against the mock relay"
   }
  },
  "next": [
