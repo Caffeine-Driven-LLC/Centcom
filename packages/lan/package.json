@@ -1,0 +1,16 @@
+{
+  "name": "@centcom/lan",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@centcom/net": "workspace:*",
+    "@centcom/protocol": "workspace:*",
+    "libsodium-wrappers-sumo": "0.8.4"
+  },
+  "devDependencies": {
+    "@centcom/testkit": "workspace:*"
+  }
+}

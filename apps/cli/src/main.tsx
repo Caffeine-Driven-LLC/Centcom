@@ -20,6 +20,7 @@ import { appViews } from './views.js';
 import { runInitCli } from './commands/init.js';
 import { resolvedKeys, runKeys } from './commands/keys.js';
 import { runSkills, ttyAsk } from './commands/skills.js';
+import { runLanCli } from './commands/lan/scan.js';
 import { makeTelemetry, runTelemetry } from './commands/telemetry.js';
 import { defaultDeps, loadConfig } from '@centcom/config';
 import { runMcpCli } from './commands/mcp/cli.js';
@@ -43,6 +44,7 @@ Usage
   centcom logout [--revoke-device]   sign out of Centcom on this computer
   centcom whoami [--json]      who is signed in, the plan and the active workspace
   centcom devices list [--json] | revoke <dev_id> [--yes]   the computers signed in to your account
+  centcom lan scan [--timeout 3] [--json]   list Centcom sessions on this network (mDNS; no account needed)
 
 Scripting
   centcom -p "task"             run once, print the answer, exit (no screen). Piped input is added to the prompt.
@@ -106,7 +108,7 @@ async function main() {
   // anonymous counts of which command ran, only when you turned telemetry on (docs/telemetry.md)
   const cfg0 = await loadConfig(defaultDeps()).catch(() => undefined); const tm = makeTelemetry({ enabled: !!cfg0?.telemetry.enabled, baseUrl: cfg0?.api.base_url ?? 'https://api.centcom.dev', version: VERSION });
   const isAccount = (ACCOUNT_COMMANDS as readonly string[]).includes(process.argv[2] ?? '');
-  const sub = ['provider', 'memory', 'mcp', 'hooks', 'init', 'keys', 'skills'].includes(process.argv[2] ?? '') || isAccount ? process.argv[2]! : has('-p') || has('--print') ? 'print' : 'tui'; tm.appStart(); tm.commandRun(sub);
+  const sub = ['provider', 'memory', 'mcp', 'hooks', 'init', 'keys', 'skills', 'lan'].includes(process.argv[2] ?? '') || isAccount ? process.argv[2]! : has('-p') || has('--print') ? 'print' : 'tui'; tm.appStart(); tm.commandRun(sub);
   const done = async (code: number) => { tm.appExit(); await tm.flush(2000); process.exit(code); };
   if (process.argv[2] === 'provider') await done(await runProviderCli(process.argv.slice(3)));
   if (process.argv[2] === 'skills') await done(await runSkills(process.argv.slice(3), { out: (l) => console.log(l), err: (l) => console.error(l), ask: ttyAsk, cwd: process.cwd() }));
@@ -116,6 +118,7 @@ async function main() {
   if (process.argv[2] === 'mcp') await done(await runMcpCli(process.argv.slice(3)));
   if (process.argv[2] === 'hooks') await done(await runHooksCli(process.argv.slice(3)));
   if (isAccount) await done(await runAccountCli(process.argv[2]!, process.argv.slice(3).filter((a) => a !== '--debug'), { version: VERSION }));
+  if (process.argv[2] === 'lan') { await done(await runLanCli(process.argv.slice(3), { out: (l) => console.log(l), err: (l) => console.error(l) })); }
   if (has('-p') || has('--print')) {
     const i = Math.max(process.argv.indexOf('-p'), process.argv.indexOf('--print'));
     const next = process.argv[i + 1]; const text = next && !next.startsWith('-') ? next : undefined;

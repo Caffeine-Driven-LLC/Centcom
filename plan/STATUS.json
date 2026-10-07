@@ -268,6 +268,14 @@
   "C067": {
    "pct": 0.85,
    "note": "flags client: non-blocking defaults, background refresh with ETag and clamped ttl, single-flight, disk cache (7 days), type checks, dev-only overrides, auth-triggered refresh; gap: no feature has registered a flag yet"
+  },
+  "C071": {
+   "pct": 0.85,
+   "note": "mDNS advertiser and browser (probe, announce, goodbye, query schedule, TTL expiry, name conflicts, member-count updates), DNS-SD codec, TXT validation, fuzz, no-secrets packet scan, --no-announce, mdns-unavailable path, centcom lan scan; gap: not run on a real network (fake bus only)"
+  },
+  "C073": {
+   "pct": 0.85,
+   "note": "pairing code, CPace key exchange, host/guest flow with confirmation, attempt limit and ban list, reconnect token, session trust store, fingerprint binding, redaction tests; gap: no real socket run; host server (C072) not built"
   }
  },
  "next": [
