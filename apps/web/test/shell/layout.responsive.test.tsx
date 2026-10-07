@@ -21,7 +21,7 @@ describe('responsive frame (acceptance 7, 9)', () => {
     const found = { './home/routes.tsx': { routeModule: { routes: [createRoute({ getParentRoute: () => rootRoute, path: '/', component: () => <p>home page</p> })], nav: [{ id: 'home', labelKey: 'nav.home', to: '/', icon: 'home' }] } } };
     window.scrollTo = () => undefined; /* jsdom has none; the router restores scroll */
     const { router, nav } = buildRouter(found, createMemoryHistory({ initialEntries: ['/'] })); render(<ShellCtx.Provider value={{ nav, connectivity: 'offline', inspector: <p>inspector</p> }}><RouterProvider router={router} /></ShellCtx.Provider>);
-    await screen.findByText('home page'); expect(screen.getByRole('alert').textContent).toContain('You are offline'); const rail = document.getElementById('cc-rail')!; expect(rail.dataset.open).toBe('false'); fireEvent.click(screen.getByText('Menu')); expect(rail.dataset.open).toBe('true'); fireEvent.click(screen.getByText('Details')); expect(document.getElementById('cc-inspector')!.dataset.open).toBe('true'); expect(screen.getByRole('navigation', { name: 'Main' })).toBeTruthy();
+    await screen.findByText('home page'); expect(screen.getByRole('status').textContent).toContain('Status unavailable'); const rail = document.getElementById('cc-rail')!; expect(rail.dataset.open).toBe('false'); fireEvent.click(screen.getByText('Menu')); expect(rail.dataset.open).toBe('true'); fireEvent.click(screen.getByText('Details')); expect(document.getElementById('cc-inspector')!.dataset.open).toBe('true'); expect(screen.getByRole('navigation', { name: 'Main' })).toBeTruthy();
   });
 });
 void Frame;
