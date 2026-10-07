@@ -1,0 +1,121 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`twelve looks > sample screen at 16 / dark 1`] = `
+"␛[90mcento · ~/app · main␛[0m
+␛[1;35m▸␛[0m ␛[97mFix the failing test␛[0m
+␛[32m✓ tests passed␛[0m
+␛[31m✗ error: build failed␛[0m
+␛[47m+ added line␛[0m
+␛[47m- removed line␛[0m
+␛[33m! Allow Cento to run npm test?␛[0m"
+`;
+
+exports[`twelve looks > sample screen at 16 / hc 1`] = `
+"␛[90mcento · ~/app · main␛[0m
+␛[1;35m▸␛[0m ␛[97mFix the failing test␛[0m
+␛[32m✓ tests passed␛[0m
+␛[31m✗ error: build failed␛[0m
+␛[47m+ added line␛[0m
+␛[47m- removed line␛[0m
+␛[33m! Allow Cento to run npm test?␛[0m"
+`;
+
+exports[`twelve looks > sample screen at 16 / light 1`] = `
+"␛[90mcento · ~/app · main␛[0m
+␛[1;35m▸␛[0m ␛[97mFix the failing test␛[0m
+␛[32m✓ tests passed␛[0m
+␛[31m✗ error: build failed␛[0m
+␛[47m+ added line␛[0m
+␛[47m- removed line␛[0m
+␛[33m! Allow Cento to run npm test?␛[0m"
+`;
+
+exports[`twelve looks > sample screen at 256 / dark 1`] = `
+"␛[38;5;245mcento · ~/app · main␛[0m
+␛[1;38;5;99m▸␛[0m ␛[38;5;255mFix the failing test␛[0m
+␛[38;5;78m✓ tests passed␛[0m
+␛[38;5;203m✗ error: build failed␛[0m
+␛[48;5;234m+ added line␛[0m
+␛[48;5;234m- removed line␛[0m
+␛[38;5;221m! Allow Cento to run npm test?␛[0m"
+`;
+
+exports[`twelve looks > sample screen at 256 / hc 1`] = `
+"␛[38;5;188mcento · ~/app · main␛[0m
+␛[1;38;5;153m▸␛[0m ␛[38;5;231mFix the failing test␛[0m
+␛[38;5;78m✓ tests passed␛[0m
+␛[38;5;203m✗ error: build failed␛[0m
+␛[48;5;234m+ added line␛[0m
+␛[48;5;234m- removed line␛[0m
+␛[38;5;221m! Allow Cento to run npm test?␛[0m"
+`;
+
+exports[`twelve looks > sample screen at 256 / light 1`] = `
+"␛[38;5;241mcento · ~/app · main␛[0m
+␛[1;38;5;62m▸␛[0m ␛[38;5;233mFix the failing test␛[0m
+␛[38;5;23m✓ tests passed␛[0m
+␛[38;5;124m✗ error: build failed␛[0m
+␛[48;5;194m+ added line␛[0m
+␛[48;5;224m- removed line␛[0m
+␛[38;5;94m! Allow Cento to run npm test?␛[0m"
+`;
+
+exports[`twelve looks > sample screen at none / dark 1`] = `
+"␛[2mcento · ~/app · main␛[0m
+␛[1m▸␛[0m Fix the failing test
+✓ tests passed
+✗ error: build failed
++ added line
+- removed line
+! Allow Cento to run npm test?"
+`;
+
+exports[`twelve looks > sample screen at none / hc 1`] = `
+"␛[2mcento · ~/app · main␛[0m
+␛[1m▸␛[0m Fix the failing test
+✓ tests passed
+✗ error: build failed
++ added line
+- removed line
+! Allow Cento to run npm test?"
+`;
+
+exports[`twelve looks > sample screen at none / light 1`] = `
+"␛[2mcento · ~/app · main␛[0m
+␛[1m▸␛[0m Fix the failing test
+✓ tests passed
+✗ error: build failed
++ added line
+- removed line
+! Allow Cento to run npm test?"
+`;
+
+exports[`twelve looks > sample screen at truecolor / dark 1`] = `
+"␛[38;2;138;138;148mcento · ~/app · main␛[0m
+␛[1;38;2;124;92;255m▸␛[0m ␛[38;2;236;236;239mFix the failing test␛[0m
+␛[32m✓ tests passed␛[0m
+␛[31m✗ error: build failed␛[0m
+␛[48;2;14;42;26m+ added line␛[0m
+␛[48;2;51;18;26m- removed line␛[0m
+␛[33m! Allow Cento to run npm test?␛[0m"
+`;
+
+exports[`twelve looks > sample screen at truecolor / hc 1`] = `
+"␛[38;2;212;212;218mcento · ~/app · main␛[0m
+␛[1;38;2;159;208;255m▸␛[0m ␛[38;2;255;255;255mFix the failing test␛[0m
+␛[38;2;74;222;128m✓ tests passed␛[0m
+␛[38;2;255;92;92m✗ error: build failed␛[0m
+␛[48;2;14;42;26m+ added line␛[0m
+␛[48;2;51;18;26m- removed line␛[0m
+␛[38;2;255;209;102m! Allow Cento to run npm test?␛[0m"
+`;
+
+exports[`twelve looks > sample screen at truecolor / light 1`] = `
+"␛[38;2;98;98;108mcento · ~/app · main␛[0m
+␛[1;38;2;90;63;209m▸␛[0m ␛[38;2;16;16;18mFix the failing test␛[0m
+␛[32m✓ tests passed␛[0m
+␛[31m✗ error: build failed␛[0m
+␛[48;2;221;247;230m+ added line␛[0m
+␛[48;2;255;224;224m- removed line␛[0m
+␛[33m! Allow Cento to run npm test?␛[0m"
+`;
