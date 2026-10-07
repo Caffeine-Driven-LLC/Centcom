@@ -308,6 +308,10 @@
   "C069": {
    "pct": 0.8,
    "note": "centcom webhooks list/show/create/update/rotate-secret/delete/test/deliveries/redeliver/verify: https-only and event-type validation from the contract list, show-once secret (TTY or --show-secret, never in --json otherwise), confirm/--yes on delete, friendly error mapping, local signature verification with overlap and tolerance (constant-time, exit 3); gaps: not wired into main.tsx until the auth lane (C052) lands, no webhook fixtures in contracts/fixtures (tests generate signatures), 18 event types in the contract vs 20+ in the card"
+  },
+  "C070": {
+   "pct": 0.8,
+   "note": "centcom audit list and export: cursor paging (<=200 per request, no offset), filters, RFC 3339 and relative times, sanitised table, exit 4 on no match, export with Idempotency-Key, 2/4/8/10 s polling and 5 minute limit, 0600 download with partial-file cleanup and no overwrite without --force, plan and role messages, no token or signed URL in output; gaps: not wired into main.tsx until the auth lane lands, not run against the mock backend audit data (tests use scripted answers)"
   }
  },
  "next": [
