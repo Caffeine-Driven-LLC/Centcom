@@ -18,7 +18,7 @@ export const HOLD_MS = 5_000;
 
 export type Ciphertext = NonNullable<Frame['ct']>;
 export interface SendDraft { t: 'event' | 'queue' | 'control'; k: string; p?: Record<string, unknown>; ct?: Ciphertext; sig?: string; ref?: string; id?: string }
-export interface EphemeralDraft { t: 'presence'; k: string; p?: Record<string, unknown>; ct?: Ciphertext; sig?: string }
+export interface EphemeralDraft { t: 'presence'; k: string; p?: Record<string, unknown>; ct?: Ciphertext; sig?: string; /** the frame id when the payload is encrypted (it is part of what the signature covers) */ id?: string }
 export interface ChannelEvents {
   /** in seq order, exactly once per seq */
   frame: [SequencedFrame];
@@ -94,7 +94,7 @@ export class ReliableChannel extends TypedEmitter<ChannelEvents> {
   sendEphemeral(draft: EphemeralDraft): void {
     if (draft.t !== 'presence') throw new TypeError('sendEphemeral() takes presence frames');
     if (!this.connected) return;
-    this.link.send({ v: 1, t: 'presence', sid: this.sid, k: draft.k, ...(draft.p !== undefined ? { p: draft.p } : {}), ...(draft.ct ? { ct: draft.ct } : {}), ...(draft.sig !== undefined ? { sig: draft.sig } : {}) }).catch(() => undefined);
+    this.link.send({ v: 1, t: 'presence', sid: this.sid, k: draft.k, ...(draft.id !== undefined ? { id: draft.id } : {}), ...(draft.p !== undefined ? { p: draft.p } : {}), ...(draft.ct ? { ct: draft.ct } : {}), ...(draft.sig !== undefined ? { sig: draft.sig } : {}) }).catch(() => undefined);
   }
 
   /** After a snapshot (or to skip ahead): lastSeq becomes `seq`, held frames above it are delivered, then sys.resume {last_seq} asks for the rest (a reconnect when the server has no resume cap). */

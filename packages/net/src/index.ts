@@ -17,3 +17,4 @@ export * from './update/index.js';
 export * from './notify/index.js';
 export * from './session/index.js';
 export * from './queue/index.js';
+export * from './presence/index.js';

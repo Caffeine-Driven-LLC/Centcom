@@ -1,5 +1,5 @@
 /** The session client: REST, the relay socket, reliable delivery and end-to-end crypto in one handle. See README.md. */
-import { isEventKind, payloadMode } from '@centcom/protocol';
+import { isEventKind, payloadMode, type Frame } from '@centcom/protocol';
 import { CentcomError } from '../errors/index.js';
 import type { DeviceKeyStore } from '../crypto/device-keys.js';
 import { inviteSecretFromFragment, openInviteBundle } from '../crypto/bundle.js';
@@ -40,6 +40,8 @@ const LIFECYCLE = new Set<string>(['state', 'roster', 'key-changed', 'waiting-fo
 export interface SessionHandle {
   readonly id: string; readonly me: MemberInfo; readonly state: SessionState; readonly policy: SessionPolicy;
   roster(): MemberInfo[];
+  /** presence frames dropped because they did not verify (best effort, never an error) */
+  presenceDropped(): number;
   /** the epochs (key ids) this device can read, oldest first */
   heldEpochs(): string[];
   sendEvent(kind: string, body: { p?: EventP | ((info: { ctBytes: number }) => EventP); secret?: EventSecret; /** the frame id (a `msg_` id); a retry with the same id is the same frame */ id?: string }): Promise<{ id: string; seq: number }>;
@@ -64,7 +66,7 @@ class Connection implements SessionHandle {
   private readonly life = new Lifecycle(); private readonly handlers = new Map<string, Set<(e: DecodedEvent) => void>>(); private readonly any = new Set<(e: DecodedEvent) => void>();
   private relay!: RelayClient; private channel!: ReliableChannel; private codec!: FrameCodec; private host?: HostDuties; private guest!: GuestKeys;
   private chain: Promise<void> = Promise.resolve(); private pending: SequencedFrame[] = []; private pendingKid?: string; private keyWaiters: { kid: string; res: () => void; rej: (e: unknown) => void; timer: unknown }[] = [];
-  private catchUps: number[] = []; private catchUpWanted = false; private catchingUp = false; private catchUpHead?: number; private unreadable = new Set<string>(); private rotationRequested = false; private lastSeq = 0; private framesSinceSnapshot = 0; private snapTimer?: unknown; private rotateTimer?: unknown; private snapshotting = false; private closed = false; 
+  private presenceDrops = 0; private catchUps: number[] = []; private catchUpWanted = false; private catchingUp = false; private catchUpHead?: number; private unreadable = new Set<string>(); private rotationRequested = false; private lastSeq = 0; private framesSinceSnapshot = 0; private snapTimer?: unknown; private rotateTimer?: unknown; private snapshotting = false; private closed = false; 
   private readonly clock: RelayClock; private readonly ids: IdGenerator; private readonly fetchFn: typeof fetch;
 
   constructor(private readonly d: SessionClientDeps, private readonly rest: SessionRest, readonly id: string, role: Role, memberId: string, private readonly ring: KeyRing, private readonly viewOnly: boolean, policy: SessionPolicy, private readonly opts: SessionOptions, private readonly relayUrl: string) {
@@ -89,7 +91,7 @@ class Connection implements SessionHandle {
     await this.channel.init();
     this.relay.on('link', (l) => { if (this.st === 'ended') return; if (l === 'reconnecting' || l === 'offline') this.setState('reconnecting'); else this.setState(this.guest.hasKey() ? 'live' : 'waiting_for_key'); });
     this.relay.on('closed', (c) => { if (!c.willReconnect && !this.closed) { if (c.code === 1000 || c.code === 4410 || c.code === 4409) this.finish(c.code); } });
-    this.relay.on('protocol_warning', (w) => this.warn(w.reason)); this.relay.on('notice', (n) => this.life.fire('notice', n));
+    this.relay.on('protocol_warning', (w) => this.warn(w.reason)); this.relay.on('frame', (f) => { if (f.t === 'presence') this.onPresence(f); }); this.relay.on('notice', (n) => this.life.fire('notice', n));
     this.relay.on('error', (e) => { if (FRAME_REFUSALS.has(e.code)) this.channel.refuseOldest(e); this.life.fire('error', { code: e.code, ...(e.status !== undefined ? { status: e.status } : {}), ...(e.retryAfterS !== undefined ? { retryAfterS: e.retryAfterS } : {}) }); });
     this.channel.on('frame', (f) => { this.chain = this.chain.then(() => this.onFrame(f)).catch(() => this.warn('frame_handler_failed')); });
     this.channel.on('snapshot-required', (e) => this.needCatchUp(e.snapshotSeq)); this.relay.on('welcome', (w) => { if (w.resume?.snapshot_required === true) this.needCatchUp(); });
@@ -144,6 +146,11 @@ class Connection implements SessionHandle {
     }
     this.emitEvent(e); void f;
   }
+  /** Presence is never sequenced, so it does not come through the channel: decode it here, and drop what does not verify without a word (best effort, counted). */
+  private onPresence(f: Frame): void {
+    const r = this.codec.decode({ ...f, seq: 0 } as SequencedFrame); if (!r.ok) { this.presenceDrops++; return; } if (!isEventKind(r.event.kind)) return; this.emitEvent(r.event);
+  }
+  presenceDropped(): number { return this.presenceDrops; }
   private emitEvent(e: DecodedEvent): void { for (const fn of [...(this.handlers.get(e.kind) ?? [])]) { try { fn(e); } catch { /* a listener must not break delivery */ } } for (const fn of [...this.any]) { try { fn(e); } catch { /* same */ } } }
   private onKeys(): void { void this.persistKeys(); this.releaseWaiters(); if (this.st === 'waiting_for_key') this.setState('live'); this.replayPending(); if (this.catchUpWanted) this.needCatchUp(); }
   private replayPending(): void { const todo = this.pending.splice(0); this.chain = this.chain.then(async () => { for (const f of todo) await this.onFrame(f); }).catch(() => undefined); }
@@ -155,7 +162,7 @@ class Connection implements SessionHandle {
   private releaseWaiters(): void { for (const w of [...this.keyWaiters]) if (this.ring.get(w.kid)) { this.clock.clearTimeout(w.timer as never); w.res(); this.keyWaiters = this.keyWaiters.filter((x) => x !== w); } }
   private async sendRaw(kind: string, body: { p?: Record<string, unknown> | ((info: { ctBytes: number }) => Record<string, unknown>); secret?: Record<string, unknown>; id?: string }, kid?: string): Promise<{ id: string; seq: number }> {
     const id = body.id ?? this.ids.next('msg'); const o = this.codec.encode(kind, id, body, kid ? { kid } : {});
-    if (o.t === 'presence') { this.channel.sendEphemeral({ t: 'presence', k: o.k, ...(o.p ? { p: o.p } : {}), ...(o.ct ? { ct: o.ct } : {}), ...(o.sig ? { sig: o.sig } : {}) }); return { id, seq: 0 }; }
+    if (o.t === 'presence') { this.channel.sendEphemeral({ t: 'presence', k: o.k, ...(o.ct ? { id } : {}), ...(o.p ? { p: o.p } : {}), ...(o.ct ? { ct: o.ct } : {}), ...(o.sig ? { sig: o.sig } : {}) }); return { id, seq: 0 }; }
     return this.channel.send({ t: o.t as 'event', k: o.k, id, ...(o.p ? { p: o.p } : {}), ...(o.ct ? { ct: o.ct } : {}), ...(o.sig ? { sig: o.sig } : {}) });
   }
   async sendEvent(kind: string, body: { p?: EventP | ((info: { ctBytes: number }) => EventP); secret?: EventSecret; id?: string }): Promise<{ id: string; seq: number }> {

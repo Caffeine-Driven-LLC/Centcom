@@ -320,6 +320,10 @@
   "C058": {
    "pct": 0.8,
    "note": "queue client: submit (hybrid frame, size = ciphertext bytes, idempotent item/frame id), cancel, host controls, deterministic reducer with held items while paused, relay queue.state replacement, ignored forged host frames, local pre-checks and server error mapping; tested between two clients on the mock relay plus property tests; gaps: no TUI wiring, auto-approve policies not exercised, frame id is msg_ (contract says que_)"
+  },
+  "C059": {
+   "pct": 0.8,
+   "note": "presence client: coalesced presence.update (1/s, latest wins), typing refresh and idle, auto-away and busy rules, encrypted cursors (10/s, deduped, null clears), receiver model with 10 s cursor expiry and offline on member_left, roster check, best-effort ephemeral frames, session reads presence off the socket and drops unverifiable ones with a counter; tested with a fake clock and two clients on the mock relay; gaps: no UI, nudge not implemented, burst seeding checked against the stub only"
   }
  },
  "next": [
