@@ -7,6 +7,7 @@ import { ClaudeCodeEngine, CodexEngine, DemoEngine, detectClaude, detectCodex, t
 import { App, AppController, ClientConfig, FirstRun, SessionStore, buildRuntime, initialSettings, isFirstRun, markFirstRunDone, settingsFromConfig } from '@centcom/tui';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join as pathJoin, resolve as pathResolve } from 'node:path';
+import { basename as pathBase, join as pathJoin, resolve as pathResolve } from 'node:path';
 import { homedir } from 'node:os';
 import { stateDir } from '@centcom/config';
 import type { FlatFlags } from '@centcom/config';
@@ -21,6 +22,9 @@ import { runInitCli } from './commands/init.js';
 import { resolvedKeys, runKeys } from './commands/keys.js';
 import { runSkills, ttyAsk } from './commands/skills.js';
 import { runLanCli } from './commands/lan/scan.js';
+import { CrashStore, installCrashHandlers, runCrash } from './crash/index.js';
+import { realDoctorContext, runDoctor } from './doctor/index.js';
+import { CONTRACT_VERSION } from '@centcom/protocol';
 import { makeTelemetry, runTelemetry } from './commands/telemetry.js';
 import { defaultDeps, loadConfig } from '@centcom/config';
 import { runMcpCli } from './commands/mcp/cli.js';
@@ -45,6 +49,8 @@ Usage
   centcom whoami [--json]      who is signed in, the plan and the active workspace
   centcom devices list [--json] | revoke <dev_id> [--yes]   the computers signed in to your account
   centcom lan scan [--timeout 3] [--json]   list Centcom sessions on this network (mDNS; no account needed)
+  centcom doctor [--json] [--bundle <file>]   check this computer (node, terminal, keychain, git, network, clock)
+  centcom crash list|show <id>|delete <id|--all>   crash reports kept on this computer (never sent)
 
 Scripting
   centcom -p "task"             run once, print the answer, exit (no screen). Piped input is added to the prompt.
@@ -108,8 +114,13 @@ async function main() {
   // anonymous counts of which command ran, only when you turned telemetry on (docs/telemetry.md)
   const cfg0 = await loadConfig(defaultDeps()).catch(() => undefined); const tm = makeTelemetry({ enabled: !!cfg0?.telemetry.enabled, baseUrl: cfg0?.api.base_url ?? 'https://api.centcom.dev', version: VERSION });
   const isAccount = (ACCOUNT_COMMANDS as readonly string[]).includes(process.argv[2] ?? '');
-  const sub = ['provider', 'memory', 'mcp', 'hooks', 'init', 'keys', 'skills', 'lan'].includes(process.argv[2] ?? '') || isAccount ? process.argv[2]! : has('-p') || has('--print') ? 'print' : 'tui'; tm.appStart(); tm.commandRun(sub);
+  const sub = ['provider', 'memory', 'mcp', 'hooks', 'init', 'keys', 'skills', 'lan', 'doctor', 'crash'].includes(process.argv[2] ?? '') || isAccount ? process.argv[2]! : has('-p') || has('--print') ? 'print' : 'tui'; tm.appStart(); tm.commandRun(sub);
   const done = async (code: number) => { tm.appExit(); await tm.flush(2000); process.exit(code); };
+  // anything nobody caught is written (redacted) to ~/.centcom/crashes and never sent anywhere
+  const crashes = new CrashStore(stateDir(defaultDeps()));
+  installCrashHandlers({ store: crashes, proc: process as never, info: { version: VERSION, contract: CONTRACT_VERSION, platform: `${process.platform}-${process.arch}`, node: process.version, now: () => Date.now(), scrub: { home: homedir(), deny: [pathBase(process.cwd())] } }, recentLog: () => [], err: (l) => console.error(l), onCode: (code) => tm.errorShown(code as never) });
+  if (process.argv[2] === 'crash') await done(runCrash(process.argv.slice(3), crashes, { out: (l) => console.log(l), err: (l) => console.error(l) }));
+  if (process.argv[2] === 'doctor') await done(await runDoctor(process.argv.slice(3), realDoctorContext({ version: VERSION, contract: CONTRACT_VERSION, apiBase: cfg0?.api.base_url ?? 'https://api.centcom.dev', stateDir: stateDir(defaultDeps()) }), { out: (l) => console.log(l), err: (l) => console.error(l) }, { crashes }));
   if (process.argv[2] === 'provider') await done(await runProviderCli(process.argv.slice(3)));
   if (process.argv[2] === 'skills') await done(await runSkills(process.argv.slice(3), { out: (l) => console.log(l), err: (l) => console.error(l), ask: ttyAsk, cwd: process.cwd() }));
   if (process.argv[2] === 'keys') await done(runKeys(process.argv.slice(3), { out: (l) => console.log(l), err: (l) => console.error(l) }));
