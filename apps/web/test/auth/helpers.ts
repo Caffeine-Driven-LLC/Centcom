@@ -1,0 +1,7 @@
+import type { AuthDeps } from '../../shell/src/auth/refresh.js';
+export const json = (status: number, body: unknown): Response => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+export const problem = (status: number, code: string): Response => json(status, { type: `https://centcom.dev/errors/${code}`, code, title: code, status });
+export function memStorage() { const m = new Map<string, string>(); return { m, getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v), removeItem: (k: string) => void m.delete(k) }; }
+export function loginEnv(storage = memStorage(), origin = 'https://app.centcom.dev') { const calls: string[] = []; const hist: string[] = []; return { storage, calls, hist, env: <import('../../shell/src/auth/login.js').LoginEnv>{ storage, location: { origin, assign: (u: string) => void calls.push(u) }, history: { replaceState: (_s: unknown, _t: string, u: string) => void hist.push(u) } } }; }
+export const fixedRandom = (byte = 7) => (n: number) => new Uint8Array(n).fill(byte);
+export function deps(fetchImpl: (url: string, init?: RequestInit) => Promise<Response>, o: Partial<AuthDeps> = {}): AuthDeps & { calls: { url: string; init?: RequestInit }[] } { const calls: { url: string; init?: RequestInit }[] = []; return { fetch: (async (u: string, i?: RequestInit) => { calls.push({ url: String(u), init: i }); return fetchImpl(String(u), i); }) as typeof fetch, apiBase: 'https://api.centcom.dev', now: () => 1_000_000, calls, ...o }; }

@@ -10,10 +10,11 @@ import { parseEnv } from './lib/env.js';
 import { makeApi } from './lib/api.js';
 import { useConnectivity } from './lib/connectivity.js';
 import { initTheme } from './theme/theme.js';
+import { getToken, startAuth } from './auth/runtime.js';
 import { ToastProvider } from './ui/index.js';
 import { HttpProvider } from './lib/http-context.js';
 
-initTheme(); const { env, problems: envProblems } = parseEnv(import.meta.env as Record<string, unknown>); const { router, nav, problems } = buildRouter(import.meta.glob('./*/routes.tsx', { eager: true }));
-for (const p of [...envProblems, ...problems]) console.warn(p); const api = makeApi(env);
+initTheme(); void startAuth(); const { env, problems: envProblems } = parseEnv(import.meta.env as Record<string, unknown>); const { router, nav, problems } = buildRouter(import.meta.glob('./*/routes.tsx', { eager: true }));
+for (const p of [...envProblems, ...problems]) console.warn(p); const api = makeApi(env, () => getToken().catch(() => undefined));
 function Shell(): React.JSX.Element { const connectivity = useConnectivity(api as never); return <ShellCtx.Provider value={{ nav, connectivity, inspector: null }}><ToastProvider><HttpProvider http={api as never}><RouterProvider router={router} /></HttpProvider></ToastProvider></ShellCtx.Provider>; }
 createRoot(document.getElementById('root')!).render(<React.StrictMode><Shell /></React.StrictMode>);
