@@ -5,7 +5,7 @@
 import type { SemanticToken } from '@centcom/theme';
 
 export type Colour = SemanticToken | `#${string}`;
-export interface Span { t: string; c?: Colour; bg?: Colour; b?: boolean; d?: boolean; i?: boolean; u?: boolean }
+export interface Span { t: string; c?: Colour; bg?: Colour; b?: boolean; d?: boolean; i?: boolean; u?: boolean; /** Reverse video: how a changed word stands out without colour. */ r?: boolean }
 export type Line = Span[];
 
 const WIDE = /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹯＀-｠￠-￦\u{1F300}-\u{1FAFF}\u{20000}-\u{3FFFD}]/u;
