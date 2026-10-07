@@ -72,7 +72,7 @@ describe('README progress block', () => {
   });
 });
 
-describe('resolve (a real stopped merge)', () => {
+describe('resolve (a real stopped merge)', { timeout: 60_000 }, () => {
   const dir = mkdtempSync(join(tmpdir(), 'claude-pr-bookkeeping-'));
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
   /** @param {...string} args */
@@ -124,5 +124,9 @@ describe('resolve (a real stopped merge)', () => {
     expect(Object.keys(lanes)).toEqual(['X001', 'X002']);
     expect(readFileSync(join(dir, 'README.md'), 'utf8')).toContain('intro edited on main');
     expect(git('log', '-1', '--format=%P').split(' ')).toHaveLength(2);
+  });
+
+  it('refuses to report success when no merge is in progress', () => {
+    expect(() => resolve(dir)).toThrow(/no merge in progress/);
   });
 });

@@ -16,12 +16,22 @@
  * Env: GH_TOKEN, GH_REPO, CLAUDE_AUTOMERGE (`off` pauses), HAS_CLAUDE_TOKEN (plan), and for
  * --record: ACTION, PLANNED, REVIEW, LOCAL, VERDICT, SUMMARY, CLAUDE_OUTCOME.
  */
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BOOKKEEPING, STATUS, gitIn, markMerged, regenerate } from './claude-pr-bookkeeping.mjs';
+import {
+  README,
+  STATUS,
+  SVG,
+  gitIn,
+  markMerged,
+  mergeStatus,
+  mergeText,
+  regenerate,
+  stripProgress,
+} from './claude-pr-bookkeeping.mjs';
 
 /**
  * @typedef {{
@@ -126,8 +136,9 @@ export function laneIds(title) {
  * @typedef {'skip' | 'wait' | 'review' | 'fix-ci' | 'update' | 'needs-human' | 'merge'} Action
  * @typedef {{ action: Action, reason: string, failed?: string[], allowFixes?: boolean }} Step
  */
-const FIELDS =
-  'number,state,isDraft,baseRefName,isCrossRepository,mergeable,headRefOid,headRefName,title,labels,reviews,commits,statusCheckRollup,changedFiles';
+const QUEUE_FIELDS =
+  'number,state,isDraft,baseRefName,isCrossRepository,mergeable,headRefOid,headRefName,title,labels,reviews,statusCheckRollup';
+const FIELDS = `${QUEUE_FIELDS},commits,changedFiles`;
 
 /**
  * Logins whose standing review is "changes requested". A COMMENTED review (every reply to a review
@@ -322,13 +333,14 @@ export const renderPrompt = (template, vars) =>
 /**
  * Claude's tool allow-list for a step. Reviews run no code from the PR, so a review verdict cannot
  * be forged by the code under review; fix and conflict steps may run the gates but never approve.
+ * For an update, the claude job adds CONFIG.execTools itself when its merge probe finds conflicts
+ * Claude must resolve (GitHub's mergeable field lags, so the plan cannot know).
  * @param {Action} action
- * @param {boolean} conflicting
  */
-export function toolsFor(action, conflicting) {
+export function toolsFor(action) {
   if (action === 'review') return BASE_TOOLS;
   if (action === 'fix-ci') return [...BASE_TOOLS, ...CONFIG.execTools];
-  return [...BASE_TOOLS, ...UPDATE_TOOLS, ...(conflicting ? CONFIG.execTools : [])];
+  return [...BASE_TOOLS, ...UPDATE_TOOLS];
 }
 
 /**
@@ -393,33 +405,63 @@ export function recordOutcome(r) {
   };
 }
 
-const NOT_BOOKKEEPING = BOOKKEEPING.map((f) => `:(exclude)${f}`);
-
 /**
- * Whether `head` is `planned` plus a merge of main and nothing else: its parents are planned and a
- * commit on main, and its changes against main equal planned's changes against their merge base
- * (by patch-id, ignoring the generated progress files). Content-based, so it trusts no job output.
- * @param {{ planned: string, head: string, main: string, git: (...args: string[]) => string }} p
+ * Whether `head` is `planned` plus a mechanical merge of main and nothing else, so an approval of
+ * `planned` still holds. Its parents must be planned and a commit on main, and its tree must equal
+ * what `git merge-tree` makes of the two, except for the progress files: plan/STATUS.json must
+ * equal the bookkeeping helper's three-way merge, README.md must match outside its generated
+ * block, and docs/progress.svg is generated. Any file a human or Claude had to resolve fails the
+ * check. Content-based, so it trusts no job output.
+ * @param {{ planned: string, head: string, main: string, cwd?: string }} p
  */
-export function isMergeOfMain({ planned, head, main, git }) {
+export function isMergeOfMain({ planned, head, main, cwd }) {
+  const git = gitIn(cwd);
+  /** @param {string[]} args */
+  const raw = (args) => spawnSync('git', args, { cwd, encoding: 'utf8' });
+  /** @param {string} rev @param {string} path */
+  const show = (rev, path) => {
+    const r = raw(['show', `${rev}:${path}`]);
+    return r.status === 0 ? r.stdout : null;
+  };
   const [, first, second, ...rest] = git('rev-list', '--parents', '-n', '1', head).split(' ');
   if (first !== planned || !second || rest.length > 0) return false;
-  try {
-    git('merge-base', '--is-ancestor', second, main);
-  } catch {
-    return false;
+  if (raw(['merge-base', '--is-ancestor', second, main]).status !== 0) return false;
+  const merged = raw([
+    'merge-tree',
+    '--write-tree',
+    '--name-only',
+    '--no-messages',
+    planned,
+    second,
+  ]);
+  if (merged.status !== 0 && merged.status !== 1) return false;
+  const [tree = '', ...conflicted] = merged.stdout.trim().split('\n').filter(Boolean);
+  const base = git('merge-base', planned, second);
+  const differing = git('diff', '--name-only', tree, head).split('\n').filter(Boolean);
+  for (const path of new Set([...differing, ...conflicted])) {
+    if (path === SVG) continue;
+    const actual = show(head, path);
+    const [atBase, atPlanned, atMain] = [show(base, path), show(planned, path), show(second, path)];
+    let ok = false;
+    try {
+      if (path === STATUS) {
+        const expected = conflicted.includes(path)
+          ? atPlanned !== null && atMain !== null && mergeStatus(atBase, atPlanned, atMain)
+          : show(tree, path);
+        ok = actual !== null && actual === expected;
+      } else if (path === README) {
+        const strip = (/** @type {string | null} */ t) => (t === null ? '' : stripProgress(t));
+        const expected = conflicted.includes(path)
+          ? mergeText(strip(atBase), strip(atPlanned), strip(atMain))
+          : strip(show(tree, path));
+        ok = actual !== null && expected !== null && stripProgress(actual) === expected;
+      }
+    } catch {
+      ok = false;
+    }
+    if (!ok) return false;
   }
-  /** @param {string} from @param {string} to */
-  const patchId = (from, to) => {
-    const diff = git('diff', '-U0', from, to, '--', '.', ...NOT_BOOKKEEPING);
-    if (!diff) return '';
-    const id = execFileSync('git', ['patch-id', '--stable'], {
-      input: `${diff}\n`,
-      encoding: 'utf8',
-    });
-    return id.split(' ')[0] ?? '';
-  };
-  return patchId(git('merge-base', planned, second), planned) === patchId(second, head);
+  return true;
 }
 
 /** @param {string[]} args */
@@ -500,10 +542,23 @@ function plan(number) {
   const behindBy = Number(gh(['api', compare, '--jq', '.behind_by']));
   let step = nextStep(pr, files, behindBy, paused);
   if (step.action === 'update' && pr.mergeable !== 'CONFLICTING') {
+    // No commits here: with them, a page of 100 PRs asks GitHub for more than its 500,000-node
+    // GraphQL limit. Queue membership never depends on fix rounds.
     /** @type {PullRequest[]} */
     const open = JSON.parse(
-      gh(['pr', 'list', '--label', OPT_IN_LABEL, '--limit', '1000', '--json', FIELDS]),
-    );
+      gh([
+        'pr',
+        'list',
+        '--label',
+        OPT_IN_LABEL,
+        '--search',
+        ACTIONABLE_SEARCH,
+        '--limit',
+        '1000',
+        '--json',
+        QUEUE_FIELDS,
+      ]),
+    ).map((/** @type {PullRequest} */ p) => ({ ...p, commits: [] }));
     const fresh = [...open.filter((p) => p.number !== pr.number), pr];
     step = nextStep(pr, files, behindBy, paused, queueHead(fresh));
   }
@@ -580,12 +635,12 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (process.argv.includes('--record')) {
     const planned = env['PLANNED'] ?? '';
     const action = env['ACTION'] ?? '';
-    const remote = viewPr(number).headRefOid;
+    // Only the head SHA: this job has no checks scope, which gh's full PR query would need.
+    const remote = gh(['pr', 'view', number, '--json', 'headRefOid', '--jq', '.headRefOid']);
     let carriedOver = false;
     if (action === 'update' && env['REVIEW'] === 'SUCCESS' && remote !== planned) {
-      const git = gitIn();
-      git('fetch', '-q', 'origin', 'main', remote);
-      carriedOver = isMergeOfMain({ planned, head: remote, main: 'origin/main', git });
+      gitIn()('fetch', '-q', 'origin', 'main', remote);
+      carriedOver = isMergeOfMain({ planned, head: remote, main: 'origin/main' });
     }
     const outcome = recordOutcome({
       action,
@@ -625,7 +680,14 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       // --match-head-commit refuses the merge if anything was pushed after the checks above.
       gh(['pr', 'merge', number, '--squash', '--match-head-commit', pr.headRefOid]);
       console.log(`Merged PR #${number}.`);
-      recordMergedLanes(laneIds(pr.title), number);
+      // Bookkeeping must never stop main's checks or the re-plans below.
+      try {
+        recordMergedLanes(laneIds(pr.title), number);
+      } catch (error) {
+        console.error(
+          `::warning::recording the merged lanes failed; update plan/STATUS.json by hand: ${error}`,
+        );
+      }
       // A merge or push made with GITHUB_TOKEN starts no `push` workflows: run main's checks here.
       for (const workflow of CONFIG.mainWorkflows) {
         gh(['workflow', 'run', workflow, '--ref', 'main']);
@@ -668,7 +730,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       head_ref: pr.headRefName,
       review: reviewState(pr),
       prompt,
-      tools: toolsFor(step.action, pr.mergeable === 'CONFLICTING').join(','),
+      tools: toolsFor(step.action).join(','),
+      exec_tools: CONFIG.execTools.join(','),
     });
   }
 }

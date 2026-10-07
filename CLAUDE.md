@@ -38,6 +38,9 @@ Every trigger re-reads the PR, and `tools/ci/claude-pr-state.mjs` picks one step
   `docs/progress.svg`. After each merge the pipeline marks the PR's lanes merged on main and
   regenerates the other two; when an older PR conflicts in those files,
   `tools/ci/claude-pr-bookkeeping.mjs` resolves them without Claude.
+- **Conflicting PRs:** GitHub runs no `pull_request` workflows on a PR with merge conflicts, so
+  labelling one is not relayed. Re-plan it with `gh workflow run claude-pr.yml -f pr=<n>`, or wait
+  for the sweep or a local waiter.
 - **Pause** with the repository variable `CLAUDE_AUTOMERGE=off`. To take one PR out of automation,
   add `do-not-merge`.
 - The scripts and prompts are shared with Centcom-backend, where `docs/ci.md` explains the design;
@@ -68,8 +71,10 @@ Start with `gh pr list --state all --limit 300 --json number,title,state`, then
 `git fetch origin main` (in that order, so a PR that merges in between still shows up in one of
 them). A lane is **done** if any of these holds:
 
-- a subject line in `git log origin/main --format=%s` carries its ID;
-- a merged PR's title carries its ID;
+- a subject line in `git log origin/main --format=%s` starts with it (`C005: …`, or a combined
+  `C005+C006: …`), or is a `Progress: …` commit naming it (other text that mentions an ID does
+  not count);
+- a merged PR's title starts with it in the same way;
 - its entry in `plan/STATUS.json` on origin/main has `pct` 0.95 or more.
 
 For dependencies only, C001 and C002 also count as done: their scaffold and CI are on main, and
@@ -83,8 +88,10 @@ A lane is **eligible** when all of these hold:
 - no open PR covers it, and it was not closed earlier in this run. An open PR also covers a lane
   that was handed to a human, and so blocks everything that depends on it;
 - none of its `deliverables` sit under a protected path, and its `acceptance` and `scope_in` do not
-  require a new or changed workflow, CI job, matrix or schedule that a test cannot provide. Leave
-  those lanes for a session a human is watching.
+  require a new or changed workflow, CI job, matrix or schedule that a test cannot provide. Skip a
+  lane whose acceptance needs external infrastructure, credentials or a human action (a real
+  account, a signing key, an app-store upload). Leave those lanes for a session a human is
+  watching.
 
 Take eligible lanes in the order their IDs first appear in the `next` titles of `plan/STATUS.json`
 (a range counts as each ID in it), then by lowest ID. If none is eligible, stop and report.

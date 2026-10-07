@@ -159,6 +159,10 @@ export function regenerate(cwd) {
  */
 export function resolve(cwd) {
   const git = gitIn(cwd);
+  // `git merge` can also fail before it starts (a dirty tree, say): that is not ours to fix.
+  if (spawnSync('git', ['rev-parse', '-q', '--verify', 'MERGE_HEAD'], { cwd }).status !== 0) {
+    throw new Error('no merge in progress: git merge failed before it could stop on conflicts');
+  }
   const unmerged = () => git('diff', '--name-only', '--diff-filter=U').split('\n').filter(Boolean);
   const resolved = [];
   for (const file of unmerged().filter((f) => BOOKKEEPING.includes(f))) {
