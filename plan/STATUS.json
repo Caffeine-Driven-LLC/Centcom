@@ -138,8 +138,8 @@
    "note": "first-run screen (once, interactive only, Cento waving or ASCII, one sentence, one command), state.json, centcom init (config, memory file, exclude, idempotent, dry run, force with .bak, non-TTY rules), empty states in the app and web"
   },
   "C049": {
-   "pct": 0.5,
-   "note": "reduced motion and NO_COLOR; no screen-reader mode"
+   "pct": 0.65,
+   "note": "mode resolution, MotionProvider, sentences for all 64 states, linear renderer with y/n/a permission prompt and Status:/Error: announcements, no-colour/no-escape test helpers, conformance for task list and progress bar; gaps: linear mode not started from main.tsx, a11y.screenReader config key, conformance for the other components"
   },
   "C081": {
    "pct": 0.5,
