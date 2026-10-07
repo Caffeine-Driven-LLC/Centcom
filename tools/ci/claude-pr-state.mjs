@@ -14,7 +14,7 @@
  *   node tools/ci/claude-pr-state.mjs <pr> --record  after a Claude run: set claude-review, hand
  *                                                    off, or re-plan (never trusts PR code)
  * Env: GH_TOKEN, GH_REPO, CLAUDE_AUTOMERGE (`off` pauses), HAS_CLAUDE_TOKEN (plan), and for
- * --record: ACTION, PLANNED, REVIEW, LOCAL, VERDICT, SUMMARY, CLAUDE_OUTCOME.
+ * --record: ACTION, PLANNED, REVIEW, LOCAL, VERDICT, SUMMARY, CLAUDE_OUTCOME, CLAUDE_ERROR.
  */
 import { execFileSync, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -352,7 +352,7 @@ export function toolsFor(action) {
  * What a finished Claude run means. Inputs from the claude job (local, verdict, outcome) only ever
  * lead to a handoff or to nothing, except a review approval, and reviews run no PR code.
  * @param {{ action: string, planned: string, remote: string, local: string, verdict: string,
- *   summary: string, claudeOutcome: string, carriedOver: boolean }} r
+ *   summary: string, claudeOutcome: string, claudeError?: string, carriedOver: boolean }} r
  * @returns {Outcome}
  */
 export function recordOutcome(r) {
@@ -381,7 +381,9 @@ export function recordOutcome(r) {
   }
   if (r.claudeOutcome !== 'success') {
     return {
-      handoff: `The Claude step did not finish (${r.claudeOutcome || 'not run'}); see the workflow run.`,
+      handoff: r.claudeError
+        ? `The Claude step did not finish (${r.claudeOutcome || 'not run'}): ${r.claudeError}`
+        : `The Claude step did not finish (${r.claudeOutcome || 'not run'}); see the workflow run.`,
       note: 'Claude step failed',
     };
   }
@@ -650,6 +652,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       verdict: env['VERDICT'] ?? '',
       summary: env['SUMMARY'] ?? '',
       claudeOutcome: env['CLAUDE_OUTCOME'] ?? '',
+      claudeError: env['CLAUDE_ERROR'] ?? '',
       carriedOver,
     });
     console.log(`PR #${number} (${action}): ${outcome.note}`);

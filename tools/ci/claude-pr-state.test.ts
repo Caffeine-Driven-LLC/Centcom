@@ -356,6 +356,17 @@ describe('recordOutcome', () => {
     expect(out.handoff).toMatch(/did not finish \(failure\)/);
     expect(out.status).toBeUndefined();
   });
+  it("quotes Claude's own error message when the step reported one", () => {
+    const out = recordOutcome({
+      ...base,
+      claudeOutcome: 'failure',
+      verdict: '',
+      claudeError: 'Invalid API key · Please run /login',
+    });
+    expect(out.handoff).toBe(
+      'The Claude step did not finish (failure): Invalid API key · Please run /login',
+    );
+  });
   it('marks claude-review failed only for a review that found a blocking issue', () => {
     expect(recordOutcome({ ...base, verdict: 'needs_human' }).status?.state).toBe('failure');
     const fix = recordOutcome({
