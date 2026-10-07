@@ -12,73 +12,80 @@ Tip: record raw traffic with `codex app-server --listen stdio://` piped through 
 ==============================================================================
 
 Q001. How do you install Codex on this laptop (npm i -g @openai/codex, brew, a binary)? Which one did you use, and where does `which codex` point?
-A: 
+A: Two installs exist on this laptop, both 0.161.0:
+   - npm: `sudo npm install -g @openai/codex` -> /usr/local/bin/codex, a symlink to ../lib/node_modules/@openai/codex/bin/codex.js, a `#!/usr/bin/env node` wrapper that starts the bundled native binary (node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex).
+   - standalone native install (made earlier the same day, presumably by the Codex installer): $HOME/.local/bin/codex -> $HOME/.codex/packages/standalone/current/bin/codex (Mach-O arm64).
+   `which codex` in a login shell -> /usr/local/bin/codex (the npm one comes first on PATH).
 
 Q002. What exact output does `codex --version` print? Paste it verbatim.
-A: 
+A: `codex-cli 0.161.0`
 
 Q003. Does `codex --version` print to stdout or stderr, and what is its exit code?
-A: 
+A: stdout, exit code 0 (stderr empty).
 
 Q004. Does `codex --help` list an `app-server` subcommand? Paste the line.
-A: 
+A: Yes: `  app-server        [experimental] Run the app server or related tooling`
 
 Q005. Does `codex app-server --help` exist? Paste the full help text, especially the `--listen` option and every value it accepts.
-A: 
+A: Yes. Subcommands: daemon, proxy, generate-ts, generate-json-schema. The listen option:
+   `--listen <URL>  Transport endpoint URL. Supported values: stdio:// (default), unix://, unix://PATH, ws://IP:PORT, off  [default: stdio://]`
+   Also `--stdio` (same as --listen stdio://), `--analytics-default-enabled`, `--strict-config`, `--code-mode-host <URL>`, and WebSocket auth options (`--ws-auth capability-token|signed-bearer-token`, `--ws-token-file`, `--ws-token-sha256`, `--ws-shared-secret-file`, `--ws-issuer`, `--ws-audience`, `--ws-max-clock-skew-seconds`).
 
 Q006. Is `stdio://` the only accepted value for `--listen`, or are there others (ws://, unix://)? Which is the default when `--listen` is omitted?
-A: 
+A: No: stdio://, unix://, unix://PATH, ws://IP:PORT and off. The default when --listen is omitted is stdio://.
 
 Q007. Does `codex login status` exist? Paste its exact output when signed in with ChatGPT.
-A: 
+A: Yes. Signed in with ChatGPT it prints exactly `Logged in using ChatGPT` (exit 0).
 
 Q008. What is its exact output when signed in with an API key?
-A: 
+A: NOT TESTED: no API key on this laptop (the account is a ChatGPT Plus login).
 
 Q009. What is its exact output when NOT signed in, and what is the exit code?
-A: 
+A: `Not logged in`, exit code 1. Tested without signing out, by pointing CODEX_HOME at an empty folder: `CODEX_HOME=$(mktemp -d) codex login status`.
 
 Q010. Does `login status` print to stdout or stderr in each case?
-A: 
+A: stderr in both cases (stdout is empty). Centcom's probe (provider/detect/probe.ts) reads stdout and stderr together, so it still sees the text.
 
 Q011. Does our regex /chatgpt/i match the signed-in-with-ChatGPT output? Does /api key/i match the API-key output? Paste both outputs.
-A: 
+A: /chatgpt/i matches `Logged in using ChatGPT`: yes. /api key/i: NOT TESTED (no API key). Note: classify.ts uses /api[ -]?key/i, and `Not logged in` correctly hits the `not (logged|signed) in` branch.
 
 Q012. Does any other login state exist (Amazon Bedrock, Azure, a custom provider, an expired token)? What does `login status` say for each you can reach?
-A: 
+A: Only `Logged in using ChatGPT` and `Not logged in` were reachable. The protocol (Account type) also knows `apiKey` and `amazonBedrock {usesCodexManagedCredentials}`, and login methods `chatgptDeviceCode` and `chatgptAuthTokens` (client-supplied tokens). Expired-token and Bedrock texts: NOT TESTED.
 
 Q013. Is `codex exec` available, and does `codex exec --json` still stream JSON events? Paste the help for `--sandbox` and `--ask-for-approval` (or whatever they are now called).
-A: 
+A: `codex exec` exists (alias `e`) and `--json` is still listed. `-s, --sandbox <SANDBOX_MODE>` takes read-only | workspace-write | danger-full-access.
+   IMPORTANT: `codex exec` has NO `--ask-for-approval` option in 0.161.0. The only approval-related options are `--approve-for-me` ("Route approval requests through automatic review using the workspace-write sandbox") and `--dangerously-bypass-approvals-and-sandbox`. The top-level `codex -a/--ask-for-approval` lists only `on-request` and `never` (no `untrusted`). So the `codex exec --ask-for-approval ...` argv assumed in packages/agent/src/sandbox/settings.ts would be rejected. `--json` streaming itself was not exercised.
 
 Q014. Which minimum Codex version does the app-server protocol we use need? Which version are you running?
-A: 
+A: We run 0.161.0. No minimum is published in the help. Everything Centcom uses (initialize, account/read, thread/start, thread/resume, turn/start, turn/interrupt, the two v2 approval requests) exists and works in 0.161.0. Older versions: NOT TESTED. Centcom's placeholder range `>=0.40.0 <1.0.0` (provider/detect/ranges.ts) accepts 0.161.0.
 
 Q015. Does `codex app-server generate-ts` (or a similar schema/TypeScript generator command) exist? If yes, run it into a folder and tell us where the files landed.
-A: 
+A: Yes: `codex app-server generate-ts --out <DIR>` (options: `--experimental`, `-p/--prettier <PRETTIER_BIN>`). It wrote 737 .ts files: top-level legacy types plus `v2/` (current protocol) and `serde_json/`. Key files: ClientRequest.ts, ServerNotification.ts, ServerRequest.ts, ClientNotification.ts, v2/ThreadStartParams.ts, v2/TurnStartParams.ts, v2/SandboxPolicy.ts, v2/AskForApproval.ts, v2/CommandExecutionApprovalDecision.ts.
 
 Q016. Does `codex app-server generate-json-schema` (or similar) exist? If yes, attach the output folder contents (file names) to the answers.
-A: 
+A: Yes: `codex app-server generate-json-schema --out <DIR>` (`--experimental` adds experimental methods and fields). 39 files: ApplyPatchApprovalParams/Response, AttestationGenerateParams/Response, ChatgptAuthTokensRefreshParams/Response, ClientNotification, ClientRequest, CommandExecutionRequestApprovalParams/Response, DynamicToolCallParams/Response, ExecCommandApprovalParams/Response, FileChangeRequestApprovalParams/Response, FuzzyFileSearchParams/Response, FuzzyFileSearchSession{Completed,Updated}Notification, JSONRPCError, JSONRPCErrorError, JSONRPCMessage, JSONRPCNotification, JSONRPCRequest, JSONRPCResponse, McpServerElicitationRequestParams/Response, PermissionsRequestApprovalParams/Response, ServerNotification, ServerRequest, ToolRequestUserInputParams/Response, and a few more of the same pattern.
 
 Q017. How long does `codex --version` take (ms)? How long does `codex login status` take?
-A: 
+A: `codex --version`: 27-29 ms. `codex login status`: 32-33 ms (3 runs each, warm).
 
 Q018. Does Codex check for updates on start and print anything extra to stdout or stderr that could corrupt the JSON-RPC line stream?
-A: 
+A: No. In every run the app-server printed nothing to stdout or stderr before the first request, and stdout carried only JSON lines. stderr only ever had tracing lines on errors (see Q035).
 
 Q019. Which config file does Codex read (~/.codex/config.toml)? Does the app-server read it? List the keys you have set there (names only, no values for secrets).
-A: 
+A: Yes, ~/.codex/config.toml, and the app-server reads it (`config/read` returns it). Key names on this laptop (values omitted): top-level `notify`; [desktop] followUpQueueMode; [marketplaces.*] source_type, source; [plugins."<name>"] enabled (about 11 plugins); [mcp_servers.node_repl] command, args, startup_timeout_sec, plus an env table; [tui] screen_reader_detection_done; [projects."<path>"] trust_level (6 projects).
+   Note: a top-level `notify` key exists, so Codex does have a notify hook setting (relevant to the hooks manager assumption in docs/codex-verification.md section 6).
 
 Q020. Where does Codex keep its login (file or OS keychain)? Do NOT paste the credentials; only say which storage it uses.
-A: 
+A: A file: ~/.codex/auth.json (mode -rw-------). Not opened.
 
 Q021. Does setting CODEX_HOME change where it looks? Does the app-server respect CODEX_HOME?
-A: 
+A: Yes. With CODEX_HOME set, `codex login status` and the app-server both use it: `initialize` returns `codexHome` = the CODEX_HOME folder, and an empty CODEX_HOME means signed out (account: null).
 
 Q022. Which environment variables does Codex read that could matter for us (OPENAI_API_KEY, CODEX_HOME, HTTPS_PROXY, RUST_LOG, NO_COLOR)? Which of them did you verify?
-A: 
+A: Verified: CODEX_HOME (both CLI and app-server honour it). Codex itself sets NO_COLOR=1, GIT_PAGER=cat, GH_PAGER=cat, CODEX_CI=1, CODEX_SANDBOX=seatbelt, CODEX_SANDBOX_NETWORK_DISABLED=1, CODEX_THREAD_ID and CODEX_SESSION_ID in the environment of the commands it runs (seen with `env`). OPENAI_API_KEY, HTTPS_PROXY, RUST_LOG: NOT TESTED.
 
 Q023. What platform is the laptop (OS and version, CPU architecture)?
-A: 
+A: macOS 26.6.0 (Darwin), Apple Silicon arm64 (the user agent says `Mac OS 26.6.0; arm64`).
 
 
 ==============================================================================
@@ -86,82 +93,87 @@ A:
 ==============================================================================
 
 Q024. Run `codex app-server --listen stdio://` by hand. What does it print on startup to stdout and to stderr before you send anything?
-A: 
+A: Nothing on stdout or stderr. It waits silently.
 
 Q025. Does it wait silently for input, or does it emit a notification first? Paste anything it prints unprompted.
-A: 
+A: It waits silently; nothing is sent until `initialize`. After `initialized` it sends notifications on its own (remoteControl/status/changed, account/updated, mcpServer/startupStatus/updated, ...).
 
 Q026. Is each message exactly one JSON object per line terminated by "\n"? Paste five raw lines from a real exchange.
-A: 
+A: Yes, one JSON object per line, ending in \n. Five real lines (-> sent, <- received; ids shortened):
+   -> {"id":1,"method":"initialize","params":{"clientInfo":{"name":"centcom","title":"Centcom","version":"0.1.0"}}}
+   <- {"id":1,"result":{"userAgent":"centcom/0.161.0 (Mac OS 26.6.0; arm64) dumb (centcom; 0.1.0)","codexHome":"$HOME/.codex","platformFamily":"unix","platformOs":"macos"}}
+   -> {"method":"initialized"}
+   <- {"method":"thread/status/changed","params":{"threadId":"01a117f1-...","status":{"type":"active","activeFlags":[]}}}
+   <- {"method":"item/agentMessage/delta","params":{"threadId":"01a117f1-...","turnId":"01a117f1-...","itemId":"msg_0b72...","delta":"Hi"}}
 
 Q027. Do messages include a "jsonrpc":"2.0" field in either direction? Does it reject requests that include it?
-A: 
+A: The server never includes "jsonrpc" in what it sends. It does NOT reject requests that include "jsonrpc":"2.0" (an initialize with it was answered normally).
 
 Q028. Does it accept requests that omit "jsonrpc" (as our client sends)? Confirm by sending one by hand.
-A: 
+A: Yes, every request in our tests omitted "jsonrpc" and was accepted.
 
 Q029. Are request ids numbers or strings from the server's side? Paste a server-to-client request with its id.
-A: 
+A: Numbers. Example: {"id":0,"method":"item/commandExecution/requestApproval","params":{...}}.
 
 Q030. Can ids from the server collide with ids we use for our requests (we start at 1)? Did you ever see a server request with id 1?
-A: 
+A: Server request ids start at 0 and count up per connection (0, 1, 2, ...). They are a separate id space from ours (we start at 1): a server request with id 1 is normal and is not the response to our request 1. Centcom's rpc.ts tells them apart by the presence of `method`, which is correct.
 
 Q031. What is the largest single line you saw (bytes) during a normal turn with a long answer? What is the largest during a turn that edited a big file?
-A: 
+A: Long answer (300 lines of text): small lines, each delta is a few bytes. Largest overall: 1,213,351 bytes, the `item/completed` of a command that printed `seq 1 200000` (its aggregatedOutput was capped at about 1 MiB, then JSON escaping and the other fields pushed the line past that). The large-file edit case was not measured.
 
 Q032. Does it ever send a line over 1 MiB (our limit)? What triggered it, if so?
-A: 
+A: YES. A plain `seq 1 200000` produced a 1,213,351-byte line, over Centcom's MAX_RPC_LINE (1 MiB, packages/agent/src/codex/rpc.ts). Centcom would treat it as `provider_protocol_error` and SIGKILL the session. Any command with about 1 MiB of output triggers it. Suggest raising the limit to at least 4 MiB (the C103 card's figure) or skipping over-long `item/completed` command lines instead of killing.
 
 Q033. Does it ever write a partial line or a line without a trailing newline (for example when it exits)?
-A: 
+A: Not seen. On stdin close it exits with code 0 after finishing its lines (no partial line was logged in any run).
 
 Q034. Does it write non-JSON text to stdout (logs, banners)? Paste an example if so.
-A: 
+A: No. stdout carried only JSON in every run.
 
 Q035. What does it write to stderr during a normal session, and how much per turn?
-A: 
+A: Usually nothing. On errors it writes ANSI-coloured tracing lines, e.g. `ERROR codex_core::tools::router: error=exec_command failed: CreateProcess { message: "Rejected(\"rejected by user\")" }` after a declined command, `... "TurnAborted"` after an interrupt, and `codex_app_server::bespoke_event_handling: failed to deserialize ...` when we answered an approval with a shape it does not know. A few hundred bytes per event at most.
 
 Q036. Does stderr ever contain secrets (tokens, API keys, paths with usernames)? Describe the shape without pasting secrets.
-A: 
+A: Not seen in our runs: only module names and error kinds. The lines are not redacted by Codex itself, so a command line or path could appear; Centcom's redact() on the stderr tail is still a good idea.
 
 Q037. What happens when we send invalid JSON? Does it answer with an error or silently drop it or exit?
-A: 
+A: Silently ignored: no error response, no notification, and the process keeps running.
 
 Q038. What happens when we send a request with an unknown method? Paste the exact error object (code and message).
-A: 
+A: {"code":-32600,"message":"Invalid request: unknown variant `nope/nothing`, expected one of `initialize`, `server/diagnostics`, ... (the full method list)"}. Note: the code is -32600 (Invalid request), not -32601.
 
 Q039. What happens when we send a request with missing or wrong-typed params? Paste the error.
-A: 
+A: {"code":-32600,"message":"Invalid request: invalid type: integer `42`, expected a string"} (thread/start with cwd: 42).
 
 Q040. What happens when stdin is closed? Does the process exit by itself, and how fast? What is the exit code?
-A: 
+A: It exits by itself with code 0 about 3.5 s after stdin is closed.
 
 Q041. What happens on SIGINT sent to the app-server process? Does it exit, ignore, or cancel the current turn?
-A: 
+A: It exits at once (13 ms) with code 0, but does NOT kill the commands it started: a running `sleep 62` (and its zsh parent) kept running after the app-server was gone.
 
 Q042. What happens on SIGTERM? How long until it exits, and with what code?
-A: 
+A: An idle app-server exits in about 70 ms with code 0.
 
 Q043. What happens on SIGKILL of the parent while it runs? Does the child exit by itself or become an orphan?
-A: 
+A: NOT TESTED directly (killing our node parent). After stdin closes it exits within about 3.5 s (Q040), so an orphaned app-server should follow once its stdin pipe closes.
 
 Q044. Does the app-server spawn child processes of its own (shell commands, MCP servers, sandboxes)? Do they share its process group?
-A: 
+A: Yes, and NOT in its process group. `ps -g <app-server pgid>` shows only the node wrapper and the native `codex app-server`; the shell commands (`/bin/zsh -c sleep 61 && echo done` and `sleep 61`) run in a different process group (the item source is `unifiedExecStartup`). MCP servers: NOT TESTED.
 
 Q045. If we kill the app-server's process group, do the commands it started die too? Test with a `sleep 300` command run by the agent.
-A: 
+A: NO. We sent SIGINT, then SIGTERM 3 s later, to the app-server's whole process group (what Centcom's ladder does) while the agent ran `sleep 63`. The app-server exited (code 0) but `sleep 63` and its zsh parent kept running. This breaks the assumption in packages/agent/src/codex/engine.ts ("The app-server leads its own process group ..., so stopping it stops the commands it started").
 
 Q046. After the app-server dies, is anything left running (pgrep codex, pgrep sleep)? Paste the result.
-A: 
+A: After each kill: `pgrep -fl 'sleep 6'` still showed `/bin/zsh -c sleep 62 && echo done` and `sleep 62` (and the same for 61 and 63). No stray `codex app-server` was left.
 
 Q047. How much memory does the app-server use idle and after a long turn (RSS in MB)?
-A: 
+A: Native `codex app-server` process: about 118 MB RSS right after start, about 250 MB after about 15 turns across several threads. The node wrapper itself is about 42 MB and does not grow.
 
 Q048. How many app-server processes can run at the same time without trouble on one account?
-A: 
+A: Several app-servers one after another, each with several threads, worked on one ChatGPT Plus account, and two threads ran turns at the same time inside one app-server (Q157). Two app-servers running at the same moment: NOT TESTED.
 
 Q049. Does starting a second app-server in the same directory conflict with the first (locks, sqlite, session files)?
-A: 
+A: No conflict seen: several app-servers ran in the same folder in turn, and threads from one could be resumed in another. ~/.codex holds sqlite files (state_5, thread_history_1, logs_2, ...) with WAL files and a `thread-writer-locks` folder, so sharing is designed in. Two app-servers writing the same thread at once: NOT TESTED.
 
 
 ==============================================================================
@@ -169,31 +181,32 @@ A:
 ==============================================================================
 
 Q050. Paste the exact `initialize` request we send ({clientInfo:{name,title,version}}) and the full response.
-A: 
+A: We send: {"id":1,"method":"initialize","params":{"clientInfo":{"name":"centcom","title":"Centcom","version":"0.1.0"}}}
+   Full response: {"id":1,"result":{"userAgent":"centcom/0.161.0 (Mac OS 26.6.0; arm64) dumb (centcom; 0.1.0)","codexHome":"$HOME/.codex","platformFamily":"unix","platformOs":"macos"}} (62 ms).
 
 Q051. Does the response contain server info, a version, capabilities, or a user-agent string? List the field names.
-A: 
+A: userAgent, codexHome, platformFamily, platformOs. No version field of its own (the version is inside userAgent) and no capabilities list.
 
 Q052. Is `clientInfo.title` accepted and used? Is `version` required?
-A: 
+A: Accepted. `name` and `version` end up in the userAgent string (`centcom/0.161.0 ... (centcom; 0.1.0)`). `title` is `string | null` in the schema. `version` is required (type `string`).
 
 Q053. Are there other fields on `initialize` we should send (capabilities, experimentalApi, optOutNotificationMethods)? Paste the schema if you generated it.
-A: 
+A: Yes, `capabilities` (InitializeCapabilities | null): `experimentalApi: boolean`, `requestAttestation: boolean`, `optOutNotificationMethods?: string[] | null`, `explicitGatewayOauth?: boolean`, `mcpServerOpenaiFormElicitation?: boolean`, `extensions?: {..} | null`. Leaving it out (as Centcom does) works.
 
 Q054. Is `initialized` a notification that must be sent after the response? What happens if we skip it and call another method?
-A: 
+A: It is a notification (no id, no answer). Skipping it did not matter: account/read sent after the initialize response but before `initialized` was answered normally.
 
 Q055. What happens if we call `account/read` before `initialize`? Paste the error.
-A: 
+A: {"code":-32600,"message":"Not initialized"}
 
 Q056. What happens if we call `initialize` twice? Paste the error.
-A: 
+A: {"code":-32600,"message":"Already initialized"}
 
 Q057. Does the initialize response tell us which methods or notifications are experimental?
-A: 
+A: No. Experimental methods are only marked in the generated schema (`--experimental` adds them) and turned on with `capabilities.experimentalApi: true`.
 
 Q058. Is there a way to subscribe to only some notifications or to turn off noisy ones? Paste the option names.
-A: 
+A: Yes: `capabilities.optOutNotificationMethods: string[]` on initialize. Not tried.
 
 
 ==============================================================================
@@ -201,52 +214,53 @@ A:
 ==============================================================================
 
 Q059. Paste the exact `account/read` request with {refreshToken:false} and the response when signed in with ChatGPT.
-A: 
+A: Request: {"id":3,"method":"account/read","params":{"refreshToken":false}}
+   Response (email and account id removed): {"id":3,"result":{"account":{"type":"chatgpt","email":"<removed>","planType":"plus"},"requiresOpenaiAuth":true,"workspaceRouting":{"chatgptAccountId":"<removed>","backendOrigin":"https://chatgpt.com","accountRoutingOverride":"NO_CONSTRAINT"}}}
 
 Q060. Paste the response when signed in with an API key.
-A: 
+A: NOT TESTED: no API key. Per the schema the account is {"type":"apiKey"} with no other fields.
 
 Q061. Paste the response when signed out.
-A: 
+A: {"account":null,"requiresOpenaiAuth":true,"workspaceRouting":null} (empty CODEX_HOME).
 
 Q062. What are all possible values of `account.type` you can find (chatgpt, apiKey, amazonBedrock, others)? Where did you find the list?
-A: 
+A: chatgpt, apiKey, amazonBedrock (from the generated v2/Account.ts: `{type:'apiKey'} | {type:'chatgpt', email, planType} | {type:'amazonBedrock', usesCodexManagedCredentials}`). Centcom's loginKindFromAccount already maps all three.
 
 Q063. Does the account response include a plan type (plus, pro, team, enterprise, free)? What field and what values?
-A: 
+A: Yes: `account.planType`. Values (v2/PlanType.ts): free, go, plus, pro, prolite, promax, team, self_serve_business_prolite, self_serve_business_usage_based, business, ent26, enterprise_cbp_automation, enterprise_cbp_usage_based, enterprise, edu, edu_plus, edu_pro, unknown. This laptop: plus. It is also in account/updated ({authMode, planType}) and in every rate-limit notification.
 
 Q064. Does the account response include an email? Is it safe for us to show it, or should we never read it?
-A: 
+A: Yes, `account.email` (ChatGPT accounts only). It is the user's personal address, plus `workspaceRouting.chatgptAccountId` is an account identifier. Centcom should not read, store or log either one; it only needs `type` (and maybe planType). Today engine.ts reads `acc.account` only for type, which is fine, but nothing stops the whole response being logged.
 
 Q065. What does `refreshToken:true` do, and when would it make a network call?
-A: 
+A: NOT TESTED. Per its name it asks Codex to refresh the ChatGPT token first (a network call to the auth server); with false it answers from the stored state, which took about 15 ms here.
 
 Q066. What happens when the ChatGPT token is expired? What does `account/read` return and what does `turn/start` do?
-A: 
+A: NOT TESTED (the login was fresh).
 
 Q067. Does the app-server emit an `account/updated` or `account/login/*` notification? When? Paste one.
-A: 
+A: Yes, `account/updated` arrives on its own after initialize and at the first turn: {"authMode":"chatgpt","planType":"plus"}. `account/login/completed` exists in the schema (after account/login/start); not seen.
 
 Q068. Does the app-server support login over the protocol (account/login/start, chatgpt browser flow, device code)? Paste the method names and params.
-A: 
+A: Yes: `account/login/start`, `account/login/cancel`, `account/logout`, plus `account/gatewayOAuth/{login,cancel,read}`. login/start params (v2/LoginAccountParams): {type:'apiKey', apiKey} | {type:'chatgpt', codexStreamlinedLogin?, useHostedLoginSuccessPage?, appBrand?} | {type:'chatgptDeviceCode'} | {type:'chatgptAuthTokens', accessToken, chatgptAccountId, chatgptPlanType?}. Not called.
 
 Q069. Could Centcom start a ChatGPT login for the user through the protocol instead of telling them to run `codex login`? What would it need to open a browser or show a code?
-A: 
+A: Possible on paper: `account/login/start` with {type:'chatgpt'} (browser flow) or {type:'chatgptDeviceCode'} (a code to show), finishing with `account/login/completed`. Centcom would only open a URL or show a code; the token stays in Codex. Not tried, and it would go against Centcom's "never touch credentials" rule only if we passed tokens ourselves (the chatgptAuthTokens and apiKey variants), which we must not.
 
 Q070. What does `account/logout` do, and is it something we must never call?
-A: 
+A: It removes Codex's stored login (like `codex logout`). Centcom must never call it on its own; only behind an explicit user action, if at all.
 
 Q071. Does `account/rateLimits/read` exist? Paste the response.
-A: 
+A: Yes. Response (trimmed): {"ordinaryUsageAllowed":true,"rateLimits":{"limitId":"codex","primary":{"usedPercent":0,"windowDurationMins":300,"resetsAt":1791420089},"secondary":{"usedPercent":0,"windowDurationMins":10080,"resetsAt":1792006889},"credits":{"hasCredits":false,"unlimited":false,"balance":"0"},"spendControlReached":false,"planType":"plus","rateLimitReachedType":null},"rateLimitsByLimitId":{"codex":{...}},"rateLimitResetCredits":{"availableCount":2,"credits":[...]}}
 
 Q072. Does the app-server need network access just to start, or only on the first turn?
-A: 
+A: Starting, initialize, account/read and thread/start worked without a model call (thread/start answered in about 70 ms). Network is needed at the first turn_start. Fully offline start: NOT TESTED.
 
 Q073. What error appears when the machine is offline at `thread/start`? At `turn/start`? Paste both.
-A: 
+A: NOT TESTED (needs the network cut; on the hands-on list for Brandon).
 
 Q074. What error appears behind a proxy that blocks api.openai.com? Does Codex honor HTTPS_PROXY?
-A: 
+A: NOT TESTED.
 
 
 ==============================================================================
@@ -254,91 +268,94 @@ A:
 ==============================================================================
 
 Q075. Paste the exact `thread/start` request we send (cwd, approvalPolicy, sandbox, model, developerInstructions) and the full response.
-A: 
+A: Request (default mode): {"method":"thread/start","params":{"cwd":"$TMPDIR/cq-exp1-...","approvalPolicy":"untrusted","sandbox":"workspace-write"}}
+   Response (trimmed): {"thread":{"id":"01a117f0-8fc6-7cf2-a3e7-8e10624bb04f","sessionId":"<same>","cwd":"...","model":"gpt-6.1-sol","modelProvider":"openai","status":{"type":"idle"},"path":"$HOME/.codex/sessions/2026/10/07/rollout-...jsonl","cliVersion":"0.161.0","originator":"centcom","source":"vscode","turns":[],...},"model":"gpt-6.1-sol","modelProvider":"openai","serviceTier":null,"cwd":"...","approvalPolicy":"untrusted","sandbox":{"type":"workspaceWrite","writableRoots":[],"networkAccess":false,"excludeTmpdirEnvVar":false,"excludeSlashTmp":false},"reasoningEffort":null,...}
+   developerInstructions also worked (Q081).
 
 Q076. Is `sandbox` accepted as the strings read-only / workspace-write / danger-full-access? Or are different spellings needed (readOnly, workspaceWrite)? Paste the error if one is wrong.
-A: 
+A: Only the kebab-case strings: read-only, workspace-write, danger-full-access. `workspaceWrite` gives {"code":-32600,"message":"Invalid request: unknown variant `workspaceWrite`, expected one of `read-only`, `workspace-write`, `danger-full-access`"}. Centcom sends the right spelling.
 
 Q077. Is `approvalPolicy` accepted as untrusted / on-request / on-failure / never? List every value it accepts.
-A: 
+A: Schema (v2/AskForApproval): "untrusted" | "on-request" | "never" | {granular:{sandbox_approval, rules, skill_approval, request_permissions, mcp_elicitations}}. There is no `on-failure` any more. `untrusted` (Centcom's default) is accepted by the app-server even though `codex --ask-for-approval` only lists on-request and never.
 
 Q078. Which approvalPolicy values exist in this version that we do not use (on-failure, granular)? Paste the schema.
-A: 
+A: `granular` (an object with five booleans). on-failure no longer exists.
 
 Q079. What does the response contain: thread id, model, model provider, cwd, approval policy, sandbox, reasoning effort? List the field names.
-A: 
+A: thread (id, sessionId, cwd, model, modelProvider, status, path, cliVersion, originator, source, turns, gitInfo, name, ...), model, modelProvider, serviceTier, cwd, runtimeWorkspaceRoots, instructionSources, approvalPolicy, approvalsReviewer, sandbox (the full SandboxPolicy object), activePermissionProfile, reasoningEffort, collaborationMode, multiAgentMode, disabledPluginIds.
 
 Q080. Does `thread/start` return the effective model when we do not pass `model`? What is the default model on this account?
-A: 
+A: Yes, `model` in the response. Default on this account: gpt-6.1-sol (reasoningEffort null, so the model default of `low`).
 
 Q081. Does `developerInstructions` reach the model? How did you verify it (ask the agent to repeat its instructions)?
-A: 
+A: Yes. With developerInstructions "Always end every answer with the word OSPREY.", the answer to "say hi" was "Hi! OSPREY", and every later answer on that thread ended with OSPREY.
 
 Q082. Is there also a `baseInstructions` or `config` override? What do they do?
-A: 
+A: Yes: `baseInstructions` (replaces the base prompt) and `config` (a map of config.toml overrides). Not tried beyond config.
 
 Q083. Does `thread/start` accept `config` overrides (like -c key=value on the CLI)? Paste an example that worked.
-A: 
+A: Yes. `config: {"web_search":"live"}` turned on web search (Q114), and `config: {"mcp_servers":{"probe_fail":{"command":"/nonexistent/cq-mcp"}}}` added an MCP server for that thread only (Q237).
 
 Q084. Does it accept `serviceName`, `ephemeral`, `personality`? Which of those exist?
-A: 
+A: serviceName, ephemeral and personality all exist in ThreadStartParams. Personality is deprecated ("friendly and pragmatic no longer select a style"). Not tried.
 
 Q085. What is the format of a thread id (uuid)? Is it safe to store in our session files?
-A: 
+A: A UUID v7 string, e.g. 01a117f0-8fc6-7cf2-a3e7-8e10624bb04f (thread.id == thread.sessionId). Safe to store: it is not a secret (anyone who can read ~/.codex sees it in file names).
 
 Q086. Where does Codex store thread history on disk (~/.codex/sessions/...)? Describe the layout, no contents.
-A: 
+A: ~/.codex/sessions/YYYY/MM/DD/rollout-<date>T<time>-<thread id>.jsonl, one file per thread (the path is in thread.path). Plus sqlite indexes in ~/.codex (state_5.sqlite, thread_history_1.sqlite, session_index.jsonl). Contents not opened.
 
 Q087. Paste the exact `thread/resume` request we send and the response.
-A: 
+A: Request: {"method":"thread/resume","params":{"threadId":"<id>","cwd":"<same dir>","approvalPolicy":"never","sandbox":"workspace-write"}}
+   Response keys: thread, model, modelProvider, serviceTier, disabledPluginIds, cwd, runtimeWorkspaceRoots, instructionSources, approvalPolicy, approvalsReviewer, sandbox, activePermissionProfile, reasoningEffort, collaborationMode, multiAgentMode, initialTurnsPage, turnsBackwardsCursor, itemsBackwardsCursor.
 
 Q088. Does resume require the same cwd? What happens if the cwd differs?
-A: 
+A: No. Resuming with cwd "/tmp" succeeded but kept the thread's original folder (response cwd and thread.cwd both still the original). Our cwd is ignored, silently.
 
 Q089. Does resume restore the old model, approval policy and sandbox, or do ours override them?
-A: 
+A: Ours win: resuming with approvalPolicy "never" and sandbox "workspace-write" gave a response with approvalPolicy "never" and the workspaceWrite policy. The model stayed the thread's model (gpt-6.1-sol).
 
 Q090. What happens when we resume a thread id that does not exist? Paste the error.
-A: 
+A: {"code":-32600,"message":"no rollout found for thread id 01a10000-0000-7000-8000-000000000000"}
 
 Q091. What happens when we resume a thread that is already open in another app-server or in the Codex TUI?
-A: 
+A: NOT TESTED.
 
 Q092. Does resume return the old turns/items in the response? Can we use them to rebuild the transcript in Centcom?
-A: 
+A: Yes. `thread.turns` held the earlier turns, e.g. [{status:'interrupted', items:['userMessage','agentMessage']}], and there are `initialTurnsPage` plus cursors for more. Enough to rebuild a transcript; `excludeTurns: true` skips them.
 
 Q093. Does `thread/list` exist? Paste params and response shape (filter by cwd, paging, sort).
-A: 
+A: Yes. {"limit":3} returned {data:[thread...], nextCursor, backwardsCursor}. Each entry has id, cwd, preview, name, status (notLoaded/idle/...), originator (codex-tui, centcom, ...), createdAt/updatedAt. Note: it lists threads from ALL clients on this account folder (Codex TUI ones included).
 
 Q094. Can we list only threads for one project folder? Which param?
-A: 
+A: Not tried. thread.cwd is in every entry, so filtering on our side works; check ThreadListParams for a cwd filter.
 
 Q095. Does `thread/read` exist to fetch a past thread's items? Paste a trimmed example.
-A: 
+A: Yes. thread/read {threadId} returned {thread} with turns: [] (history not included by default); thread/turns/list returned {data:[2 turns], nextCursor, backwardsCursor}, and thread/items/list exists.
 
 Q096. Does `thread/fork` exist? Does it copy history up to a turn?
-A: 
+A: Yes. thread/fork {threadId} returned a new thread with forkedFromId = the original id. Copying up to a chosen turn: not tried.
 
 Q097. Does `thread/rollback` or `thread/undo` exist? What does it undo (turns only, or files too)?
-A: 
+A: `thread/revert` exists (plus a `thread/reverted` notification). No rollback or undo method. What it reverts (turns, files): NOT TESTED.
 
 Q098. Does `thread/archive` / `thread/unarchive` / `thread/delete` exist?
-A: 
+A: thread/archive, thread/unarchive and thread/delete all exist (and the CLI has archive/unarchive/delete). Not called.
 
 Q099. Does `thread/name/set` exist? Does the TUI show our name?
-A: 
+A: Yes, thread/name/set {threadId, name} returned {} and a thread/name/updated notification exists. Whether the TUI shows it: NOT TESTED (thread/list showed names such as "Clarify request" for TUI threads, so the list does).
 
 Q100. Does `thread/compact/start` exist? What does it emit while compacting (item/started contextCompaction, thread/compacted)? Paste the sequence.
-A: 
+A: Yes. thread/compact/start {threadId} returned {} and then sent: turn/started, item/started {type:contextCompaction}, thread/tokenUsage/updated, account/rateLimits/updated, item/completed {type:contextCompaction}, turn/completed. NO `thread/compacted` notification arrived (it exists in the schema), so Centcom's map.ts only sees compaction through the contextCompaction items, which it already handles.
 
 Q101. Can we run a one-off review (`review/start`) through the protocol? Paste params.
-A: 
+A: Yes: review/start {threadId, target, delivery?}. target: {type:'uncommittedChanges'} | {type:'baseBranch', branch} | {type:'commit', sha, title} | {type:'custom', instructions}. delivery 'detached' is deprecated. Not run.
 
 Q102. Is there `thread/started`, `thread/status/changed`, `thread/closed` notifications? Paste examples.
-A: 
+A: thread/started (after thread/start, with the whole thread), thread/status/changed ({type:'active', activeFlags:[]} at turn start, {type:'idle'} at the end), and thread/closed exists (not seen). Also thread/name/updated, thread/archived, thread/settings/updated and others in the schema.
 
 Q103. Does Codex emit a thread title or summary we could show in the session list?
-A: 
+A: `thread.preview` (the first user text) and `thread.name` (TUI threads had names such as "Clarify request"; ours stayed null).
 
 
 ==============================================================================
@@ -346,175 +363,180 @@ A:
 ==============================================================================
 
 Q104. Paste the exact `turn/start` request we send (threadId, input:[{type:'text',text}], model, approvalPolicy, sandboxPolicy:{type}).
-A: 
+A: {"method":"turn/start","params":{"threadId":"<id>","input":[{"type":"text","text":"say hi"}],"approvalPolicy":"untrusted","sandboxPolicy":{"type":"workspaceWrite"}}}. Accepted, although the schema marks text_elements as part of the text input; it is not required.
 
 Q105. Is `sandboxPolicy:{type:'workspaceWrite'}` accepted in camelCase here while `thread/start` takes the kebab-case string? Confirm both work and paste any error for the wrong spelling.
-A: 
+A: Both work: thread/start takes the kebab-case string (sandbox: "workspace-write"), and turn/start takes the camelCase object (sandboxPolicy: {type:"workspaceWrite"}). The short object without writableRoots/networkAccess/excludeTmpdirEnvVar/excludeSlashTmp was accepted, and the defaults were applied (thread/start shows writableRoots [], networkAccess false, excludeTmpdirEnvVar false, excludeSlashTmp false).
 
 Q106. Does `sandboxPolicy` for workspaceWrite accept extra fields (writableRoots, networkAccess, excludeTmpdirEnvVar)? Paste the schema.
-A: 
+A: Yes: workspaceWrite {writableRoots: AbsolutePath[], networkAccess: boolean, excludeTmpdirEnvVar: boolean, excludeSlashTmp: boolean}; readOnly {networkAccess}; externalSandbox {networkAccess}; dangerFullAccess {}.
 
 Q107. Is network access allowed inside workspaceWrite by default? Test with `curl https://example.com` through the agent and report.
-A: 
+A: No. `curl -sS -m 10 https://example.com` through the agent in workspaceWrite gave `curl: (6) Could not resolve host: example.com` (exit 6); the command env has CODEX_SANDBOX_NETWORK_DISABLED=1.
 
 Q108. Paste the response to `turn/start` (turn id, status). Is the turn id in the response the same as `turnId` in later notifications?
-A: 
+A: {"turn":{"id":"01a117f1-28e6-...","items":[],"itemsView":"notLoaded","status":"inProgress","error":null,"startedAt":null,"completedAt":null,"durationMs":null}}. Yes, the same id appears as turnId in every later notification.
 
 Q109. List, in order, every notification you see for a simple prompt "say hi" (method names only, with the first params of each).
-A: 
+A: "say hi" (first turn of a thread): thread/status/changed {active}, turn/started, item/started {userMessage}, item/completed {userMessage}, item/started {agentMessage, phase:'final_answer'}, item/agentMessage/delta x2, item/completed {agentMessage, text:'Hi!'}, thread/tokenUsage/updated, account/rateLimits/updated, thread/status/changed {idle}, turn/completed {status:'completed'}. (Interleaved: mcpServer/startupStatus/updated and account/updated on a thread's first turn.)
 
 Q110. List, in order, every notification for a prompt that makes the agent run `ls`.
-A: 
+A: `ls` (default mode): turn/started, userMessage started/completed, agentMessage (phase commentary) started, deltas, completed, item/started {commandExecution, status inProgress}, REQUEST item/commandExecution/requestApproval, serverRequest/resolved, item/completed {commandExecution, completed, exitCode 0}, thread/tokenUsage/updated, account/rateLimits/updated, agentMessage (final_answer) started/deltas/completed, thread/tokenUsage/updated, account/rateLimits/updated, thread/status/changed {idle}, turn/completed.
 
 Q111. List, in order, every notification for a prompt that makes the agent create a file.
-A: 
+A: Creating notes.txt: the agent used a shell command (`/bin/zsh -lc 'printf %s hello > notes.txt'`), not a fileChange, so the sequence is the same as Q110 (commandExecution + its approval request).
 
 Q112. List, in order, every notification for a prompt that makes the agent edit an existing file.
-A: 
+A: Editing src/a.ts: commentary message, commandExecution `cat src/a.ts` (+approval), then item/started {fileChange, changes:[{path, kind:{type:'update'}, diff}]}, REQUEST item/fileChange/requestApproval, serverRequest/resolved, item/completed {fileChange, completed}, turn/diff/updated, token usage and rate limits, final agentMessage, turn/diff/updated again, thread/status/changed {idle}, turn/completed.
 
 Q113. List, in order, every notification for a prompt that makes the agent delete a file.
-A: 
+A: Deleting README.md: a shell command (`/bin/zsh -lc 'rm README.md'`) with its approval, same sequence as Q110. No fileChange with kind delete was produced.
 
 Q114. List, in order, every notification for a prompt that triggers a web search.
-A: 
+A: With thread/start config {"web_search":"live"}: commentary agentMessage, item/started {webSearch}, item/completed {webSearch}, token usage, rate limits, final agentMessage, turn/completed. See Q142 for the item.
 
 Q115. List, in order, every notification for a prompt that makes it think (reasoning) before answering.
-A: 
+A: With the default settings no reasoning items appeared for simple prompts. With effort:'high' and summary:'detailed', reasoning items appeared, sometimes empty ({type:'reasoning', summary:[], content:[]}), sometimes with item/reasoning/summaryPartAdded {summaryIndex} followed by item/reasoning/summaryTextDelta {delta, summaryIndex}.
 
 Q116. Is there a `turn/started` notification? Paste it.
-A: 
+A: Yes: {"threadId":"...","turn":{"id":"...","items":[],"itemsView":"notLoaded","status":"inProgress","error":null,"startedAt":1791403043,"completedAt":null,"durationMs":null}}
 
 Q117. Paste a real `turn/completed` for a successful turn, a failed turn and an interrupted turn.
-A: 
+A: Completed: {"threadId":"...","turn":{"id":"...","items":[{"type":"agentMessage","id":"msg_...","text":"Hi!","phase":"final_answer",...}],"itemsView":"summary","status":"completed","error":null,"startedAt":1791403043,"completedAt":1791403047,"durationMs":4315}}
+   Failed (signed out): status "failed", error {"message":"unexpected status 401 Unauthorized: Missing bearer or basic authentication in header, url: https://api.openai.com/v1/responses, ...","codexErrorInfo":{"httpConnectionFailed":{"httpStatusCode":401}},"additionalDetails":null}
+   Interrupted: status "interrupted", error null.
 
 Q118. What `turn.status` values exist (completed, failed, interrupted, inProgress, others)?
-A: 
+A: completed, interrupted, failed, inProgress (v2/TurnStatus).
 
 Q119. Where is the error object on a failed turn (`turn.error.message`)? Paste a real one, for example from running offline.
-A: 
+A: turn.error.message, plus turn.error.codexErrorInfo (structured: e.g. {httpConnectionFailed:{httpStatusCode:401}} or the string "other"), additionalDetails and misalignment. See Q117.
 
 Q120. Does `item/agentMessage/delta` carry `itemId`, `delta` and `turnId`? Paste one.
-A: 
+A: Yes: {"threadId":"...","turnId":"...","itemId":"msg_0b72...","delta":"Hi"}
 
 Q121. Are deltas always in order? Did you ever see one arrive after `item/completed`?
-A: 
+A: Always in order in our runs; no delta after its item/completed.
 
 Q122. Does `item/completed` for agentMessage always contain the full final text? Is it ever different from the joined deltas?
-A: 
+A: Yes, item/completed has the full text ("Hi!" after deltas "Hi", "!"); it matched the joined deltas in every turn checked.
 
 Q123. Do agent messages come as one item per turn, or several (commentary before tools, final answer after)? Paste an example with two.
-A: 
+A: Several per turn when tools are used: one with phase "commentary" before the tool ("I'll run `ls` in this folder ..."), and one with phase "final_answer" after it. A simple turn has one final_answer message.
 
 Q124. Is there a `phase` or `kind` on agent messages (commentary vs final_answer)? Should we show them differently?
-A: 
+A: Yes: `phase` = "commentary" | "final_answer". Suggest showing commentary smaller or greyed and only final_answer as the answer. Centcom's text.done currently treats both the same.
 
 Q125. What do `item/reasoning/textDelta` and `item/reasoning/summaryTextDelta` look like? Which of the two appears by default? Is the raw reasoning ever shown?
-A: 
+A: item/reasoning/summaryTextDelta (with summaryIndex) after item/reasoning/summaryPartAdded, when summaries are on. item/reasoning/textDelta (raw reasoning) never appeared. By default (no summary param) nothing appeared.
 
 Q126. Does `reasoning` need a config (model_reasoning_summary, show_raw_agent_reasoning) to appear? Which setting did you use?
-A: 
+A: Yes: we passed `summary: 'detailed'` and `effort: 'high'` on turn/start; summaries then appeared on some turns. The config keys model_reasoning_summary / show_raw_agent_reasoning were not tried.
 
 Q127. What is `item.type` for each of: shell command, patch, MCP call, dynamic tool, web search, plan, review, user message, reasoning, compaction? Give the exact strings you observed.
-A: 
+A: Seen: commandExecution (shell), fileChange (patch), webSearch, reasoning, userMessage, agentMessage, contextCompaction. From the schema but not seen: mcpToolCall, dynamicToolCall, plan, enteredReviewMode/exitedReviewMode (check ThreadItem.ts for the full list).
 
 Q128. Is there an item for the user's own message (`userMessage`)? Do we get it echoed back at the start of a turn?
-A: 
+A: Yes: item/started and item/completed {type:'userMessage', id, clientId:null, content:[{type:'text', text:'say hi', text_elements:[]}]} at the start of every turn. Centcom's mapper ignores it (fine).
 
 Q129. Paste a `commandExecution` item at start and at completion: which fields (command, cwd, status, exitCode, aggregatedOutput, durationMs, commandActions, processId)?
-A: 
+A: Start: {"type":"commandExecution","id":"exec-4a32...","pluginId":null,"scriptPath":null,"command":"/bin/zsh -lc ls","cwd":"...","processId":null,"source":"agent","status":"inProgress","commandActions":[{"type":"listFiles","command":"ls","path":null}],"aggregatedOutput":null,"exitCode":null,"durationMs":null}
+   Completed: same plus "processId":"71518","source":"unifiedExecStartup","status":"completed","aggregatedOutput":"README.md\npackage.json\nsrc\n","exitCode":0,"durationMs":0.
 
 Q130. Does the command come as a string or an array? Is it wrapped in `bash -lc "..."`? Show an example. How should we present it?
-A: 
+A: A single string wrapped in the user's login shell: `/bin/zsh -lc ls`, `/bin/zsh -lc 'printf %s hello > notes.txt'`. The unwrapped command is in commandActions[].command ("ls"). Present commandActions[0].command, or strip the `<shell> -lc` prefix. Centcom's classifyCommand currently gets the wrapped string.
 
 Q131. Is there streaming command output (`item/commandExecution/outputDelta`)? Paste one.
-A: 
+A: Yes, item/commandExecution/outputDelta exists and was seen once (npm test). Plain short commands usually go straight to item/completed.
 
 Q132. Is the output limited in size? What is the limit and how is it marked as truncated?
-A: 
+A: Yes. `seq 1 200000` (1,288,895 bytes) arrived with aggregatedOutput of 1,048,606 characters: the start and the end are kept and the middle is replaced by a marker line `... 240319 bytes omitted ...` (the lines either side of the cut can be partial). So the limit is about 1 MiB with a head-and-tail cut. See Q032 for the line-size problem this causes.
 
 Q133. What `status` values does a commandExecution take (inProgress, completed, failed, declined)?
-A: 
+A: inProgress, completed, failed, declined (v2/CommandExecutionStatus). Seen: completed; declined (after decline or cancel); failed (after an error answer or an unknown answer shape).
 
 Q134. What is `exitCode` for a command killed by interrupt or sandbox denial?
-A: 
+A: Declined or cancelled: exitCode null, status declined. Interrupted (`sleep 61`): no item/completed arrived for the command at all; the turn just ended as interrupted (and the process kept running, Q207).
 
 Q135. Paste a `fileChange` item at start and completion: `changes[]` with path, kind {type: add|delete|update, move_path?}, diff.
-A: 
+A: Start: {"type":"fileChange","id":"exec-7747...","changes":[{"path":"<absolute>/src/a.ts","kind":{"type":"update","move_path":null},"diff":"@@ -1 +1 @@\n-export const a = 1;\n+export const a = 2;\n"}],"status":"inProgress"}
+   Completed: identical with "status":"completed".
 
 Q136. Is `diff` a unified diff with headers, a bare hunk, or the whole file content for adds? Paste one of each kind.
-A: 
+A: Update: a bare hunk starting with @@ (no ---/+++ headers). Rename: kind update with move_path, and diff "\n\nMoved to: <absolute path>". Add and delete: NOT SEEN (the agent used shell commands for both). Centcom's diffFor adds headers to bare hunks, which fits.
 
 Q137. Is the path absolute or relative to cwd?
-A: 
+A: Absolute (e.g. $TMPDIR/cq-exp2-.../src/a.ts).
 
 Q138. What does `item/fileChange/patchUpdated` look like and when does it fire? Paste one.
-A: 
+A: Exists in the schema; not seen in our runs.
 
 Q139. Does the file change get applied before approval (it should not) or only after? How did you verify?
-A: 
+A: Only after approval: the file was unchanged until the fileChange request was answered, and item/completed came right after the answer.
 
 Q140. What does a rename look like (`kind.type = update` with `move_path`)?
-A: 
+A: {"path":"<abs>/src/a.ts","kind":{"type":"update","move_path":"<abs>/src/b.ts"},"diff":"\n\nMoved to: <abs>/src/b.ts"}
 
 Q141. Paste an `mcpToolCall` item: fields server, tool, arguments, result, error, status.
-A: 
+A: NOT TESTED (no MCP tool call was triggered).
 
 Q142. Paste a `webSearch` item: fields query, action. Is there a result list?
-A: 
+A: {"type":"webSearch","id":"exec-d051...","query":"https://example.com","action":{"type":"openPage","url":"https://example.com"},"results":[{"type":"text_result","domain":"example.com","ref_id":"turn0view0","snippet":"Total lines: 1","title":"Example Domain","url":"https://example.com/"}]}. Yes, there is a results list.
 
 Q143. What does the plan update look like (`turn/plan/updated` with plan:[{step,status}], explanation)? Which status strings exist (pending, inProgress, completed)?
-A: 
+A: NOT SEEN. Asked to "make a plan with your planning tool", the agent said "No planning tool is available" and wrote the plan as text. No turn/plan/updated arrived (an `item/plan/delta` notification also exists in the schema). The plan tool may need a collaboration mode or experimental flag.
 
 Q144. Is there a `turn/diff/updated` notification (aggregate diff for the turn)? Paste one.
-A: 
+A: Yes: {"threadId":"...","turnId":"...","diff":"diff --git a/src/a.ts b/src/a.ts\nindex cc798ff..66d48fc\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@\n-export const a = 1;\n+export const a = 2;\n"}. Full git-style diff of the turn so far, sent after each change and again at the end.
 
 Q145. What does `thread/tokenUsage/updated` contain? Paste it: `tokenUsage.last`, `.total`, `modelContextWindow`.
-A: 
+A: {"threadId":"...","turnId":"...","tokenUsage":{"total":{"totalTokens":37628,"inputTokens":37615,"cachedInputTokens":22144,"cacheWriteInputTokens":0,"outputTokens":13,"reasoningOutputTokens":0},"last":{"totalTokens":21003,"inputTokens":20996,"cachedInputTokens":8960,"cacheWriteInputTokens":0,"outputTokens":7,"reasoningOutputTokens":0},"modelContextWindow":258400}}
+   IMPORTANT: `total` is cumulative over the whole thread (it only grows), while `last` is the latest model request. Centcom's map.ts computes context_used_pct from total.totalTokens / modelContextWindow, so the context gauge overstates and climbs forever (past 100% on a long thread). The current context size is `last` (last.totalTokens or last.inputTokens).
 
 Q146. Are `inputTokens` inclusive of cached tokens? Is `reasoningOutputTokens` included in `outputTokens`? How did you verify?
-A: 
+A: Inclusive: inputTokens 16124 with cachedInputTokens 13184 and totalTokens 16130 = inputTokens + outputTokens (16124 + 6), so cached tokens are part of inputTokens. reasoningOutputTokens is 0 in every turn seen, so whether it is inside outputTokens is NOT verified.
 
 Q147. Does Codex report a cost? If not, do we need our own price table for OpenAI models? Which models and prices should we use?
-A: 
+A: No cost field anywhere. On a ChatGPT plan the meaningful number is the rate-limit percentage (and credits). A price table would only matter for API-key users (NOT TESTED).
 
 Q148. What does `account/rateLimits/updated` contain? Paste one with `primary` and `secondary` windows (usedPercent, windowDurationMins, resetsAt).
-A: 
+A: {"rateLimits":{"limitId":"codex","limitName":null,"normalModelSlug":null,"primary":{"usedPercent":0,"windowDurationMins":300,"resetsAt":1791420089},"secondary":{"usedPercent":0,"windowDurationMins":10080,"resetsAt":1792006889},"credits":{"hasCredits":false,"unlimited":false,"balance":"0"},"individualLimit":null,"spendControlReached":null,"planType":"plus","rateLimitReachedType":null}}. Sent after every model request (several per turn). usedPercent went 0 -> 2 after about 20 turns.
 
 Q149. Is `resetsAt` seconds or milliseconds since epoch?
-A: 
+A: Seconds (1791420089 = 2026-10-08, about 5 h after the test). Centcom's limits.report passes it through as resets_at; make sure the UI treats it as seconds.
 
 Q150. Do plan limits show credits or a balance on some plans? Paste the field if present.
-A: 
+A: Yes: rateLimits.credits {hasCredits, unlimited, balance (a string, "0" here)}, and account/rateLimits/read adds rateLimitResetCredits {availableCount, credits:[{id, resetType, status, grantedAt, expiresAt, title, description}]}.
 
 Q151. What notifications arrive when the model is rerouted or the context window changes (`model/rerouted`)?
-A: 
+A: model/rerouted exists in the schema but never arrived, even when we switched model mid-thread (gpt-6.1-sol -> gpt-6-astra). An unknown model gave a `warning`: "Model metadata for `no-such-model-xyz` not found. Defaulting to fallback metadata; this can degrade performance and cause issues."
 
 Q152. What does `warning`, `configWarning` and `deprecationNotice` look like in practice? Have you seen any? Paste them.
-A: 
+A: warning seen: {"threadId":"...","message":"Model metadata for `no-such-model-xyz` not found. Defaulting to fallback metadata; ..."}. Also a warning when signed out (after the retries). configWarning and deprecationNotice: not seen.
 
 Q153. What does the `error` notification look like with `willRetry:true` and `willRetry:false`? Paste each, for example by cutting the network mid-turn.
-A: 
+A: Signed out: `error` {"error":{"message":"Reconnecting... 2/5","codexErrorInfo":{"responseStreamDisconnected":{"httpStatusCode":401}},"additionalDetails":"unexpected status 401 Unauthorized: ... url: wss://api.openai.com/v1/responses ..."},"willRetry":true,...} and later the failure. Unknown model: `error` with willRetry:false and the 400 message (Q221). Network cut mid-turn: NOT TESTED.
 
 Q154. Does Codex retry on its own after a stream disconnect? How many times and with what delay? What do we see meanwhile?
-A: 
+A: Yes. With a 401 it showed "Reconnecting... 2/5" (error notifications with willRetry:true), i.e. up to 5 attempts, then failed the turn. Delays not measured.
 
 Q155. Does a turn ever end without `turn/completed` (process crash, hang)? How long did you wait before declaring it hung?
-A: 
+A: Yes, effectively: an acceptEdits turn ("change the constant from 1 to 3") sent its first commentary message at 4.9 s and then NOTHING for about 186 s (no notification of any kind on that thread). It then carried on and completed normally (edit + answer) at about 201 s, right after another thread on the same app-server started a turn. Cause unknown. Centcom has no no-progress timeout for Codex turns today; a turn can look hung for minutes.
 
 Q156. Can two turns run at the same time on one thread? What happens if we send `turn/start` while one is running?
-A: 
+A: It is not refused. A second turn/start while a turn runs returned the SAME turn id (both responses had turn id 01a117fa-09c7-...), i.e. the new input is merged into the running turn (config [desktop] followUpQueueMode = "steer" here; `turn/steer` also exists). Centcom refuses the second send itself ("a turn is already running"), which avoids this.
 
 Q157. Can one app-server run two threads at the same time? Do notifications carry `threadId` so we can tell them apart?
-A: 
+A: Yes. Two threads ran turns at the same time on one app-server (3.6 s for both), and every notification carried threadId (the only one without, apart from account/mcp/remote notices, was thread/started, which has thread.id inside).
 
 Q158. Do sub-agent threads exist (spawned by the agent)? How do their notifications look (other `threadId`, other `turnId`)? Our code ignores notifications whose turnId differs. Is that right?
-A: 
+A: NOT SEEN. The models list says multiAgentVersion "v2" and effort "ultra" means "Maximum reasoning with automatic task delegation", so sub-agents probably come with effort ultra; not tried. Every notification seen had the parent turnId.
 
 Q159. Does any notification arrive with no turnId that we must still handle (apart from rate limits)? List the methods.
-A: 
+A: Without turnId: account/rateLimits/updated, account/updated, mcpServer/startupStatus/updated, remoteControl/status/changed, thread/started, thread/status/changed, serverRequest/resolved (has threadId). Of these Centcom should handle account/rateLimits/updated (it does) and maybe thread/status/changed. Note: engine.ts drops notifications whose turnId differs only when p.turnId exists, so these pass through.
 
 Q160. What happens to notifications that arrive after we call `turn/interrupt`? Which ones, in which order, and does `turn/completed` have status `interrupted`?
-A: 
+A: After turn/interrupt: turn/completed {status:'interrupted'} arrived 6-9 ms later; no deltas after it (the last delta was 37 ms before turn/completed). A pending approval request is resolved by the server (serverRequest/resolved), and the running command gets no item/completed.
 
 
 ==============================================================================
