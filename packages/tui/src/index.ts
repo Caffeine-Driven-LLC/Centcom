@@ -22,3 +22,5 @@ export * from './fleet/index.js';
 export * from './mascot/index.js';
 export * from './theme/index.js';
 export * from './pixel/index.js';
+export * from './shell/index.js';
+export { stringWidth, wrapText, truncate as truncateText, sanitizeForTerminal as sanitizeText } from './text/index.js';

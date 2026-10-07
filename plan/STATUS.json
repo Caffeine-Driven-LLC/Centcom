@@ -82,8 +82,8 @@
    "note": "Cento component with per-frame durations, frame cache, hero/mini sizes (8x14 and 2x6), 256-colour and ASCII fallbacks, recolouring, animation budget of 6; gaps: no golden files against play.py, app still draws through PixelView"
   },
   "C034": {
-   "pct": 0.5,
-   "note": "TUI shell works; card gaps: renderApp/useLayout, safe alt-screen on signals, focus stack, grapheme text module"
+   "pct": 0.65,
+   "note": "Shell frame (header/scrollback/toast/prompt/footer, 100-col rail, overlay, too-small state), renderApp with debounced resize, alt-screen guard for exit/SIGINT/SIGTERM/uncaught error, action registry with focus stack, grapheme-aware text helpers; gaps: App.tsx not moved onto the Shell, --no-alt-screen/config not wired, no lint rule for raw Text"
   },
   "C035": {
    "pct": 0.7,
