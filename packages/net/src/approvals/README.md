@@ -1,0 +1,10 @@
+# approval routing (lane C061)
+
+`new ApprovalRouter(session, { clock, ids?, maxWaitMs?, sink?, owners?, warn? })` sends tool-permission asks to the people who can decide them and brings the answer back.
+
+- **Asking** (`request({ agentId, risk, approver, summary, command?, cwd?, ttlMs? })`): one `approval.request` frame with a client-made `apr_` id (the frame id carries the same ULID, so a resend is the same frame). The clear part is only `approval_id`, `agent_id`, `risk`, `expires_at`, `approver`; summary, command and cwd are encrypted. Resolves with the first valid decision (`approve` or `deny`, scope `once`, `session` or `always`, `by` = the member), `expired` at the deadline (the time limit is at most 10 minutes; a deny with reason `expired` is sent), or a deny when the request could not be sent. Nothing ever approves because of a transport failure. `cancel(id)` is a deny.
+- **Answering** (`decide(id, { decision, scope, reason? })`, `pending()`, event `request`): requests are shown decrypted and once (a resend or a replay does not prompt again). The reason is encrypted.
+- **Who may answer** (`authorize`, decided by the live roster, never by the frame): the host always; members the policy lists in `approvers`; for `approver: 'any_editor'` any editor; for `approver: 'owner'` the members `owners()` names (the roster has no workspace roles, so the caller supplies them); never a viewer, an unknown member, or the requester answering their own request unless they are the host. The first valid decision wins; later ones are ignored and reported as `ignored`.
+- **Sink:** `ApprovalSink.apply({ agentId, approvalId, outcome })` gets every outcome with its scope; the router keeps no always-rules (the permission engine owns them). Events `awaiting-approval` and `approval-resolved` are for the fleet panel.
+
+Note: the mock relay only lets the host send `approval.decision`, so editor decisions are tested with scripted peers. The router subscribes with `replay`, so requests that arrived while the session was connecting are not missed.

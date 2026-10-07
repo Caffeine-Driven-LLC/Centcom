@@ -33,7 +33,7 @@ export class QueueClient extends TypedEmitter<QueueEvents> {
   constructor(private readonly session: SessionHandle, private readonly opts: QueueClientOptions = {}) {
     super();
     const now = opts.now ?? (() => new Date()); this.ids = newIdGenerator({ now: () => now().getTime(), random: opts.random ?? ((n) => crypto.getRandomValues(new Uint8Array(n))) }); this.ctl = hostControls(session);
-    this.offs.push(session.onAny((e) => this.onEvent(e)), session.on('state', (s) => { this.model.setPaused(s === 'paused'); this.emit('changed', this.model.view()); }), session.on('error', (e) => this.emit('error', Object.assign(new Error(e.code), { code: e.code }))));
+    this.offs.push(session.onAny((e) => this.onEvent(e), { replay: true }), session.on('state', (s) => { this.model.setPaused(s === 'paused'); this.emit('changed', this.model.view()); }), session.on('error', (e) => this.emit('error', Object.assign(new Error(e.code), { code: e.code }))));
   }
   dispose(): void { for (const o of this.offs.splice(0)) o(); }
   snapshot(): QueueView { return this.model.view(); }
