@@ -1,0 +1,6 @@
+import type { CursorRosterEntry, CursorState } from '../../src/cursors/index.js';
+export const clock = () => { let t = 0; const q: { at: number; fn: () => void; h: number }[] = []; let id = 0; return { now: () => t, setTimeout: (fn: () => void, ms: number) => { const h = ++id; q.push({ at: t + ms, fn, h }); return h; }, clearTimeout: (h: never) => { const i = q.findIndex((x) => x.h === (h as unknown as number)); if (i >= 0) q.splice(i, 1); }, advance(ms: number) { const end = t + ms; for (;;) { q.sort((a, b) => a.at - b.at); const n = q[0]; if (!n || n.at > end) break; q.shift(); t = n.at; n.fn(); } t = end; } }; };
+export const roster: CursorRosterEntry[] = [{ id: 'me', name: 'Me', slot: 0 }, { id: 'ada', name: 'Ada', slot: 1 }, { id: 'ben', name: 'Benedikt-Alexander-Long', slot: 2 }, { id: 'cy', name: 'Cy', slot: 3 }, { id: 'di', name: 'Di', slot: 4 }, { id: 'ed', name: 'Ed', slot: 5 }];
+export const cur = (member: string, o: Partial<CursorState> = {}): CursorState => ({ member, path: 'src/a.ts', line: 5, col: 4, updatedAt: 0, ...o });
+export const vp = { path: 'src/a.ts', firstLine: 0, lines: 20, cols: 80 };
+export const mapOf = (...c: CursorState[]) => new Map(c.map((x) => [x.member, x] as const));

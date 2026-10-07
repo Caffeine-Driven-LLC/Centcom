@@ -1,0 +1,89 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`rendering (acceptance 3, 4, 5) > 16 dark: initial and name are on screen (colour does not reach this renderer, so tier colours are checked on the spans) 1`] = `
+"
+   A Ada
+
+
+          B Benedikt-Al…
+
+  C Cy
+"
+`;
+
+exports[`rendering (acceptance 3, 4, 5) > 16 light: initial and name are on screen (colour does not reach this renderer, so tier colours are checked on the spans) 1`] = `
+"
+   A Ada
+
+
+          B Benedikt-Al…
+
+  C Cy
+"
+`;
+
+exports[`rendering (acceptance 3, 4, 5) > 256 dark: initial and name are on screen (colour does not reach this renderer, so tier colours are checked on the spans) 1`] = `
+"
+   A Ada
+
+
+          B Benedikt-Al…
+
+  C Cy
+"
+`;
+
+exports[`rendering (acceptance 3, 4, 5) > 256 light: initial and name are on screen (colour does not reach this renderer, so tier colours are checked on the spans) 1`] = `
+"
+   A Ada
+
+
+          B Benedikt-Al…
+
+  C Cy
+"
+`;
+
+exports[`rendering (acceptance 3, 4, 5) > none dark: initial and name are on screen (colour does not reach this renderer, so tier colours are checked on the spans) 1`] = `
+"
+   A Ada
+
+
+          B Benedikt-Al…
+
+  C Cy
+"
+`;
+
+exports[`rendering (acceptance 3, 4, 5) > none light: initial and name are on screen (colour does not reach this renderer, so tier colours are checked on the spans) 1`] = `
+"
+   A Ada
+
+
+          B Benedikt-Al…
+
+  C Cy
+"
+`;
+
+exports[`rendering (acceptance 3, 4, 5) > truecolor dark: initial and name are on screen (colour does not reach this renderer, so tier colours are checked on the spans) 1`] = `
+"
+   A Ada
+
+
+          B Benedikt-Al…
+
+  C Cy
+"
+`;
+
+exports[`rendering (acceptance 3, 4, 5) > truecolor light: initial and name are on screen (colour does not reach this renderer, so tier colours are checked on the spans) 1`] = `
+"
+   A Ada
+
+
+          B Benedikt-Al…
+
+  C Cy
+"
+`;
