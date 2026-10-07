@@ -1,0 +1,18 @@
+{
+ "note": "Which lines a state draws from. A line belongs to a pool when it matches one of the pool's words; Default is every line; Absurd is drawn after 30 s. Serious states never draw a joke.",
+ "pools": {
+  "Default": {},
+  "Ocean": { "words": ["tentacle", "ocean", "tide", "wave", "sea", "reef", "ink", "octo", "kelp", "squid", "deep", "coral", "anchor", "sail", "bubble"] },
+  "Signals": { "words": ["signal", "ping", "packet", "socket", "thread", "queue", "relay", "broadcast", "sync", "handshake", "heartbeat", "sub-agent", "process"] },
+  "Code": { "words": ["code", "type", "semicolon", "refactor", "compil", "lint", "bug", "function", "variable", "syntax", "debug", "stack", "git", "commit", "readme", "regex"] },
+  "Search": { "words": ["search", "hunt", "seek", "scan", "look", "find", "grep", "dig", "explor", "trac", "sniff", "detective"] },
+  "Build": { "words": ["build", "wir", "assembl", "bundl", "construct", "forg", "weld", "hammer", "scaffold", "bak", "craft", "sculpt", "wrangl"] },
+  "Math": { "words": ["math", "number", "integer", "prime", "equation", "algebra", "count", "calculat", "sum", "fraction", "modulo", "tensor"] },
+  "Absurd": { "words": ["feelings", "rubber duck", "sacrific", "oracle", "flirt", "sunbath", "hoopla", "beard", "bubble-wrap", "stand-up", "enthusias", "cobweb", "hyperfocus"] }
+ },
+ "states": {
+  "thinking": "Default", "thinking-hard": "Default", "prompt-received": "Default", "streaming": "Default", "planning": "Default", "compacting": "Default", "listening": "Default", "saving": "Default", "background-task": "Signals", "sub-agent": "Signals", "tool-running": "Build", "running-command": "Build", "creating-file": "Build", "editing-file": "Code", "reading-file": "Code", "searching": "Search", "deploying": "Build", "ci-running": "Build", "tests-pass": "Default", "tests-fail": "Default", "ci-pass": "Default", "ci-fail": "Default", "context-full": "Default", "message-queued": "Default", "host-session": "Signals", "pair-working": "Signals", "handoff": "Signals", "teammate-typing": "Signals", "teammate-joins": "Default", "teammate-leaves": "Default", "welcome-teammate": "Default", "idle": "Default", "ready": "Default", "sleeping": "Default", "away": "Default", "empty": "Default", "first-run": "Default", "welcome": "Default", "approved": "Default", "success": "Default", "celebrate": "Default", "high-five": "Default", "no-results": "Search", "merge-conflict": "Code", "pr-open": "Code", "pr-merged": "Code", "update-available": "Default", "warning": "Default", "cost-alert": "Default", "online": "Default", "offline": "Default", "asking-question": "Default"
+ },
+ "serious": ["awaiting-approval", "auth-required", "provider-auth-required", "provider-cap-reached", "provider-policy-blocked", "session-expired", "rate-limited", "quota-reached", "error", "crash", "deleting-file", "reconnecting", "denied"],
+ "plain": { "awaiting-approval": "Waiting for approval…", "reconnecting": "Reconnecting…", "rate-limited": "Retrying…", "provider-cap-reached": "Waiting…", "default": "Working…" }
+}
