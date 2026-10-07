@@ -24,6 +24,8 @@ import { makeTelemetry, runTelemetry } from './commands/telemetry.js';
 import { defaultDeps, loadConfig } from '@centcom/config';
 import { runMcpCli } from './commands/mcp/cli.js';
 import { runHooksCli } from './commands/hooks/cli.js';
+import { runAccountCli } from './commands/account/cli.js';
+import { ACCOUNT_COMMANDS } from './commands/account/index.js';
 
 const VERSION = '0.1.0';
 const HELP = `centcom ${VERSION}: command many hands
@@ -37,6 +39,10 @@ Usage
   centcom hooks list|add|remove|validate|templates   manage Claude Code hooks (the tool runs them, Centcom only edits the settings)
   centcom provider status|login|logout|doctor   check, sign in or out of Claude Code and Codex (the tools do the signing in)
   centcom telemetry status|on|off|reset   anonymous usage counts (off unless you turn them on)
+  centcom login [--no-browser] [--device-name <name>] [--api-key-stdin] [--json]   sign in to Centcom (needed for hosted sessions only)
+  centcom logout [--revoke-device]   sign out of Centcom on this computer
+  centcom whoami [--json]      who is signed in, the plan and the active workspace
+  centcom devices list [--json] | revoke <dev_id> [--yes]   the computers signed in to your account
 
 Scripting
   centcom -p "task"             run once, print the answer, exit (no screen). Piped input is added to the prompt.
@@ -99,7 +105,8 @@ async function main() {
   if (process.argv[2] === 'telemetry') process.exit(await runTelemetry(process.argv.slice(3), { out: (l) => console.log(l), err: (l) => console.error(l), version: VERSION }));
   // anonymous counts of which command ran, only when you turned telemetry on (docs/telemetry.md)
   const cfg0 = await loadConfig(defaultDeps()).catch(() => undefined); const tm = makeTelemetry({ enabled: !!cfg0?.telemetry.enabled, baseUrl: cfg0?.api.base_url ?? 'https://api.centcom.dev', version: VERSION });
-  const sub = ['provider', 'memory', 'mcp', 'hooks', 'init', 'keys', 'skills'].includes(process.argv[2] ?? '') ? process.argv[2]! : has('-p') || has('--print') ? 'print' : 'tui'; tm.appStart(); tm.commandRun(sub);
+  const isAccount = (ACCOUNT_COMMANDS as readonly string[]).includes(process.argv[2] ?? '');
+  const sub = ['provider', 'memory', 'mcp', 'hooks', 'init', 'keys', 'skills'].includes(process.argv[2] ?? '') || isAccount ? process.argv[2]! : has('-p') || has('--print') ? 'print' : 'tui'; tm.appStart(); tm.commandRun(sub);
   const done = async (code: number) => { tm.appExit(); await tm.flush(2000); process.exit(code); };
   if (process.argv[2] === 'provider') await done(await runProviderCli(process.argv.slice(3)));
   if (process.argv[2] === 'skills') await done(await runSkills(process.argv.slice(3), { out: (l) => console.log(l), err: (l) => console.error(l), ask: ttyAsk, cwd: process.cwd() }));
@@ -108,6 +115,7 @@ async function main() {
   if (process.argv[2] === 'memory') await done(await runMemoryCli(process.argv.slice(3)));
   if (process.argv[2] === 'mcp') await done(await runMcpCli(process.argv.slice(3)));
   if (process.argv[2] === 'hooks') await done(await runHooksCli(process.argv.slice(3)));
+  if (isAccount) await done(await runAccountCli(process.argv[2]!, process.argv.slice(3).filter((a) => a !== '--debug'), { version: VERSION }));
   if (has('-p') || has('--print')) {
     const i = Math.max(process.argv.indexOf('-p'), process.argv.indexOf('--print'));
     const next = process.argv[i + 1]; const text = next && !next.startsWith('-') ? next : undefined;
