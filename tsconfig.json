@@ -41,6 +41,9 @@
       ],
       "@centcom/fleet": [
         "./packages/net/src/fleet/model.ts"
+      ],
+      "@centcom/mascot-browser": [
+        "./packages/mascot/src/browser.ts"
       ]
     }
   }
