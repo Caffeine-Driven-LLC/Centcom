@@ -98,8 +98,8 @@
    "note": "unified-diff parser with caps (2,000 lines, 200 files, 50k lines in <300 ms), two-string differ, camelCase-aware word highlights as reverse-video spans, row layout with numbered gutter, wrapping, gap folding/expansion, binary/rename rows, DiffView with focusable gaps, diff.share adapter; gap: transcript and approval prompt still use util/diff.ts"
   },
   "C038": {
-   "pct": 0.6,
-   "note": "approval prompt with y/n/a and high-risk confirm; card gaps: layout details, session scope, edit, type-ahead guard, expiry"
+   "pct": 0.7,
+   "note": "ApprovalView from either engine or a shared session, key state machine (scopes, edit only when editable, 300 ms grace, y+Enter for risky, expiry deny), PermissionPrompt box (min(cols-2,78), heavy border for destructive, command cap, visible escapes, waiting-for-host text), queue ordering helper; gap: app still uses components/Approval.tsx, queue host and view-all screen not built"
   },
   "C039": {
    "pct": 0.7,

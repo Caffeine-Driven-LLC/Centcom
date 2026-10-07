@@ -17,3 +17,4 @@ export * from './a11y/index.js';
 export * from './prompt/index.js';
 export * from './status/index.js';
 export * from './diff/index.js';
+export * from './permission/index.js';
