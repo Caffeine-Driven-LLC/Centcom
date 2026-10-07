@@ -12,3 +12,7 @@ apps/web/dist
 *.key
 .dev/
 bench-results.json
+security-report.json
+conformance-report.json
+release-gate-report.json
+release-gate-inputs/

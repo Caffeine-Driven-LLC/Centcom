@@ -18,9 +18,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4 # reads the pnpm version from package.json (packageManager)
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0, reads the pnpm version from package.json (packageManager)
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with: { node-version-file: .node-version, cache: pnpm }
       - name: Install (lockfile must be up to date)
         run: pnpm install --frozen-lockfile
@@ -40,6 +40,8 @@ jobs:
         run: pnpm test
       - name: Contract conformance
         run: pnpm conformance
+      - name: Security checks (secrets, pinning, lockfile, workflows, licences, audit)
+        run: pnpm security:check
       - name: Build the web app
         run: pnpm web:build
       - name: Plan, contracts and contract lock

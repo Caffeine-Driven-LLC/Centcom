@@ -300,6 +300,10 @@
   "C100": {
    "pct": 0.35,
    "note": "conformance runner (pnpm conformance: --contract, --json, --out, --strict; report schema, waivers max 60 days, fixture loader) with suites for 13 contracts that pass offline in about 1 s (IDS, ERR, VER, envelope, session events, presence, queue, control, crypto vectors, LAN, telemetry, state map, provider); release-gate aggregator (pnpm release-gate) with checklist; gaps: gate scripts G1-G6 (need the session/queue/billing lanes), suites for PAGE/AUTH/RESUME/DEEPLINK (waived to 2026-12-01), RELEASES/NOTIF suites wait for the update and notification PRs, queue replay host-vs-guest (C076), coverage tooling"
+  },
+  "C099": {
+   "pct": 0.7,
+   "note": "security baseline: pnpm security:check (secret scan, install scripts, exact pinning [waived to 2026-12-31 until C001], lockfile integrity, workflow lint, licence allow-list, audit with 3 retries, fails closed), waivers with issue URL and 90-day expiry, CycloneDX 1.5 SBOM per artifact (pnpm sbom, validated against a schema subset), keystore scan, redaction fuzz, Renovate config, threat model, checklist, review log; ci.yml pinned by SHA; gaps: SBOM not attached to a real release, full CycloneDX schema, keystore scan not yet run after a real login flow (C052 PR), web CSP review, runner env review"
   }
  },
  "next": [

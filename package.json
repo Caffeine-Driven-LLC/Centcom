@@ -28,15 +28,19 @@
     "docs:dev": "vitepress dev docs/site",
     "docs:build": "vitepress build docs/site",
     "conformance": "tsx tools/conformance/run.ts",
-    "release-gate": "tsx tools/release-gate/run.ts"
+    "release-gate": "tsx tools/release-gate/run.ts",
+    "security:check": "tsx tools/security/run.ts",
+    "sbom": "tsx tools/security/sbom-cli.ts"
   },
   "devDependencies": {
     "@changesets/cli": "3.0.3",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
+    "ajv": "8.20.0",
     "fast-check": "^3.23.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
-    "vitest": "^3.0.0"
+    "vitest": "^3.0.0",
+    "yaml": "2.9.1"
   }
 }

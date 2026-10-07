@@ -6,7 +6,8 @@
     "packages/*/test",
     "apps/*/test",
     "tools/conformance",
-    "tools/release-gate"
+    "tools/release-gate",
+    "tools/security"
   ],
   "compilerOptions": {
     "paths": {
