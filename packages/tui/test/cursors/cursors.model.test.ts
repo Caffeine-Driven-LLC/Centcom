@@ -36,3 +36,10 @@ describe('from the presence model', () => {
     expect([...m.keys()]).toEqual(['ada']); expect(m.get('ada')).toEqual({ member: 'ada', path: 'a', line: 1, updatedAt: 5 });
   });
 });
+
+describe('a selection that starts off screen', () => {
+  it('still draws the part that is visible, next to the edge marker', () => {
+    const [m] = layoutCursors({ cursors: mapOf(cur('ada', { line: 2, col: 4, selEndLine: 14, selEndCol: 3, updatedAt: 0 })), roster, viewport: { ...vp, firstLine: 10, lines: 10 }, selfMember: 'me', now: 0 });
+    expect(m).toMatchObject({ edge: 'up', row: 0 }); expect(m!.selection).toEqual([{ row: 0, from: 0, to: 80 }, { row: 1, from: 0, to: 80 }, { row: 2, from: 0, to: 80 }, { row: 3, from: 0, to: 80 }, { row: 4, from: 0, to: 3 }]);
+  });
+});

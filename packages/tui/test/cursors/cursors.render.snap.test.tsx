@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToString } from 'ink';
 import { createTheme, type ColorTier } from '@centcom/theme';
 import { describe, expect, it } from 'vitest';
-import { RemoteCursors, layoutCursors, tagLine } from '../../src/cursors/index.js';
+import { RemoteCursors, layoutCursors, paintCursors, tagLine } from '../../src/cursors/index.js';
 import { ThemeCtx } from '../../src/components/ui.js';
 import { cur, mapOf, roster, vp } from './helpers.js';
 
@@ -24,4 +24,15 @@ describe('cost (acceptance 7)', () => {
     const run = () => { const t = performance.now(); for (const m of layoutCursors({ cursors: cs, roster: [{ id: 'me', name: 'Me', slot: 0 }, ...many], viewport: vp, selfMember: 'me', now: 0 })) tagLine(m, { hex: '#ffffff' }); return performance.now() - t; };
     run(); expect(Math.min(run(), run(), run())).toBeLessThan(8);
   });
+});
+
+describe('colours per tier and theme (checked on the painted spans)', () => {
+  const marks = layoutCursors({ cursors: mapOf(cur('ada', { line: 1, col: 3, updatedAt: 0, selEndLine: 2, selEndCol: 6 })), roster, viewport: small, selfMember: 'me', now: 0 });
+  for (const mode of ['dark', 'light'] as const) {
+    it(`${mode}: truecolor blends the member colour into the selection; 256 and 16 use reverse and dim; none has no colour at all`, () => {
+      const t = createTheme(mode, 'truecolor'); const tc = paintCursors(marks, t); expect(tc.tags[0]!.line[0]).toMatchObject({ c: t.presence[1], r: true }); expect(tc.selections[0]!.line[0]!.bg).toMatch(/^#[0-9a-f]{6}$/); expect(tc.selections[0]!.line[0]!.bg).not.toBe(t.presence[1]);
+      for (const tier of ['256', '16'] as const) { const p = paintCursors(marks, createTheme(mode, tier)); expect(p.tags[0]!.line[0]).toMatchObject({ c: t.presence[1], r: true }); expect(p.selections[0]!.line[0]).toMatchObject({ r: true, d: true }); expect(p.selections[0]!.line[0]!.bg).toBeUndefined(); }
+      const none = paintCursors(marks, createTheme(mode, 'none')); expect(none.tags[0]!.line[0]!.c).toBeUndefined(); expect(none.tags[0]!.line[0]).toMatchObject({ r: true }); expect(none.selections[0]!.line[0]).toMatchObject({ r: true, d: true });
+    });
+  }
 });
