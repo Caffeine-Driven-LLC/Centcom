@@ -323,6 +323,19 @@ export function queueHead(prs) {
 }
 
 /**
+ * The protected paths as Claude's prompts list them, with the lane-owned exceptions spelled out
+ * (`plan/ (except plan/STATUS.json)`), so Claude does not flag what the pipeline allows.
+ */
+export const protectedList = () =>
+  [
+    ...CONFIG.protectedPaths.map((p) => {
+      const owned = CONFIG.laneOwnedPaths.filter((o) => o.startsWith(p));
+      return owned.length > 0 ? `${p} (except ${owned.join(', ')})` : p;
+    }),
+    ...CONFIG.protectedNames,
+  ].join(', ');
+
+/**
  * Fills `{{KEY}}` placeholders.
  * @param {string} template
  * @param {Record<string, string>} vars
@@ -723,7 +736,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
           FAILED_CHECKS: (step.failed ?? []).map((name) => describeFailure(pr, name)).join('; '),
           FIXES: step.allowFixes === false ? 'not allowed' : 'allowed',
           GATES: CONFIG.gates,
-          PROTECTED: [...CONFIG.protectedPaths, ...CONFIG.protectedNames].join(', '),
+          PROTECTED: protectedList(),
         })
       : '';
     writeOutputs({

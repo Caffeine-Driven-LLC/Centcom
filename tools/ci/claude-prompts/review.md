@@ -16,6 +16,9 @@ install, build, test or run anything. CI runs every check on whatever you push.
    discussed findings; do not raise them again.
 2. Review `gh pr diff {{PR}}` in §11 order: scope, contracts, tests prove acceptance, failure paths
    and limits, security/privacy, logging, docs. Style is automated; skip it.
+   Progress bookkeeping is the pipeline's job, not the lane's: changes to plan/STATUS.json (any
+   lane's entry), README.md's progress block (between `<!-- progress:start -->` and
+   `<!-- progress:end -->`) and docs/progress.svg are never findings, and you never edit them.
 3. Sort every finding into one of two kinds:
    - blocking: a bug, an unmet acceptance criterion, a missing failure-path test, forbidden data
      in logs, a security or privacy gap, work outside the lane's scope, a change to a protected
