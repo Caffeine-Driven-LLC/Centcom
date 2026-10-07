@@ -38,6 +38,8 @@ jobs:
         run: pnpm typecheck
       - name: Tests
         run: pnpm test
+      - name: Contract conformance
+        run: pnpm conformance
       - name: Build the web app
         run: pnpm web:build
       - name: Plan, contracts and contract lock

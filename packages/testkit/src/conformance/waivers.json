@@ -1,0 +1,26 @@
+[
+  {
+    "contract": "CT-PAGE",
+    "reason": "no shared fixtures; cursor handling is tested in the HTTP client lane C051",
+    "issue": "plan/client/C100.md",
+    "expires": "2026-12-01"
+  },
+  {
+    "contract": "CT-AUTH",
+    "reason": "no shared fixtures; the auth flows are tested in lane C052 against the mock",
+    "issue": "plan/client/C100.md",
+    "expires": "2026-12-01"
+  },
+  {
+    "contract": "CT-RESUME",
+    "reason": "no shared fixtures; resume is tested in lane C055 against the relay simulator",
+    "issue": "plan/client/C100.md",
+    "expires": "2026-12-01"
+  },
+  {
+    "contract": "CT-DEEPLINK",
+    "reason": "no shared fixtures; the session link parser lives in the notifications lane C066 (open PR)",
+    "issue": "plan/client/C100.md",
+    "expires": "2026-12-01"
+  }
+]

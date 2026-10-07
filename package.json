@@ -26,7 +26,9 @@
     "docs:gen": "tsx tools/docs/gen-cli-reference.ts",
     "docs:check": "tsx tools/docs/check.ts",
     "docs:dev": "vitepress dev docs/site",
-    "docs:build": "vitepress build docs/site"
+    "docs:build": "vitepress build docs/site",
+    "conformance": "tsx tools/conformance/run.ts",
+    "release-gate": "tsx tools/release-gate/run.ts"
   },
   "devDependencies": {
     "@changesets/cli": "3.0.3",

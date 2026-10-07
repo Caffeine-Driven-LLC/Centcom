@@ -4,7 +4,9 @@
     "apps/*/src",
     "packages/*/src",
     "packages/*/test",
-    "apps/*/test"
+    "apps/*/test",
+    "tools/conformance",
+    "tools/release-gate"
   ],
   "compilerOptions": {
     "paths": {
