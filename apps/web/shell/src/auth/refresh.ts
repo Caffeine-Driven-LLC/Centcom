@@ -4,7 +4,7 @@ import { AuthError } from './errors.js';
 
 export interface AuthDeps {
   fetch: typeof fetch; apiBase: string; now(): number; locks?: { request<T>(name: string, cb: () => Promise<T>): Promise<T> };
-  channel?: { postMessage(m: unknown): void; addEventListener(t: 'message', fn: (e: { data: unknown }) => void): void; close?(): void }; clientId?: string; setTimeout?: (fn: () => void, ms: number) => unknown;
+  channel?: { postMessage(m: unknown): void; addEventListener(t: 'message', fn: (e: { data: unknown }) => void): void; close?(): void }; clientId?: string; setTimeout?: (fn: () => void, ms: number) => unknown; clearTimeout?: (h: unknown) => void;
 }
 export const REFRESH_MARGIN_MS = 60_000; export const LOCK = 'centcom-refresh'; export const CHANNEL = 'centcom-auth';
 export interface TokenReply { access_token: string; expires_in: number }
