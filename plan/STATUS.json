@@ -256,6 +256,18 @@
   "C055": {
    "pct": 0.85,
    "note": "reliable channel: ordered, de-duplicated delivery with hold buffer and gap recovery, outbox with resend/stuck/limits, ack cadence, resume/snapshot/history paths, relay-reset detection, seq store; 17 tests incl. a 1,000-schedule property test; gap: not yet run against the mock backend end to end"
+  },
+  "C064": {
+   "pct": 0.85,
+   "note": "entitlements fetch with ETag, schema check, memory and disk cache, gates for hosted features with reasons and upgrade links, LAN/local never gated; built and tested against the mock; gap: no real billing links exercised"
+  },
+  "C065": {
+   "pct": 0.85,
+   "note": "usage reporter: synchronous record, hosted-only boundary, spool with caps and crash recovery, batches of 500/1 MiB with stable idempotency keys, rate spacing, outcome matrix (2xx/409/422/429/5xx/offline), quota tracker, contract test against the OpenAPI schema; gap: ledger outbox is not yet wired to the reporter in the app"
+  },
+  "C067": {
+   "pct": 0.85,
+   "note": "flags client: non-blocking defaults, background refresh with ETag and clamped ttl, single-flight, disk cache (7 days), type checks, dev-only overrides, auth-triggered refresh; gap: no feature has registered a flag yet"
   }
  },
  "next": [
