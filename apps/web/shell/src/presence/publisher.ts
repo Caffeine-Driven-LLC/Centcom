@@ -1,0 +1,24 @@
+/** Your presence, sent sparingly: `presence.update` at most once a second and only on change, `presence.cursor` at most 10 a second, typing after 400 ms of keys and cleared 5 s after the last one, away after 5 minutes without input. Best effort: a refused send is dropped. */
+export interface Sink { update(p: { status: 'online' | 'away' | 'busy'; activity: 'idle' | 'typing' | 'reviewing' | 'running'; agent_count?: number }): void; cursor(c: Record<string, unknown> | null): void }
+export interface Clock { now(): number; setTimeout(fn: () => void, ms: number): unknown; clearTimeout(h: unknown): void }
+export const UPDATE_GAP = 1000; export const CURSOR_GAP = 100; export const TYPING_DEBOUNCE = 400; export const TYPING_CLEAR = 5000; export const AWAY_AFTER = 300_000;
+export class PresencePublisher {
+  private status: 'online' | 'busy' = 'online'; private away = false; private activity: 'idle' | 'typing' | 'reviewing' | 'running' = 'idle'; private agents?: number; private lastUpdate = -Infinity; private sentKey = ''; private updTimer?: unknown;
+  private typeTimer?: unknown; private clearTimer?: unknown; private awayTimer?: unknown; private lastCursor = -Infinity; private curTimer?: unknown; private pendingCursor?: Record<string, unknown> | null; private curKey = ''; private off = false; sent = { update: 0, cursor: 0 };
+  constructor(private readonly sink: Sink, private readonly c: Clock) { this.armAway(); }
+  private body() { return { status: (this.away && this.status !== 'busy' ? 'away' : this.status) as 'online' | 'away' | 'busy', activity: this.activity, ...(this.agents !== undefined ? { agent_count: this.agents } : {}) }; }
+  private flushUpdate(): void { this.updTimer = undefined; if (this.off) return; const b = this.body(); const k = JSON.stringify(b); if (k === this.sentKey) return; this.sentKey = k; this.lastUpdate = this.c.now(); this.sent.update++; try { this.sink.update(b); } catch { /* best effort */ } }
+  private schedule(): void { if (this.off || this.updTimer !== undefined) return; const wait = this.lastUpdate + UPDATE_GAP - this.c.now(); if (wait <= 0) this.flushUpdate(); else this.updTimer = this.c.setTimeout(() => this.flushUpdate(), wait); }
+  setStatus(s: 'online' | 'busy'): void { this.status = s; this.schedule(); } setAgents(n: number, running: boolean): void { this.agents = n; this.activity = running ? 'running' : this.activity === 'running' ? 'idle' : this.activity; this.schedule(); } setReviewing(on: boolean): void { this.activity = on ? 'reviewing' : 'idle'; this.schedule(); }
+  /** Call on every key and pointer event: it also brings you back from away. */
+  input(isTyping = false): void {
+    if (this.away) { this.away = false; this.schedule(); } this.armAway();
+    if (isTyping) { if (this.typeTimer !== undefined) this.c.clearTimeout(this.typeTimer); this.typeTimer = this.c.setTimeout(() => { this.typeTimer = undefined; if (this.activity !== 'typing') { this.activity = 'typing'; this.schedule(); } }, TYPING_DEBOUNCE); if (this.clearTimer !== undefined) this.c.clearTimeout(this.clearTimer); this.clearTimer = this.c.setTimeout(() => { this.clearTimer = undefined; if (this.activity === 'typing') { this.activity = 'idle'; this.schedule(); } }, TYPING_CLEAR); }
+  }
+  private armAway(): void { if (this.awayTimer !== undefined) this.c.clearTimeout(this.awayTimer); this.awayTimer = this.c.setTimeout(() => { this.awayTimer = undefined; if (!this.away) { this.away = true; this.schedule(); } }, AWAY_AFTER); }
+  /** Your cursor: at most 10 a second, the latest one wins, a repeat is not sent. The path and text go only in the encrypted body the sink builds. */
+  cursor(c: Record<string, unknown> | null): void { if (this.off) return; const k = JSON.stringify(c); if (k === this.curKey) return; this.pendingCursor = c; if (this.curTimer !== undefined) return; const wait = this.lastCursor + CURSOR_GAP - this.c.now(); const go = (): void => { this.curTimer = undefined; if (this.off || this.pendingCursor === undefined) return; const x = this.pendingCursor; this.pendingCursor = undefined; this.curKey = JSON.stringify(x); this.lastCursor = this.c.now(); this.sent.cursor++; try { this.sink.cursor(x); } catch { /* best effort */ } }; if (wait <= 0) go(); else this.curTimer = this.c.setTimeout(go, wait); }
+  dispose(): void { this.off = true; for (const t of [this.updTimer, this.typeTimer, this.clearTimer, this.awayTimer, this.curTimer]) if (t !== undefined) this.c.clearTimeout(t); }
+}
+/** One nudge per person per minute. */
+export class NudgeLimiter { private last = new Map<string, number>(); constructor(private readonly now: () => number = Date.now) {} allow(to: string): boolean { const t = this.now(); const l = this.last.get(to); if (l !== undefined && t - l < 60_000) return false; this.last.set(to, t); return true; } }
