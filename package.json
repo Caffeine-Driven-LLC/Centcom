@@ -32,7 +32,7 @@
     "security:check": "tsx tools/security/run.ts",
     "sbom": "tsx tools/security/sbom-cli.ts",
     "web:shell": "pnpm --filter @centcom/web exec vite --config vite.shell.config.ts",
-    "web:shell:build": "pnpm --filter @centcom/web exec vite build --config vite.shell.config.ts"
+    "web:shell:build": "pnpm --filter @centcom/web split-animations && pnpm --filter @centcom/web exec vite build --config vite.shell.config.ts"
   },
   "devDependencies": {
     "@changesets/cli": "3.0.3",

@@ -11,6 +11,7 @@ export default defineConfig({
       '@centcom/config': r('./packages/config/src/index.ts'),
       '@centcom/protocol': r('./packages/protocol/src/index.ts'),
       '@centcom/net': r('./packages/net/src/index.ts'),
+      '@centcom/mascot-browser': r('./packages/mascot/src/browser.ts'),
       '@centcom/fleet': r('./packages/net/src/fleet/model.ts'),
       '@centcom/states': r('./packages/protocol/src/generated/agent-state.ts'),
       '@centcom/notify': r('./packages/net/src/notify/browser.ts'),

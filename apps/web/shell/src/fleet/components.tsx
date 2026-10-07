@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useReducedMotion } from '../a11y/motion.js';
 import { Banner, Button, Card, Chip, EmptyState, Table } from '../ui/index.js';
+import { Mascot } from '../mascot/Mascot.js';
 import { MAX_ANIMATED, elapsed, middleTruncate, motionPlan, type Card as FleetCard } from './model.js';
 
-/** Where the 36 px mascot goes (the player is lane C086). Until then it is a still slot that records the state and whether it may move. */
-export const MascotThumb = ({ state, paused }: { state: string; paused: boolean }): React.JSX.Element => <span className="cc-mascot" data-mascot-slot data-state={state} data-paused={paused} aria-hidden="true" />;
+/** The 36 px mascot slot: the player (lane C086) runs only for the cards the board lets move; the rest show nothing animated. */
+export const MascotThumb = ({ state, paused }: { state: string; paused: boolean }): React.JSX.Element => <span className="cc-mascot" data-mascot-slot data-state={state} data-paused={paused} aria-hidden="true">{paused ? null : <Mascot state={state} scale={2} />}</span>;
 export interface FleetActions { onOpen?(agentId: string): void; onMerge?(agentId: string, action: 'merge' | 'rebase' | 'open-pr'): void }
 const SLOT_CLASS = ['0', '1', '2', '3', '4'];
 function AgentCard({ c, now, plan, active, refCb, tabIndex, onKey, ...a }: { c: FleetCard; now: number; plan: ReturnType<typeof motionPlan>; active: boolean; refCb(el: HTMLElement | null): void; tabIndex: number; onKey(e: React.KeyboardEvent): void } & FleetActions): React.JSX.Element {

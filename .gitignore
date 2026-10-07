@@ -18,3 +18,4 @@ release-gate-report.json
 release-gate-inputs/
 coverage/
 apps/web/dist-shell
+apps/web/shell/public/mascot
