@@ -21,3 +21,4 @@ export * from './presence/index.js';
 export { ControlClient, ControlStateModel, ControlError, ForbiddenError, InvalidPolicyError, SelfActionError, NotHostError as ControlNotHostError, readServerFrame, SERVER_KINDS, type KickCode, type EndCode, type ControlEvents, type ControlClock, type ControlState, type ServerEvent } from './control/index.js';
 export * from './approvals/index.js';
 export * from './fleet/index.js';
+export * from './offline/index.js';

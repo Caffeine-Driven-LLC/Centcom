@@ -31,13 +31,17 @@ export interface SessionClientDeps {
   http: HttpClient; crypto: CryptoDeps; /** this device's id from login */ deviceId: string; clientInfo: ClientIdent;
   /** time for the session's own timers (key rotation, snapshots, key waits) and message ids */ clock?: RelayClock; /** time for the socket and delivery timers (heartbeat, reconnect, acks); the real clock unless a test needs to drive them */ relayClock?: RelayClock; ids?: IdGenerator; logger?: Logger; relayUrl?: string; allowPlainWs?: boolean; wsFactory?: WsFactory; fetch?: typeof fetch; seqStore?: SeqStore;
 }
-export interface SessionOptions { /** listeners attached before the connection starts, so early states are not missed */ on?: { [K in LifecycleName]?: (...a: LifecycleEvents[K]) => void }; /** host: builds the checkpoint at this position; without it no snapshots are uploaded */ buildSnapshot?(ctx: { seq: number }): Promise<Omit<SnapshotDoc, 'fmt' | 'v' | 'seq'> | undefined>; }
+/** A place to keep frames written while the connection is down (lane C063's durable outbox fits). Drafts are plain; the store must keep them encrypted at rest. */
+export interface OfflineStore { push(draft: OfflineDraft): Promise<void>; /** hand every stored draft, oldest first, to `send`; a draft is removed once `send` succeeds, and a draft `send` refuses for good is dropped */ drain(send: (d: OfflineDraft) => Promise<unknown>): Promise<number> }
+export interface OfflineDraft { kind: string; id: string; p?: Record<string, unknown>; secret?: Record<string, unknown> }
+export const CT_BYTES = '$ctBytes';
+export interface SessionOptions { /** frames written while the link is down go here and are sent, in order and under the then-current key, after the reconnect */ outbox?: OfflineStore; /** listeners attached before the connection starts, so early states are not missed */ on?: { [K in LifecycleName]?: (...a: LifecycleEvents[K]) => void }; /** host: builds the checkpoint at this position; without it no snapshots are uploaded */ buildSnapshot?(ctx: { seq: number }): Promise<Omit<SnapshotDoc, 'fmt' | 'v' | 'seq'> | undefined>; }
 export type LifecycleEvents = {
-  state: [SessionState]; roster: [MemberInfo[], number]; 'key-changed': [{ device: string; member: string; old?: string; new?: string }]; 'waiting-for-key': []; 'protocol-warning': [{ reason: string }]; ended: [{ code: number | string }]; snapshot: [{ doc: SnapshotDoc; seq: number }]; notice: [Record<string, unknown>]; removed: [{ code: string }]; error: [{ code: string; status?: number; retryAfterS?: number }];
+  state: [SessionState]; roster: [MemberInfo[], number]; 'key-changed': [{ device: string; member: string; old?: string; new?: string }]; 'waiting-for-key': []; 'protocol-warning': [{ reason: string }]; ended: [{ code: number | string }]; snapshot: [{ doc: SnapshotDoc; seq: number }]; notice: [Record<string, unknown>]; link: ['online' | 'reconnecting' | 'offline']; removed: [{ code: string }]; error: [{ code: string; status?: number; retryAfterS?: number }];
 };
 export type LifecycleName = keyof LifecycleEvents;
 class Lifecycle extends TypedEmitter<LifecycleEvents> { fire<K extends LifecycleName>(ev: K, ...a: LifecycleEvents[K]): void { this.emit(ev, ...a); } }
-const LIFECYCLE = new Set<string>(['state', 'roster', 'key-changed', 'waiting-for-key', 'protocol-warning', 'ended', 'snapshot', 'notice', 'error', 'removed']);
+const LIFECYCLE = new Set<string>(['state', 'roster', 'key-changed', 'waiting-for-key', 'protocol-warning', 'ended', 'snapshot', 'notice', 'error', 'removed', 'link']);
 export interface SessionHandle {
   readonly id: string; readonly me: MemberInfo; readonly state: SessionState; readonly policy: SessionPolicy;
   roster(): MemberInfo[];
@@ -45,6 +49,10 @@ export interface SessionHandle {
   presenceDropped(): number;
   /** whether the host has silenced us, and until when (it ends by itself at that time) */
   muted(): { muted: boolean; until?: string };
+  /** the state of the socket on its own (`state` also covers keys and the host) */
+  link(): 'online' | 'reconnecting' | 'offline';
+  /** drop the connection and connect again with a fresh ticket (after a long sleep) */
+  reconnect(): void;
   /** the epochs (key ids) this device can read, oldest first */
   heldEpochs(): string[];
   sendEvent(kind: string, body: { p?: EventP | ((info: { ctBytes: number }) => EventP); secret?: EventSecret; /** the frame id (a `msg_` id); a retry with the same id is the same frame */ id?: string }): Promise<{ id: string; seq: number }>;
@@ -74,7 +82,7 @@ class Connection implements SessionHandle {
   private readonly life = new Lifecycle(); private readonly handlers = new Map<string, Set<(e: DecodedEvent) => void>>(); private readonly any = new Set<(e: DecodedEvent) => void>();
   private relay!: RelayClient; private channel!: ReliableChannel; private codec!: FrameCodec; private host?: HostDuties; private guest!: GuestKeys;
   private chain: Promise<void> = Promise.resolve(); private pending: SequencedFrame[] = []; private pendingKid?: string; private keyWaiters: { kid: string; res: () => void; rej: (e: unknown) => void; timer: unknown }[] = [];
-  private recent: DecodedEvent[] = []; private presenceDrops = 0; private mutedUntil?: number; private mutedIso?: string; private removedFired = false; private catchUps: number[] = []; private catchUpWanted = false; private catchingUp = false; private catchUpHead?: number; private unreadable = new Set<string>(); private rotationRequested = false; private lastSeq = 0; private framesSinceSnapshot = 0; private snapTimer?: unknown; private rotateTimer?: unknown; private snapshotting = false; private closed = false; 
+  private linkNow: 'online' | 'reconnecting' | 'offline' = 'online'; private flushing = false; private recent: DecodedEvent[] = []; private presenceDrops = 0; private mutedUntil?: number; private mutedIso?: string; private removedFired = false; private catchUps: number[] = []; private catchUpWanted = false; private catchingUp = false; private catchUpHead?: number; private unreadable = new Set<string>(); private rotationRequested = false; private lastSeq = 0; private framesSinceSnapshot = 0; private snapTimer?: unknown; private rotateTimer?: unknown; private snapshotting = false; private closed = false; 
   private readonly clock: RelayClock; private readonly ids: IdGenerator; private readonly fetchFn: typeof fetch;
 
   constructor(private readonly d: SessionClientDeps, private readonly rest: SessionRest, readonly id: string, role: Role, memberId: string, private readonly ring: KeyRing, private readonly viewOnly: boolean, policy: SessionPolicy, private readonly opts: SessionOptions, private readonly relayUrl: string) {
@@ -86,6 +94,8 @@ class Connection implements SessionHandle {
   roster(): MemberInfo[] { return this.roster_.list(); }
   muted(): { muted: boolean; until?: string } { if (this.mutedUntil !== undefined && this.mutedUntil !== Infinity && this.clock.now() >= this.mutedUntil) { this.mutedUntil = undefined; this.mutedIso = undefined; } return this.mutedUntil === undefined ? { muted: false } : { muted: true, ...(this.mutedIso ? { until: this.mutedIso } : {}) }; }
   heldEpochs(): string[] { return this.ring.kids(); }
+  link(): 'online' | 'reconnecting' | 'offline' { return this.linkNow; }
+  reconnect(): void { this.relay.reconnect(); }
   private setState(s: SessionState): void { if (this.st === s || this.st === 'ended') return; this.st = s; this.life.fire('state', s); if (s === 'waiting_for_key') this.life.fire('waiting-for-key'); }
   private warn(reason: string): void { this.d.logger?.warn('session.protocol_warning', { reason }); this.life.fire('protocol-warning', { reason }); }
 
@@ -98,7 +108,7 @@ class Connection implements SessionHandle {
       getTicket: async () => { const t = await this.rest.joinToken(this.id, ['resume']); return { ticket: t.ticket, url: t.relay_url }; } });
     this.channel = new ReliableChannel({ link: this.relay, sessionId: this.id, seqStore: this.d.seqStore, clock: this.d.relayClock, ids: this.ids, logger: this.d.logger, memberId: () => this.me.id });
     await this.channel.init();
-    this.relay.on('link', (l) => { if (this.st === 'ended') return; if (l === 'reconnecting' || l === 'offline') this.setState('reconnecting'); else this.setState(this.guest.hasKey() ? 'live' : 'waiting_for_key'); });
+    this.relay.on('link', (l) => { this.linkNow = l; this.life.fire('link', l); if (l === 'online') void this.flushOutbox(); if (this.st === 'ended') return; if (l === 'reconnecting' || l === 'offline') this.setState('reconnecting'); else this.setState(this.guest.hasKey() ? 'live' : 'waiting_for_key'); });
     this.relay.on('closed', (c) => { if (!c.willReconnect && !this.closed) { if (c.code === 4403) void this.removed('forbidden'); else if (c.code === 1000 || c.code === 4410 || c.code === 4409) this.finish(c.code); } });
     this.relay.on('protocol_warning', (w) => this.warn(w.reason)); this.relay.on('frame', (f) => { if (f.t === 'presence') this.onPresence(f); }); this.relay.on('notice', (n) => this.life.fire('notice', n));
     this.relay.on('error', (e) => { if (FRAME_REFUSALS.has(e.code)) this.channel.refuseOldest(e); this.life.fire('error', { code: e.code, ...(e.status !== undefined ? { status: e.status } : {}), ...(e.retryAfterS !== undefined ? { retryAfterS: e.retryAfterS } : {}) }); });
@@ -179,11 +189,21 @@ class Connection implements SessionHandle {
   }
   async sendEvent(kind: string, body: { p?: EventP | ((info: { ctBytes: number }) => EventP); secret?: EventSecret; id?: string }): Promise<{ id: string; seq: number }> {
     if (this.st === 'ended') throw new SessionError('ended', 'This session has ended.'); if (!kind.startsWith('presence.') && this.muted().muted) throw new SessionError('muted', 'The host has muted you, so you cannot send this right now.'); const mode = payloadMode(kind); if (mode === 'unknown') throw new TypeError(`unknown event kind ${kind}`);
+    if (this.opts.outbox && this.linkNow !== 'online' && !kind.startsWith('presence.')) return this.bufferOffline(kind, body);
     if (mode !== 'clear') {
       if (this.viewOnly) throw new SessionError('view_only', 'You joined with a view-only link, so you cannot send this.'); if (!this.guest.hasKey()) throw new SessionError('waiting_for_key', 'Waiting for the host to let you in.');
       if (this.pendingKid && !this.ring.get(this.pendingKid)) await this.waitForKey(this.pendingKid);
     }
     return this.sendRaw(kind, body, this.pendingKid && this.ring.get(this.pendingKid) ? this.pendingKid : undefined);
+  }
+  /** The link is down: keep the frame (its id fixed) on disk and send it after the reconnect. A function in `p` is stored as the `$ctBytes` marker by the caller. */
+  private async bufferOffline(kind: string, body: { p?: unknown; secret?: Record<string, unknown>; id?: string }): Promise<{ id: string; seq: number }> {
+    const id = body.id ?? this.ids.next('msg'); if (typeof body.p === 'function') throw new SessionError('too_large', 'Write the size as "$ctBytes" to send this while offline.'); await this.opts.outbox!.push({ kind, id, ...(body.p ? { p: body.p as Record<string, unknown> } : {}), ...(body.secret ? { secret: body.secret } : {}) }); return { id, seq: 0 };
+  }
+  /** After the link is back: send what was kept, in order. Each goes out under the key of the moment (so a rotation in between is honoured) and keeps its id. */
+  private async flushOutbox(): Promise<void> {
+    if (!this.opts.outbox || this.flushing) return; this.flushing = true;
+    try { await this.opts.outbox.drain(async (d) => { if (this.linkNow !== 'online') throw new Error('link_down'); if (!this.guest.hasKey() && payloadMode(d.kind) !== 'clear') throw new Error('no_key'); if (this.pendingKid && !this.ring.get(this.pendingKid)) await this.waitForKey(this.pendingKid); const p = d.p ? Object.fromEntries(Object.entries(d.p).map(([k, v]) => [k, v === CT_BYTES ? CT_BYTES : v])) : undefined; return this.sendRaw(d.kind, { id: d.id, ...(p ? { p } : {}), ...(d.secret ? { secret: d.secret } : {}) }, this.pendingKid && this.ring.get(this.pendingKid) ? this.pendingKid : undefined); }); } catch { this.warn('offline_flush_failed'); } finally { this.flushing = false; }
   }
   on(name: string, fn: (...a: never[]) => void): () => void {
     if (LIFECYCLE.has(name)) return this.life.on(name as LifecycleName, fn as never);
