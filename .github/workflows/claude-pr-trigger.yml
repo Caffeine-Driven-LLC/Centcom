@@ -24,4 +24,6 @@ jobs:
         env:
           EVENT: ${{ github.event.action }}
           NUMBER: ${{ github.event.pull_request.number }}
-        run: echo "PR #$NUMBER $EVENT; claude-pr.yml takes it from here."
+        # A block scalar: in a plain scalar, " #" would start a YAML comment.
+        run: |
+          echo "PR #$NUMBER $EVENT; claude-pr.yml takes it from here."
