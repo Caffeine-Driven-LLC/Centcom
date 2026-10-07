@@ -40,3 +40,4 @@ body { margin: 0; background: var(--bg-base); color: var(--text-primary); font-f
 @media (max-width: 1023px) { .cc-body { grid-template-columns: minmax(0, 1fr); } .cc-rail { display: none; } .cc-rail[data-open="true"] { display: block; position: fixed; top: 48px; bottom: 0; left: 0; width: 240px; z-index: 30; } .cc-railtoggle { display: inline-flex; } }
 @media (max-width: 767px) { .cc-inspector[data-open="true"] { position: fixed; left: 0; right: 0; bottom: 0; max-height: 60vh; overflow: auto; border-left: 0; border-top: 1px solid var(--border-strong); z-index: 30; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; animation-iteration-count: 1 !important; } .cc-skel__line { animation: none; } }
+.cc-block { display: block; } .cc-row { display: flex; gap: 8px; flex-wrap: wrap; }

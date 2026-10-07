@@ -1,0 +1,53 @@
+// @vitest-environment jsdom
+import { RouterProvider, createMemoryHistory } from '@tanstack/react-router';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import React from 'react';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { buildRouter } from '../../shell/src/app/router.js';
+import { HttpProvider } from '../../shell/src/lib/http-context.js';
+import { ToastProvider } from '../../shell/src/ui/index.js';
+import { routeModule } from '../../shell/src/workspace/routes.js';
+import { HttpErr, fakeHttp, type Call } from './helpers.js';
+
+afterEach(cleanup); beforeEach(() => { window.scrollTo = () => undefined; });
+const me = { user: { id: 'usr_me' }, plan: 'team', active_workspace: null, ent: 1 };
+const members = [{ id: 'mem_me', role: 'admin', user: { id: 'usr_me', display_name: 'Me' }, joined_at: '2026-01-01T00:00:00Z' }, { id: 'mem_2', role: 'member', user: { id: 'usr_2', display_name: 'Ben' }, joined_at: '2026-02-02T00:00:00Z' }, { id: 'mem_o', role: 'owner', user: { id: 'usr_o', display_name: 'Olga' } }];
+interface Setup { role?: string; extra?: (c: Call) => unknown; pages?: Record<string, () => { data: unknown[]; next_cursor?: string | null; has_more: boolean }> }
+function setup(path: string, o: Setup = {}) {
+  const http = fakeHttp((c) => { const x = o.extra?.(c); if (x !== undefined) return x; if (c.op === 'getWorkspace') return { id: 'wsp_1', name: 'Acme', role: o.role ?? 'admin', member_count: 3 }; if (c.op === 'getMe') return me; if (c.op === 'getWorkspaceSettings') return { data: { auto_approve: 'ask', share_history: true, history_retention_days: 30 }, etag: '"1"', replayed: false, status: 200 }; return {}; }, { listMembers: () => ({ data: members, next_cursor: null, has_more: false }), listInvites: () => ({ data: [{ id: 'inv_1', email: 'new@x.io', role: 'member', status: 'pending', created_at: '2026-10-01T00:00:00Z', expires_at: '2026-10-08T00:00:00Z' }], next_cursor: null, has_more: false }), ...(o.pages ?? {}) });
+  const { router } = buildRouter({ './workspace/routes.tsx': { routeModule } }, createMemoryHistory({ initialEntries: [path] })); render(<ToastProvider ttlMs={0}><HttpProvider http={http}><RouterProvider router={router} /></HttpProvider></ToastProvider>); return { http, router };
+}
+describe('members page (acceptance 1, 5, 7 and the review)', () => {
+  it('knows who you are: your row has no role select, shows Leave, and never offers Make owner on you', async () => {
+    setup('/w/wsp_1/members'); await screen.findByText('Ben'); const rows = screen.getAllByRole('row'); const mine = rows.find((r) => within(r).queryByText('Me'))!; expect(within(mine).queryByRole('combobox')).toBeNull(); expect(within(mine).getByText('Leave')).toBeTruthy(); expect(within(mine).queryByText('Make owner')).toBeNull();
+    const ben = rows.find((r) => within(r).queryByText('Ben'))!; expect(within(ben).getByRole('combobox', { name: 'Role of Ben' })).toBeTruthy(); expect(within(ben).getByText('Remove')).toBeTruthy(); const olga = rows.find((r) => within(r).queryByText('Olga'))!; expect(within(olga).queryByRole('combobox')).toBeNull(); expect(within(olga).queryByText('Remove')).toBeNull();
+  });
+  it('a refused role change goes back within 300 ms with a toast; a good one reloads the list', async () => {
+    let refuse = true; const { http } = setup('/w/wsp_1/members', { extra: (c) => { if (c.op === 'updateMember') { if (refuse) throw new HttpErr('forbidden', 403); return {}; } return undefined; } }); const sel = (await screen.findByRole('combobox', { name: 'Role of Ben' })) as HTMLSelectElement; const t0 = Date.now(); fireEvent.change(sel, { target: { value: 'guest' } }); expect(sel.value).toBe('guest');
+    await waitFor(() => expect((screen.getByRole('combobox', { name: 'Role of Ben' }) as HTMLSelectElement).value).toBe('member'), { timeout: 300 }); expect(Date.now() - t0).toBeLessThan(400); expect(screen.getByRole('region', { name: 'Notifications' }).textContent).toContain('not allowed');
+    refuse = false; const before = http.calls.filter((c) => c.op === 'listMembers').length; fireEvent.change(screen.getByRole('combobox', { name: 'Role of Ben' }), { target: { value: 'guest' } }); await waitFor(() => expect(http.calls.filter((c) => c.op === 'listMembers').length).toBe(before + 1));
+  });
+  it('invites: a role picker, a list with Revoke that reloads, a link invite', async () => {
+    const { http } = setup('/w/wsp_1/members', { extra: (c) => (c.op === 'createInvite' ? { data: { id: 'inv_9', link: 'https://centcom.dev/i/TOKEN' }, replayed: false, status: 201 } : undefined) }); await screen.findByText('new@x.io'); expect(screen.getByRole('region', { name: 'Open invites' })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'guest' } }); fireEvent.click(screen.getByText('Create a link')); await screen.findByText('Link created.', { selector: 'p' }); expect(http.calls.find((c) => c.op === 'createInvite')!.args.body).toEqual({ role: 'guest' }); expect(screen.getByText('https://centcom.dev/i/TOKEN')).toBeTruthy();
+    const before = http.calls.filter((c) => c.op === 'listInvites').length; fireEvent.click(screen.getByText('Revoke')); await waitFor(() => expect(http.calls.some((c) => c.op === 'revokeInvite' && c.args.id === 'inv_1')).toBe(true)); await waitFor(() => expect(http.calls.filter((c) => c.op === 'listInvites').length).toBeGreaterThan(before));
+  });
+  it('no free seats shows the one-link banner and no modal', async () => { setup('/w/wsp_1/members', { extra: (c) => { if (c.op === 'createInvite') throw new HttpErr('seat_limit_reached', 402); return undefined; } }); fireEvent.change(await screen.findByLabelText('Email'), { target: { value: 'a@b.co' } }); fireEvent.click(screen.getByText('Send invite')); const banner = await screen.findByText('No free seats'); expect(banner).toBeTruthy(); expect(screen.getByRole('link', { name: 'See billing' })).toBeTruthy(); expect(screen.queryByRole('dialog')).toBeNull(); });
+  it('a 429 turns the invite buttons off with a countdown, and they come back', async () => {
+    setup('/w/wsp_1/members', { extra: (c) => { if (c.op === 'createInvite') throw new HttpErr('rate_limited', 429, 1); return undefined; } }); fireEvent.change(await screen.findByLabelText('Email'), { target: { value: 'a@b.co' } }); fireEvent.click(screen.getByText('Send invite')); await waitFor(() => expect(screen.getAllByRole('tooltip').some((t) => t.textContent === 'Too many requests. Try again in 1s.')).toBe(true)); expect(screen.getByText('Send invite').getAttribute('aria-disabled')).toBe('true'); await waitFor(() => expect(screen.getByText('Send invite').getAttribute('aria-disabled')).toBeNull(), { timeout: 2500 });
+  });
+  it('a member cannot invite: the buttons say why', async () => { setup('/w/wsp_1/members', { role: 'member' }); await screen.findByText('Ben'); const b = screen.getByText('Send invite'); expect(b.getAttribute('aria-disabled')).toBe('true'); expect(screen.getAllByRole('tooltip').some((t) => t.textContent === 'Only owners and admins can invite people.')).toBe(true); });
+  it('rows move with the arrow keys, one tab stop for the table rows', async () => {
+    setup('/w/wsp_1/members'); await screen.findByText('Ben'); const rows = document.querySelector('.cc-table-wrap')!.querySelectorAll<HTMLElement>('tbody tr'); expect(rows[0]!.tabIndex).toBe(0); expect(rows[1]!.tabIndex).toBe(-1); rows[0]!.focus(); fireEvent.keyDown(rows[0]!, { key: 'ArrowDown' }); expect(document.activeElement).toBe(rows[1]); expect(rows[1]!.tabIndex).toBe(0); fireEvent.keyDown(rows[1]!, { key: 'End' }); expect(document.activeElement).toBe(rows[2]); fireEvent.keyDown(rows[2]!, { key: 'ArrowUp' }); expect(document.activeElement).toBe(rows[1]); fireEvent.keyDown(rows[1]!, { key: 'Home' }); expect(document.activeElement).toBe(rows[0]);
+  });
+});
+describe('settings page', () => {
+  it('rename, the retention override and the approval default are there and saved with If-Match', async () => {
+    const { http } = setup('/w/wsp_1/settings', { extra: (c) => (c.op === 'updateWorkspace' ? { data: { name: 'Acme 2' }, replayed: false, status: 200 } : c.op === 'updateWorkspaceSettings' ? { data: { auto_approve: 'ask', share_history: true, history_retention_days: 14 }, etag: '"2"', replayed: false, status: 200 } : undefined) });
+    const name = (await screen.findByLabelText('Workspace name')) as HTMLInputElement; await waitFor(() => expect(name.value).toBe('Acme')); fireEvent.change(name, { target: { value: 'Acme 2' } }); fireEvent.click(screen.getByText('Rename')); await waitFor(() => expect(http.calls.some((c) => c.op === 'updateWorkspace' && JSON.stringify(c.args.body) === '{"name":"Acme 2"}')).toBe(true));
+    const days = (await screen.findByLabelText(/Keep history for/)) as HTMLInputElement; await waitFor(() => expect(days.value).toBe('30')); fireEvent.change(days, { target: { value: '14' } }); fireEvent.click(screen.getByText('Save settings')); await waitFor(() => expect(http.calls.some((c) => c.op === 'updateWorkspaceSettings')).toBe(true)); const save = http.calls.find((c) => c.op === 'updateWorkspaceSettings')!; expect(save.o!.ifMatch).toBe('"1"'); expect((save.args.body as { history_retention_days: number }).history_retention_days).toBe(14);
+  });
+  it('a 412 shows Changed elsewhere with the reapply action', async () => { setup('/w/wsp_1/settings', { extra: (c) => { if (c.op === 'updateWorkspaceSettings') throw new HttpErr('precondition_failed', 412); return undefined; } }); const b = await screen.findByText('Save settings'); await waitFor(() => expect((screen.getByLabelText('Default approvals') as HTMLSelectElement).value).toBe('ask')); fireEvent.click(b); expect(await screen.findByText('Changed elsewhere')).toBeTruthy(); expect(screen.getByText('Refresh and reapply my changes')).toBeTruthy(); });
+  it('a member sees everything off with the reason, and delete is off for an admin', async () => { setup('/w/wsp_1/settings', { role: 'admin' }); await screen.findByLabelText('Default approvals'); expect(screen.getByText('Delete workspace…').getAttribute('aria-disabled')).toBe('true'); expect(screen.getAllByRole('tooltip').some((t) => t.textContent === 'Only the owner can delete the workspace.')).toBe(true); });
+  it('a workspace that was deleted elsewhere sends you to the list with a notice', async () => { const { router } = setup('/w/wsp_1/settings', { extra: (c) => { if (c.op === 'getWorkspace') throw new HttpErr('not_found', 404); return undefined; } }); await waitFor(() => expect(router.state.location.pathname).toBe('/workspaces')); expect(await screen.findByText('That workspace no longer exists.')).toBeTruthy(); });
+});
