@@ -1,0 +1,119 @@
+{
+ "schema_version": 1,
+ "machine": {
+  "cpu": "Intel(R) Core(TM) Ultra 7 355",
+  "cores": 8,
+  "node": "v22.23.3"
+ },
+ "calibration_ms": 123.24079600000002,
+ "results": [
+  {
+   "id": "cli.version.warm",
+   "unit": "ms",
+   "p50": 419.73527173675484,
+   "p95": 424.5546778724674,
+   "max": 424.51484800000026,
+   "cv": 0.015199424619141007,
+   "budget": 150,
+   "gated": false,
+   "status": "fail",
+   "baseline": 422.5833580000001
+  },
+  {
+   "id": "transcript.scroll.frame",
+   "unit": "ms",
+   "p50": 0.1642277071288693,
+   "p95": 0.2817000278708448,
+   "max": 1.504419900000039,
+   "cv": 0.05840072978881598,
+   "budget": 16,
+   "gated": true,
+   "status": "pass",
+   "baseline": 0.1656235999999808
+  },
+  {
+   "id": "transcript.layout.10k",
+   "unit": "ms",
+   "p50": 48.618198147792505,
+   "p95": 60.550760608879095,
+   "max": 60.54507999999987,
+   "cv": 0.10777107134324403,
+   "budget": 1500,
+   "gated": true,
+   "status": "pass",
+   "baseline": 47.73720400000002
+  },
+  {
+   "id": "mascot.redraw",
+   "unit": "ms",
+   "p50": 0.01386890111995704,
+   "p95": 0.02567175841266427,
+   "max": 0.10643314999999802,
+   "cv": 0.15301890308732238,
+   "budget": 2,
+   "gated": true,
+   "status": "pass",
+   "baseline": 0.01733240000000933
+  },
+  {
+   "id": "envelope.parse",
+   "unit": "ms",
+   "p50": 0.0003741551016048431,
+   "p95": 0.0004129387401169055,
+   "max": 0.000739650000000438,
+   "cv": 0.07944927492674624,
+   "budget": 0.5,
+   "gated": true,
+   "status": "pass",
+   "baseline": 0.0003378199999997378
+  },
+  {
+   "id": "crypto.encrypt_sign.4k",
+   "unit": "ms",
+   "p50": 0.14522302419222655,
+   "p95": 0.18010719687347412,
+   "max": 0.7341194000000086,
+   "cv": 0.0654132078383874,
+   "budget": 1,
+   "gated": true,
+   "status": "pass",
+   "baseline": 0.14204769999996641
+  },
+  {
+   "id": "crypto.encrypt_sign.192k",
+   "unit": "ms",
+   "p50": 2.4901376138753517,
+   "p95": 3.4381375511043037,
+   "max": 3.7526975000000675,
+   "cv": 0.030179958804966513,
+   "budget": 8,
+   "gated": true,
+   "status": "pass",
+   "baseline": 2.370732999999973
+  },
+  {
+   "id": "crypto.verify_decrypt.4k",
+   "unit": "ms",
+   "p50": 0.13098378832908944,
+   "p95": 0.1381793633866436,
+   "max": 0.3189416000000165,
+   "cv": 0.013595653811704045,
+   "budget": 1,
+   "gated": true,
+   "status": "pass",
+   "baseline": 0.12973360000000866
+  },
+  {
+   "id": "memory.transcript.10k",
+   "unit": "MB",
+   "p50": 301.23828125,
+   "p95": 301.23828125,
+   "max": 301.23828125,
+   "cv": 0,
+   "budget": 300,
+   "gated": false,
+   "status": "fail",
+   "baseline": 302.58984375
+  }
+ ]
+}

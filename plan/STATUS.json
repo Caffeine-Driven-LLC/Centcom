@@ -284,6 +284,10 @@
   "C098": {
    "pct": 0.6,
    "note": "bench harness (calibration, stats, budgets, baseline compare with normalisation, noise handling, results schema, pnpm bench/bench:compare, baseline-commit check, nightly workflow) with 9 metrics: crypto, envelope, mascot, transcript scroll and layout, version, memory; self-test of the gate passes; gaps: first-prompt, keypress-to-paint, diff, resume and reducer rates, leak check not measured yet; version/memory not gating until the packaged CLI"
+  },
+  "C096": {
+   "pct": 0.6,
+   "note": "one command list drives centcom --help (80 columns), centcom help [topic], per-command --help, the CLI reference pages and the man pages (docs:gen, docs:check fails on drift); docs site pages written (guide, privacy page from the crypto contract, env and exit codes); link/anchor, flag and env-var checks; gaps: VitePress build/Lighthouse and the link checker for external links are not set up (VitePress is not installed), no spell check, install-page command test, /help text source for the TUI"
   }
  },
  "next": [

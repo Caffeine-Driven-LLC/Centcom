@@ -1,0 +1,38 @@
+/** The one list of commands and flags. The reference pages, the man pages and `centcom help` are all made from it, so they cannot disagree. */
+export interface Flag { flag: string; arg?: string; description: string }
+export interface CommandMeta { name: string; summary: string; usage: string; description: string; flags: Flag[]; examples?: string[] }
+
+export const COMMANDS: CommandMeta[] = [
+  { name: 'centcom', summary: 'the terminal app and print mode', usage: 'centcom [options] | centcom -p "task"', description: 'Starts the terminal app in the current folder, or with -p runs one task and prints the answer. Centcom drives your own Claude Code or Codex; it never sees your login.',
+    flags: [
+      { flag: '-p, --print', arg: '[task]', description: 'run once, print the answer and exit (no screen); piped input is added to the prompt' },
+      { flag: '--output-format', arg: '<text|json|stream-json>', description: 'what -p prints (default text)' },
+      { flag: '--engine', arg: '<claude-code|codex|demo>', description: 'choose the agent engine (default: claude-code if installed)' },
+      { flag: '--demo', description: 'scripted demo agent (no login, no model)' },
+      { flag: '--demo-team', description: 'with --demo: also show two pretend teammates' },
+      { flag: '-c, --continue', description: 'continue the most recent conversation in this folder' },
+      { flag: '--resume', arg: '<id>', description: 'continue a specific saved conversation' },
+      { flag: '--no-save', description: 'do not save this conversation or your prompt history' },
+      { flag: '--no-checkpoints', description: 'do not snapshot the folder before each prompt' },
+      { flag: '--model', arg: '<name>', description: 'model to use (same ids as /model)' },
+      { flag: '--mode', arg: '<default|plan|acceptEdits|bypassPermissions>', description: 'start in a permission mode' },
+      { flag: '--dangerously-skip-permissions', description: 'never ask: run commands and edit files freely (alias: --yolo)' },
+      { flag: '--mascot', arg: '<large|small|off>', description: 'Cento size (default: auto from terminal height)' },
+      { flag: '--cento-color', arg: '<violet|red|yellow|green|brown>', description: "Cento's color" },
+      { flag: '--theme', arg: '<dark|light>', description: 'Graphite (default) or Paper (for light terminals)' },
+      { flag: '--colors', arg: '<truecolor|256|16|never>', description: 'force a colour tier (NO_COLOR is honoured)' },
+      { flag: '--debug', description: 'write detailed logs to ~/.centcom/logs/centcom.log' },
+      { flag: '--no-motion', description: 'turn animation off (also CENTCOM_REDUCED_MOTION=1; the older CENTCOM_REDUCE_MOTION works too)' },
+      { flag: '-v, --version', description: 'print the version' },
+      { flag: '-h, --help', description: 'print this help' },
+    ], examples: ['centcom', 'cat error.log | centcom -p "what went wrong?"'] },
+  { name: 'init', summary: 'set this project up', usage: 'centcom init [--yes] [--force] [--dry-run]', description: 'Writes the project config, the memory file and a git exclude. Safe to run again.', flags: [{ flag: '--yes', description: 'accept the defaults without asking' }, { flag: '--force', description: 'overwrite what is there' }, { flag: '--dry-run', description: 'show what would change and change nothing' }] },
+  { name: 'keys', summary: 'list every shortcut', usage: 'centcom keys [--json]', description: 'Lists every keyboard action and its keys; change them in keybindings.json.', flags: [{ flag: '--json', description: 'machine-readable output' }] },
+  { name: 'memory', summary: 'edit CLAUDE.md and AGENTS.md', usage: 'centcom memory show|add|edit|status|sync', description: 'Shows and edits the memory files the agents read. A line starting with "# " in the app adds a note.', flags: [] },
+  { name: 'mcp', summary: 'manage MCP servers', usage: 'centcom mcp list|add|remove|status|test', description: 'Manages MCP servers for Claude Code and Codex.', flags: [] },
+  { name: 'hooks', summary: 'manage Claude Code hooks', usage: 'centcom hooks list|add|remove|validate|templates', description: 'Edits the hook settings; Claude Code runs the hooks, Centcom only edits them.', flags: [] },
+  { name: 'provider', summary: 'check, sign in or out of the agents', usage: 'centcom provider status|login|logout|doctor', description: 'Checks Claude Code and Codex and hands over to their own sign-in; Centcom never reads their credentials.', flags: [] },
+  { name: 'telemetry', summary: 'anonymous usage counts', usage: 'centcom telemetry status|on|off|reset', description: 'Anonymous counts of which commands run. Off unless you turn it on; DO_NOT_TRACK=1 and CENTCOM_TELEMETRY=off always win.', flags: [] },
+  { name: 'help', summary: 'help on a command or topic', usage: 'centcom help [topic]', description: 'Prints help for a command or a topic (env, privacy, exit-codes).', flags: [] },
+];
+export const find = (name: string): CommandMeta | undefined => COMMANDS.find((c) => c.name === name);

@@ -25,6 +25,7 @@ import { runLanCli } from './commands/lan/scan.js';
 import { CrashStore, installCrashHandlers, runCrash } from './crash/index.js';
 import { realDoctorContext, runDoctor } from './doctor/index.js';
 import { CONTRACT_VERSION } from '@centcom/protocol';
+import { find as findCommand, helpFor, renderHelp, topHelp } from './help/index.js';
 import { makeTelemetry, runTelemetry } from './commands/telemetry.js';
 import { defaultDeps, loadConfig } from '@centcom/config';
 import { runMcpCli } from './commands/mcp/cli.js';
@@ -79,6 +80,7 @@ Options
   -v, --version   -h, --help
 
 Centcom drives your own Claude Code; it never sees your login.`;
+const HELP = topHelp(VERSION);
 
 function arg(name: string): string | undefined { const i = process.argv.indexOf(name); return i >= 0 ? process.argv[i + 1] : undefined; }
 const has = (n: string) => process.argv.includes(n);
@@ -108,6 +110,10 @@ async function pickEngine(preferred: 'claude-code' | 'codex' = 'claude-code'): P
 }
 
 async function main() {
+  // `centcom help [topic]` and `centcom <command> --help` come from the same list as the docs and the man pages
+  const helpOpts = { width: Math.min(80, process.stdout.columns ?? 80), colour: !!process.stdout.isTTY && !process.env.NO_COLOR };
+  if (process.argv[2] === 'help') { const r = helpFor(process.argv[3], helpOpts); (r.code ? console.error : console.log)(r.text); process.exit(r.code); }
+  if ((has('--help') || has('-h')) && process.argv[2] && findCommand(process.argv[2]) && process.argv[2] !== 'centcom') { console.log(renderHelp(findCommand(process.argv[2])!, helpOpts)); process.exit(0); }
   if (has('-h') || has('--help')) { console.log(HELP); return; }
   if (has('-v') || has('--version')) { console.log(VERSION); return; }
   if (process.argv[2] === 'telemetry') process.exit(await runTelemetry(process.argv.slice(3), { out: (l) => console.log(l), err: (l) => console.error(l), version: VERSION }));

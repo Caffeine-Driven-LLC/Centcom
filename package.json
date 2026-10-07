@@ -22,7 +22,11 @@
     "release:meta": "node tools/release/build-meta.mjs",
     "dev:mock": "tsx tools/dev/mock.mjs",
     "bench": "tsx tools/bench/run.ts",
-    "bench:compare": "tsx tools/bench/compare-cli.ts"
+    "bench:compare": "tsx tools/bench/compare-cli.ts",
+    "docs:gen": "tsx tools/docs/gen-cli-reference.ts",
+    "docs:check": "tsx tools/docs/check.ts",
+    "docs:dev": "vitepress dev docs/site",
+    "docs:build": "vitepress build docs/site"
   },
   "devDependencies": {
     "@changesets/cli": "3.0.3",

@@ -30,6 +30,8 @@ jobs:
         run: node tools/skills/build-manifest.mjs --check
       - name: HTTP operation table matches openapi.yaml
         run: pnpm --filter @centcom/net gen:http --check
+      - name: Docs: generated pages, links, flags and variables
+        run: pnpm docs:check
       - name: Agent states doc is up to date
         run: pnpm exec tsx tools/docs/states-doc.ts --check
       - name: Typecheck
