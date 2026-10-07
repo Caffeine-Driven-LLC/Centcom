@@ -41,6 +41,8 @@ export type AgentEventMap = {
   /** Saving the conversation log failed (disk full, no permission). The session goes on without saving. */
   'session.persist_failed': { session_id: string; code: string };
   /** The reported cost of a session passed 80 % (warn) or 100 % (error) of `budget.sessionUsd`. Warns only; nothing is stopped. */
+  /** An agent's model changed (applied at a turn boundary). */
+  'model.changed': { agent_id: string; from: string | null; to: string; reason: 'user' | 'config' };
   'cost.alert': { level: 'warn' | 'error'; pct: number; session_id: string };
   /** Something long-running that a progress bar can follow (`total` 0 or missing with no value: unknown). */
   'progress': { id: string; value: number; total?: number; label: string };

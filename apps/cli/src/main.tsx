@@ -5,6 +5,7 @@ import { render } from 'ink';
 import { detectColorTier } from '@centcom/theme';
 import { ClaudeCodeEngine, CodexEngine, DemoEngine, detectClaude, detectCodex, type AgentEngine, type PermissionMode } from '@centcom/agent';
 import { App, AppController, ClientConfig, FirstRun, SessionStore, buildRuntime, initialSettings, isFirstRun, markFirstRunDone, settingsFromConfig } from '@centcom/tui';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join as pathJoin, resolve as pathResolve } from 'node:path';
 import { homedir } from 'node:os';
 import { stateDir } from '@centcom/config';
@@ -157,6 +158,7 @@ async function main() {
     engine, demo, cwd: process.cwd(), branch, version: VERSION, permissionMode: mode, dangerous: dangerous || mode === 'bypassPermissions', ghosts: has('--demo-team'),
     logger, settings, ...cc.options({ ...initialSettings(), ...settings }, { saveHistory: !has('--no-save') }),
     sessions: sessionStore,
+    modelCache: { read: async (f) => { try { return await readFile(pathJoin(stateDir(defaultDeps()), f), 'utf8'); } catch { return undefined; } }, write: async (f, t) => { const d = stateDir(defaultDeps()); await mkdir(d, { recursive: true, mode: 0o700 }); await writeFile(pathJoin(d, f), t, { mode: 0o600 }); } },
     resume: resumeId,
     onExit: (code) => { if (code) process.exitCode = code; instance?.unmount(); },
     onMemoryAdd: async (text) => { // a line starting with "# " is a note for this tool's memory file (CLAUDE.md or AGENTS.md), shown as a diff and confirmed

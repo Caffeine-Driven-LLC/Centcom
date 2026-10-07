@@ -90,4 +90,8 @@ export interface AgentEngine {
   readonly label: string;
   capabilities(): ReadonlySet<Capability>;
   start(o: EngineStartOptions): Promise<EngineSession>;
+  /** Models the engine reports through its own documented commands; only with capability `models.list`. */
+  listModels?(): Promise<{ id: string; label?: string }[]>;
+  /** The engine CLI's version, when known (a changed version invalidates cached model lists). */
+  version?(): string | undefined;
 }

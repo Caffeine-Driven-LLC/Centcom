@@ -4,7 +4,7 @@
  * The React tree only reads the store and calls the controller's methods.
  */
 import { CLAUDE_MODELS, createAgentBus, createCheckpointManager, createContextView, modelLabel, newId, nodeGit } from '@centcom/agent';
-import { createInterruptController, usageTable, type InterruptController } from '@centcom/agent';
+import { createInterruptController, createModelRegistry, usageTable, type InterruptController, type ModelRegistry } from '@centcom/agent';
 import type { AgentBus, AgentId, FleetManager, FleetNode, Ledger, Checkpoint, CheckpointManager, ContextConfig, ContextView, EngineId, EngineStartOptions, GitRunner, PermissionEngine, PolicyMode, RewindMode } from '@centcom/agent';
 import type { PendingApproval as PolicyPending } from '@centcom/agent';
 import type { Logger } from '@centcom/net';
@@ -55,6 +55,7 @@ export interface ControllerOptions {
   observers?: ((agentId: string, ev: NormalisedEvent) => void)[];
   /** Usage as the engines reported it (lane C029): `/usage`, budget warnings, the informational outbox. Its cost alerts arrive on `ledgerBus`. */
   ledger?: Ledger; ledgerBus?: AgentBus;
+  /** Where the cached model lists live (small file; none = not cached). */ modelCache?: { read(p: string): Promise<string | undefined>; write(p: string, t: string): Promise<void> };
 }
 const FLEET_COLORS: CentoColor[] = ['green', 'yellow', 'red', 'brown', 'violet'];
 const FLEET_STATE: Record<string, string> = { queued: 'queued', starting: 'prompt-received', running: 'thinking', waiting: 'idle', done: 'success', failed: 'error', canceled: 'idle' };
@@ -97,6 +98,12 @@ export class AppController {
     this.ctxView = createContextView({ bus: this.bus, clock, config: o.context, engines: { capabilities: () => o.engine.capabilities(), status: () => (this.state.busy ? 'running' : this.session ? 'waiting' : 'starting'), send: async (_id, prompt) => { await this.session?.send(prompt); } } });
     this.bus.on('agent:context_alert', (a) => { if (a.level === 'warn') this.notice('warn', `The context is ${Math.round(a.pct)}% full.`, 'Type /compact to have the agent compact it.'); else if (a.level === 'full') { this.notice('warn', 'The context is almost full.', 'Type /compact now, or start fresh with /new.'); this.driver.setState('context-full'); } });
     if (o.fleet) this.watchFleet(o.fleet);
+    this.models = createModelRegistry({
+      config: () => ({ model: this.state.settings.model || undefined }), bus: { emit: (_k, p) => this.o.logger?.debug('model.changed', { reason: p.reason }) },
+      engines: { get: (id) => (id === this.o.engine.id ? this.o.engine : undefined) }, cachePath: 'models-cache.json', clock: { now: () => Date.now() },
+      fs: { read: async (p) => this.o.modelCache?.read(p), write: async (p, t) => this.o.modelCache?.write(p, t) },
+      notify: (level, text, detail) => { this.toast(level, text); if (detail) this.notice(level, text, detail); },
+    });
     o.ledgerBus?.on('cost.alert', (a) => { if (a.session_id !== this.state.sessionId) return; this.notice(a.level === 'error' ? 'warn' : 'info', a.level === 'error' ? `This conversation has reached its cost budget (${a.pct}% of it, as the tools reported it).` : `This conversation is at ${a.pct}% of its cost budget (as the tools reported it).`, 'Budgets only warn: nothing was stopped. Change it with budget.session_usd in your settings.'); this.driver.setState('cost-alert'); });
     if (o.checkpoints) this.cp = createCheckpointManager({ worktree: o.cwd, agentId: this.me, git: o.checkpoints.git ?? nodeGit, clock,
       store: { markRewind: async (seq) => this.rewindTranscript(seq), summarize: async (seq, max) => this.summaryUpTo(seq, max) },
@@ -143,7 +150,14 @@ export class AppController {
   /** A conversation saved with the other engine cannot be resumed by this one (its session id means nothing here): this one starts fresh with a summary of what was said. */
   private carryOver(meta: SessionMeta): string { const other = meta.engine === 'codex' ? 'Codex' : meta.engine === 'claude-code' ? 'Claude Code' : meta.engine; this.notice('info', `This conversation was with ${other}. ${this.o.engine.label} continues it from a summary of what was said.`); const n = this.state.items.filter((i) => i.kind === 'user').length; return `This conversation started with another coding agent. Summary of it so far:\n\n${this.summaryUpTo(n + 1, 8 * 1024)}`; }
   /** Make `s` the running engine session (after a start, or a conversation rewind). */
-  private adopt(s: EngineSession) { this.session = s; void this.consume(s); }
+  private adopt(s: EngineSession) {
+    this.session = s;
+    this.models.attach({ agentId: this.me, engine: this.o.engine.id, setModel: (m) => s.setModel?.(m) });
+    const m = this.state.settings.model; if (m) s.setModel?.(m);
+    void this.consume(s);
+  }
+  /** Which model the agent uses; a change made during a turn applies when the turn ends (lane C028). */
+  readonly models: ModelRegistry;
 
   /* ------------------------------------------------------------------ saved conversations */
   private persistTimer?: NodeJS.Timeout; private lastItems?: Item[]; private lastToken?: string; private lastSid = '';
@@ -213,7 +227,8 @@ export class AppController {
     this.logEvent(ev);
     try { this.ctxView?.onEvent(ev); } catch { /* the meter never breaks the transcript */ }
     for (const ob of this.o.observers ?? []) { try { ob(this.me, ev); } catch { /* an observer never breaks the transcript */ } }
-    this.account(this.me, ev, this.o.engine.id);
+    this.account(this.me, ev, this.o.engine.id); this.models.onEvent(this.me, ev as never);
+    if (ev.type === 'error' && /model/i.test(ev.tool_message)) this.models.onRejected(this.me, ev.tool_message);
     this.o.sessions?.append(this.state.sessionId, this.o.cwd, ev); // the conversation log (lane C026)
     if (ev.type === 'turn.done') void this.cp?.endTurn().catch(() => undefined);
     const me = this.me;
@@ -385,7 +400,7 @@ export class AppController {
 
   /** Switch model for the next turn (the running turn keeps its model). */
   setModel(id: string) {
-    this.setSettings({ model: id }); this.session?.setModel?.(id);
+    this.setSettings({ model: id }); void this.models.switchTo(this.me, id, 'user').then((c) => { if (c.note?.startsWith('Already')) this.toast('info', c.note); });
     this.updateAgent(this.me, () => ({ model: id || 'default' }));
     this.toast('ok', `Model: ${id ? modelLabel(id) : 'Default'}${this.state.busy ? ' (from the next message)' : ''}`);
   }

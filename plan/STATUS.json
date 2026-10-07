@@ -58,8 +58,8 @@
    "note": "append-only redacted session log with header v2, flush cadence, segments, line cap, lock, index rebuild, retention, engine session map, resumeSession with fresh-with-summary fallback, toSnapshotEvents, app and CLI wired (-c, --resume [id] with picker), old saves migrated; gaps: session.retentionDays/persist config keys, pty-level CLI test"
   },
   "C028": {
-   "pct": 0.4,
-   "note": "model picker with a fixed Claude list; card gaps: model registry from the engines, precedence, rollback, cache"
+   "pct": 0.75,
+   "note": "model registry (precedence, engine-reported list + aliases, 24 h cache keyed by engine version, turn-boundary switch with one model.changed, rejection keeps previous model), wired into /model and setModel; gaps: /model no-arg still opens the fixed picker, engines do not yet read models.aliases/--model through the registry at spawn"
   },
   "C029": {
    "pct": 0.9,
