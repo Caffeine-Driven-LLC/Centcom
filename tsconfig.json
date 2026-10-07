@@ -35,6 +35,9 @@
       ],
       "@centcom/notify": [
         "./packages/net/src/notify/browser.ts"
+      ],
+      "@centcom/states": [
+        "./packages/protocol/src/generated/agent-state.ts"
       ]
     }
   }

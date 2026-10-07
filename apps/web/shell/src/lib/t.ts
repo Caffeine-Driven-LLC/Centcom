@@ -1,2 +1,2 @@
-/** Placeholder for the i18n framework (lane C092): every visible string goes through here. */
-export const t = (key: string, fallback?: string): string => fallback ?? key;
+/** The shell's translation function (lane C092). Kept here so older imports keep working. */
+export { t, tp, useLocale, setLocale, detectLocale, registerLocale, fmt, type MessageKey } from '../i18n/index.js';

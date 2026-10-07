@@ -41,3 +41,6 @@ body { margin: 0; background: var(--bg-base); color: var(--text-primary); font-f
 @media (max-width: 767px) { .cc-inspector[data-open="true"] { position: fixed; left: 0; right: 0; bottom: 0; max-height: 60vh; overflow: auto; border-left: 0; border-top: 1px solid var(--border-strong); z-index: 30; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; animation-iteration-count: 1 !important; } .cc-skel__line { animation: none; } }
 .cc-block { display: block; } .cc-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.cc-skip { position: absolute; left: 8px; top: -48px; z-index: 100; padding: 8px 12px; background: var(--accent-fill); color: var(--accent-on); } .cc-skip:focus { top: 8px; }
+@media (forced-colors: active) { .cc-btn, .cc-input, .cc-card, .cc-tab, .cc-banner, .cc-modal { border: 1px solid CanvasText; } :focus-visible { outline: 2px solid Highlight; } .cc-tab--on { border-bottom-color: Highlight; } .cc-dot, .cc-avatar { border: 1px solid CanvasText; forced-color-adjust: none; } }
+[data-theme="hc"] { --border-default: var(--text-primary); }
