@@ -5,10 +5,11 @@
  * claude-pr.config.json.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
+import { resolve, writeStatus } from './claude-pr-bookkeeping.mjs';
 import {
   BASE_TOOLS,
   CLAUDE_STATUS,
@@ -317,11 +318,10 @@ describe('describeFailure', () => {
 });
 
 describe('toolsFor', () => {
-  it('runs no PR code in a review, and only conflict resolution adds the gates to an update', () => {
-    expect(toolsFor('review', false)).toEqual(BASE_TOOLS);
-    expect(toolsFor('fix-ci', false)).toEqual(expect.arrayContaining(CONFIG.execTools));
-    expect(toolsFor('update', false)).not.toEqual(expect.arrayContaining(CONFIG.execTools));
-    expect(toolsFor('update', true)).toEqual(expect.arrayContaining(CONFIG.execTools));
+  it('runs no PR code in a review; the claude job adds the gates to an update itself', () => {
+    expect(toolsFor('review')).toEqual(BASE_TOOLS);
+    expect(toolsFor('fix-ci')).toEqual(expect.arrayContaining(CONFIG.execTools));
+    expect(toolsFor('update')).not.toEqual(expect.arrayContaining(CONFIG.execTools));
   });
 });
 
@@ -369,42 +369,128 @@ describe('recordOutcome', () => {
   });
 });
 
-describe('isMergeOfMain', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'claude-pr-merge-'));
-  afterAll(() => rmSync(dir, { recursive: true, force: true }));
-  /** @param {...string} args */
-  const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8' }).trim();
-  /** @param {string} name @param {string} text */
-  const commit = (name, text) => {
-    writeFileSync(join(dir, name), text);
-    git('add', name);
-    git('commit', '-q', '-m', `edit ${name}`);
-    return git('rev-parse', 'HEAD');
+// Real git repositories: slow to set up on Windows runners and laptops.
+describe('isMergeOfMain', { timeout: 60_000 }, () => {
+  /** @type {string[]} */
+  const dirs = [];
+  afterAll(() => dirs.forEach((d) => rmSync(d, { recursive: true, force: true })));
+  /** @param {Record<string, { pct: number, note: string }>} lanes */
+  const status = (lanes) => writeStatus({ updated: '2026-10-01', lanes, next: [] });
+  /** @param {string} block @param {string} tail */
+  const readme = (block, tail) =>
+    `# T\n\n<!-- progress:start -->\n${block}\n<!-- progress:end -->\n\n${tail}\n`;
+
+  /**
+   * A repo where a lane branch and main both moved on from a common base. `lane` and `main` are
+   * the files each side changes; returns the planned (lane) commit, checked out.
+   * @param {Record<string, string>} lane
+   * @param {Record<string, string>} main
+   */
+  const scenario = (lane, main) => {
+    const dir = mkdtempSync(join(tmpdir(), 'claude-pr-merge-'));
+    dirs.push(dir);
+    /** @param {...string} args */
+    const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8' }).trim();
+    /** @param {Record<string, string>} files */
+    const commit = (files) => {
+      for (const [path, text] of Object.entries(files)) {
+        mkdirSync(join(dir, path, '..'), { recursive: true });
+        writeFileSync(join(dir, path), text);
+      }
+      git('add', '-A');
+      git('commit', '-q', '-m', 'edit');
+      return git('rev-parse', 'HEAD');
+    };
+    git('init', '-q', '-b', 'main');
+    git('config', 'user.email', 't@example.com');
+    git('config', 'user.name', 't');
+    git('config', 'commit.gpgsign', 'false');
+    commit({
+      'a.txt': 'one\ntwo\nthree\n',
+      'plan/STATUS.json': status({ X001: { pct: 0.5, note: 'wip' } }),
+      'README.md': readme('0%', 'intro'),
+      'docs/progress.svg': '<svg>0</svg>\n',
+    });
+    git('checkout', '-q', '-b', 'lane');
+    const planned = commit(lane);
+    git('checkout', '-q', 'main');
+    commit(main);
+    git('checkout', '-q', 'lane');
+    /** The merge as the claude job makes it: merge, then the bookkeeping helper if it stopped. */
+    const mergeMain = () => {
+      try {
+        git('merge', '-q', '--no-ff', '--no-edit', 'main');
+      } catch {
+        resolve(dir);
+      }
+      return git('rev-parse', 'HEAD');
+    };
+    /** Rewrites files in the merge commit, as a careless conflict resolution would. */
+    const amend = (/** @type {Record<string, string>} */ files) => {
+      for (const [path, text] of Object.entries(files)) writeFileSync(join(dir, path), text);
+      git('commit', '-q', '-a', '--amend', '--no-edit');
+      return git('rev-parse', 'HEAD');
+    };
+    const check = (/** @type {string} */ head) =>
+      isMergeOfMain({ planned, head, main: 'main', cwd: dir });
+    return { dir, planned, mergeMain, amend, check };
   };
-  git('init', '-q', '-b', 'main');
-  git('config', 'user.email', 't@example.com');
-  git('config', 'user.name', 't');
-  git('config', 'commit.gpgsign', 'false');
-  commit('a.txt', 'one\ntwo\nthree\n');
-  git('checkout', '-q', '-b', 'lane');
-  const planned = commit('a.txt', 'one\ntwo changed by the lane\nthree\n');
-  git('checkout', '-q', 'main');
-  commit('b.txt', 'main moved on\n');
-  git('checkout', '-q', 'lane');
-  git('merge', '-q', '--no-ff', '--no-edit', 'main');
-  const merged = git('rev-parse', 'HEAD');
 
   it('accepts planned plus a clean merge of main', () => {
-    expect(isMergeOfMain({ planned, head: merged, main: 'main', git })).toBe(true);
+    const s = scenario({ 'a.txt': 'one\ntwo by the lane\nthree\n' }, { 'b.txt': 'main\n' });
+    expect(s.check(s.mergeMain())).toBe(true);
   });
+
+  it('accepts progress-file conflicts resolved by the bookkeeping helper', () => {
+    const s = scenario(
+      {
+        'a.txt': 'one\ntwo by the lane\nthree\n',
+        'plan/STATUS.json': status({
+          X001: { pct: 0.5, note: 'wip' },
+          X002: { pct: 1, note: 'lane' },
+        }),
+        'README.md': readme('4%', 'intro'),
+        'docs/progress.svg': '<svg>4</svg>\n',
+      },
+      {
+        'plan/STATUS.json': status({ X001: { pct: 1, note: 'merged in #1' } }),
+        'README.md': readme('5%', 'intro edited on main'),
+        'docs/progress.svg': '<svg>5</svg>\n',
+      },
+    );
+    expect(s.check(s.mergeMain())).toBe(true);
+  });
+
   it('rejects a merge that slipped in another change', () => {
-    writeFileSync(join(dir, 'a.txt'), 'one\ntwo changed by the lane\nthree\nsneaky\n');
-    git('commit', '-q', '-a', '--amend', '--no-edit');
-    const sneaky = git('rev-parse', 'HEAD');
-    expect(isMergeOfMain({ planned, head: sneaky, main: 'main', git })).toBe(false);
+    const s = scenario({ 'a.txt': 'one\ntwo by the lane\nthree\n' }, { 'b.txt': 'main\n' });
+    s.mergeMain();
+    expect(s.check(s.amend({ 'a.txt': 'one\ntwo by the lane\nthree\nsneaky\n' }))).toBe(false);
   });
+
+  it('rejects moved or re-indented lane lines, which a whitespace-blind patch-id would accept', () => {
+    const s = scenario({ 'a.txt': 'one\ntwo by the lane\nthree\n' }, { 'b.txt': 'main\n' });
+    s.mergeMain();
+    expect(s.check(s.amend({ 'a.txt': 'one\n    two by the lane\nthree\n' }))).toBe(false);
+    expect(s.check(s.amend({ 'a.txt': 'one\nthree\ntwo by the lane\n' }))).toBe(false);
+  });
+
+  it('rejects hand edits to README outside its progress block, or to other lanes in STATUS', () => {
+    const s = scenario({ 'a.txt': 'one\ntwo by the lane\nthree\n' }, { 'b.txt': 'main\n' });
+    s.mergeMain();
+    expect(s.check(s.amend({ 'README.md': readme('0%', 'intro, rewritten') }))).toBe(false);
+    const t = scenario({ 'a.txt': 'one\ntwo by the lane\nthree\n' }, { 'b.txt': 'main\n' });
+    t.mergeMain();
+    expect(
+      t.check(t.amend({ 'plan/STATUS.json': status({ X001: { pct: 1, note: 'done!' } }) })),
+    ).toBe(false);
+  });
+
   it('rejects a head whose first parent is not the planned commit', () => {
-    expect(isMergeOfMain({ planned: merged, head: planned, main: 'main', git })).toBe(false);
+    const s = scenario({ 'a.txt': 'one\ntwo by the lane\nthree\n' }, { 'b.txt': 'main\n' });
+    const merged = s.mergeMain();
+    expect(isMergeOfMain({ planned: merged, head: s.planned, main: 'main', cwd: s.dir })).toBe(
+      false,
+    );
   });
 });
 

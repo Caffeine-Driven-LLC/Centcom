@@ -102,6 +102,7 @@ jobs:
       review: ${{ steps.plan.outputs.review }}
       prompt: ${{ steps.plan.outputs.prompt }}
       tools: ${{ steps.plan.outputs.tools }}
+      exec_tools: ${{ steps.plan.outputs.exec_tools }}
     steps:
       # The state script and prompts come from main, never from the PR.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -153,8 +154,9 @@ jobs:
           HEAD_REF: ${{ needs.plan.outputs.head_ref }}
         run: git checkout -B "$HEAD_REF"
 
-      # Before touching the tree: will Claude have to resolve conflicts beyond the progress files?
-      # Then it needs dependencies, installed now while package.json and the lockfile are valid.
+      # Before touching the tree: will Claude have to resolve conflicts the bookkeeping helper does
+      # not always manage (anything but STATUS.json and the SVG)? Then it needs dependencies and the
+      # gates, installed now while package.json and the lockfile are valid.
       - name: Predict merge conflicts
         id: probe
         if: env.ACTION == 'update'
@@ -162,7 +164,7 @@ jobs:
           needs=false
           if ! out="$(git merge-tree --write-tree --name-only --no-messages HEAD origin/main)"; then
             others="$(printf '%s\n' "$out" | tail -n +2 \
-              | grep -vxF -e plan/STATUS.json -e README.md -e docs/progress.svg || true)"
+              | grep -vxF -e plan/STATUS.json -e docs/progress.svg || true)"
             [ -n "$others" ] && needs=true
           fi
           echo "claude_resolves=$needs" >> "$GITHUB_OUTPUT"
@@ -192,6 +194,18 @@ jobs:
             node "$RUNNER_TEMP/bookkeeping.mjs" resolve
           fi
 
+      # The probe, not GitHub's lagging mergeable field, decides whether Claude may run the gates.
+      - name: Claude's tools
+        id: tools
+        env:
+          PLAN_TOOLS: ${{ needs.plan.outputs.tools }}
+          EXEC_TOOLS: ${{ needs.plan.outputs.exec_tools }}
+          RESOLVES: ${{ steps.probe.outputs.claude_resolves }}
+        run: |
+          tools="$PLAN_TOOLS"
+          if [ "$ACTION" = update ] && [ "$RESOLVES" = true ]; then tools="$tools,$EXEC_TOOLS"; fi
+          echo "list=$tools" >> "$GITHUB_OUTPUT"
+
       - name: Claude
         id: claude
         timeout-minutes: 25 # a step timeout fails the step; the record job still runs and hands off
@@ -206,13 +220,13 @@ jobs:
           additional_permissions: |
             actions: read
           # --setting-sources user: the repo's CLAUDE.md is for local sessions, and a PR's .claude/
-          # must never configure this run. The tool list comes from main's claude-pr-state.mjs.
+          # must never configure this run. The tool lists come from main's claude-pr-state.mjs.
           claude_args: |
             --model claude-sonnet-5-5
             --max-turns 60
             --setting-sources user
             --strict-mcp-config
-            --allowedTools "${{ needs.plan.outputs.tools }}"
+            --allowedTools "${{ steps.tools.outputs.list }}"
             --disallowedTools "Bash(git add -A:*),Bash(git add --all:*),Bash(git add .:*),Bash(git commit -a:*),Bash(git commit -am:*)"
             --json-schema '{"type":"object","properties":{"verdict":{"enum":["approve","fixed","needs_human"]},"summary":{"type":"string"}},"required":["verdict","summary"]}'
 
