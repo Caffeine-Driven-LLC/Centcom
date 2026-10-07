@@ -3,3 +3,4 @@ export * from './discovery/index.js';
 export * from './pairing/index.js';
 export * from './errors.js';
 export { systemClock, cryptoRandom, type LanClock, type RandomBytes } from './clock.js';
+export * from './host/index.js';

@@ -340,6 +340,10 @@
   "C063": {
    "pct": 0.75,
    "note": "offline: NetStateMonitor (online/reconnecting/offline/degraded/backend-down and mascot names), encrypted durable outbox with caps, corruption recovery and in-order replay with original ids after reconnect, file seq store, resume reporting, wake detector with jitter, requireOnline and 24 h display rule; session client gains link(), reconnect() and the outbox hook; tested on the mock relay with maintenance mode; gaps: frames buffered offline may go under the older key if the rotate_key replay is still coming, no real kill/restart in the mock, not wired into app startup"
+  },
+  "C072": {
+   "pct": 0.8,
+   "note": "LAN host server on ws: hello/welcome with local tokens, supersede, 8 member cap, lowest free slot, one seq per session with echo and dedupe, replay buffer with resume and snapshot_required plus lan.snapshot.get, rate limits, 2 MiB outbound close, malformed frame handling, pings and dead detection, presence and cursor coalescing with typing auto-clear, member_left after 10 s, public bind refusal, 0600 JSONL transcript, interceptor, loopback link, pairing hook, ban list; tested with real RelayClient guests and raw sockets; gaps: CLI flags not wired, host engine (C075) not built, a revoked member needs the validator to say so"
   }
  },
  "next": [

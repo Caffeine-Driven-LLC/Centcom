@@ -315,10 +315,16 @@ importers:
       libsodium-wrappers-sumo:
         specifier: 0.8.4
         version: 0.8.4
+      ws:
+        specifier: 8.22.0
+        version: 8.22.0
     devDependencies:
       '@centcom/testkit':
         specifier: workspace:*
         version: link:../testkit
+      '@types/ws':
+        specifier: 8.18.2
+        version: 8.18.2
 
   packages/mascot:
     dependencies:
