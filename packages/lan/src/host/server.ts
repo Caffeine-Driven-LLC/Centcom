@@ -19,7 +19,8 @@ void DEDUPE_MS;
 export interface HostMember { id: string; name: string; slot: number; role: 'host' | 'editor' | 'viewer' }
 export interface ProblemBody { code: string; status?: number; title?: string; detail?: string; [k: string]: unknown }
 export type ServerFrame = Omit<Frame, 'v' | 'from' | 'ts' | 'seq' | 'sid'> & { v?: 1 };
-export interface FrameInterceptor { onInbound(ctx: { from: HostMember; frame: Frame }): 'accept' | { reject: ProblemBody } | { replace: Frame[] } }
+export interface FrameInterceptor { onInbound(ctx: { from: HostMember; frame: Frame }): 'accept' | { reject: ProblemBody } | { replace: Frame[] }; /** after the frame was numbered and sent to everyone (the engine updates its state and sends what follows from it) */ onSequenced?(frame: Frame): void }
+export interface ServerHooks { connected?(m: ConnectedMember, first: boolean): void; disconnected?(m: ConnectedMember): void; left?(memberId: string): void }
 export interface SnapshotProvider { get(sid: string): Promise<{ seq: number; bytes: Uint8Array } | null> }
 export interface ConnectedMember { memberId: string; deviceId: string; name: string; role: HostMember['role']; slot: number; remoteIp: string }
 export type LanTokenValidator = TokenValidator;
@@ -42,13 +43,22 @@ export function isPublicAddress(ip: string): boolean {
 
 export class LanHostServer implements LoopbackHost {
   private http?: Server; private wss?: WebSocketServer; private readonly conns = new Set<Conn>(); private readonly seqr = new Sequencer(); private readonly buffer: ReplayBuffer; private readonly transcript: TranscriptFile; private readonly presence: PresenceCoalescer;
-  private connSeq = 0; private rosterV = 1; private readonly joined = new Set<string>(); private readonly leaveTimers = new Map<string, unknown>(); private loopback?: LoopbackLink; private stopped = false; private snapshotReq = new Map<Conn, number>();
+  private hooks: ServerHooks = {}; private readonly roleOverride = new Map<string, HostMember['role']>(); private readonly slotOf = new Map<string, number>(); private connSeq = 0; private rosterV = 1; private readonly joined = new Set<string>(); private readonly leaveTimers = new Map<string, unknown>(); private loopback?: LoopbackLink; private stopped = false; private snapshotReq = new Map<Conn, number>();
   constructor(private readonly o: LanHostOptions) {
     this.buffer = new ReplayBuffer(o.replayMinFrames ?? REPLAY_MIN_FRAMES, o.replayMinMs ?? REPLAY_MIN_MS); this.transcript = new TranscriptFile(o.transcriptPath, (m) => o.logger?.warn(m));
     this.presence = new PresenceCoalescer(o.clock, (f) => this.fanOut(f), (member, f) => ({ ...f, from: member, ts: this.iso() }));
   }
   private iso(): string { return new Date(this.o.clock.now()).toISOString(); }
   headSeq(): number { return this.seqr.head(); }
+  setInterceptor(i: FrameInterceptor | undefined): void { (this.o as { interceptor?: FrameInterceptor }).interceptor = i; }
+  setHooks(h: ServerHooks): void { this.hooks = h; }
+  setSnapshots(p: SnapshotProvider | undefined): void { (this.o as { snapshots?: SnapshotProvider }).snapshots = p; }
+  /** A member was removed for good (kick): close its connections without the usual leave timer, and forget that it joined. */
+  dropMember(memberId: string, closeCode = 4403): void { const t = this.leaveTimers.get(memberId); if (t !== undefined) { this.o.clock.clearTimeout(t as never); this.leaveTimers.delete(memberId); } for (const c of this.liveOf(memberId)) { this.sysError(c, 'forbidden'); this.close(c, closeCode); } this.joined.delete(memberId); this.roleOverride.delete(memberId); this.presence.forget(memberId); this.removed.add(memberId); }
+  private readonly removed = new Set<string>();
+  /** A role changed (kick, role, transfer): live connections and later hellos use it from the next frame. */
+  setRole(memberId: string, role: HostMember['role']): void { this.roleOverride.set(memberId, role); for (const c of this.conns) if (c.member?.memberId === memberId) c.member.role = role; if (memberId === this.o.hostMember.id) this.o.hostMember.role = role; }
+  roleOf(memberId: string): HostMember['role'] | undefined { return this.roleOverride.get(memberId) ?? [...this.conns].find((c) => c.member?.memberId === memberId)?.member?.role ?? (memberId === this.o.hostMember.id ? this.o.hostMember.role : undefined); }
   members(): ConnectedMember[] { return [...this.conns].filter((c) => c.authed && c.member).map((c) => ({ ...c.member! })); }
 
   /* ------------------------------------------------------------- start and stop */
@@ -86,8 +96,8 @@ export class LanHostServer implements LoopbackHost {
   private clearTimers(c: Conn): void { if (c.helloTimer !== undefined) this.o.clock.clearTimeout(c.helloTimer as never); if (c.pingTimer !== undefined) this.o.clock.clearTimeout(c.pingTimer as never); c.helloTimer = c.pingTimer = undefined; }
   private onClose(c: Conn): void {
     this.clearTimers(c); this.conns.delete(c); this.snapshotReq.delete(c); if (c.pair) { try { this.o.pairing?.onClose(c.pair); } catch { /* handler bug */ } } if (!c.authed || !c.member || this.stopped) return;
-    const m = c.member; if (this.liveOf(m.memberId).length > 0) return; /* another connection of the same member is up */
-    const t = this.o.clock.setTimeout(() => { this.leaveTimers.delete(m.memberId); if (this.liveOf(m.memberId).length === 0) { this.joined.delete(m.memberId); this.presence.forget(m.memberId); this.rosterV++; this.broadcast({ t: 'control', k: 'control.member_left', p: { member: m.memberId, code: 'timeout' } }); } }, this.o.memberGraceMs ?? 10_000); this.leaveTimers.set(m.memberId, t);
+    const m = c.member; try { this.hooks.disconnected?.({ ...m }); } catch { /* ignore */ } if (this.removed.has(m.memberId)) return; if (this.liveOf(m.memberId).length > 0) return; /* another connection of the same member is up */
+    const t = this.o.clock.setTimeout(() => { this.leaveTimers.delete(m.memberId); if (this.liveOf(m.memberId).length === 0) { this.joined.delete(m.memberId); this.presence.forget(m.memberId); this.rosterV++; this.broadcast({ t: 'control', k: 'control.member_left', p: { member: m.memberId, code: 'timeout' } }); try { this.hooks.left?.(m.memberId); } catch { /* ignore */ } } }, this.o.memberGraceMs ?? 10_000); this.leaveTimers.set(m.memberId, t);
   }
   private liveOf(member: string): Conn[] { return [...this.conns].filter((x) => x.authed && !x.closing && x.member?.memberId === member); }
   private startPings(c: Conn): void {
@@ -135,12 +145,14 @@ export class LanHostServer implements LoopbackHost {
     for (const o of this.liveOf(who.memberId)) if (o.member!.deviceId === who.deviceId) { this.send(o, { t: 'sys.bye', ts: this.iso(), p: { reason: 'superseded' } }); this.close(o, 4409); }
     const live = [...this.conns].filter((x) => x.authed && !x.closing).length + (this.loopback ? 1 : 0); if (live >= (this.o.maxMembers ?? MAX_MEMBERS) && !this.liveOf(who.memberId).length) { this.sysError(c, 'session_full'); return this.close(c, 4403); }
     const t = this.leaveTimers.get(who.memberId); if (t !== undefined) { this.o.clock.clearTimeout(t as never); this.leaveTimers.delete(who.memberId); }
-    const slot = who.slot ?? this.lowestFreeSlot(); c.authed = true; c.member = { memberId: who.memberId, deviceId: who.deviceId, name: who.name, role: who.role, slot, remoteIp: c.remoteIp }; if (c.helloTimer !== undefined) this.o.clock.clearTimeout(c.helloTimer as never); c.helloTimer = undefined; this.startPings(c);
+    const slot = who.slot ?? this.slotOf.get(who.memberId) ?? this.lowestFreeSlot(); this.slotOf.set(who.memberId, slot); const role = this.roleOverride.get(who.memberId) ?? who.role; c.authed = true; c.member = { memberId: who.memberId, deviceId: who.deviceId, name: who.name, role, slot, remoteIp: c.remoteIp }; if (c.helloTimer !== undefined) this.o.clock.clearTimeout(c.helloTimer as never); c.helloTimer = undefined; this.startPings(c);
     const last = typeof p.last_seq === 'number' ? p.last_seq : null; const oldest = this.buffer.oldest() ?? this.seqr.head() + 1; const resumable = last !== null && last >= oldest - 1;
-    this.send(c, { t: 'sys.welcome', ts: this.iso(), p: { protocol: 1, caps: ['resume'], member: { id: who.memberId, name: who.name, slot, role: who.role }, slot, role: who.role, roster_v: this.rosterV, heartbeat: { ping_ms: PING_MS, dead_ms: DEAD_MS }, server_time: this.iso(), limits: { max_frame_bytes: MAX_FRAME_BYTES, max_frame: MAX_FRAME_BYTES, seq_rate: SEQ_RATE, seq_burst: SEQ_BURST, presence_rate: PRESENCE_RATE, outbound_buffer_bytes: this.o.outboundLimitBytes ?? OUTBOUND_LIMIT_BYTES, max_members: this.o.maxMembers ?? MAX_MEMBERS }, resume: last === null ? null : resumable ? { from_seq: last + 1 } : { snapshot_required: true, snapshot_seq: this.seqr.head() }, session: { mode: 'branch', state: 'live' } } });
+    this.send(c, { t: 'sys.welcome', ts: this.iso(), p: { protocol: 1, caps: ['resume'], member: { id: who.memberId, name: who.name, slot, role }, slot, role, roster_v: this.rosterV, heartbeat: { ping_ms: PING_MS, dead_ms: DEAD_MS }, server_time: this.iso(), limits: { max_frame_bytes: MAX_FRAME_BYTES, max_frame: MAX_FRAME_BYTES, seq_rate: SEQ_RATE, seq_burst: SEQ_BURST, presence_rate: PRESENCE_RATE, outbound_buffer_bytes: this.o.outboundLimitBytes ?? OUTBOUND_LIMIT_BYTES, max_members: this.o.maxMembers ?? MAX_MEMBERS }, resume: last === null ? null : resumable ? { from_seq: last + 1 } : { snapshot_required: true, snapshot_seq: this.seqr.head() }, session: { mode: 'branch', state: 'live' } } });
     if (last !== null) this.resume(c, last);
-    if (!this.joined.has(who.memberId)) { this.joined.add(who.memberId); this.rosterV++; this.broadcast({ t: 'control', k: 'control.member_joined', p: { member: who.memberId, name: who.name, slot, role: who.role, device: who.deviceId } }); }
+    const first = !this.joined.has(who.memberId);
+    if (first) { this.joined.add(who.memberId); this.rosterV++; this.broadcast({ t: 'control', k: 'control.member_joined', p: { member: who.memberId, name: who.name, slot, role: who.role, device: who.deviceId } }); }
     for (const pf of this.presence.burst()) this.send(c, pf as unknown as Record<string, unknown>);
+    try { this.hooks.connected?.({ ...c.member! }, first); } catch { /* engine bug must not drop the guest */ }
   }
   private lowestFreeSlot(): number { const used = new Set<number>([this.o.hostMember.slot, ...[...this.conns].filter((x) => x.member).map((x) => x.member!.slot)]); let s = 0; while (used.has(s)) s++; return s; }
   private resume(c: Conn, last: number | null): void {
@@ -163,15 +175,15 @@ export class LanHostServer implements LoopbackHost {
   /** Number a frame, keep it, write it down and send it to everyone. A frame id seen before gets its old number and no new one. */
   private sequence(from: string, f: Frame, origin?: Conn): number {
     const now = this.o.clock.now(); if (f.id) { const dup = this.seqr.known(from, f.id, now); if (dup !== undefined) { const orig = this.buffer.bySeq(dup); if (orig && origin) this.send(origin, orig as unknown as Record<string, unknown>); return dup; } }
-    const out = { ...this.stampFrame(from, f), seq: this.seqr.next() } as Frame; if (f.id) this.seqr.remember(from, f.id, out.seq!, now); this.buffer.push(out, now); this.transcript.append(out); this.fanOut(out); return out.seq!;
+    const out = { ...this.stampFrame(from, f), seq: this.seqr.next() } as Frame; if (f.id) this.seqr.remember(from, f.id, out.seq!, now); this.buffer.push(out, now); this.transcript.append(out); this.fanOut(out); try { this.o.interceptor?.onSequenced?.(out); } catch { this.o.logger?.warn('lan.interceptor_failed'); } return out.seq!;
   }
   private fanOut(f: Frame): void { for (const c of [...this.conns]) if (c.authed && !c.closing) this.send(c, f as unknown as Record<string, unknown>); this.loopback?.deliver(f); }
 
   /* ------------------------------------------------------------- the host's own side */
   /** A frame the host itself originates (server frames carry `from: "srv"`): numbered like any other when it is a sequenced type. */
   broadcast(frame: ServerFrame): number {
-    const base = { ...frame, v: 1 as const, sid: this.o.sessionId, from: 'srv', ts: this.iso() } as Frame; if (!SEQUENCED.has(String(frame.t))) { this.fanOut(base); return 0; }
-    const now = this.o.clock.now(); const out = { ...base, seq: this.seqr.next() } as Frame; this.buffer.push(out, now); this.transcript.append(out); this.fanOut(out); return out.seq!;
+    const base = { id: this.o.ids.next('msg'), ...frame, v: 1 as const, sid: this.o.sessionId, from: 'srv', ts: this.iso() } as Frame; if (!SEQUENCED.has(String(frame.t))) { this.fanOut(base); return 0; }
+    const now = this.o.clock.now(); const out = { ...base, seq: this.seqr.next() } as Frame; this.buffer.push(out, now); this.transcript.append(out); this.fanOut(out); try { this.o.interceptor?.onSequenced?.(out); } catch { this.o.logger?.warn('lan.interceptor_failed'); } return out.seq!;
   }
   sendTo(memberId: string, frame: ServerFrame): void { for (const c of this.liveOf(memberId)) this.send(c, { ...frame, sid: this.o.sessionId, from: 'srv', ts: this.iso() } as Record<string, unknown>); }
   kickConnection(memberId: string, closeCode = 4403): void { for (const c of this.liveOf(memberId)) { this.sysError(c, 'forbidden'); this.close(c, closeCode); } }
