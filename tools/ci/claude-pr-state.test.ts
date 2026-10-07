@@ -21,6 +21,7 @@ import {
   fixRounds,
   isMergeOfMain,
   isProtected,
+  protectedList,
   laneIds,
   nextStep,
   queueHead,
@@ -283,6 +284,13 @@ describe('merge queue', () => {
     expect(nextStep(pr({ number: 9, mergeable: 'CONFLICTING' }), files, 3, false, 4).action).toBe(
       'update',
     );
+  });
+});
+
+describe('protectedList', () => {
+  it('tells Claude about the lane-owned exception, so it does not flag STATUS.json edits', () => {
+    expect(protectedList()).toContain('plan/ (except plan/STATUS.json)');
+    expect(protectedList()).toContain('CLAUDE.md');
   });
 });
 
