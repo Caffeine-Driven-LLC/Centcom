@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { REVERT_MS, ReactionAnimator, ReactionController, summarize, type OutFrame } from '../../src/reactions/index.js';
+import { HOLD_MS, REVERT_MS,ReactionAnimator, ReactionController, summarize, type OutFrame } from '../../src/reactions/index.js';
 
 const clock = () => { let t = 0; const q: { at: number; fn: () => void; h: number }[] = []; let id = 0; return { now: () => t, setTimeout: (fn: () => void, ms: number) => { const h = ++id; q.push({ at: t + ms, fn, h }); return h; }, clearTimeout: (h: never) => { const i = q.findIndex((x) => x.h === (h as unknown as number)); if (i >= 0) q.splice(i, 1); }, advance(ms: number) { const end = t + ms; for (;;) { q.sort((a, b) => a.at - b.at); const n = q[0]; if (!n || n.at > end) break; q.shift(); t = n.at; n.fn(); } t = end; } }; };
-const make = (o: { canReact?: () => boolean } = {}) => { const c = clock(); const sent: OutFrame[] = []; const toast = vi.fn(); let n = 0; const ctl = new ReactionController({ self: 'me', clock: c, send: async (f) => { sent.push(f); }, newId: () => `msg_${++n}`, toast, ...o }); return { c, sent, toast, ctl }; };
+const make = (o: { canReact?: () => boolean; hasTarget?: (t: string) => boolean } = {}) => { const c = clock(); const sent: OutFrame[] = []; const toast = vi.fn(); let n = 0; const ctl = new ReactionController({ self: 'me', clock: c, send: async (f) => { sent.push(f); }, newId: () => `msg_${++n}`, toast, ...o }); return { c, sent, toast, ctl }; };
 const mine = (ctl: ReactionController, t = 'msg_T') => summarize(ctl.reactions, t, 'me');
 
 describe('toggling (acceptance 1, 2)', () => {
@@ -21,6 +21,18 @@ describe('toggling (acceptance 1, 2)', () => {
   it('a muted member cannot toggle; spam is dropped by the bucket (20, refilling 30 a second), never queued', () => {
     let on = false; const m = make({ canReact: () => on }); expect(m.ctl.toggle('t', 'thumbs')).toBe('disabled'); expect(m.sent).toHaveLength(0); on = true;
     const results = Array.from({ length: 60 }, (_, i) => m.ctl.toggle(`msg_${i}`, 'thumbs')); expect(results.filter((r) => r === 'sent')).toHaveLength(20); expect(results.filter((r) => r === 'rate')).toHaveLength(40); m.c.advance(1000); expect(m.ctl.toggle('msg_x', 'heart')).toBe('sent');
+  });
+});
+describe('failure modes', () => {
+  it('sys.error forbidden takes every guess back and disables the controls', () => {
+    const { ctl, sent } = make(); ctl.toggle('msg_T', 'thumbs'); ctl.toggle('msg_T', 'heart'); expect(mine(ctl)).toHaveLength(2); ctl.onSysError({ code: 'forbidden' }); expect(mine(ctl)).toEqual([]); expect(ctl.disabled).toBe(true); expect(ctl.toggle('msg_T', 'party')).toBe('disabled'); expect(sent).toHaveLength(2);
+  });
+  it('sys.slow_down pauses sending for for_ms and then sends only the latest toggle', () => {
+    const { ctl, sent, c } = make(); ctl.onSysError({ code: 'slow_down', for_ms: 2000 }); expect(ctl.toggle('msg_T', 'thumbs')).toBe('paused'); expect(ctl.toggle('msg_T', 'heart')).toBe('paused'); expect(sent).toHaveLength(0); c.advance(1999); expect(sent).toHaveLength(0); c.advance(1); expect(sent).toHaveLength(1); expect(sent[0]).toMatchObject({ p: { target: 'msg_T', code: 'heart', op: 'add' } });
+  });
+  it('a reaction on a target that is not loaded is held up to 60 s, sent when it loads, dropped afterwards', () => {
+    let loaded = false; const { ctl, sent, c } = make({ hasTarget: () => loaded }); expect(ctl.toggle('msg_T', 'thumbs')).toBe('held'); expect(sent).toHaveLength(0); loaded = true; ctl.targetLoaded('msg_T'); expect(sent).toHaveLength(1);
+    loaded = false; expect(ctl.toggle('msg_U', 'heart')).toBe('held'); c.advance(HOLD_MS); loaded = true; ctl.targetLoaded('msg_U'); expect(sent).toHaveLength(1);
   });
 });
 describe('animation (acceptance 7)', () => {
