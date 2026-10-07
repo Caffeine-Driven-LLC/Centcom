@@ -42,8 +42,13 @@ export const Skeleton = ({ lines = 1, width }: { lines?: number; width?: string 
 export function Tooltip({ text, children }: { text: string; children: React.ReactElement }): React.JSX.Element { const id = useId(); return <span className="cc-tipwrap">{React.cloneElement(children as React.ReactElement<{ 'aria-describedby'?: string }>, { 'aria-describedby': id })}<span id={id} role="tooltip" className="cc-tip">{text}</span></span>; }
 export const EmptyState = ({ title, children, action }: { title: string; children?: React.ReactNode; action?: React.ReactNode }): React.JSX.Element => <div className="cc-empty"><PixelIcon name="home" size={32} /><h3>{title}</h3>{children ? <p>{children}</p> : null}{action}</div>;
 export interface Column<T> { key: string; header: string; cell(row: T): React.ReactNode }
+/** Up and down move between rows, Home and End jump; a row is one stop in the tab order and the controls inside keep their own. */
+function rowNav(e: React.KeyboardEvent<HTMLTableSectionElement>): void {
+  if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key) || (e.target as HTMLElement).closest('select,input,textarea')) return; const rows = [...e.currentTarget.querySelectorAll<HTMLTableRowElement>('tr[data-row]')]; const here = rows.findIndex((r) => r === (e.target as HTMLElement).closest('tr')); if (here < 0) return;
+  const next = e.key === 'ArrowDown' ? Math.min(rows.length - 1, here + 1) : e.key === 'ArrowUp' ? Math.max(0, here - 1) : e.key === 'Home' ? 0 : rows.length - 1; e.preventDefault(); rows.forEach((r, i) => r.setAttribute('tabindex', i === next ? '0' : '-1')); rows[next]?.focus();
+}
 export function Table<T>({ rows, columns, caption, rowKey }: { rows: T[]; columns: Column<T>[]; caption: string; rowKey(r: T): string }): React.JSX.Element {
-  return <div className="cc-table-wrap" tabIndex={0} role="region" aria-label={caption}><table className="cc-table"><caption className="cc-vh">{caption}</caption><thead><tr>{columns.map((c) => <th key={c.key} scope="col">{c.header}</th>)}</tr></thead><tbody>{rows.map((r) => <tr key={rowKey(r)}>{columns.map((c) => <td key={c.key}>{c.cell(r)}</td>)}</tr>)}</tbody></table></div>;
+  return <div className="cc-table-wrap" tabIndex={0} role="region" aria-label={caption}><table className="cc-table"><caption className="cc-vh">{caption}</caption><thead><tr>{columns.map((c) => <th key={c.key} scope="col">{c.header}</th>)}</tr></thead><tbody onKeyDown={rowNav}>{rows.map((r, i) => <tr key={rowKey(r)} tabIndex={i === 0 ? 0 : -1} data-row={i}>{columns.map((c) => <td key={c.key}>{c.cell(r)}</td>)}</tr>)}</tbody></table></div>;
 }
 /** Traps focus, gives it back on close, and closes on Esc unless there is unsaved input (`dirty`). */
 export function Modal({ open, title, onClose, dirty = false, children }: { open: boolean; title: string; onClose: () => void; dirty?: boolean; children?: React.ReactNode }): React.JSX.Element | null {
