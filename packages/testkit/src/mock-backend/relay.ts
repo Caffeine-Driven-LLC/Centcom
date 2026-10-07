@@ -9,7 +9,7 @@ import { signJwt, verifyJwt, type KeyPair } from '../core/jwt.js';
 import { problem } from './problem.js';
 import type { Frame, MemberRec, MockState, QueueItem, SessionRec } from './state.js';
 
-export interface RelayOptions { helloTimeoutMs: number; ping_ms: number; dead_ms: number; outboundLimit: number; maxFrameBytes: number; replayFrames: number; queueLimit: number; memberQueueCap: number; invalidPerMinute: number; presenceMs: number; hostGraceMs: number }
+export interface RelayOptions { helloTimeoutMs: number; ping_ms: number; dead_ms: number; outboundLimit: number; maxFrameBytes: number; replayFrames: number; queueLimit: number; memberQueueCap: number; invalidPerMinute: number; presenceMs: number; hostGraceMs: number; /** spawn limit per member (the plan's max_parallel_agents); unset means none */ maxParallelAgents?: number }
 export const DEFAULT_RELAY_OPTIONS: RelayOptions = { helloTimeoutMs: 5000, ping_ms: 20_000, dead_ms: 50_000, outboundLimit: 2 * 1024 * 1024, maxFrameBytes: 256 * 1024, replayFrames: 5000, queueLimit: 20, memberQueueCap: 5, invalidPerMinute: 10, presenceMs: 500, hostGraceMs: 600_000 };
 
 /** `observe` sees the kind (`k`, else `t`) of every frame the relay sequences, before delivery, plus `sys.hello` after each welcome: scenario triggers hang off it. */
@@ -184,9 +184,25 @@ export function createRelay(d: RelayDeps) {
     if (m.muted && (f.t === 'event' || k === 'queue.submit')) return sysError(c, 'muted');
     if (k in EVENT_MODES && f.p !== undefined && EVENT_MODES[k as EventKind] !== 'encrypted') { const pr = parseEventPayload(k, f.p); if (!pr.ok) return badFrame(c, { errors: pr.issues.slice(0, 5).map((i) => ({ pointer: `/p${i.pointer}`, code: i.code })) }); }
     const dup = f.id ? s.seen.get(`${m.id}:${f.id}`) : undefined; if (dup !== undefined) { const orig = s.buffer.find((x) => x.seq === dup); if (orig) send(c, orig); return; } // a resend: same seq, no new frame
+    if (k === 'file.lock' || k === 'agent.spawn' || k === 'agent.exit') return fleetOp(c, s, f);
     if (k.startsWith('queue.')) return queueOp(c, s, f);
     if (k.startsWith('control.')) return controlOp(c, s, f);
     sequence(s, f, m.id);
+  }
+
+  /** Locks are arbitrated on `path_hmac`: the first acquire is sequenced (that is the grant), a second agent gets a server `deny`, a lock ends on release or `expire` after its ttl. Agents count against `maxParallelAgents`. */
+  const locks = new Map<string, Map<string, { agent: string; member: string; timer: TimerHandle | undefined }>>(); const agentsBySession = new Map<string, Map<string, string>>();
+  function fleetOp(c: Conn, s: SessionRec, f: Frame) {
+    const m = c.member!; const k = f.k!; const p = (f.p ?? {}) as Record<string, any>;
+    if (k === 'agent.spawn') { const agents = agentsBySession.get(s.id) ?? new Map<string, string>(); agentsBySession.set(s.id, agents); const mine = [...agents.values()].filter((x) => x === m.id).length; if (opts.maxParallelAgents !== undefined && mine >= opts.maxParallelAgents && !agents.has(String(p.agent_id))) return sysError(c, 'quota_exceeded'); agents.set(String(p.agent_id), m.id); sequence(s, f, m.id); return; }
+    if (k === 'agent.exit') { agentsBySession.get(s.id)?.delete(String(p.agent_id)); sequence(s, f, m.id); return; }
+    const table = locks.get(s.id) ?? new Map(); locks.set(s.id, table); const hmac = String(p.path_hmac); const cur = table.get(hmac);
+    if (p.action === 'acquire') {
+      if (cur && cur.agent !== String(p.agent_id)) { server(s, 'event', 'file.lock', { action: 'deny', path_hmac: hmac, agent_id: String(p.agent_id) }); return; }
+      if (cur?.timer !== undefined) clock.clearTimeout(cur.timer); const ttl = typeof p.ttl_ms === 'number' && p.ttl_ms > 0 ? p.ttl_ms : 30_000; sequence(s, f, m.id);
+      const timer = clock.setTimeout(() => { const now = table.get(hmac); if (now && now.agent === String(p.agent_id)) { table.delete(hmac); server(s, 'event', 'file.lock', { action: 'expire', path_hmac: hmac, agent_id: now.agent }); } }, ttl); table.set(hmac, { agent: String(p.agent_id), member: m.id, timer }); return;
+    }
+    if (p.action === 'release') { if (cur && cur.agent === String(p.agent_id)) { if (cur.timer !== undefined) clock.clearTimeout(cur.timer); table.delete(hmac); sequence(s, f, m.id); } return; }
   }
 
   function queueOp(c: Conn, s: SessionRec, f: Frame) {
@@ -275,7 +291,7 @@ export function createRelay(d: RelayDeps) {
     for (const ws of open) if (ws.readyState !== WebSocket.CLOSED) ws.terminate();
     wss.close();
   }
-  function reset() { closeAll(1001); logs.clear(); presenceLatest.clear(); held.clear(); faults.length = 0; for (const t of [...hostTimers.values(), ...presenceTimers.values()]) clock.clearTimeout(t); hostTimers.clear(); presenceTimers.clear(); paused = new Set(); virtualMembers.clear(); }
+  function reset() { closeAll(1001); logs.clear(); presenceLatest.clear(); held.clear(); faults.length = 0; for (const t of [...hostTimers.values(), ...presenceTimers.values()]) clock.clearTimeout(t); hostTimers.clear(); presenceTimers.clear(); paused = new Set(); virtualMembers.clear(); for (const t of locks.values()) for (const l of t.values()) if (l.timer !== undefined) clock.clearTimeout(l.timer); locks.clear(); agentsBySession.clear(); }
   /** A scripted peer: a member without a socket that "sends" frames (kind and opaque bodies only). */
   function peerSend(sid: string, o: { name?: string; role?: Role; frame: Omit<Frame, 'v' | 'sid'> }) {
     const s = getOrCreateSession(sid); let m = [...s.members.values()].find((x) => x.name === (o.name ?? 'Peer')); if (!m) { m = { id: d.newId('mem'), user: d.newId('usr'), name: o.name ?? 'Peer', slot: s.members.size, role: o.role ?? 'editor', device: d.newId('dev'), joined: true }; s.members.set(m.id, m); virtualMembers.add(m.id); s.rosterV++; if (m.role === 'host' && !s.hostId) s.hostId = m.id; server(s, 'control', 'control.member_joined', { member: m.id, name: m.name, slot: m.slot, role: m.role, device: m.device }); }

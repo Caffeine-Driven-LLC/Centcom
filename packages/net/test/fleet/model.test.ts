@@ -1,0 +1,30 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+import { FleetModel, GENERIC_WORKING_STATE, type FEvent } from '../../src/index.js';
+
+const DIR = join(import.meta.dirname, '../../../../contracts/fixtures/events'); const fx = (k: string) => JSON.parse(readFileSync(join(DIR, `${k}.json`), 'utf8')) as { kind: string; frame: { p?: Record<string, unknown> }; secret?: Record<string, unknown> };
+const A = 'agt_01JA3Z8K2M5N7P9Q0R1S2T3V4W'; const B = 'agt_01JA3Z8K2M5N7P9Q0R1S2T3V5X'; const M1 = 'mem_ONE'; const M2 = 'mem_TWO'; const members = new Set([M1, M2]);
+let seq = 0; const ev = (kind: string, from: string, p: Record<string, unknown>, secret?: Record<string, unknown>, s = ++seq): FEvent => ({ kind, seq: s, from, ts: new Date(Date.UTC(2026, 9, 7, 12, 0, s)).toISOString(), p, secret });
+const model = () => { seq = 0; return new FleetModel((id) => members.has(id)); };
+
+describe('replay (acceptance 6)', () => {
+  it('rebuilding from the same frames twice gives the same view; a duplicate changes nothing', () => {
+    const frames = [ev('agent.spawn', M1, { agent_id: A, owner: M1, mode: 'branch' }, { label: 'one', branch: 'feat/a' }), ev('agent.state', M1, { agent_id: A, state: 'editing-file', since: 't' }), ev('branch.update', M1, {}, { agent_id: A, branch: 'feat/a', head: 'abc', ahead: 2, behind: 0, dirty: true }), ev('agent.spawn', M2, { agent_id: B, owner: M2, mode: 'branch' }), ev('file.lock', M1, { action: 'acquire', path_hmac: 'H1', agent_id: A, ttl_ms: 30000 }, { path: 'src/a.ts' }), ev('conflict.detected', M2, { agent_ids: [A, B], path_hmacs: ['H1'] }, { paths: ['src/a.ts'] }), ev('agent.exit', M2, { agent_id: B, outcome: 'ok' })];
+    const a = model(); for (const f of frames) a.apply(f); const b = model(); for (const f of frames) b.apply(f); for (const f of frames) b.apply(f); expect(b.view()).toEqual(a.view()); const v = a.view(); expect(v.members.map((m) => m.memberId)).toEqual([M1, M2]); expect(v.members[0]!.agents[0]).toMatchObject({ agentId: A, state: 'editing-file', label: 'one', branch: 'feat/a', branchStatus: { ahead: 2, dirty: true } }); expect(v.members[1]!.agents[0]!.exited).toMatchObject({ outcome: 'ok' }); expect(v.locks).toEqual([expect.objectContaining({ pathHmac: 'H1', agentId: A, path: 'src/a.ts' })]); expect(v.conflicts).toHaveLength(1);
+  });
+  it('every fixture applies without throwing', () => { const m = model(); let s = 0; for (const f of readdirSync(DIR).filter((n) => /^(agent\.|branch\.|file\.lock|conflict)/.test(n))) { const j = fx(f.replace('.json', '')); expect(() => m.apply({ kind: j.kind, seq: ++s, from: 'mem_ONE', ts: '2026-10-07T12:00:00.000Z', p: j.frame.p, secret: j.secret }), j.kind).not.toThrow(); } });
+});
+describe('what is believed', () => {
+  it('an unknown state shows as the generic working state and keeps what was said; the view is still updated', () => { const m = model(); m.apply(ev('agent.spawn', M1, { agent_id: A, owner: M1, mode: 'branch' })); m.apply(ev('agent.state', M1, { agent_id: A, state: 'warp-drive', since: 't9' })); expect(m.agent(A)).toMatchObject({ state: GENERIC_WORKING_STATE, rawState: 'warp-drive', since: 't9' }); m.apply(ev('agent.state', M1, { agent_id: A, state: 'idle', since: 't10' })); expect(m.agent(A)!.rawState).toBeUndefined(); });
+  it('events from non-members are ignored, and the sender is the owner whatever `owner` says', () => {
+    const m = model(); expect(m.apply(ev('agent.spawn', 'mem_STRANGER', { agent_id: A, owner: M1, mode: 'branch' }))).toEqual([{ type: 'ignored', reason: 'not_member' }]); m.apply(ev('agent.spawn', M2, { agent_id: A, owner: M1, mode: 'branch' })); expect(m.agent(A)!.owner).toBe(M2); expect(m.apply(ev('agent.state', M1, { agent_id: A, state: 'idle', since: 't' }))).toEqual([{ type: 'ignored', reason: 'unknown_agent' }]); expect(m.apply(ev('agent.spawn', M1, { agent_id: A, owner: M1, mode: 'branch' }))).toEqual([{ type: 'ignored', reason: 'not_owner' }]);
+  });
+  it('locks: the first holder wins, release only by the holder, expire only from the server, deny only from the server, ttl from the frame time; unknown actions ignored', () => {
+    const m = model(); m.apply(ev('file.lock', M1, { action: 'acquire', path_hmac: 'H', agent_id: A, ttl_ms: 5000 })); expect(m.apply(ev('file.lock', M2, { action: 'acquire', path_hmac: 'H', agent_id: B }))).toEqual([{ type: 'ignored', reason: 'held' }]); expect(m.view().locks[0]).toMatchObject({ agentId: A, expiresAt: Date.UTC(2026, 9, 7, 12, 0, 1) + 5000 });
+    m.apply(ev('file.lock', M2, { action: 'release', path_hmac: 'H', agent_id: A })); expect(m.view().locks).toHaveLength(1); expect(m.apply(ev('file.lock', M2, { action: 'expire', path_hmac: 'H', agent_id: A }))).toEqual([{ type: 'ignored', reason: 'forged' }]); expect(m.apply(ev('file.lock', M2, { action: 'deny', path_hmac: 'H', agent_id: B }))).toEqual([{ type: 'ignored', reason: 'forged' }]);
+    expect(m.apply(ev('file.lock', 'srv', { action: 'deny', path_hmac: 'H', agent_id: B }))).toEqual([{ type: 'lock-denied', pathHmac: 'H', agentId: B }]); expect(m.apply(ev('file.lock', M1, { action: 'teleport', path_hmac: 'H', agent_id: A }))).toEqual([{ type: 'ignored', reason: 'unknown_action' }]); expect(m.apply(ev('file.lock', 'srv', { action: 'expire', path_hmac: 'H', agent_id: A }))[0]).toMatchObject({ type: 'lock-expired' }); expect(m.view().locks).toEqual([]);
+    m.apply(ev('file.lock', M1, { action: 'acquire', path_hmac: 'H', agent_id: A, ttl_ms: 5000 })); expect(m.apply(ev('file.lock', M2, { action: 'acquire', path_hmac: 'H', agent_id: B })).length).toBe(1); m.apply(ev('file.lock', M1, { action: 'release', path_hmac: 'H', agent_id: A })); expect(m.view().locks).toEqual([]);
+  });
+  it('a conflict is recorded once even when the frame repeats', () => { const m = model(); const c = ev('conflict.detected', M1, { agent_ids: [A, B], path_hmacs: ['H'] }, { paths: ['x.ts'] }); expect(m.apply(c)[0]).toMatchObject({ type: 'conflict' }); expect(m.apply({ ...c, seq: 99 })).toEqual([{ type: 'ignored', reason: 'duplicate' }]); expect(m.view().conflicts).toHaveLength(1); });
+});
