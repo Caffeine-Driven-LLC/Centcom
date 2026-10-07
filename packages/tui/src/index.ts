@@ -12,3 +12,4 @@ export * from './tasks/index.js';
 export * from './keys/index.js';
 export * from './transcript/index.js';
 export * from './terminal/index.js';
+export * from './settings/index.js';

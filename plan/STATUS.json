@@ -130,8 +130,8 @@
    "note": "mascot driver; card gaps: full state map, priorities and chips, bursts, idle/night, visibility"
   },
   "C047": {
-   "pct": 0.5,
-   "note": "settings slash commands; card gaps: settings store with sources, /spinner, /density, env overrides"
+   "pct": 0.7,
+   "note": "settings store with env overrides and sources, /theme /mascot /spinner /motion /density with the card copy (no-arg line, unknown value, env override notice, failed save keeps the value), useSettings/useDensity/blockGap; gap: the app still handles these commands in controller.ts, density not yet fed into the transcript layout, hc theme not in the theme engine"
   },
   "C048": {
    "pct": 1.0,
