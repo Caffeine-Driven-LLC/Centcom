@@ -30,3 +30,4 @@ export * from './accounting/index.js';
 export * from './interrupt/index.js';
 export * from './persistence/index.js';
 export * from './models/index.js';
+export * from './skills/index.js';

@@ -19,6 +19,7 @@ import { makeMemoryFiles, runMemoryCli } from './commands/memory/cli.js';
 import { appViews } from './views.js';
 import { runInitCli } from './commands/init.js';
 import { resolvedKeys, runKeys } from './commands/keys.js';
+import { runSkills, ttyAsk } from './commands/skills.js';
 import { makeTelemetry, runTelemetry } from './commands/telemetry.js';
 import { defaultDeps, loadConfig } from '@centcom/config';
 import { runMcpCli } from './commands/mcp/cli.js';
@@ -98,9 +99,10 @@ async function main() {
   if (process.argv[2] === 'telemetry') process.exit(await runTelemetry(process.argv.slice(3), { out: (l) => console.log(l), err: (l) => console.error(l), version: VERSION }));
   // anonymous counts of which command ran, only when you turned telemetry on (docs/telemetry.md)
   const cfg0 = await loadConfig(defaultDeps()).catch(() => undefined); const tm = makeTelemetry({ enabled: !!cfg0?.telemetry.enabled, baseUrl: cfg0?.api.base_url ?? 'https://api.centcom.dev', version: VERSION });
-  const sub = ['provider', 'memory', 'mcp', 'hooks', 'init', 'keys'].includes(process.argv[2] ?? '') ? process.argv[2]! : has('-p') || has('--print') ? 'print' : 'tui'; tm.appStart(); tm.commandRun(sub);
+  const sub = ['provider', 'memory', 'mcp', 'hooks', 'init', 'keys', 'skills'].includes(process.argv[2] ?? '') ? process.argv[2]! : has('-p') || has('--print') ? 'print' : 'tui'; tm.appStart(); tm.commandRun(sub);
   const done = async (code: number) => { tm.appExit(); await tm.flush(2000); process.exit(code); };
   if (process.argv[2] === 'provider') await done(await runProviderCli(process.argv.slice(3)));
+  if (process.argv[2] === 'skills') await done(await runSkills(process.argv.slice(3), { out: (l) => console.log(l), err: (l) => console.error(l), ask: ttyAsk, cwd: process.cwd() }));
   if (process.argv[2] === 'keys') await done(runKeys(process.argv.slice(3), { out: (l) => console.log(l), err: (l) => console.error(l) }));
   if (process.argv[2] === 'init') await done(await runInitCli(process.argv.slice(3)));
   if (process.argv[2] === 'memory') await done(await runMemoryCli(process.argv.slice(3)));
