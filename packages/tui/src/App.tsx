@@ -35,6 +35,9 @@ export function App({ ctl, tier, keys }: AppProps) {
   const [confirming, setConfirming] = useState(false);
   const pending = s.approvals[0];
   useEffect(() => { setConfirming(false); }, [pending?.req.approval_id]);
+  /** A new approval ignores answers for 300 ms: a key you were typing for something else must not approve a command you have not seen. */
+  const shown = useRef<{ id?: string; at: number }>({ at: 0 }); if (pending?.req.approval_id !== shown.current.id) shown.current = { id: pending?.req.approval_id, at: Date.now() };
+  const approvalGrace = () => !!pending && Date.now() - shown.current.at < 300;
 
   /* ---- layout ---- */
   const showFleet = s.fleet && s.agents.length > 1 && cols >= 110 && s.mode === 'chat'; // a solo session has no fleet panel; it appears when others join
@@ -104,6 +107,7 @@ export function App({ ctl, tier, keys }: AppProps) {
     /* approvals */
     if (pending) {
       focusRef.current = ['permission']; const high = pending.req.risk === 'high'; const step = fromInk(input, key);
+      if (approvalGrace()) return;
       if (confirming) { if (key.return) ctl.answerApproval('approve'); else if (step && dispatcher.handle(step).kind === 'action' && key.escape) ctl.answerApproval('deny'); return; }
       const d = step ? dispatcher.handle(step) : { kind: 'none' as const };
       if (d.kind === 'action') {
@@ -250,7 +254,7 @@ export function App({ ctl, tier, keys }: AppProps) {
                       : <Box paddingX={1}><Transcript layout={layout} items={s.items} width={mainW - 2} height={bodyH} scroll={s.scroll} unseen={unseen} /></Box>}
             </Box>
             {stripH > 0 ? <Box paddingX={1} height={stripH}><LiveStrip s={s} driver={ctl.driver} width={mainW - 2} size={stripSize as 'large' | 'small' | 'off'} /></Box> : null}
-            {pending ? <Approval a={pending} width={mainW} confirming={confirming} maxDiff={maxDiff} onChoose={(c) => { if (c === 'no') ctl.answerApproval('deny'); else if (c === 'always') { if (pending.req.risk !== 'high') ctl.answerApproval('approve', 'always'); } else if (pending.req.risk === 'high' && !confirming) setConfirming(true); else ctl.answerApproval('approve'); }} /> : (
+            {pending ? <Approval a={pending} width={mainW} confirming={confirming} maxDiff={maxDiff} onChoose={(c) => { if (approvalGrace()) return; if (c === 'no') ctl.answerApproval('deny'); else if (c === 'always') { if (pending.req.risk !== 'high') ctl.answerApproval('approve', 'always'); } else if (pending.req.risk === 'high' && !confirming) setConfirming(true); else ctl.answerApproval('approve'); }} /> : (
               <>
                 {showTasks ? <Box paddingX={1} height={tasksH}><TaskList items={s.tasks} maxRows={rows >= 34 ? 10 : 5} width={mainW - 2} unicode={tier !== 'none'} /></Box> : null}
                 {popupH ? <SlashPopup matches={matches} sel={s.slashSel} width={mainW} onPick={(c) => { const t = '/' + c.name + (c.args ? ' ' : ''); ctl.patch({ input: t, cursor: t.length, anchor: undefined, slashSel: 0 }); if (!c.args) void ctl.submit('/' + c.name); }} /> : null}

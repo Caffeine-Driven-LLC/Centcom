@@ -25,6 +25,8 @@ import { emptyText } from './onboarding/copy.js';
 import { reduceTasks } from './tasks/model.js';
 import { VerbRotator } from './util/verbs.js';
 
+/** The longest message Centcom sends in one go. */
+export const MAX_MESSAGE = 65_536;
 export interface ControllerOptions {
   /** Where copied text goes (tests pass a recorder). Default: the system clipboard. */
   clipboard?: (text: string) => void;
@@ -421,6 +423,7 @@ export class AppController {
   async submit(raw: string, opts: { wire?: string } = {}) {
     const text = raw.trim();
     if (!text) return;
+    if (text.length > MAX_MESSAGE) { this.toast('warn', `That message is ${text.length.toLocaleString('en-US')} characters; the limit is ${MAX_MESSAGE.toLocaleString('en-US')}. Shorten it, or put the long part in a file and mention the path.`, 7000); return; } // your text stays in the prompt
     if (this.state.mode === 'night' && !this.nightSending && !text.startsWith('/')) { this.nightAdd(text); return; } // in the night panel, a message is a task
     if (this.night.active() && !this.nightSending && !text.startsWith('/')) { this.toast('warn', 'Night cycle is running. Add tasks with /night add …, stop it with /night stop.'); return; }
     if (this.pendingAnswer) { const a = this.pendingAnswer; this.pendingAnswer = undefined; this.set({ input: '', cursor: 0 }); a(text); return; }

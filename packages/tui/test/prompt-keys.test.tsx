@@ -88,10 +88,10 @@ describe('mouse clicks', () => {
   });
   it('the buttons of an approval answer it', async () => {
     const t = await mount(); const req = (id: string, risk: 'medium' | 'high') => ({ approval_id: id, agent_id: 'me', tool_id: 't' + id, tool: 'Bash', summary: 'x', risk, command: 'npm test' } as never);
-    const a = t.ctl.decide(req('1', 'medium')); await wait(); await t.click('[n]'); expect(await a).toMatchObject({ decision: 'deny' });
-    const b = t.ctl.decide(req('2', 'medium')); await wait(); await t.click('[y]'); expect(await b).toMatchObject({ decision: 'approve', scope: 'once' });
-    const c = t.ctl.decide(req('3', 'medium')); await wait(); await t.click('[a]'); expect(await c).toMatchObject({ decision: 'approve' }); expect((await c).scope).not.toBe('once');
-    const d = t.ctl.decide(req('4', 'high')); await wait(); await t.click('[y]'); expect(t.ctl.state.approvals).toHaveLength(1); await t.click('[y]'); expect(await d).toMatchObject({ decision: 'approve' }); // a destructive one needs a second click
+    const a = t.ctl.decide(req('1', 'medium')); await wait(330); await t.click('[n]'); expect(await a).toMatchObject({ decision: 'deny' });
+    const b = t.ctl.decide(req('2', 'medium')); await wait(330); await t.click('[y]'); expect(await b).toMatchObject({ decision: 'approve', scope: 'once' });
+    const c = t.ctl.decide(req('3', 'medium')); await wait(330); await t.click('[a]'); expect(await c).toMatchObject({ decision: 'approve' }); expect((await c).scope).not.toBe('once');
+    const d = t.ctl.decide(req('4', 'high')); await wait(330); await t.click('[y]'); expect(t.ctl.state.approvals).toHaveLength(1); await t.click('[y]'); expect(await d).toMatchObject({ decision: 'approve' }); // a destructive one needs a second click
   });
   it('clicking a command in the / menu runs it, or fills it in when it needs an argument', async () => {
     const t = await mount(); const sent: string[] = []; t.ctl.submit = (async (x: string) => { sent.push(x); }) as never;
@@ -101,5 +101,38 @@ describe('mouse clicks', () => {
   it('clicks do nothing with the mouse off, and a click on empty space is ignored', async () => {
     const t = await mount(); const r = t.ctl.pick({ title: 'Pick', options: opts }); await wait(); await t.click('Pick'); expect(t.ctl.state.pick!.checked).toEqual([]);
     await t.ctl.runCommand('/mouse off'); await wait(); await t.click('option a'); expect(t.ctl.state.pick!.checked).toEqual([]); t.ctl.pickKey('cancel'); await r;
+  });
+});
+
+describe('a new approval ignores answers for 300 ms', () => {
+  const req = (id: string) => ({ approval_id: id, agent_id: 'me', tool_id: 't' + id, tool: 'Bash', summary: 'x', risk: 'medium', command: 'npm test' } as never);
+  it('a stray y or a click right as it appears does nothing; after the grace it works', async () => {
+    const t = await mount(); const a = t.ctl.decide(req('1')); await wait(40);
+    await t.send('y'); await t.send('a'); expect(t.ctl.state.approvals).toHaveLength(1); await t.click('[y]'); expect(t.ctl.state.approvals).toHaveLength(1);
+    await wait(320); await t.send('n'); expect(await a).toMatchObject({ decision: 'deny' });
+    const b = t.ctl.decide(req('2')); await wait(320); await t.send('y'); expect(await b).toMatchObject({ decision: 'approve' });
+  });
+  it('each approval gets its own grace, so the next one in the queue is protected too', async () => {
+    const t = await mount(); const a = t.ctl.decide(req('1')); const b = t.ctl.decide(req('2')); await wait(330); await t.send('y'); expect(await a).toMatchObject({ decision: 'approve' });
+    await t.send('y'); expect(t.ctl.state.approvals).toHaveLength(1); // the second one only just appeared
+    await wait(330); await t.send('n'); expect(await b).toMatchObject({ decision: 'deny' });
+  });
+});
+
+describe('multi-line input and completion', () => {
+  it('ctrl+j and backslash then Enter make a new line instead of sending', async () => {
+    const t = await mount(); const sent: string[] = []; t.ctl.submit = (async (x: string) => { sent.push(x); }) as never;
+    await t.send('one'); await t.send('\n'); await t.send('two'); expect(t.text()).toBe('one\ntwo'); expect(sent).toEqual([]);
+    await t.send('\x1ba'); await t.send('\x7f'); expect(t.text()).toBe(''); await t.send('first\\'); await t.send('\r'); await t.send('second'); expect(t.text()).toBe('first\nsecond'); expect(sent).toEqual([]);
+    await t.send('\r'); expect(sent).toEqual(['first\nsecond']);
+  });
+  it('Tab completes a partial command, and Enter on a complete one with an argument waits for the argument', async () => {
+    const t = await mount(); await t.send('/effo'); await t.send('\t'); expect(t.text()).toBe('/effort '); await t.send('\x15');
+    await t.send('/res'); await t.send('\t'); expect(t.text().startsWith('/resume')).toBe(true);
+  });
+  it('a message over 65,536 characters is refused with a clear message and stays in the prompt', async () => {
+    const t = await mount(); const sent: string[] = []; const real = t.ctl.submit.bind(t.ctl); void real;
+    const long = 'x'.repeat(65_537); await t.ctl.submit(long); expect(t.ctl.state.toasts.at(-1)!.text).toMatch(/65,537 characters; the limit is 65,536/); expect(t.ctl.state.items.filter((i) => i.kind === 'user')).toHaveLength(0); expect(sent).toEqual([]);
+    await t.ctl.submit('x'.repeat(65_536).slice(0, 10)); expect(t.ctl.state.items.some((i) => i.kind === 'user')).toBe(true);
   });
 });
