@@ -14,6 +14,7 @@ export const SCHEMA = {
   'log.max_files': { kind: 'number', default: 3, min: 1, max: 20, doc: 'How many rotated log files to keep' },
   'ui.theme': { kind: 'enum', default: 'auto', enum: ['auto', 'dark', 'light'], project: true, doc: 'Graphite (dark), Paper (light), or follow the system' },
   'ui.mascot': { kind: 'boolean', default: true, project: true, doc: 'Show Cento' },
+  'ui.mouse': { kind: 'boolean', default: true, doc: 'Scroll with the mouse wheel in the terminal app (off gives the terminal its own text selection back)' },
   'ui.reduced_motion': { kind: 'boolean', default: false, project: true, doc: 'Turn animation off' },
   'ui.color': { kind: 'enum', default: 'auto', enum: ['auto', 'truecolor', '256', '16', 'never'], project: true, doc: 'Terminal color depth' },
   'lan.enabled': { kind: 'boolean', default: true, doc: 'Allow LAN sessions' },

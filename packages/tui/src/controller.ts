@@ -16,7 +16,7 @@ import { newPick, pickAll, pickMove, pickResult, pickToggle, type PickOption } f
 import { NightCycle, initialNight, counts as nightCounts, type NightState, type NightTask } from './night/index.js';
 import { LIBRARY_DIR, MASTER_DIR, discover, injection, librarySkills, masterSkills, match, mergeLibrary, setEnabled, loadEntries, type Skill } from '@centcom/skills';
 import { MascotDriver, bakedByCategory, bakedCategories, getBaked, type CentoColor } from '@centcom/mascot';
-import type { AgentEngine, ApprovalDecision, ApprovalRequest, EngineSession, NormalisedEvent, PermissionGate, PermissionMode } from '@centcom/agent';
+import type { AgentEngine, ApprovalDecision, ApprovalRequest, EngineQuestion, EngineSession, QuestionGate, NormalisedEvent, PermissionGate, PermissionMode } from '@centcom/agent';
 import { Store } from './state/store.js';
 import { initialSettings, isBusyState, stateToMini, type AgentView, type AppState, type Item, type Mode, type PendingApproval, type Settings } from './state/model.js';
 import { COMMANDS } from './state/commands.js';
@@ -98,10 +98,10 @@ export class AppController {
 
   constructor(private o: ControllerOptions) {
     this.verbs = o.verbs ?? new VerbRotator();
-    const settings = { ...initialSettings(), permissionMode: o.permissionMode ?? 'default', ...o.settings };
+    const settings = { ...initialSettings(), permissionMode: o.permissionMode ?? 'default', ...o.settings }; settings.mouse = o.mouse ?? (settings.mouse && !!process.stdout.isTTY); // the wheel only makes sense in a terminal
     const me: AgentView = { id: this.me, name: 'you', color: settings.color, mine: true, engine: o.engine.label, provider: o.engine.provider, model: '', loginKind: 'unknown', state: 'idle', mini: 'idle', busy: false, branch: o.branch ?? '', runsOn: 'you', cost: 0, inTok: 0, outTok: 0 };
     this.store = new Store<AppState>({
-      items: [], agents: [me], activeAgent: this.me, mode: 'chat', mouse: o.mouse ?? !!process.stdout.isTTY, input: '', cursor: 0, history: o.history ?? [], histIdx: null, draft: '', scroll: 0, toasts: [], approvals: [], settings,
+      items: [], agents: [me], activeAgent: this.me, mode: 'chat', input: '', cursor: 0, history: o.history ?? [], histIdx: null, draft: '', scroll: 0, toasts: [], approvals: [], settings,
       busy: false, verb: this.verbs.next(), limits: [], cwd: o.cwd, branch: o.branch ?? '', engineId: o.engine.id, engineLabel: o.engine.label, demo: o.demo, fleet: true, tasks: [], tasksOpen: true,
       slashSel: 0, palette: { query: '', sel: 0 }, modelSel: 0, gallery: { cat: 0, idx: 0, color: 0, query: '' }, version: o.version, sessionId: newId('ses'), sessions: [], night: initialNight(),
     });
@@ -159,7 +159,8 @@ export class AppController {
 
   private startOptions(resumeToken?: string, carry?: string): EngineStartOptions {
     const gate: PermissionGate = { decide: (r) => this.decide(r) };
-    return { agentId: this.me, cwd: this.o.cwd, permissionMode: this.state.settings.permissionMode, model: this.state.settings.model || undefined, addDirs: this.o.demo ? undefined : [MASTER_DIR, LIBRARY_DIR], approvalGate: gate, ...(resumeToken ? { resume: { engine_session_id: resumeToken } } : {}), ...(carry ? { systemPromptAppend: carry } : {}) };
+    const questionGate: QuestionGate = { ask: (qs) => this.askEngine(qs) };
+    return { agentId: this.me, cwd: this.o.cwd, permissionMode: this.state.settings.permissionMode, model: this.state.settings.model || undefined, addDirs: this.o.demo ? undefined : [MASTER_DIR, LIBRARY_DIR], approvalGate: gate, questionGate, ...(resumeToken ? { resume: { engine_session_id: resumeToken } } : {}), ...(carry ? { systemPromptAppend: carry } : {}) };
   }
   private async startEngine(resumeToken?: string, carry?: string) { this.adopt(await this.o.engine.start(this.startOptions(resumeToken, carry))); }
   /** A conversation saved with the other engine cannot be resumed by this one (its session id means nothing here): this one starts fresh with a summary of what was said. */
@@ -392,6 +393,28 @@ export class AppController {
     this.patch({ histIdx: idx, draft, input: t, cursor: t.length });
   }
 
+  /** A typed answer to an engine's question: the next line you send is the answer, never a message to the agent and never kept in the transcript. */
+  private pendingAnswer?: (text: string | undefined) => void;
+  private askText(q: EngineQuestion): Promise<string | undefined> {
+    this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: q.text, detail: q.secret ? 'Type your answer and press Enter. It is not kept in this conversation. Esc cancels.' : 'Type your answer and press Enter. Esc cancels.' });
+    return new Promise((resolve) => { this.pendingAnswer = resolve; });
+  }
+  /** Codex asks mid-turn and waits for the reply: a list for choices (with a way to type your own), text otherwise. Undefined when you cancel. */
+  private async askEngine(qs: EngineQuestion[]): Promise<Record<string, string[]> | undefined> {
+    const out: Record<string, string[]> = {};
+    for (const q of qs) {
+      if (q.options?.length) {
+        const OTHER = '\u0000other';
+        const ids = await this.pick({ title: q.header ? `${q.header}: ${q.text}` : q.text, note: 'Esc cancels the question.', options: [...q.options.map((o, i) => ({ id: String(i), label: o.label, hint: o.description })), ...(q.allowOther ? [{ id: OTHER, label: 'Something else…' }] : [])], multi: false, confirm: 'answer' });
+        if (!ids?.length) return undefined;
+        if (ids[0] === OTHER) { const t = await this.askText(q); if (t === undefined) return undefined; out[q.id] = [t]; } else out[q.id] = [q.options[Number(ids[0])]!.label];
+      } else { const t = await this.askText(q); if (t === undefined) return undefined; out[q.id] = [t]; }
+    }
+    return out;
+  }
+  /** Stop waiting on any open question (an interrupt, a new session). */
+  private cancelQuestions() { const a = this.pendingAnswer; this.pendingAnswer = undefined; a?.(undefined); if (this.state.mode === 'pick') this.pickKey('cancel'); }
+
   /** A question waiting for y (memory notes, rewinds): the answer never goes to the engine or into history. */
   private pendingMemory?: { diff: string; apply: () => Promise<string>; no?: string };
   async submit(raw: string, opts: { wire?: string } = {}) {
@@ -399,6 +422,7 @@ export class AppController {
     if (!text) return;
     if (this.state.mode === 'night' && !this.nightSending && !text.startsWith('/')) { this.nightAdd(text); return; } // in the night panel, a message is a task
     if (this.night.active() && !this.nightSending && !text.startsWith('/')) { this.toast('warn', 'Night cycle is running. Add tasks with /night add …, stop it with /night stop.'); return; }
+    if (this.pendingAnswer) { const a = this.pendingAnswer; this.pendingAnswer = undefined; this.set({ input: '', cursor: 0 }); a(text); return; }
     if (this.pendingMemory) { // the answer to "add this to memory?": never goes to the engine or into the prompt history
       const p = this.pendingMemory; this.pendingMemory = undefined; this.set({ input: '', cursor: 0 });
       if (/^(y|yes)$/i.test(text)) { try { this.addItem({ kind: 'notice', id: nid('n'), level: 'ok', text: await p.apply() }); } catch (e) { this.addItem({ kind: 'notice', id: nid('n'), level: 'warn', text: String((e as Error).message ?? e) }); } } else this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: p.no ?? 'Nothing was added to memory.' });
@@ -472,7 +496,7 @@ export class AppController {
   });
   /** True when the latest turn was stopped by an interrupt. */
   turnInterrupted(): boolean { return this.interrupts.cancelledTurn(this.currentTurn); }
-  async interrupt(hard = false) { if (!this.state.busy) return; await this.interrupts.interrupt(this.me, { mode: hard ? 'hard' : 'soft', reason: 'user' }); }
+  async interrupt(hard = false) { this.cancelQuestions(); if (!this.state.busy) return; await this.interrupts.interrupt(this.me, { mode: hard ? 'hard' : 'soft', reason: 'user' }); }
 
   /** Leave the app (the `app.quit` action). */
   quit(code = 0) { void this.o.ledger?.flush().catch(() => undefined); this.o.onExit?.(code); }
@@ -537,6 +561,11 @@ export class AppController {
       this.pickBack = this.state.mode === 'night' ? 'night' : 'chat'; this.pickDone = resolve;
       this.set({ mode: 'pick', pick: newPick(o) });
     });
+  }
+  /** A click on option `i`: a list of several toggles it; a one-of list picks it. */
+  pickClick(i: number) {
+    const p = this.state.pick; if (!p || i < 0 || i >= p.options.length) return;
+    this.set({ pick: { ...p, sel: i } }); this.pickKey(p.multi ? 'toggle' : 'enter');
   }
   pickKey(k: 'up' | 'down' | 'toggle' | 'all' | 'enter' | 'cancel') {
     const p = this.state.pick; if (!p) return;
@@ -636,7 +665,7 @@ export class AppController {
       case 'mascot': if (['large', 'small', 'off', 'auto'].includes(arg)) this.setSettings({ mascot: arg as Settings['mascot'] }); else this.toast('info', 'Try /mascot large, small, off or auto'); break;
       case 'color': if (['violet', 'red', 'yellow', 'green', 'brown'].includes(arg)) this.setSettings({ color: arg as CentoColor }); else this.toast('info', 'Colours: violet red yellow green brown'); break;
       case 'theme': if (arg === 'dark' || arg === 'light') this.setSettings({ theme: arg }); else this.toast('info', 'Try /theme dark or /theme light'); break;
-      case 'mouse': { const on = arg ? arg === 'on' : !this.state.mouse; this.set({ mouse: on }); this.toast('info', on ? 'Mouse wheel scrolls. /mouse off lets you select text with the mouse.' : 'Mouse off: select text with the mouse as usual.'); break; }
+      case 'mouse': { const on = arg ? arg === 'on' : !this.state.settings.mouse; this.setSettings({ mouse: on }); this.toast('info', on ? 'Mouse wheel scrolls. /mouse off lets you select text with the mouse.' : 'Mouse off: select text with the mouse as usual.'); break; }
       case 'effort': await this.effortCommand(arg); break;
       case 'model': {
         if (!arg) { const i = CLAUDE_MODELS.findIndex((m) => m.id === this.state.settings.model); this.set({ mode: 'models', modelSel: Math.max(0, i) }); break; }

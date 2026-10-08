@@ -21,15 +21,13 @@ export interface Toast { id: string; level: 'info' | 'ok' | 'warn' | 'error'; te
 
 export interface PendingApproval { req: ApprovalRequest; agentName: string; color: CentoColor; resolve: (d: ApprovalDecision) => void; confirmHigh: boolean }
 
-export interface Settings { theme: 'dark' | 'light'; mascot: MascotSize | 'auto'; permissionMode: PermissionMode; reducedMotion: boolean; color: CentoColor; autoSkills: boolean; model: string }
+export interface Settings { theme: 'dark' | 'light'; mascot: MascotSize | 'auto'; permissionMode: PermissionMode; reducedMotion: boolean; color: CentoColor; autoSkills: boolean; model: string; /** Mouse wheel scrolls the transcript; off gives the terminal's own text selection back. */ mouse: boolean }
 
 export interface AppState {
   items: Item[];
   agents: AgentView[];
   activeAgent: string;
   mode: Mode;
-  /** Mouse wheel scrolls the transcript. Turning it off gives the terminal's own text selection back. */
-  mouse: boolean;
   input: string; cursor: number; /** The other end of the selection in the prompt (the cursor is one end). */ anchor?: number;
   history: string[]; histIdx: number | null; draft: string;
   scroll: number;
@@ -57,7 +55,7 @@ export interface AppState {
   night: import('../night/model.js').NightState;
 }
 
-export const initialSettings = (): Settings => ({ theme: 'dark', mascot: 'auto', permissionMode: 'default', reducedMotion: false, color: 'violet', autoSkills: true, model: '' });
+export const initialSettings = (): Settings => ({ theme: 'dark', mascot: 'auto', permissionMode: 'default', reducedMotion: false, color: 'violet', autoSkills: true, model: '', mouse: true });
 
 export function stateToMini(state: string): MiniState {
   switch (state) {

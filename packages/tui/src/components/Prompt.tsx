@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import { Rich, useCol } from './ui.js';
+import { Clickable } from '../click.js';
 import { layoutInput, selRange } from '../util/editor.js';
 import { COMMANDS, type SlashCommand } from '../state/commands.js';
 import { sp, truncate, type Line } from '../util/text.js';
@@ -57,14 +58,14 @@ export function Prompt({ text, cursor, anchor, busy, width, active, placeholder 
   );
 }
 
-export function SlashPopup({ matches, sel, width }: { matches: SlashCommand[]; sel: number; width: number }) {
+export function SlashPopup({ matches, sel, width, onPick }: { matches: SlashCommand[]; sel: number; width: number; onPick?: (c: SlashCommand) => void }) {
   const shown = matches.slice(0, 6);
   return (
     <Box flexDirection="column" width={width} paddingX={1}>
       {shown.map((c, i): React.ReactNode => {
         const on = i === sel % Math.max(1, shown.length);
         const line: Line = [sp(on ? '▸ ' : '  ', { c: 'accent.hover', b: true }), sp('/' + c.name, { c: on ? 'text.primary' : 'text.secondary', b: on, bg: on ? 'bg.selected' : undefined }), ...(c.args ? [sp(argHint(c.args), { c: 'text.muted', bg: on ? 'bg.selected' : undefined })] : []), sp('  ' + truncate(c.desc, Math.max(8, width - c.name.length - (c.args?.length ?? 0) - 10)), { c: 'text.muted' })];
-        return <Rich key={c.name} line={line} />;
+        return <Clickable key={c.name} onClick={() => onPick?.(c)}><Rich line={line} /></Clickable>;
       })}
     </Box>
   );

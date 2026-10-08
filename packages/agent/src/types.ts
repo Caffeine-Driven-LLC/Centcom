@@ -48,6 +48,10 @@ export interface ApprovalRequest {
 }
 export interface ApprovalDecision { decision: 'approve' | 'deny'; scope: 'once' | 'session' | 'always'; reason?: string }
 /** Injected into engines; the permission policy engine (C015) / the UI answers. */
+/** One question an engine asks the person: choose among `options`, or type text when there are none. */
+export interface EngineQuestion { id: string; header?: string; text: string; options?: { label: string; description?: string }[]; /** The person may type something else. */ allowOther?: boolean; /** The answer is a secret (do not echo or log it). */ secret?: boolean }
+/** Answers per question id; undefined when the person cancelled. */
+export interface QuestionGate { ask(questions: EngineQuestion[]): Promise<Record<string, string[]> | undefined> }
 export interface PermissionGate { decide(req: ApprovalRequest): Promise<ApprovalDecision> }
 
 export interface EngineStartOptions {
@@ -64,6 +68,8 @@ export interface EngineStartOptions {
   /** When true `env` is the child's whole environment (the runner's allow-list); otherwise it is added on top of process.env. */
   envExact?: boolean;
   approvalGate?: PermissionGate;
+  /** Where an engine's questions to the person go when it can take the answer directly (Codex). Without one the question is declined. */
+  questionGate?: QuestionGate;
   limits?: { spawn_timeout_ms?: number; first_event_timeout_ms?: number; interrupt_grace_ms?: number };
 }
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box } from 'ink';
+import { Clickable } from '../click.js';
 import { useCol, Rich } from './ui.js';
 import { renderDiff } from '../util/diff.js';
 import { sp, truncate, truncateMiddle, wrapLine, type Line } from '../util/text.js';
@@ -28,14 +29,20 @@ function approvalBody(a: PendingApproval, width: number, confirming: boolean, ma
   return out;
 }
 
-export function Approval({ a, width, confirming, maxDiff = 8 }: { a: PendingApproval; width: number; confirming: boolean; maxDiff?: number }) {
+export type ApprovalChoice = 'yes' | 'always' | 'no';
+export function Approval({ a, width, confirming, maxDiff = 8, onChoose }: { a: PendingApproval; width: number; confirming: boolean; maxDiff?: number; onChoose?: (c: ApprovalChoice) => void }) {
   const col = useCol();
   const body = approvalBody(a, width, confirming, maxDiff);
   const border = a.req.risk === 'high' ? 'status.danger' : 'status.warning';
   return (
     <Box flexDirection="column" borderStyle="round" borderColor={col(border)} width={width} paddingX={1}>
       <Rich line={[sp(truncate(approvalTitle(a), width - 6), { b: true, c: border })]} />
-      {body.map((l, i) => <Rich key={i} line={l} />)}
+      {body.slice(0, -1).map((l, i) => <Rich key={i} line={l} />)}
+      <Box>
+        <Clickable onClick={() => onChoose?.('yes')}><Rich line={[sp('[y]', { c: 'status.success', b: true }), sp(' yes', { c: 'text.secondary' })]} /></Clickable>
+        {a.req.risk === 'high' ? null : <Clickable marginLeft={3} onClick={() => onChoose?.('always')}><Rich line={[sp('[a]', { c: 'accent.hover', b: true }), sp(' always (this project)', { c: 'text.secondary' })]} /></Clickable>}
+        <Clickable marginLeft={3} onClick={() => onChoose?.('no')}><Rich line={[sp('[n]', { c: 'status.danger', b: true }), sp(' no', { c: 'text.secondary' }), sp('   esc = no', { c: 'text.muted' })]} /></Clickable>
+      </Box>
     </Box>
   );
 }

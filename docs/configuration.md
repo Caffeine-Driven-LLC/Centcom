@@ -37,12 +37,14 @@ When you change them in the app, these are saved to your user file: theme, Cento
 | `relay.url` | string | `"wss://relay.centcom.dev/v1/ws"` | no | Hosted relay WebSocket URL |
 | `net.timeout_ms` | number (1000 to 600000) | `15000` | no | Per-request network timeout |
 | `net.max_attempts` | number (1 to 20) | `5` | no | Retry attempts for network calls |
+| `budget.session_usd` | number (0 to 100000) | `0` | no | Warn when a session's reported cost passes 80 % and 100 % of this (0 = off). Only warns; nothing is stopped |
 | `telemetry.enabled` | boolean | `false` | no | Anonymous usage reporting (off unless you turn it on) |
 | `log.level` | debug \| info \| warn \| error \| silent | `"info"` | yes | How much to write to the log file |
 | `log.max_file_bytes` | number (65536 to 268435456) | `5242880` | no | Rotate the log file at this size |
 | `log.max_files` | number (1 to 20) | `3` | no | How many rotated log files to keep |
 | `ui.theme` | auto \| dark \| light | `"auto"` | yes | Graphite (dark), Paper (light), or follow the system |
 | `ui.mascot` | boolean | `true` | yes | Show Cento |
+| `ui.mouse` | boolean | `true` | no | Scroll with the mouse wheel in the terminal app (off gives the terminal its own text selection back) |
 | `ui.reduced_motion` | boolean | `false` | yes | Turn animation off |
 | `ui.color` | auto \| truecolor \| 256 \| 16 \| never | `"auto"` | yes | Terminal color depth |
 | `lan.enabled` | boolean | `true` | no | Allow LAN sessions |

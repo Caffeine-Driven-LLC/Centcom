@@ -18,6 +18,7 @@ import { Transcript, useTranscriptLayout } from './components/Transcript.js';
 import { Palette, Gallery, ModelPicker, galleryList, paletteItems } from './components/Overlays.js';
 import { Toasts } from './components/Toasts.js';
 import { MultiSelect } from './pick/MultiSelect.js';
+import { ClickContext, clicksIn, createClickRegistry } from './click.js';
 import { NightPanel } from './night/NightPanel.js';
 import { COMMANDS } from './state/commands.js';
 import * as ed from './util/editor.js';
@@ -87,15 +88,16 @@ export function App({ ctl, tier, keys }: AppProps) {
   });
 
   /** Mouse reporting (press, release and wheel, in the SGR form) only while it is on; always switched off again on the way out. */
+  const clicks = useMemo(() => createClickRegistry(), []);
   const { write } = useStdout(); const { stdin } = useStdin(); const wheelRef = useRef<(n: number) => void>(() => undefined);
   wheelRef.current = (notches) => { if (s.mode === 'pick') { for (let i = 0; i < Math.abs(notches); i++) ctl.pickKey(notches > 0 ? 'up' : 'down'); } else if (s.mode === 'chat' || s.mode === 'night' || pending) ctl.patch({ scroll: Math.max(0, Math.min(maxScroll, ctl.state.scroll + notches * 3)) }); }; // from the live value: events can arrive faster than renders
   // Ink drops mouse reports before `useInput` sees them, so the wheel is read from the raw bytes (Ink keeps reading them too).
   useEffect(() => {
-    if (!s.mouse) return;
-    const onData = (d: Buffer | string) => { let n = 0; for (const m of String(d).matchAll(/\x1b\[<(\d+);\d+;\d+M/g)) { const b = Number(m[1]); if (b & 64) n += b & 1 ? -1 : 1; } if (n) wheelRef.current(n); };
+    if (!s.settings.mouse) return;
+    const onData = (d: Buffer | string) => { for (const c of clicksIn(String(d))) clicks.hit(c.col, c.row); let n = 0; for (const m of String(d).matchAll(/\x1b\[<(\d+);\d+;\d+M/g)) { const b = Number(m[1]); if (b & 64) n += b & 1 ? -1 : 1; } if (n) wheelRef.current(n); };
     stdin.on('data', onData); return () => { stdin.off('data', onData); };
-  }, [s.mouse, stdin]);
-  useEffect(() => { if (!s.mouse) return; write('\x1b[?1000h\x1b[?1006h'); return () => { write('\x1b[?1000l\x1b[?1006l'); }; }, [s.mouse, write]);
+  }, [s.settings.mouse, stdin, clicks]);
+  useEffect(() => { if (!s.settings.mouse) return; write('\x1b[?1000h\x1b[?1006h'); return () => { write('\x1b[?1000l\x1b[?1006l'); }; }, [s.settings.mouse, write]);
 
   useInput((input, key) => {
     if (key.ctrl && input === 'c') { if (sel && !pending && (s.mode === 'chat' || s.mode === 'night')) { ctl.copy(ed.selectedText(s.input, s.cursor, s.anchor)); ctl.patch({ anchor: undefined }); return; } ctl.ctrlC(); return; }
@@ -232,13 +234,14 @@ export function App({ ctl, tier, keys }: AppProps) {
   const gallerySize = bodyH;
   return (
     <ThemeCtx.Provider value={theme}>
+      <ClickContext.Provider value={clicks}>
       <Box flexDirection="column" width={cols} height={rows}>
         <Header s={s} width={cols} />
         <Box height={bodyH + stripH + bottomH} width={cols}>
           <Box flexDirection="column" width={mainW} height={bodyH + stripH + bottomH}>
             <Box height={bodyH} width={mainW} flexDirection="column">
               {nightOpen ? <NightPanel n={s.night} width={mainW} height={bodyH} unicode={tier !== 'none'} />
-                : s.mode === 'pick' && s.pick ? <MultiSelect p={s.pick} width={mainW} height={bodyH} unicode={tier !== 'none'} />
+                : s.mode === 'pick' && s.pick ? <MultiSelect p={s.pick} width={mainW} height={bodyH} unicode={tier !== 'none'} onRow={(i) => ctl.pickClick(i)} onConfirm={() => ctl.pickKey('enter')} onCancel={() => ctl.pickKey('cancel')} />
                 : s.mode === 'models' ? <ModelPicker sel={s.modelSel} current={s.settings.model} width={mainW} />
                 : s.mode === 'palette' ? <Palette query={s.palette.query} sel={s.palette.sel} width={mainW} />
                 : s.mode === 'help' ? <HelpScreen actions={allActions()} keymap={keymap} warnings={keys?.warnings ?? []} onClose={() => ctl.patch({ mode: 'chat' })} width={mainW} height={bodyH} />
@@ -247,10 +250,10 @@ export function App({ ctl, tier, keys }: AppProps) {
                       : <Box paddingX={1}><Transcript layout={layout} items={s.items} width={mainW - 2} height={bodyH} scroll={s.scroll} unseen={unseen} /></Box>}
             </Box>
             {stripH > 0 ? <Box paddingX={1} height={stripH}><LiveStrip s={s} driver={ctl.driver} width={mainW - 2} size={stripSize as 'large' | 'small' | 'off'} /></Box> : null}
-            {pending ? <Approval a={pending} width={mainW} confirming={confirming} maxDiff={maxDiff} /> : (
+            {pending ? <Approval a={pending} width={mainW} confirming={confirming} maxDiff={maxDiff} onChoose={(c) => { if (c === 'no') ctl.answerApproval('deny'); else if (c === 'always') { if (pending.req.risk !== 'high') ctl.answerApproval('approve', 'always'); } else if (pending.req.risk === 'high' && !confirming) setConfirming(true); else ctl.answerApproval('approve'); }} /> : (
               <>
                 {showTasks ? <Box paddingX={1} height={tasksH}><TaskList items={s.tasks} maxRows={rows >= 34 ? 10 : 5} width={mainW - 2} unicode={tier !== 'none'} /></Box> : null}
-                {popupH ? <SlashPopup matches={matches} sel={s.slashSel} width={mainW} /> : null}
+                {popupH ? <SlashPopup matches={matches} sel={s.slashSel} width={mainW} onPick={(c) => { const t = '/' + c.name + (c.args ? ' ' : ''); ctl.patch({ input: t, cursor: t.length, anchor: undefined, slashSel: 0 }); if (!c.args) void ctl.submit('/' + c.name); }} /> : null}
                 <Prompt text={s.input} cursor={s.cursor} anchor={s.anchor} busy={s.busy} width={mainW} active={s.mode === 'chat' || s.mode === 'night'} placeholder={nightOpen ? 'Add a task for tonight…' : placeholder} />
               </>
             )}
@@ -260,6 +263,7 @@ export function App({ ctl, tier, keys }: AppProps) {
         <StatusLine s={s} width={cols} />
         <Box position="absolute" marginTop={1} width={cols}><Toasts toasts={s.toasts} width={cols - 1} /></Box>
       </Box>
+      </ClickContext.Provider>
     </ThemeCtx.Provider>
   );
 }

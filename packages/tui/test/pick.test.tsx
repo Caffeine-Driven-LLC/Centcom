@@ -97,3 +97,22 @@ describe('a single-choice agent question', () => {
     expect(c.state.pick!.multi).toBe(false); c.pickKey('down'); c.pickKey('enter'); await ans; expect(sent).toEqual(['In the caller']);
   });
 });
+describe('questions from Codex', () => {
+  const ask = (c: AppController, qs: unknown[]) => (c as any).askEngine(qs) as Promise<Record<string, string[]> | undefined>;
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+  it('a choice is a one-of list and its label is the answer', async () => {
+    const c = make(); const r = ask(c, [{ id: 'q1', header: 'Colour', text: 'Which?', options: [{ label: 'red' }, { label: 'blue', description: 'cool' }] }]); await tick();
+    expect(c.state.pick!.title).toBe('Colour: Which?'); expect(c.state.pick!.multi).toBe(false); c.pickKey('down'); c.pickKey('enter'); expect(await r).toEqual({ q1: ['blue'] });
+  });
+  it('"Something else…" and option-less questions take a typed line that never reaches the agent or the transcript', async () => {
+    const c = make(); 
+    const r = ask(c, [{ id: 'a', text: 'Pick', options: [{ label: 'x' }], allowOther: true }, { id: 'b', text: 'Name?' }]); await tick();
+    expect(c.state.pick!.options.map((o) => o.label)).toEqual(['x', 'Something else…']); c.pickKey('down'); c.pickKey('enter'); await tick();
+    const before = c.state.items.length; await c.submit('green'); await tick(); await c.submit('Ada'); expect(await r).toEqual({ a: ['green'], b: ['Ada'] });
+    expect(c.state.items.some((i) => (i as { kind: string; text?: string }).kind === 'user' && /green|Ada/.test((i as { text?: string }).text ?? ''))).toBe(false); expect(c.state.items.length).toBeGreaterThanOrEqual(before);
+  });
+  it('cancelling (Esc in the list, or an interrupt while a typed answer is awaited) answers nothing', async () => {
+    const c = make(); const r1 = ask(c, [{ id: 'q', text: 'Which?', options: [{ label: 'x' }] }]); await tick(); c.pickKey('cancel'); expect(await r1).toBeUndefined();
+    const r2 = ask(c, [{ id: 'q', text: 'Name?' }]); await tick(); await c.interrupt(); expect(await r2).toBeUndefined();
+  });
+});

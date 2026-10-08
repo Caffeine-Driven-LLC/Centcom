@@ -69,3 +69,21 @@ describe('a whole Codex session against the mock (real child process, real proto
     const { s, evs } = await start({ permissionMode: 'bypassPermissions' }); await s.send('run: echo ok'); await until(() => done(evs)); expect(evs.find((e) => e.type === 'tool.result')).toMatchObject({ status: 'ok' });
   });
 });
+
+describe('Codex asks the person a question (item/tool/requestUserInput)', () => {
+  const text = (evs: NormalisedEvent[]) => evs.filter((e) => e.type === 'text.delta').map((e) => (e as { text: string }).text).join('');
+  it('the gate sees the question and options, and the chosen answer goes back to Codex', async () => {
+    const asked: unknown[] = []; const { s, evs } = await start({ questionGate: { ask: async (qs: unknown[]) => { asked.push(qs); return { q1: ['blue'] }; } } as never });
+    await s.send('ask Which colour? | red | blue'); await until(() => done(evs));
+    expect(asked).toEqual([[{ id: 'q1', header: 'Question', text: 'Which colour?', options: [{ label: 'red' }, { label: 'blue' }] }]]);
+    expect(evs).toContainEqual(expect.objectContaining({ type: 'question.asked', question_id: 'q1', text: 'Which colour?', options: ['red', 'blue'] })); expect(text(evs)).toContain('You chose: blue.');
+  });
+  it('a question without options is free text, and a cancelled question still lets the turn finish', async () => {
+    const seen: unknown[] = []; const a = await start({ questionGate: { ask: async (qs: { options?: unknown }[]) => { seen.push(qs[0]!.options); return { q1: ['my own answer'] }; } } as never });
+    await a.s.send('ask What name? '); await until(() => done(a.evs)); expect(seen).toEqual([undefined]); expect(text(a.evs)).toContain('You chose: my own answer.');
+    const b = await start({ questionGate: { ask: async () => undefined } as never }); await b.s.send('ask Which? | x | y'); await until(() => done(b.evs)); expect(text(b.evs)).toContain('No answer given.');
+  });
+  it('without a gate it is declined with a warning, as before, and the turn does not hang', async () => {
+    const { s, evs } = await start(); await s.send('ask Which? | x | y'); await until(() => done(evs)); expect(evs).toContainEqual(expect.objectContaining({ type: 'engine.warning', code: 'unhandled_server_request' }));
+  });
+});
