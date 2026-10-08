@@ -265,3 +265,16 @@ describe('ctrl+r: earlier messages', () => {
     const t = await mount(); await t.send('\x12', 100); expect(t.ctl.state.toasts.at(-1)!.text).toMatch(/No earlier messages/); t.ctl.patch({ history: ['one'] }); await t.send('draft', 50); await t.send('\x12', 150); await t.send('\x1b', 100); expect(t.text()).toBe('draft');
   });
 });
+
+describe('/find', () => {
+  const many = () => Array.from({ length: 60 }, (_, i) => (i % 2 ? { id: 'a' + i, kind: 'assistant', messageId: 'm' + i, agentId: 'x', text: `reply number ${i} about ${i === 11 ? 'the zebra crossing' : 'nothing special'}`, done: true } : { id: 'u' + i, kind: 'user', text: `question ${i}${i === 40 ? ' mentions a zebra too' : ''}`, ts: 1 })) as never[];
+  it('lists the messages that contain the words, and scrolls the chosen one into view', async () => {
+    const t = await mount(); t.ctl.patch({ items: many() }); await wait(60);
+    const run = t.ctl.runCommand('/find zebra'); await wait(60); expect(t.ctl.state.pick!.title).toBe('2 messages mention "zebra"'); expect(t.ctl.state.pick!.options.map((o) => o.hint)).toEqual(['Cento', 'You']); expect(t.ctl.state.pick!.options[0]!.label).toContain('the zebra crossing');
+    t.ctl.pickKey('enter'); await run; await wait(150); expect(t.ctl.state.jumpTo).toBeUndefined(); expect(t.ctl.state.scroll).toBeGreaterThan(0); expect(t.frame()).toContain('the zebra crossing'); expect(t.frame()).toContain('more lines below');
+  });
+  it('says so when nothing matches or nothing was typed, and Esc changes nothing', async () => {
+    const t = await mount(); t.ctl.patch({ items: many() }); await t.ctl.runCommand('/find'); expect(t.ctl.state.toasts.at(-1)!.text).toMatch(/Type what to look for/);
+    await t.ctl.runCommand('/find giraffe'); expect(t.ctl.state.toasts.at(-1)!.text).toBe('Nothing in this conversation mentions "giraffe".'); const run = t.ctl.runCommand('/find ZEBRA'); await wait(60); t.ctl.pickKey('cancel'); await run; expect(t.ctl.state.scroll).toBe(0);
+  });
+});

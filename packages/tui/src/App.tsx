@@ -74,6 +74,10 @@ export function App({ ctl, tier, keys }: AppProps) {
   useEffect(() => { if (s.scroll > 0) anchor.current = layout.anchorAt(Math.max(0, total - s.scroll - bodyH)); else anchor.current = undefined; });
   const maxScroll = Math.max(0, total - bodyH);
   const setScroll = (n: number) => ctl.patch({ scroll: Math.max(0, Math.min(maxScroll, n)) });
+  useEffect(() => { // /find: bring the chosen message into view, a third of the way down
+    if (!s.jumpTo) return; const row = layout.rowOf({ id: s.jumpTo, offset: 0 }); const start = Math.max(0, (row ?? 0) - Math.floor(bodyH / 3));
+    ctl.patch({ scroll: row === undefined ? s.scroll : Math.max(0, Math.min(maxScroll, total - start - bodyH)), jumpTo: undefined });
+  }, [s.jumpTo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ---- @file suggestions follow the word at the cursor ---- */
   const mentionQuery = mentionNow?.query;

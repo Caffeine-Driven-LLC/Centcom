@@ -52,6 +52,10 @@ Type a few letters of anything: commands (`thm hc` finds `/theme hc`), project f
 
 Everything you change is remembered. `/config` shows where each value comes from.
 
+## Finding things
+
+`/find <words>` lists the messages in this conversation that mention them (newest last); pick one and the conversation scrolls there. `ctrl+r` searches your earlier messages in this project, and `ctrl+k` searches commands, files, saved conversations and skills.
+
 ## Taking things with you
 
 `/copy` puts the last answer on the clipboard, `/copy code` just its last code block. `/export` saves the whole conversation as a Markdown file in this folder (`/export notes.md` to name it; it never overwrites). Secrets are scrubbed from the file.

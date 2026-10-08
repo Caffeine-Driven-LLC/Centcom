@@ -43,6 +43,8 @@ export interface AppState {
   tasks: import('../tasks/model.js').TaskItem[]; tasksOpen: boolean;
   slashSel: number;
   palette: { query: string; sel: number };
+  /** Scroll this transcript item into view (set by /find, cleared by the app once it has scrolled). */
+  jumpTo?: string;
   /** Files suggested for the `@word` at the cursor. */
   mention?: { q: string; items: string[]; sel: number };
   /** The prompt shows dots instead of letters (a typed answer that is a secret). */

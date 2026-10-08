@@ -20,6 +20,7 @@ export const COMMANDS: SlashCommand[] = [
   { name: 'spinner', args: '[fun|plain]', desc: 'The waiting line: rotating verbs, or just "Working…"' },
   { name: 'mouse', args: '[on|off]', desc: 'Scroll with the mouse wheel (off lets you select text with the mouse)' },
   { name: 'settings', desc: 'Every setting in one list: choose one to change it' },
+  { name: 'find', args: '<words>', desc: 'Find messages in this conversation and jump to one' },
   { name: 'copy', args: '[code]', desc: 'Copy the last answer (or just its last code block) to the clipboard' },
   { name: 'export', args: '[file]', desc: 'Save this conversation as a Markdown file in this folder' },
   { name: 'config', desc: 'Show the settings in effect and where each came from' },

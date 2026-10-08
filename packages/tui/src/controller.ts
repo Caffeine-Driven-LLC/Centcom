@@ -640,6 +640,16 @@ export class AppController {
   }
   /** Stop suggesting (the word was finished or deleted). */
   clearMentions() { this.mentionSearch?.abort(); if (this.state.mention) this.set({ mention: undefined }); }
+  /** `/find words`: the messages of this conversation that contain them; the one you pick is scrolled into view. */
+  private async findCommand(arg: string) {
+    const q = arg.trim().toLowerCase(); if (!q) { this.toast('info', 'Type what to look for: /find <words>'); return; }
+    const who = (i: Item) => (i.kind === 'user' ? 'You' : i.kind === 'assistant' ? 'Cento' : i.kind === 'tool' ? i.name : i.kind === 'notice' ? 'Note' : '');
+    const text = (i: Item) => (i.kind === 'user' || i.kind === 'assistant' ? i.text : i.kind === 'tool' ? `${i.summary} ${i.result ?? ''}` : i.kind === 'notice' ? `${i.text} ${i.detail ?? ''}` : '');
+    const hits = this.state.items.filter((i) => i.kind !== 'thinking' && text(i).toLowerCase().includes(q)); if (!hits.length) { this.toast('info', `Nothing in this conversation mentions "${arg.trim()}".`); return; }
+    const snippet = (t: string) => { const flat = t.replace(/\s+/g, ' '); const at = flat.toLowerCase().indexOf(q); const from = Math.max(0, at - 30); return (from > 0 ? '…' : '') + flat.slice(from, from + 90) + (flat.length > from + 90 ? '…' : ''); };
+    const ids = await this.pick({ title: `${hits.length} message${hits.length === 1 ? '' : 's'} mention "${arg.trim()}"`, note: 'Newest last. The one you choose is scrolled into view.', multi: false, confirm: 'go there', options: hits.slice(-40).map((i) => ({ id: i.id, label: snippet(text(i)), hint: who(i) })) });
+    if (ids?.[0]) this.patch({ jumpTo: ids[0] });
+  }
   /** ctrl+r: pick one of your earlier messages in this project; it goes in the prompt for you to change or send. */
   async historyPick() {
     const seen = new Set<string>(); const items = [...this.state.history].reverse().filter((h) => !h.startsWith('/') && !seen.has(h) && !!seen.add(h)).slice(0, 40);
@@ -785,6 +795,7 @@ export class AppController {
       case 'spinner': if (arg === 'fun' || arg === 'plain') { this.setSettings({ spinner: arg }); this.toast('info', arg === 'plain' ? 'The waiting line says Working…' : 'The waiting line rotates its verbs'); } else this.toast('info', 'Try /spinner fun or /spinner plain'); break;
       case 'mouse': { const on = arg ? arg === 'on' : !this.state.settings.mouse; this.setSettings({ mouse: on }); this.toast('info', on ? 'Mouse wheel scrolls. /mouse off lets you select text with the mouse.' : 'Mouse off: select text with the mouse as usual.'); break; }
       case 'settings': await this.settingsMenu(); break;
+      case 'find': await this.findCommand(arg); break;
       case 'copy': {
         const a = lastAnswer(this.state.items); if (!a) { this.toast('info', 'Nothing to copy yet.'); break; }
         if (arg === 'code') { const blocks = codeBlocks(a); if (!blocks.length) { this.toast('info', 'The last answer has no code block.'); break; } this.copy(blocks.at(-1)!); break; }
