@@ -14,7 +14,7 @@ function infoLines(s: AppState, spin: string, width: number, now: number): Line[
   const lastNotice = [...s.items].reverse().find((i) => i.kind === 'notice');
   if (s.approvals.length) {
     const a = s.approvals[0]!;
-    return [[sp('? ', { c: 'status.warning', b: true }), sp('Waiting for you', { c: 'status.warning', b: true })], [sp(truncate(a.req.summary, width), { c: 'text.secondary' })], [sp('y yes · a always · n no', { c: 'text.muted' })]];
+    return [[sp('? ', { c: 'status.warning', b: true }), sp('Waiting for you', { c: 'status.warning', b: true })], [sp(truncate(a.req.summary, width), { c: 'text.secondary' })], [sp(a.req.risk === 'high' ? 'y yes · n no' : 'y yes · s session · a always · n no', { c: 'text.muted' })]];
   }
   if (s.busy) {
     const elapsed = s.turnStartedAt ? formatElapsed(now - s.turnStartedAt) : '';

@@ -60,3 +60,13 @@ describe('the answers of a permission prompt stay readable on every width', () =
     });
   }
 });
+
+describe('the mascot strip offers the same answers as the permission dialog', () => {
+  it('a destructive one offers only yes and no; others also offer this session and always', async () => {
+    const { LiveStrip } = await import('../src/components/LiveStrip.js'); const { MascotDriver } = await import('@centcom/mascot');
+    const c = new AppController({ engine: new DemoEngine({ speed: 100 }), demo: true, cwd: '/tmp', version: 't', skills: [] }); c.patch({ items: [{ id: 'u', kind: 'user', text: 'x' } as never] });
+    const strip = (risk: 'medium' | 'high') => { c.patch({ approvals: [approval(risk)] }); return strip_(renderToString(<ThemeCtx.Provider value={createTheme('dark', 'truecolor')}><LiveStrip s={c.state} driver={new MascotDriver({}) as never} width={70} size="small" /></ThemeCtx.Provider>, { columns: 80 })); };
+    const strip_ = (x: string) => x.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '');
+    expect(strip('high')).toContain('y yes · n no'); expect(strip('high')).not.toContain('always'); expect(strip('medium')).toContain('y yes · s session · a always · n no'); c.stop();
+  });
+});
