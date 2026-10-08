@@ -43,6 +43,14 @@ The adapter lives in `packages/agent/src/codex/`:
 
 Check in the schema that every method name and field name in that table still exists with the same shape (including the approval answers `{ decision: 'accept' | 'acceptForSession' | 'decline' | 'cancel' }` and the `approvalPolicy` / `sandbox` values passed to `thread/start` and `turn/start`). Note every difference.
 
+### 2b. Questions that Codex asks you (`item/tool/requestUserInput`)
+
+This was added later and has **only been tried against the mock** (`tools/codex/mock-codex.mjs`, prompt `ask <question> | <a> | <b>`). Check it against the real schema before trusting it:
+
+1. In `/tmp/codex-schema` look for `requestUserInput` (the params and the response types). The adapter (`engine.ts`, `onQuestion`) assumes the request has `questions: [{ id, header?, question, isOther?, isSecret?, options: [{ label, description? }] | null }]` and that the answer is `{ answers: { "<question id>": { answers: ["<label or typed text>"] } } }`. If a field name differs, change `onQuestion` and the mock together and keep the test in `packages/agent/test/codex.mock.test.ts` ("Codex asks the person a question").
+2. By hand (section 5), ask Codex something that makes it ask you: for example "Before you start, ask me whether I want red or blue, using your question tool." In Centcom you should get a list (one-of, with "Something else…" when `isOther` is set); your pick must come back to Codex as its answer, and Esc must let the turn go on with an empty answer. A question with no options must ask for a typed line that is not kept in the conversation.
+3. Record what Codex really sent (section 3) and replace the mock's `ask` prompt with the recorded request if it differs.
+
 ## 3. Record real sessions
 
 ```sh
