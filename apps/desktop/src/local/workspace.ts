@@ -1,4 +1,6 @@
 import { execFileSync } from 'node:child_process';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { ClaudeCodeEngine, CodexEngine, DemoEngine, newId, type AgentEngine } from '@centcom/agent';
 import { appLogger } from './logger.js';
 import { AppController, ClientConfig, SessionStore, buildRuntime, initialSettings, settingsFromConfig, type Item } from '@centcom/tui';
@@ -24,7 +26,7 @@ export class Workspace {
     const settings = settingsFromConfig(cc.cfg);
     const logger = appLogger(cc.cfg.log).child({ component: 'web', session_id: newId('ses') }); // one shared file sink for the whole server, one binding per workspace
     const rt = await buildRuntime({ cwd: dir, engineId: engine.id, demo, dangerous: settings.permissionMode === 'bypassPermissions' });
-    const ctl = new AppController({ ...rt.options, logger, engine, demo, cwd: dir, branch, version: '0.1.0', ghosts: false, permissionMode: settings.permissionMode, settings, ...cc.options({ ...initialSettings(), ...settings }, { saveHistory: !demo }), sessions: demo ? undefined : new SessionStore(), resume: demo ? undefined : resume });
+    const ctl = new AppController({ ...rt.options, logger, engine, demo, cwd: dir, branch, version: '0.1.0', ghosts: false, permissionMode: settings.permissionMode, settings, ...cc.options({ ...initialSettings(), ...settings }, { saveHistory: !demo }), night: demo ? undefined : { dir: join(homedir(), '.centcom', 'night') }, sessions: demo ? undefined : new SessionStore(), resume: demo ? undefined : resume });
     const ws = new Workspace(dir, ctl, cc);
     rt.bind(ctl);
     await ctl.start();

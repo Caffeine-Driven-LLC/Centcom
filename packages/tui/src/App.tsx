@@ -17,6 +17,7 @@ import { FleetPanel, FLEET_W } from './components/FleetPanel.js';
 import { Transcript, useTranscriptLayout } from './components/Transcript.js';
 import { Palette, Gallery, ModelPicker, galleryList, paletteItems } from './components/Overlays.js';
 import { Toasts } from './components/Toasts.js';
+import { NightPanel } from './night/NightPanel.js';
 import { COMMANDS } from './state/commands.js';
 import * as ed from './util/editor.js';
 
@@ -38,10 +39,11 @@ export function App({ ctl, tier, keys }: AppProps) {
   const mainW = cols - (showFleet ? FLEET_W + 1 : 0);
   const mascot = s.settings.mascot === 'auto' ? (rows >= 34 ? 'large' : rows >= 22 ? 'small' : 'off') : s.settings.mascot;
   const welcome = s.items.length === 0 && !s.busy && s.mode === 'chat' && !pending;
+  const nightOpen = s.mode === 'night';
   const tight = !!pending && rows < 30;
   const stripH = welcome ? 0 : tight ? 1 : mascot === 'large' ? LARGE_H : mascot === 'small' ? 4 : 1;
   const stripSize = tight && mascot !== 'off' ? 'off' : mascot;
-  const matches = s.mode === 'chat' && !pending ? slashMatches(s.input) : [];
+  const matches = (s.mode === 'chat' || s.mode === 'night') && !pending ? slashMatches(s.input) : [];
   const popupH = Math.min(6, matches.length);
   const inputRows = promptRows(s.input, s.cursor, mainW);
   const promptH = inputRows + 2;
@@ -122,6 +124,10 @@ export function App({ ctl, tier, keys }: AppProps) {
       else if (input === 'c') ctl.patch({ gallery: { ...g, color: g.color + 1 } });
       return;
     }
+    if (s.mode === 'night') { // the prompt below stays live: Enter adds a task (an empty Enter starts the night), Esc hides the panel
+      if (key.escape) { ctl.closeNight(); return; }
+      if (key.return && !s.input.endsWith('\\')) { if (s.input.trim()) { void ctl.submit(s.input); ctl.patch({ input: '', cursor: 0 }); } else ctl.nightStart(); return; }
+    }
     /* chat: shortcuts are actions in the keymap; anything else is editing */
     focusRef.current = ['prompt', 'transcript']; const step = fromInk(input, key);
     const typingQuestion = input === '?' && !!s.input; // `?` types itself unless the prompt is empty
@@ -137,6 +143,7 @@ export function App({ ctl, tier, keys }: AppProps) {
         case 'mode.cycle': ctl.cycleMode(); return;
         case 'agent.interrupt': if (s.busy) void ctl.interrupt(); else if (s.input) ctl.patch({ input: '', cursor: 0 }); else ctl.escIdle(); return;
         case 'tasks.toggle': ctl.patch({ tasksOpen: !s.tasksOpen }); return;
+        case 'night.toggle': ctl.openNight(); return;
         case 'fleet.toggle': ctl.patch({ fleet: !s.fleet }); return;
         case 'transcript.bottom': setScroll(0); return;
         case 'transcript.top': setScroll(maxScroll); return;
@@ -193,7 +200,8 @@ export function App({ ctl, tier, keys }: AppProps) {
         <Box height={bodyH + stripH + bottomH} width={cols}>
           <Box flexDirection="column" width={mainW} height={bodyH + stripH + bottomH}>
             <Box height={bodyH} width={mainW} flexDirection="column">
-              {s.mode === 'models' ? <ModelPicker sel={s.modelSel} current={s.settings.model} width={mainW} />
+              {nightOpen ? <NightPanel n={s.night} width={mainW} height={bodyH} unicode={tier !== 'none'} />
+                : s.mode === 'models' ? <ModelPicker sel={s.modelSel} current={s.settings.model} width={mainW} />
                 : s.mode === 'palette' ? <Palette query={s.palette.query} sel={s.palette.sel} width={mainW} />
                 : s.mode === 'help' ? <HelpScreen actions={allActions()} keymap={keymap} warnings={keys?.warnings ?? []} onClose={() => ctl.patch({ mode: 'chat' })} width={mainW} height={bodyH} />
                   : s.mode === 'gallery' ? <Gallery cat={s.gallery.cat} idx={s.gallery.idx} color={s.gallery.color} width={mainW} height={gallerySize} reduced={s.settings.reducedMotion} />
@@ -205,7 +213,7 @@ export function App({ ctl, tier, keys }: AppProps) {
               <>
                 {showTasks ? <Box paddingX={1} height={tasksH}><TaskList items={s.tasks} maxRows={rows >= 34 ? 10 : 5} width={mainW - 2} unicode={tier !== 'none'} /></Box> : null}
                 {popupH ? <SlashPopup matches={matches} sel={s.slashSel} width={mainW} /> : null}
-                <Prompt text={s.input} cursor={s.cursor} busy={s.busy} width={mainW} active={s.mode === 'chat'} placeholder={placeholder} />
+                <Prompt text={s.input} cursor={s.cursor} busy={s.busy} width={mainW} active={s.mode === 'chat' || s.mode === 'night'} placeholder={nightOpen ? 'Add a task for tonight…' : placeholder} />
               </>
             )}
           </Box>

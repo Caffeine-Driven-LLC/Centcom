@@ -2,6 +2,7 @@ import React from 'react';
 import { Box } from 'ink';
 import type { AppState } from '../state/model.js';
 import { Rich } from './ui.js';
+import { counts as nightCounts } from '../night/model.js';
 import { formatCost, formatReset, formatTokens, fit, lineWidth, sp, type Line } from '../util/text.js';
 
 const lvl = (p: number): 'text.muted' | 'status.warning' | 'status.danger' => (p >= 90 ? 'status.danger' : p >= 70 ? 'status.warning' : 'text.muted');
@@ -20,6 +21,7 @@ export function StatusLine({ s, width }: { s: AppState; width: number }) {
   const gauge = (key: string, name: string, pct: number, extra = ''): { key: string; line: Line } => ({ key, line: [sp(name + ' ', { c: 'text.muted' }), sp(bar(pct), { c: lvl(pct) === 'text.muted' ? 'accent.hover' : lvl(pct) }), sp(` ${Math.round(pct)}%`, { c: lvl(pct) === 'text.muted' ? 'text.primary' : lvl(pct) }), ...(extra ? [sp(' ' + extra, { c: 'text.muted' })] : [])] });
   const fields: { key: string; line: Line }[] = [
     { key: 'mode', line: [sp('» ', { c: mc }), sp(mode, { c: mc })] },
+    ...(s.night.running || s.night.armed || s.night.tasks.length ? [{ key: 'night', line: (() => { const c = nightCounts(s.night); const t = s.night.running ? `night ${c.done + c.failed}/${c.total}` : c.queued ? `night · ${c.queued} queued` : 'night ready'; return [sp('◐ ', { c: s.night.running ? 'signal' : 'accent.hover', b: true }), sp(t, { c: s.night.running ? 'signal' : 'accent.hover', b: s.night.running })] as Line; })() }] : []),
     { key: 'state', line: s.busy ? [sp('● ', { c: 'signal' }), sp(me.state.replace(/-/g, ' '), { c: 'text.secondary' })] : [sp('○ ', { c: 'text.muted' }), sp('idle', { c: 'text.muted' })] },
     ...(need ? [{ key: 'need', line: [sp(`${need} need${need === 1 ? 's' : ''} you`, { c: 'status.warning', b: true })] }] : []),
     ...(me.ctxPct !== undefined ? [gauge('ctx', 'context', me.ctxPct, me.ctxTokens && me.ctxWindow ? `${formatTokens(me.ctxTokens)}/${formatTokens(me.ctxWindow)}` : '')] : []),

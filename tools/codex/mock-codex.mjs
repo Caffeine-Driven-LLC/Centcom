@@ -71,6 +71,7 @@ async function fileChange(t, threadId, turnId, rel, make) {
 }
 
 async function turn(threadId, turnId, prompt, t) {
+  prompt = /\nTask:\n([\s\S]*)$/.exec(prompt)?.[1] ?? prompt; // a night-cycle prompt carries its task after the rules
   const live_ = () => t.turn?.id === turnId; const say = (text) => (live_() ? agentText(threadId, turnId, text) : undefined); // an interrupted turn says no more
   let m; let ended = 'completed'; let error = null;
   if ((m = /^\s*run:\s*([\s\S]+)$/i.exec(prompt))) { await say( 'Running that now.'); const r = await runCommand(t, threadId, turnId, m[1].trim()); await say( r === 'declined' ? 'Understood, I did not run it.' : `The command finished with exit code ${r.code}.`); }

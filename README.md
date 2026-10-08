@@ -78,6 +78,8 @@ Flags: `--mode plan|acceptEdits`, `--mascot large|small|off`, `--cento-color red
 
 **Auto skills:** before each prompt Centcom matches your installed skills and commands (`~/.claude/skills`, plugins, `.claude/skills`, `.claude/commands`) against it locally, shows what it picked, and tells Claude to apply them. `/auto on|off`, `/skills [filter]`.
 
+**Night cycle:** `ctrl+n` (or `/night`) opens a queue: write many tasks, press Enter on an empty line, and the agent works through them while you sleep, never asking you anything. Questions are answered "decide yourself"; high-risk actions and anything that pushes, publishes or deploys are refused; a morning report is written to `~/.centcom/night/`. See [`docs/night-cycle.md`](docs/night-cycle.md).
+
 **Skill library:** seven skills ship with Centcom in `packages/skills/library` (design, frontend, backend, security, database, marketing, code-review): each a `SKILL.md` plus `references/` the agent reads only when the task needs that depth, and a few stdlib-only helper scripts. They are matched like any other skill, the agent is pointed at the file, and your own project skills of the same name win. See `packages/skills/library/README.md`.
 
 **centcom-master:** `pnpm skills:sync` fetches the curated catalog in `packages/skills/catalog.tsv` (245 rows from ~70 repos) into `~/.centcom/master`: text files only (scripts are left out), pinned to a commit, scanned for prompt-injection and obfuscation, and exposed as one router skill with an index. Per prompt the matcher injects only the best 1 to 3 (by file path), never the whole bundle. Trusted publishers are on by default; overlapping, hook-dependent and unknown-publisher skills are off. `/skills enable <id>` and `/skills disable <id>` change that.

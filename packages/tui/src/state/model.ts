@@ -2,7 +2,7 @@ import type { ApprovalDecision, ApprovalRequest, EngineId, LoginKind, Permission
 import type { CentoColor, MiniState } from '@centcom/mascot';
 import type { SessionMeta } from '../sessions.js';
 
-export type Mode = 'chat' | 'palette' | 'help' | 'gallery' | 'fleet' | 'models';
+export type Mode = 'chat' | 'palette' | 'help' | 'gallery' | 'fleet' | 'models' | 'night';
 export type MascotSize = 'large' | 'small' | 'off';
 
 export interface AgentView {
@@ -49,6 +49,8 @@ export interface AppState {
   /** The saved conversation this one is written to, and recent saved ones in this folder. */
   sessionId: string; sessions: SessionMeta[];
   version: string;
+  /** The night cycle: tasks worked through unattended. */
+  night: import('../night/model.js').NightState;
 }
 
 export const initialSettings = (): Settings => ({ theme: 'dark', mascot: 'auto', permissionMode: 'default', reducedMotion: false, color: 'violet', autoSkills: true, model: '' });
