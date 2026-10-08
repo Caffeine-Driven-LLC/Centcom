@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const root = resolve(__dirname, '../..');
@@ -39,4 +40,16 @@ describe('the launcher: bundle, rebuild and fallback (a fake project root)', () 
     expect(f.run()).toBe('FALLBACK tsx ' + join(f.r, 'apps/cli/src/main.tsx') + ' --flag x'); expect(readdirSync(join(f.r, 'node_modules/.cache/centcom')).filter((n) => n.endsWith('.tmp') || n === 'cli.mjs')).toEqual([]);
   });
   it('CENTCOM_DEV=1 skips the bundle and runs the sources', () => { const f = fakeRoot(BUNDLER); expect(f.run({ CENTCOM_DEV: '1' })).toContain('FALLBACK tsx'); expect(existsSync(join(f.r, 'node_modules/.cache/centcom/cli.mjs'))).toBe(false); });
+});
+
+describe('the real bundle', () => {
+  it('builds in a few seconds, starts, prints its version and the help, and still finds files next to the sources (import.meta.url kept)', () => {
+    const out = join(mkdtempSync(join(tmpdir(), 'cc-real-')), 'cli.mjs'); execFileSync('node', [join(root, 'tools/dev/bundle-cli.mjs'), out], { encoding: 'utf8', timeout: 60_000 });
+    const run = (args: string[]) => execFileSync('node', [out, ...args], { encoding: 'utf8', env: { ...process.env, NODE_ENV: 'production' }, timeout: 30_000 });
+    expect(run(['--version']).trim()).toMatch(/^\d+\.\d+\.\d+$/); expect(run(['--help'])).toContain('--screen-reader');
+    expect(run(['keys'])).toContain('ctrl+k'); // reads the key list through the bundled packages
+    expect(run(['help', 'env'])).toContain('CENTO_SCREEN_READER');
+    expect(readFileSync(out, 'utf8')).not.toContain(root + '/node_modules/.pnpm/'); // third-party code is inlined, not referenced by path
+    expect(readFileSync(out, 'utf8')).toContain(pathToFileURL(join(root, 'packages/mascot/src/library.ts')).href); // each source file keeps its own location
+  }, 120_000);
 });
