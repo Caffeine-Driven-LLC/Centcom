@@ -17,12 +17,12 @@ const STOPPERS: Record<string, string> = { provider_not_signed_in: 'the agent is
 /** Works through the queue one task at a time while nobody is there. */
 export class NightCycle {
   private current?: string; private timer?: unknown; private timedOut = false; private userStop = false; private lastError?: { code: string; fatal: boolean };
-  constructor(private h: NightHost, private o: { gapMs?: number } = {}) {}
+  constructor(private h: NightHost, private o: { gapMs?: number; branch?: () => string | undefined } = {}) {}
   get state(): NightState { return this.h.get(); }
   /** Approvals and questions are answered by rule while a task runs. */
   active(): boolean { return this.state.running; }
   decide(r: { tool: string; risk: Risk; command?: string }): NightDecision {
-    const d = nightDecision(r); const t = this.task(this.current); if (t) this.update(t.id, (x) => (d.decision === 'approve' ? { approved: x.approved + 1 } : { denied: x.denied + 1 })); return d;
+    const d = nightDecision(r, { allowPush: this.state.allowPush, branch: this.o.branch?.() }); const t = this.task(this.current); if (t) this.update(t.id, (x) => (d.decision === 'approve' ? { approved: x.approved + 1 } : { denied: x.denied + 1 })); return d;
   }
   private task(id?: string): NightTask | undefined { return id ? this.state.tasks.find((t) => t.id === id) : undefined; }
   private update(id: string, f: (t: NightTask) => Partial<NightTask>): void { this.h.set((n) => ({ tasks: n.tasks.map((t) => (t.id === id ? { ...t, ...f(t) } : t)) })); }
@@ -36,6 +36,7 @@ export class NightCycle {
   }
   remove(index: number): boolean { const t = this.state.tasks[index - 1]; if (!t || t.status === 'running') return false; this.h.set((n) => ({ tasks: n.tasks.filter((x) => x.id !== t.id) })); this.h.saved?.(); return true; }
   clear(): void { this.h.set((n) => ({ tasks: n.tasks.filter((t) => t.status === 'running') })); this.h.saved?.(); }
+  setAllowPush(on: boolean): void { this.h.set({ allowPush: on }); this.h.saved?.(); }
   setTimeoutMin(m: number): void { this.h.set({ taskTimeoutMin: Math.max(1, Math.min(480, Math.round(m))) }); this.h.saved?.(); }
 
   start(): { ok: boolean; why?: string } {

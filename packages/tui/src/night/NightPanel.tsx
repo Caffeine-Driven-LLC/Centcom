@@ -25,7 +25,8 @@ export function nightRows(n: NightState, o: { width: number; height: number; now
   if (start + shown.length < list.length) rows.push([sp(`  ↓ ${list.length - start - shown.length} more`, { c: 'text.muted' })]);
   if (!list.length) rows.push([sp('  The queue is empty.', { c: 'text.muted' })]);
   rows.push([]);
-  rows.push([sp(truncate('While it runs, nobody is asked anything. Questions are answered "decide yourself"; high-risk actions, pushes, publishes and deploys are refused. Each task gets ' + n.taskTimeoutMin + ' min.', inner), { c: 'text.muted' })]);
+  rows.push([sp(truncate('While it runs, nobody is asked anything. Questions are answered "decide yourself"; high-risk actions, publishes and deploys are refused. Each task gets ' + n.taskTimeoutMin + ' min.', inner), { c: 'text.muted' })]);
+  rows.push([sp(truncate(n.allowPush ? 'Pushing work branches and opening pull requests is allowed (never main, never force, never merge). /night allow none to turn off.' : 'Nothing is pushed. /night allow push lets it push work branches and open pull requests.', inner), { c: n.allowPush ? 'status.warning' : 'text.muted' })]);
   rows.push([sp(truncate(n.running ? 'esc hide this panel (the night keeps going) · /night stop to stop · ctrl+n back here' : 'enter add task · enter on an empty line start the night · esc close · /night timeout <min>', inner), { c: 'text.muted' })]);
   if (n.reportPath) rows.push([sp(truncate('Report: ' + n.reportPath, inner), { c: 'status.success' })]);
   return rows;

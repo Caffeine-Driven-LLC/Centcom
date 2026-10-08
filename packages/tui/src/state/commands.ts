@@ -17,7 +17,7 @@ export const COMMANDS: SlashCommand[] = [
   { name: 'config', desc: 'Show the settings in effect and where each came from' },
   { name: 'auto', args: '[on|off]', desc: 'Auto skills: apply matching skills and commands to your prompts' },
   { name: 'skills', args: '[filter | enable <id> | disable <id>]', desc: 'List, enable or disable the skills Centcom can auto-apply' },
-  { name: 'night', args: '[on|off|start|stop|add <task>|list|remove <n>|clear|timeout <min>|report]', desc: 'Night cycle: queue many tasks the agent works through while you sleep, without asking you anything' },
+  { name: 'night', args: '[on|off|start|stop|add <task>|list|remove <n>|clear|allow push|timeout <min>|report]', desc: 'Night cycle: queue many tasks the agent works through while you sleep, without asking you anything' },
   { name: 'interrupt', desc: 'Stop the running agent' },
   { name: 'rewind', args: '[number] [files|conversation|both]', desc: 'Go back to before an earlier prompt (Esc Esc when idle)' },
   { name: 'compact', desc: 'Ask the agent to compact its context' },

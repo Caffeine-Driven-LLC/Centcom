@@ -493,10 +493,10 @@ export class AppController {
       interrupt: () => this.interrupt(), lastAssistantText: () => { for (let i = this.state.items.length - 1; i >= 0; i--) { const it = this.state.items[i]!; if (it.kind === 'assistant' && it.text.trim()) return it.text; } return ''; },
       notice: (l, t, d) => this.notice(l, t, d), now: () => Date.now(), id: () => nid('nt'),
       setTimer: (f, ms) => { const t = setTimeout(f, ms); t.unref?.(); return t; }, clearTimer: (h) => clearTimeout(h as NodeJS.Timeout),
-      saved: () => { if (!file) return; try { mkdirSync(dir!, { recursive: true, mode: 0o700 }); const n = this.state.night; writeFileSync(file, JSON.stringify({ taskTimeoutMin: n.taskTimeoutMin, tasks: n.tasks.filter((t) => t.status === 'queued' || t.status === 'running').map((t) => t.text) })); } catch { /* the queue is a convenience; a full disk must not stop the night */ } },
+      saved: () => { if (!file) return; try { mkdirSync(dir!, { recursive: true, mode: 0o700 }); const n = this.state.night; writeFileSync(file, JSON.stringify({ taskTimeoutMin: n.taskTimeoutMin, allowPush: n.allowPush, tasks: n.tasks.filter((t) => t.status === 'queued' || t.status === 'running').map((t) => t.text) })); } catch { /* the queue is a convenience; a full disk must not stop the night */ } },
       writeReport: (name, text) => { if (!dir) return undefined; try { mkdirSync(dir, { recursive: true, mode: 0o700 }); const p = join(dir, name); writeFileSync(p, text); return p; } catch { return undefined; } },
-    }, { gapMs: this.o.night?.gapMs });
-    if (file) { try { const q = JSON.parse(readFileSync(file, 'utf8')) as { taskTimeoutMin?: number; tasks?: string[] }; const tasks = (q.tasks ?? []).filter((t) => typeof t === 'string').slice(0, 200); if (tasks.length) { this.set((s) => ({ night: { ...s.night, taskTimeoutMin: Math.max(1, Math.min(480, Number(q.taskTimeoutMin) || s.night.taskTimeoutMin)), tasks: tasks.map((text): NightTask => ({ id: nid('nt'), text, status: 'queued', approved: 0, denied: 0 })) } })); } } catch { /* no queue yet */ } }
+    }, { gapMs: this.o.night?.gapMs, branch: () => this.state.branch });
+    if (file) { try { const q = JSON.parse(readFileSync(file, 'utf8')) as { taskTimeoutMin?: number; allowPush?: boolean; tasks?: string[] }; if (q.allowPush === true) this.set((s) => ({ night: { ...s.night, allowPush: true } })); const tasks = (q.tasks ?? []).filter((t) => typeof t === 'string').slice(0, 200); if (tasks.length) { this.set((s) => ({ night: { ...s.night, taskTimeoutMin: Math.max(1, Math.min(480, Number(q.taskTimeoutMin) || s.night.taskTimeoutMin)), tasks: tasks.map((text): NightTask => ({ id: nid('nt'), text, status: 'queued', approved: 0, denied: 0 })) } })); } } catch { /* no queue yet */ } }
     return cycle;
   }
   /** Tasks from the panel's prompt or `/night add`. */
@@ -514,10 +514,11 @@ export class AppController {
       case 'add': if (!tail) { this.openNight(); break; } this.nightAdd(tail); break;
       case 'remove': case 'rm': if (!this.night.remove(Number(tail))) this.toast('warn', `No removable task ${tail || ''}.`); break;
       case 'clear': this.night.clear(); this.toast('info', 'Queue cleared.'); break;
+      case 'allow': { const w = tail.toLowerCase(); if (w === 'push') { this.night.setAllowPush(true); this.toast('ok', 'Night cycle may push work branches and open pull requests (never main, never force, never merge).', 5000); } else if (w === 'none' || w === 'nothing') { this.night.setAllowPush(false); this.toast('ok', 'Night cycle pushes nothing.'); } else this.toast('info', n.allowPush ? 'Allowed: pushing work branches and opening pull requests.' : 'Allowed: nothing leaves the machine. /night allow push to let it push work branches and open PRs.', 5000); break; }
       case 'timeout': { const m = Number(tail); if (!Number.isFinite(m) || m < 1) { this.toast('warn', `Per-task limit is ${n.taskTimeoutMin} minutes. Use /night timeout <minutes>.`); break; } this.night.setTimeoutMin(m); this.toast('ok', `Per-task limit: ${this.state.night.taskTimeoutMin} minutes.`); break; }
       case 'list': { const c = nightCounts(n); this.notice('info', `Night cycle: ${c.total} tasks (${c.done} done, ${c.failed} failed, ${c.queued} queued)`, n.tasks.map((t, i) => `${i + 1}. [${t.status}] ${t.text.split('\n')[0]!.slice(0, 90)}`).join('\n') || 'The queue is empty.'); break; }
       case 'report': this.notice('info', n.reportPath ? `Last report: ${n.reportPath}` : 'No report yet. One is written when a night cycle ends.'); break;
-      default: this.toast('warn', `Unknown /night option "${sub}". Try on, start, stop, add, list, remove, clear, timeout, report.`);
+      default: this.toast('warn', `Unknown /night option "${sub}". Try on, start, stop, add, list, remove, clear, allow, timeout, report.`);
     }
   }
 
