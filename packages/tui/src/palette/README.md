@@ -13,4 +13,4 @@ The ctrl+k command palette: fuzzy search over commands, files, sessions and skil
 - **`PaletteView` / `CommandPalette`:** the box is 60 columns wide (`cols-4` when narrower), shows at most 8 rows with `▾ N more`, highlights the matched letters, wraps around with the arrows, runs with enter and closes with esc. The no-results text is the DESIGN copy, and there is no mascot.
 - **Actions:** `palette.open` (ctrl+k), `palette.close`, `palette.next`, `palette.prev`, `palette.run`.
 
-The app's present palette (`components/Overlays.tsx`) is not switched over yet, and the providers for sessions and skills still have to be wired in with the real lists.
+**In the app (ctrl+k):** `AppController.paletteProviders()` builds the providers from the real lists: commands, quick settings and the 319 animations (`entries.ts`, each one a slash command line), project files (a pick adds `@path` to the prompt), saved conversations (a pick resumes it) and skills (a pick puts `/name ` or "Use the … skill:" in the prompt). With nothing typed it shows the commands people use most as Recent. Results can be clicked. The same file index feeds the `@file` suggestions in the prompt.
