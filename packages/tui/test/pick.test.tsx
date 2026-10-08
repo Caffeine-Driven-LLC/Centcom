@@ -1,4 +1,6 @@
 import React from 'react';
+import { resolve as resolvePath } from 'node:path';
+const REPO_ROOT = resolvePath(__dirname, '../../..'); // not the folder the tests were started from
 import { renderToString } from 'ink';
 import { describe, expect, it } from 'vitest';
 import { DemoEngine } from '@centcom/agent';
@@ -157,7 +159,7 @@ describe('palette providers', () => {
     const ran: string[] = []; c.submit = (async (x: string) => { ran.push(x); }) as never; await th[0]!.run(); await (await find(c, 'commands', 'cento idle_breathe'))[0]!.run(); expect(ran).toEqual(['/theme hc', '/cento idle_breathe']);
   });
   it('files of this project are found by a fuzzy name; picking one mentions it in the prompt', async () => {
-    const c = new AppController({ engine: new DemoEngine({ speed: 100 }), demo: true, cwd: process.cwd(), version: 't', skills: [] }); const hits = await find(c, 'files', 'ptkeys'); expect(hits.some((h) => h.label.endsWith('packages/tui/test/prompt-keys.test.tsx'))).toBe(true);
+    const c = new AppController({ engine: new DemoEngine({ speed: 100 }), demo: true, cwd: REPO_ROOT, version: 't', skills: [] }); const hits = await find(c, 'files', 'ptkeys'); expect(hits.some((h) => h.label.endsWith('packages/tui/test/prompt-keys.test.tsx'))).toBe(true);
     c.patch({ input: 'look at', cursor: 7 }); await hits.find((h) => h.label.endsWith('prompt-keys.test.tsx'))!.run(); expect(c.state.input).toMatch(/^look at @\S*prompt-keys\.test\.tsx $/); c.stop();
   });
   it('sessions list the saved conversations (not the current one) and resume the chosen one; skills put a hint in the prompt', async () => {

@@ -1,5 +1,7 @@
 import React from 'react';
 import { PassThrough } from 'node:stream';
+import { resolve as resolvePath } from 'node:path';
+const REPO_ROOT = resolvePath(__dirname, '../../..'); // not the folder the tests were started from
 import { render } from 'ink';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DemoEngine } from '@centcom/agent';
@@ -233,7 +235,7 @@ describe('review fixes: the night panel, masked answers and modified clicks', ()
 });
 
 describe('@file suggestions', () => {
-  const repo = process.cwd();
+  const repo = REPO_ROOT;
   it('typing @ and a few letters suggests project files; Tab completes the chosen one with a space', async () => {
     const t = await mount({ cwd: repo }); await t.send('look at @ptkeys', 700);
     expect(t.frame()).toContain('@prompt-keys.test.tsx'); expect(t.frame()).toContain('packages/tui/test/'); await t.send('\t', 150);
