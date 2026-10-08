@@ -1,0 +1,626 @@
+[
+ {
+  "type": "session.started",
+  "engine": "codex",
+  "engine_session_id": "01a11808-215b-7c63-89ae-208225339207",
+  "model": "gpt-6.1-sol",
+  "tools": [
+   "shell",
+   "apply_patch"
+  ],
+  "mcp_servers": [],
+  "capabilities": [
+   "streaming",
+   "approvals",
+   "resume",
+   "mcp",
+   "thinking",
+   "usage",
+   "interrupt",
+   "compact",
+   "models.list"
+  ],
+  "login_kind": "subscription",
+  "v": 1,
+  "seq": 1,
+  "ts": "2026-10-07T20:22:28.516Z",
+  "agent_id": "agt_01JREC00000000000000000003"
+ },
+ {
+  "type": "turn.started",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB",
+  "v": 1,
+  "seq": 2,
+  "ts": "2026-10-07T20:22:28.619Z",
+  "agent_id": "agt_01JREC00000000000000000003"
+ },
+ {
+  "type": "status",
+  "state": "prompt-received",
+  "v": 1,
+  "seq": 3,
+  "ts": "2026-10-07T20:22:28.619Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "status",
+  "state": "streaming",
+  "v": 1,
+  "seq": 4,
+  "ts": "2026-10-07T20:22:32.207Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0798c08191a20e2429c3542273",
+  "index": 0,
+  "text": "I",
+  "v": 1,
+  "seq": 5,
+  "ts": "2026-10-07T20:22:32.208Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0798c08191a20e2429c3542273",
+  "index": 1,
+  "text": "’ll",
+  "v": 1,
+  "seq": 6,
+  "ts": "2026-10-07T20:22:32.208Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0798c08191a20e2429c3542273",
+  "index": 2,
+  "text": " run",
+  "v": 1,
+  "seq": 7,
+  "ts": "2026-10-07T20:22:32.209Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0798c08191a20e2429c3542273",
+  "index": 3,
+  "text": " `",
+  "v": 1,
+  "seq": 8,
+  "ts": "2026-10-07T20:22:32.209Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0798c08191a20e2429c3542273",
+  "index": 4,
+  "text": "npm",
+  "v": 1,
+  "seq": 9,
+  "ts": "2026-10-07T20:22:32.209Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0798c08191a20e2429c3542273",
+  "index": 5,
+  "text": " test",
+  "v": 1,
+  "seq": 10,
+  "ts": "2026-10-07T20:22:32.340Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0798c08191a20e2429c3542273",
+  "index": 6,
+  "text": "`",
+  "v": 1,
+  "seq": 11,
+  "ts": "2026-10-07T20:22:32.340Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0798c08191a20e2429c3542273",
+  "index": 7,
+  "text": " in",
+  "v": 1,
+  "seq": 12,
+  "ts": "2026-10-07T20:22:32.340Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0798c08191a20e2429c3542273",
+  "index": 8,
+  "text": " this",
+  "v": 1,
+  "seq": 13,
+  "ts": "2026-10-07T20:22:32.340Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0798c08191a20e2429c3542273",
+  "index": 9,
+  "text": " folder",
+  "v": 1,
+  "seq": 14,
+  "ts": "2026-10-07T20:22:32.340Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0798c08191a20e2429c3542273",
+  "index": 10,
+  "text": " and",
+  "v": 1,
+  "seq": 15,
+  "ts": "2026-10-07T20:22:32.340Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0798c08191a20e2429c3542273",
+  "index": 11,
+  "text": " report",
+  "v": 1,
+  "seq": 16,
+  "ts": "2026-10-07T20:22:32.340Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0798c08191a20e2429c3542273",
+  "index": 12,
+  "text": " the",
+  "v": 1,
+  "seq": 17,
+  "ts": "2026-10-07T20:22:32.341Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0798c08191a20e2429c3542273",
+  "index": 13,
+  "text": " result",
+  "v": 1,
+  "seq": 18,
+  "ts": "2026-10-07T20:22:32.341Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0798c08191a20e2429c3542273",
+  "index": 14,
+  "text": ".",
+  "v": 1,
+  "seq": 19,
+  "ts": "2026-10-07T20:22:32.341Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.done",
+  "message_id": "msg_0984e676a3406028016ac6aa0798c08191a20e2429c3542273",
+  "text": "I’ll run `npm test` in this folder and report the result.",
+  "v": 1,
+  "seq": 20,
+  "ts": "2026-10-07T20:22:32.367Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "status",
+  "state": "running-command",
+  "v": 1,
+  "seq": 21,
+  "ts": "2026-10-07T20:22:33.586Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "tool.requested",
+  "tool_id": "exec-ddddc087-4d71-4b6a-b79f-13669b2ff32a",
+  "name": "Bash",
+  "input_summary": "/bin/zsh -lc 'npm test'",
+  "risk": "medium",
+  "command": "/bin/zsh -lc 'npm test'",
+  "v": 1,
+  "seq": 22,
+  "ts": "2026-10-07T20:22:33.586Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "approval.requested",
+  "approval_id": "apr_01M4C0GDBJ5B60X9TAYECM0YDA",
+  "tool_id": "exec-ddddc087-4d71-4b6a-b79f-13669b2ff32a",
+  "summary": "Bash: /bin/zsh -lc 'npm test'",
+  "risk": "medium",
+  "command": "/bin/zsh -lc 'npm test'",
+  "cwd": "$WORK",
+  "v": 1,
+  "seq": 23,
+  "ts": "2026-10-07T20:22:33.586Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "status",
+  "state": "awaiting-approval",
+  "v": 1,
+  "seq": 24,
+  "ts": "2026-10-07T20:22:33.586Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "approval.resolved",
+  "approval_id": "apr_01M4C0GDBJ5B60X9TAYECM0YDA",
+  "decision": "deny",
+  "scope": "once",
+  "by": "user",
+  "v": 1,
+  "seq": 25,
+  "ts": "2026-10-07T20:22:33.586Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "tool.result",
+  "tool_id": "exec-ddddc087-4d71-4b6a-b79f-13669b2ff32a",
+  "status": "denied",
+  "summary": "Not allowed",
+  "v": 1,
+  "seq": 26,
+  "ts": "2026-10-07T20:22:33.586Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "usage.report",
+  "input_tokens": 16705,
+  "output_tokens": 101,
+  "cache_read_tokens": 13184,
+  "cost_is_estimate": true,
+  "context_used_pct": 7,
+  "context_tokens": 16806,
+  "context_window": 258400,
+  "v": 1,
+  "seq": 27,
+  "ts": "2026-10-07T20:22:33.844Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "limits.report",
+  "windows": [
+   {
+    "name": "five_hour",
+    "utilization": 0.08,
+    "resets_at": 1791420089
+   },
+   {
+    "name": "seven_day",
+    "utilization": 0.01,
+    "resets_at": 1792006889
+   }
+  ],
+  "v": 1,
+  "seq": 28,
+  "ts": "2026-10-07T20:22:33.844Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "status",
+  "state": "streaming",
+  "v": 1,
+  "seq": 29,
+  "ts": "2026-10-07T20:22:36.076Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0c2588819187c01974ec47ce78",
+  "index": 0,
+  "text": "`",
+  "v": 1,
+  "seq": 30,
+  "ts": "2026-10-07T20:22:36.097Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0c2588819187c01974ec47ce78",
+  "index": 1,
+  "text": "npm",
+  "v": 1,
+  "seq": 31,
+  "ts": "2026-10-07T20:22:36.097Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0c2588819187c01974ec47ce78",
+  "index": 2,
+  "text": " test",
+  "v": 1,
+  "seq": 32,
+  "ts": "2026-10-07T20:22:36.097Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0c2588819187c01974ec47ce78",
+  "index": 3,
+  "text": "`",
+  "v": 1,
+  "seq": 33,
+  "ts": "2026-10-07T20:22:36.097Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0c2588819187c01974ec47ce78",
+  "index": 4,
+  "text": " did",
+  "v": 1,
+  "seq": 34,
+  "ts": "2026-10-07T20:22:36.324Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0c2588819187c01974ec47ce78",
+  "index": 5,
+  "text": " not",
+  "v": 1,
+  "seq": 35,
+  "ts": "2026-10-07T20:22:36.508Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0c2588819187c01974ec47ce78",
+  "index": 6,
+  "text": " run",
+  "v": 1,
+  "seq": 36,
+  "ts": "2026-10-07T20:22:36.508Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0c2588819187c01974ec47ce78",
+  "index": 7,
+  "text": " because",
+  "v": 1,
+  "seq": 37,
+  "ts": "2026-10-07T20:22:36.508Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0c2588819187c01974ec47ce78",
+  "index": 8,
+  "text": " the",
+  "v": 1,
+  "seq": 38,
+  "ts": "2026-10-07T20:22:36.508Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0c2588819187c01974ec47ce78",
+  "index": 9,
+  "text": " command",
+  "v": 1,
+  "seq": 39,
+  "ts": "2026-10-07T20:22:36.508Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0c2588819187c01974ec47ce78",
+  "index": 10,
+  "text": " execution",
+  "v": 1,
+  "seq": 40,
+  "ts": "2026-10-07T20:22:36.508Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0c2588819187c01974ec47ce78",
+  "index": 11,
+  "text": " was",
+  "v": 1,
+  "seq": 41,
+  "ts": "2026-10-07T20:22:36.508Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0c2588819187c01974ec47ce78",
+  "index": 12,
+  "text": " rejected",
+  "v": 1,
+  "seq": 42,
+  "ts": "2026-10-07T20:22:36.508Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0c2588819187c01974ec47ce78",
+  "index": 13,
+  "text": ".",
+  "v": 1,
+  "seq": 43,
+  "ts": "2026-10-07T20:22:36.512Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0c2588819187c01974ec47ce78",
+  "index": 14,
+  "text": " No",
+  "v": 1,
+  "seq": 44,
+  "ts": "2026-10-07T20:22:36.512Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0c2588819187c01974ec47ce78",
+  "index": 15,
+  "text": " test",
+  "v": 1,
+  "seq": 45,
+  "ts": "2026-10-07T20:22:36.512Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0c2588819187c01974ec47ce78",
+  "index": 16,
+  "text": " results",
+  "v": 1,
+  "seq": 46,
+  "ts": "2026-10-07T20:22:36.512Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0c2588819187c01974ec47ce78",
+  "index": 17,
+  "text": " are",
+  "v": 1,
+  "seq": 47,
+  "ts": "2026-10-07T20:22:36.512Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0c2588819187c01974ec47ce78",
+  "index": 18,
+  "text": " available",
+  "v": 1,
+  "seq": 48,
+  "ts": "2026-10-07T20:22:36.512Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_0984e676a3406028016ac6aa0c2588819187c01974ec47ce78",
+  "index": 19,
+  "text": ".",
+  "v": 1,
+  "seq": 49,
+  "ts": "2026-10-07T20:22:36.512Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "text.done",
+  "message_id": "msg_0984e676a3406028016ac6aa0c2588819187c01974ec47ce78",
+  "text": "`npm test` did not run because the command execution was rejected. No test results are available.",
+  "v": 1,
+  "seq": 50,
+  "ts": "2026-10-07T20:22:36.514Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "usage.report",
+  "input_tokens": 16851,
+  "output_tokens": 24,
+  "cache_read_tokens": 16512,
+  "cost_is_estimate": true,
+  "context_used_pct": 13,
+  "context_tokens": 33681,
+  "context_window": 258400,
+  "v": 1,
+  "seq": 51,
+  "ts": "2026-10-07T20:22:36.518Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "limits.report",
+  "windows": [
+   {
+    "name": "five_hour",
+    "utilization": 0.09,
+    "resets_at": 1791420089
+   },
+   {
+    "name": "seven_day",
+    "utilization": 0.01,
+    "resets_at": 1792006889
+   }
+  ],
+  "v": 1,
+  "seq": 52,
+  "ts": "2026-10-07T20:22:36.518Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "status",
+  "state": "idle",
+  "v": 1,
+  "seq": 53,
+  "ts": "2026-10-07T20:22:36.523Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ },
+ {
+  "type": "turn.done",
+  "outcome": "ok",
+  "stop_reason": "completed",
+  "v": 1,
+  "seq": 54,
+  "ts": "2026-10-07T20:22:36.523Z",
+  "agent_id": "agt_01JREC00000000000000000003",
+  "turn_id": "trn_01M4C0G8GBPDK9C0JMTN52EXMB"
+ }
+]

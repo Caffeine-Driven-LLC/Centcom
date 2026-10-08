@@ -1,0 +1,197 @@
+[
+ {
+  "type": "engine.warning",
+  "code": "deprecationNotice",
+  "text": "Full-history hydration is deprecated for paginated threads; use `excludeTurns: true`, then page with `thread/turns/list` and `thread/items/list`.",
+  "v": 1,
+  "seq": 1,
+  "ts": "2026-10-07T20:22:41.768Z",
+  "agent_id": "agt_01JREC00000000000000000005"
+ },
+ {
+  "type": "session.started",
+  "engine": "codex",
+  "engine_session_id": "01a11807-a3b7-7b03-b948-98c67e796c53",
+  "model": "gpt-6.1-sol",
+  "tools": [
+   "shell",
+   "apply_patch"
+  ],
+  "mcp_servers": [],
+  "capabilities": [
+   "streaming",
+   "approvals",
+   "resume",
+   "mcp",
+   "thinking",
+   "usage",
+   "interrupt",
+   "compact",
+   "models.list"
+  ],
+  "login_kind": "subscription",
+  "v": 1,
+  "seq": 2,
+  "ts": "2026-10-07T20:22:41.818Z",
+  "agent_id": "agt_01JREC00000000000000000005"
+ },
+ {
+  "type": "usage.report",
+  "input_tokens": 16686,
+  "output_tokens": 9,
+  "cache_read_tokens": 13184,
+  "cost_is_estimate": true,
+  "context_used_pct": 6,
+  "context_tokens": 16695,
+  "context_window": 258400,
+  "v": 1,
+  "seq": 3,
+  "ts": "2026-10-07T20:22:41.818Z",
+  "agent_id": "agt_01JREC00000000000000000005"
+ },
+ {
+  "type": "turn.started",
+  "turn_id": "trn_01M4C0GNFZTN0QNJA1JKM49RVG",
+  "v": 1,
+  "seq": 4,
+  "ts": "2026-10-07T20:22:41.919Z",
+  "agent_id": "agt_01JREC00000000000000000005"
+ },
+ {
+  "type": "status",
+  "state": "prompt-received",
+  "v": 1,
+  "seq": 5,
+  "ts": "2026-10-07T20:22:41.919Z",
+  "agent_id": "agt_01JREC00000000000000000005",
+  "turn_id": "trn_01M4C0GNFZTN0QNJA1JKM49RVG"
+ },
+ {
+  "type": "status",
+  "state": "streaming",
+  "v": 1,
+  "seq": 6,
+  "ts": "2026-10-07T20:22:45.640Z",
+  "agent_id": "agt_01JREC00000000000000000005",
+  "turn_id": "trn_01M4C0GNFZTN0QNJA1JKM49RVG"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_005014a66760695b016ac6aa15bb0c87d2981ed94b35429056",
+  "index": 0,
+  "text": "Hello",
+  "v": 1,
+  "seq": 7,
+  "ts": "2026-10-07T20:22:45.646Z",
+  "agent_id": "agt_01JREC00000000000000000005",
+  "turn_id": "trn_01M4C0GNFZTN0QNJA1JKM49RVG"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_005014a66760695b016ac6aa15bb0c87d2981ed94b35429056",
+  "index": 1,
+  "text": " from",
+  "v": 1,
+  "seq": 8,
+  "ts": "2026-10-07T20:22:45.699Z",
+  "agent_id": "agt_01JREC00000000000000000005",
+  "turn_id": "trn_01M4C0GNFZTN0QNJA1JKM49RVG"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_005014a66760695b016ac6aa15bb0c87d2981ed94b35429056",
+  "index": 2,
+  "text": " Cod",
+  "v": 1,
+  "seq": 9,
+  "ts": "2026-10-07T20:22:45.782Z",
+  "agent_id": "agt_01JREC00000000000000000005",
+  "turn_id": "trn_01M4C0GNFZTN0QNJA1JKM49RVG"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_005014a66760695b016ac6aa15bb0c87d2981ed94b35429056",
+  "index": 3,
+  "text": "ex",
+  "v": 1,
+  "seq": 10,
+  "ts": "2026-10-07T20:22:45.784Z",
+  "agent_id": "agt_01JREC00000000000000000005",
+  "turn_id": "trn_01M4C0GNFZTN0QNJA1JKM49RVG"
+ },
+ {
+  "type": "text.delta",
+  "message_id": "msg_005014a66760695b016ac6aa15bb0c87d2981ed94b35429056",
+  "index": 4,
+  "text": ".",
+  "v": 1,
+  "seq": 11,
+  "ts": "2026-10-07T20:22:45.841Z",
+  "agent_id": "agt_01JREC00000000000000000005",
+  "turn_id": "trn_01M4C0GNFZTN0QNJA1JKM49RVG"
+ },
+ {
+  "type": "text.done",
+  "message_id": "msg_005014a66760695b016ac6aa15bb0c87d2981ed94b35429056",
+  "text": "Hello from Codex.",
+  "v": 1,
+  "seq": 12,
+  "ts": "2026-10-07T20:22:46.077Z",
+  "agent_id": "agt_01JREC00000000000000000005",
+  "turn_id": "trn_01M4C0GNFZTN0QNJA1JKM49RVG"
+ },
+ {
+  "type": "usage.report",
+  "input_tokens": 17343,
+  "output_tokens": 9,
+  "cache_read_tokens": 13184,
+  "cost_is_estimate": true,
+  "context_used_pct": 13,
+  "context_tokens": 34047,
+  "context_window": 258400,
+  "v": 1,
+  "seq": 13,
+  "ts": "2026-10-07T20:22:46.116Z",
+  "agent_id": "agt_01JREC00000000000000000005",
+  "turn_id": "trn_01M4C0GNFZTN0QNJA1JKM49RVG"
+ },
+ {
+  "type": "limits.report",
+  "windows": [
+   {
+    "name": "five_hour",
+    "utilization": 0.09,
+    "resets_at": 1791420089
+   },
+   {
+    "name": "seven_day",
+    "utilization": 0.01,
+    "resets_at": 1792006889
+   }
+  ],
+  "v": 1,
+  "seq": 14,
+  "ts": "2026-10-07T20:22:46.116Z",
+  "agent_id": "agt_01JREC00000000000000000005",
+  "turn_id": "trn_01M4C0GNFZTN0QNJA1JKM49RVG"
+ },
+ {
+  "type": "status",
+  "state": "idle",
+  "v": 1,
+  "seq": 15,
+  "ts": "2026-10-07T20:22:46.120Z",
+  "agent_id": "agt_01JREC00000000000000000005",
+  "turn_id": "trn_01M4C0GNFZTN0QNJA1JKM49RVG"
+ },
+ {
+  "type": "turn.done",
+  "outcome": "ok",
+  "stop_reason": "completed",
+  "v": 1,
+  "seq": 16,
+  "ts": "2026-10-07T20:22:46.120Z",
+  "agent_id": "agt_01JREC00000000000000000005",
+  "turn_id": "trn_01M4C0GNFZTN0QNJA1JKM49RVG"
+ }
+]
