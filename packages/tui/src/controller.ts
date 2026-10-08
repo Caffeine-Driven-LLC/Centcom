@@ -817,6 +817,30 @@ export class AppController {
     else this.updateAgent(n.id, () => view);
     if (n.state === 'failed') this.notice('warn', `Agent ${this.fleetIds.indexOf(n.id) + 1} (${n.label}) stopped with an error${n.error_code ? `: ${n.error_code}` : ''}.`);
   }
+  /** Bare `/fleet`: what you can do with parallel agents, as a list. Starting asks how many and what for. */
+  private async fleetMenu() {
+    const f = this.o.fleet!; const nodes = f.manager.list().filter((n) => n.kind === 'agent'); const has = nodes.length > 0;
+    const ids = await this.pick({ title: 'Parallel agents', note: has ? `${nodes.length} agent${nodes.length === 1 ? '' : 's'} so far. Each works in its own folder and branch.` : 'None yet. Each one works in its own folder and branch.', multi: false, confirm: 'choose', options: [
+      { id: 'start', label: 'Start agents…', hint: 'the same task, in parallel' },
+      ...(has ? [{ id: 'list', label: 'Show them', hint: 'branch and state of each' }, { id: 'preview', label: 'What would merging one change?', hint: 'checks for conflicts' }, { id: 'stop', label: 'Stop agents…' }, { id: 'remove', label: 'Remove agents and their branches…' }] : []),
+      { id: 'clean', label: 'Clean up leftovers', hint: 'folders of agents that were interrupted' }] });
+    switch (ids?.[0]) {
+      case 'start': {
+        const n = await this.pick({ title: 'How many agents?', options: [1, 2, 3, 4, 6, 8].map((k) => ({ id: String(k), label: String(k), hint: k === 1 ? 'one on its own branch' : undefined })), multi: false, confirm: 'next' }); if (!n?.[0]) return;
+        const task = await this.askText({ id: 'task', text: `What should ${n[0] === '1' ? 'it' : 'they'} work on?${n[0] === '1' ? '' : ' Every agent gets the same task.'}` }); if (!task?.trim()) return;
+        await this.fleetCommand(`start ${n[0]} ${task.trim()}`); break;
+      }
+      case 'preview': {
+        const pickedAgent = await this.pick({ title: 'Which agent?', options: nodes.map((x) => ({ id: x.id, label: `${this.fleetIds.indexOf(x.id) + 1}. ${x.branch ?? x.id}` })), multi: false, confirm: 'check' }); if (!pickedAgent?.[0]) return;
+        await this.fleetCommand(`preview ${this.fleetIds.indexOf(pickedAgent[0]) + 1}`); break;
+      }
+      case 'stop': await this.fleetPick('stop'); break;
+      case 'remove': await this.fleetPick('remove'); break;
+      case 'list': await this.fleetCommand('list'); break;
+      case 'clean': await this.fleetCommand('clean'); break;
+      default: break;
+    }
+  }
   /** `/fleet stop` or `/fleet remove` with no number: tick the agents. */
   private async fleetPick(verb: 'stop' | 'remove') {
     const f = this.o.fleet!; const nodes = f.manager.list().filter((n) => n.kind === 'agent');
@@ -829,6 +853,7 @@ export class AppController {
   private fleetAgent(nArg: string | undefined): FleetNode | undefined { const n = Number(nArg); const id = Number.isInteger(n) ? this.fleetIds[n - 1] : undefined; return id ? this.o.fleet!.manager.list().find((x) => x.id === id) : undefined; }
   private async fleetCommand(arg: string) {
     const f = this.o.fleet; if (!f) { this.toast('info', this.o.demo ? 'The fleet needs a real engine (not the demo).' : 'Parallel agents are off in this session.'); return; }
+    if (!arg.trim()) { await this.fleetMenu(); return; }
     const [sub = 'list', ...rest] = arg.split(/\s+/).filter(Boolean);
     try {
       switch (sub) {
@@ -891,7 +916,7 @@ export class AppController {
     this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: `Rewind to before "${target.label}"? Type y to confirm, anything else cancels.`, detail: parts.join('\n') });
   }
   /** Esc twice within 600 ms while idle opens the checkpoint list. */
-  escIdle() { const now = Date.now(); if (now - this.lastEsc < 600) { this.lastEsc = 0; void this.rewindCommand(''); } else this.lastEsc = now; }
+  escIdle() { if (this.pendingAnswer) { this.cancelQuestions(); return; } const now = Date.now(); if (now - this.lastEsc < 600) { this.lastEsc = 0; void this.rewindCommand(''); } else this.lastEsc = now; }
 
   /* ------------------------------------------------------------------ permissions */
   private async permissionsCommand(arg: string) {

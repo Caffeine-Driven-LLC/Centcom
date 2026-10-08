@@ -27,7 +27,7 @@ The wheel scrolls the conversation and moves the highlight in lists. Click a row
 
 `/settings` is one list of every setting with its current value: pick one to change it, and you come back to the list. `Esc` closes it.
 
-Most commands open a list when you give them no value: `/mode`, `/theme`, `/mascot`, `/color`, `/motion`, `/spinner`, `/density`, `/effort`, `/resume`, `/permissions`, `/skills`, `/night remove`, `/night allow`, `/fleet stop`, `/fleet remove`. Move with the arrows (or `j` / `k`), `space` ticks, `a` ticks all, `Enter` confirms, `Esc` cancels. When the agent asks you a question with options, the same list appears; `Esc` lets you type your own answer.
+Most commands open a list when you give them no value: `/mode`, `/theme`, `/mascot`, `/color`, `/motion`, `/spinner`, `/density`, `/effort`, `/resume`, `/permissions`, `/skills`, `/night remove`, `/night allow`, `/fleet stop`, `/fleet remove`. `/fleet` alone is a menu: start agents (it asks how many, then what for), show them, check a merge, stop or remove them. Move with the arrows (or `j` / `k`), `space` ticks, `a` ticks all, `Enter` confirms, `Esc` cancels. When the agent asks you a question with options, the same list appears; `Esc` lets you type your own answer.
 
 Codex can wait for your answer while it works. Claude Code's questions come back to it as your next message.
 

@@ -85,7 +85,16 @@ describe('the fleet in the app', () => {
   it('/fleet start 2 runs two agents on their own branches; they show in the fleet panel; /fleet lists them; stop all ends them', async () => {
     const { ctl, fake } = await fleetApp(); await ctl.runCommand('/fleet start 2 fix the flaky test'); await until(() => fake.sessions.length === 2, 10_000);
     const rows = ctl.state.agents.filter((a) => !a.mine); expect(rows.map((a) => a.name)).toEqual(['1 fix the flaky test 1', '2 fix the flaky test 2']); expect(rows.every((a) => /^centcom\/alex\//.test(a.branch))).toBe(true); expect(new Set(fake.sessions.map((s) => s.o.cwd)).size).toBe(2); expect(ctl.state.fleet).toBe(true);
-    await ctl.runCommand('/fleet'); expect(notices(ctl).at(-1)).toMatch(/2 fleet agents[\s\S]*1\. fix the flaky test 1/); await ctl.runCommand('/fleet stop all'); await until(() => ctl.state.agents.filter((a) => !a.mine).every((a) => a.state === 'idle' || a.state === 'success'), 10_000); ctl.stop();
+    await ctl.runCommand('/fleet list'); expect(notices(ctl).at(-1)).toMatch(/2 fleet agents[\s\S]*1\. fix the flaky test 1/); await ctl.runCommand('/fleet stop all'); await until(() => ctl.state.agents.filter((a) => !a.mine).every((a) => a.state === 'idle' || a.state === 'success'), 10_000); ctl.stop();
+  }, 30_000);
+  it('bare /fleet is a menu: start asks how many and what for (nothing is sent to an agent), then runs; stop lists the agents', async () => {
+    const { ctl, fake } = await fleetApp(); const tick = () => new Promise((r) => setTimeout(r, 10)); const opts = () => ctl.state.pick!.options.map((o) => o.id);
+    const run = ctl.runCommand('/fleet'); await until(() => ctl.state.mode === 'pick'); expect(opts()).toEqual(['start', 'clean']); // nothing to show or stop yet
+    ctl.pickKey('enter'); await until(() => ctl.state.pick?.title === 'How many agents?'); ctl.pickKey('down'); ctl.pickKey('enter'); await tick(); // 2 agents
+    expect(ctl.state.items.some((i) => i.kind === 'notice' && /What should they work on/.test(i.text))).toBe(true); await ctl.submit('tidy the docs'); await run; await until(() => fake.sessions.length === 2, 10_000);
+    expect(ctl.state.items.some((i) => i.kind === 'user' && /tidy the docs/.test(i.text))).toBe(false); // the task went to the agents, not into your chat
+    const again = ctl.runCommand('/fleet'); await until(() => ctl.state.mode === 'pick'); expect(opts()).toEqual(['start', 'list', 'preview', 'stop', 'remove', 'clean']);
+    ctl.pickKey('down'); ctl.pickKey('down'); ctl.pickKey('down'); ctl.pickKey('enter'); await until(() => ctl.state.pick?.title === 'Stop fleet agents'); expect(ctl.state.pick!.options).toHaveLength(2); ctl.pickAnswer([1, 2]); await again; await until(() => ctl.state.toasts.some((t) => /Stopped 2 agents/.test(t.text))); ctl.stop();
   }, 30_000);
   it('an agent that commits announces its branch is ready, and preview checks it for conflicts', async () => {
     const { ctl, fake, manager, runner } = await fleetApp(); await ctl.runCommand('/fleet start add a file'); await until(() => fake.sessions.length === 1, 10_000); const wt = fake.sessions[0]!.o.cwd; writeFileSync(join(wt, 'new.txt'), 'x'); git(wt, 'add', '-A'); git(wt, 'commit', '-q', '-m', 'agent work');
