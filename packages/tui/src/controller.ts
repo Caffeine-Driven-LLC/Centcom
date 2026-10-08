@@ -186,7 +186,7 @@ export class AppController {
   private persistTimer?: NodeJS.Timeout; private lastItems?: Item[]; private lastToken?: string; private lastSid = '';
   private schedulePersist() {
     if (!this.o.sessions || this.persistTimer) return;
-    this.persistTimer = setTimeout(() => { this.persistTimer = undefined; this.persist(); }, 600); this.persistTimer.unref?.();
+    this.persistTimer = setTimeout(() => { this.persistTimer = undefined; this.persist(); }, this.state.busy ? 1500 : 600); this.persistTimer.unref?.(); // while text streams, less often: a save rewrites the whole view
   }
   persist() {
     const st = this.o.sessions; const s = this.state; if (!st || !s.items.length) return;
@@ -196,7 +196,7 @@ export class AppController {
     // items are replaced (never mutated) on every change, so identity tells us whether anything new needs saving
     if (s.items === this.lastItems && meta.resumeToken === this.lastToken && s.sessionId === this.lastSid && s.tasks === this.lastTasks && s.tasksOpen === this.lastTasksOpen) return;
     this.lastItems = s.items; this.lastTasks = s.tasks; this.lastTasksOpen = s.tasksOpen; this.lastToken = meta.resumeToken; this.lastSid = s.sessionId;
-    try { st.save(meta, s.items); this.refreshSessions(); } catch (e) { this.toast('warn', 'Could not save this conversation: ' + String((e as Error).message ?? e)); }
+    try { st.save(meta, s.items); } catch (e) { this.toast('warn', 'Could not save this conversation: ' + String((e as Error).message ?? e)); }
   }
   private createdAt?: number; private lastTasks?: unknown; private lastTasksOpen?: boolean;
   private refreshSessions() { if (this.o.sessions) this.set({ sessions: this.o.sessions.list(this.o.cwd, 10) }); }

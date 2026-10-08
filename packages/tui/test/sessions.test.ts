@@ -68,3 +68,16 @@ describe('continuing a conversation', () => {
     const f = join(st.dir, a.state.sessionId, 'view.json'); const t1 = statSync(f).mtimeMs; await new Promise((r) => setTimeout(r, 30)); a.persist(); expect(statSync(f).mtimeMs).toBe(t1); a.stop();
   });
 });
+
+describe('saving a long conversation stays cheap', () => {
+  const meta = (token?: string, engine = 'claude-code') => ({ id: A, cwd: '/tmp/p', engine, title: 't', createdAt: 1, updatedAt: 2, messages: 1, ...(token ? { resumeToken: token } : {}) });
+  it('the log is read once per conversation, not on every save, and a changed engine session is still recorded', () => {
+    const st = tmp(); let opens = 0; const sync = (st as any).store.sync; const open = sync.open.bind(sync); sync.open = (...a: unknown[]) => { opens++; return open(...a); };
+    for (let i = 0; i < 6; i++) st.save(meta('tok-1'), [user('hello'), user('again ' + i)]); expect(opens).toBe(1);
+    st.save(meta('tok-2'), [user('hello')]); expect(st.load(A)!.meta.resumeToken).toBe('tok-2'); st.save(meta('tok-2'), [user('hello')]); expect(st.load(A)!.meta.resumeToken).toBe('tok-2');
+    st.save(meta('tok-3', 'codex'), [user('hello')]); expect(st.load(A)!.meta).toMatchObject({ resumeToken: 'tok-3', engine: 'codex' });
+  });
+  it('the first user message is recorded once, and what was saved loads back', () => {
+    const st = tmp(); st.save(meta(), [user('first question')]); st.save(meta(), [user('first question'), user('second')]); const l = st.load(A)!; expect(l.items.map((i) => (i as { text?: string }).text)).toEqual(['first question', 'second']);
+  });
+});
