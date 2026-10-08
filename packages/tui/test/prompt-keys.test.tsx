@@ -136,3 +136,31 @@ describe('multi-line input and completion', () => {
     await t.ctl.submit('x'.repeat(65_536).slice(0, 10)); expect(t.ctl.state.items.some((i) => i.kind === 'user')).toBe(true);
   });
 });
+
+describe('big pastes', () => {
+  const paste = (s: string) => `\x1b[200~${s}\x1b[201~`;
+  const fakeSession = (t: Awaited<ReturnType<typeof mount>>) => { const sent: string[] = []; (t.ctl as any).session = { send: async (x: string) => { sent.push(x); }, stop: async () => undefined }; return sent; };
+  it('a small paste goes in as text; a big one becomes a chip, and the agent still gets every line', async () => {
+    const t = await mount(); const sent = fakeSession(t);
+    await t.send(paste('just a line')); expect(t.text()).toBe('just a line'); await t.send('\x1ba'); await t.send('\x7f');
+    const big = Array.from({ length: 30 }, (_, i) => `line ${i}`).join('\n'); await t.send(paste(big)); expect(t.text()).toBe('[Pasted text #1 +29 lines]');
+    await t.send(' please review'); await t.send('\r');
+    expect(sent).toEqual([big + ' please review']); const shown = t.ctl.state.items.find((i) => i.kind === 'user') as { text: string };
+    expect(shown.text).toBe('[Pasted text #1 +29 lines] please review'); // the transcript stays short
+  });
+  it('a chip you edit is no longer expanded, and chips do not leak into the next message', async () => {
+    const t = await mount(); const sent = fakeSession(t); const big = Array.from({ length: 12 }, (_, i) => `row ${i}`).join('\n');
+    await t.send(paste(big)); await t.send('\x7f'); await t.send('\r'); expect(sent[0]).toMatch(/^\[Pasted text #1 \+11 lines$/); // the closing bracket was deleted: sent as typed
+  });
+  it('a paste that would make the message longer than the limit is refused when sent', async () => {
+    const t = await mount(); const sent = fakeSession(t); await t.send(paste('x'.repeat(70_000))); expect(t.text()).toMatch(/^\[Pasted text #1/); await t.send('\r');
+    expect(sent).toEqual([]); expect(t.ctl.state.toasts.at(-1)!.text).toMatch(/limit is 65,536/); expect(t.text()).toMatch(/^\[Pasted text #1/); // still in the box
+  });
+});
+
+describe('prompt height', () => {
+  it('grows with the window up to 12 lines instead of stopping at 6', async () => {
+    const { promptRows } = await import('../src/components/Prompt.js'); const text = Array.from({ length: 10 }, (_, i) => `l${i}`).join('\n');
+    expect(promptRows(text, text.length, 80)).toBe(6); expect(promptRows(text, text.length, 80, 12)).toBe(10); expect(promptRows(text + '\n'.repeat(20), 0, 80, 12)).toBe(12);
+  });
+});

@@ -11,6 +11,7 @@ import type { Logger } from '@centcom/net';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SessionStore, ago, titleFrom, type SessionMeta } from './sessions.js';
+import { PasteStore } from './prompt/paste.js';
 import { errorGuide } from './errors.js';
 import { copyToClipboard } from './util/clipboard.js';
 import { newPick, pickAll, pickMove, pickResult, pickToggle, type PickOption } from './pick/model.js';
@@ -423,7 +424,8 @@ export class AppController {
   async submit(raw: string, opts: { wire?: string } = {}) {
     const text = raw.trim();
     if (!text) return;
-    if (text.length > MAX_MESSAGE) { this.toast('warn', `That message is ${text.length.toLocaleString('en-US')} characters; the limit is ${MAX_MESSAGE.toLocaleString('en-US')}. Shorten it, or put the long part in a file and mention the path.`, 7000); return; } // your text stays in the prompt
+    const expanded = this.pastes.expand(text);
+    if (expanded.length > MAX_MESSAGE) { this.toast('warn', `That message is ${expanded.length.toLocaleString('en-US')} characters; the limit is ${MAX_MESSAGE.toLocaleString('en-US')}. Shorten it, or put the long part in a file and mention the path.`, 7000); return; } // your text stays in the prompt
     if (this.state.mode === 'night' && !this.nightSending && !text.startsWith('/')) { this.nightAdd(text); return; } // in the night panel, a message is a task
     if (this.night.active() && !this.nightSending && !text.startsWith('/')) { this.toast('warn', 'Night cycle is running. Add tasks with /night add …, stop it with /night stop.'); return; }
     if (this.pendingAnswer) { const a = this.pendingAnswer; this.pendingAnswer = undefined; this.set({ input: '', cursor: 0 }); a(text); return; }
@@ -444,15 +446,16 @@ export class AppController {
     if (this.state.busy) { this.toast('warn', 'Cento is still working. Press Esc to interrupt, then send again.'); return; }
     this.addItem({ kind: 'user', id: nid('u'), text, ts: Date.now() }); this.o.sessions?.noteUser(this.state.sessionId, this.o.cwd, text);
     this.setAgentState(this.me, 'prompt-received');
-    let outgoing = opts.wire ?? text; // the transcript keeps what the person typed; night tasks carry their rules on the wire only
+    let outgoing = opts.wire ?? expanded; // the transcript keeps what the person typed; night tasks carry their rules on the wire only
     if (this.state.settings.autoSkills) {
       const picks = match(opts.wire ? text.replace(/^\[night \d+\/\d+\]\s*/, '') : text, this.skills());
       if (picks.length) {
         this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: 'auto skills: ' + picks.map((p) => (p.skill.kind === 'command' ? '/' : '') + p.skill.name).join(' · '), detail: picks.map((p) => `${p.skill.name}: matched ${p.why.join(', ')}`).join('\n') });
-        if (!this.o.demo) outgoing = injection(picks) + (opts.wire ?? text);
+        if (!this.o.demo) outgoing = injection(picks) + (opts.wire ?? expanded);
       }
     }
     await this.checkpointBefore(text);
+    this.pastes.clear(); // the chips are spent
     try { await this.session?.send(outgoing); } catch (e) { this.addItem({ kind: 'notice', id: nid('n'), level: 'error', text: 'Could not send the prompt', detail: String(e) }); }
   }
 
@@ -566,6 +569,8 @@ export class AppController {
       this.set({ mode: 'pick', pick: newPick(o) });
     });
   }
+  /** Big pastes sit in the prompt as a short chip and are put back when the message is sent. */
+  readonly pastes = new PasteStore();
   /** Watch every event of the main agent (the plain-text mode prints them). */
   addObserver(fn: (agentId: string, ev: NormalisedEvent) => void) { (this.o.observers ??= []).push(fn); }
   /** Answer the open list without keys: the ticked option numbers (1-based), or undefined to cancel. A one-of list takes the first. */

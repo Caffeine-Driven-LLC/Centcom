@@ -50,7 +50,8 @@ export function App({ ctl, tier, keys }: AppProps) {
   const stripSize = tight && mascot !== 'off' ? 'off' : mascot;
   const matches = (s.mode === 'chat' || s.mode === 'night') && !pending ? slashMatches(s.input) : [];
   const popupH = Math.min(6, matches.length);
-  const inputRows = promptRows(s.input, s.cursor, mainW);
+  const maxInput = Math.max(3, Math.min(12, Math.floor(rows / 3))); // the box grows with the window, up to 12 lines
+  const inputRows = promptRows(s.input, s.cursor, mainW, maxInput);
   const promptH = inputRows + 2;
   const maxDiff = Math.max(3, Math.min(10, rows - 20));
   const showTasks = s.tasksOpen && s.tasks.length > 0 && !pending && s.mode === 'chat';
@@ -87,7 +88,7 @@ export function App({ ctl, tier, keys }: AppProps) {
 
   usePaste((text) => {
     if (s.mode === 'palette') { ctl.patch({ palette: { query: s.palette.query + text.replace(/\s+/g, ' '), sel: 0 } }); return; }
-    if (s.mode === 'chat' && !pending) edit((e) => ed.insert(e, text.replace(/\r\n?/g, '\n')));
+    if (s.mode === 'chat' && !pending) { const r = ctl.pastes.add(text.replace(/\r\n?/g, '\n')); if (r.warning) ctl.toast('warn', r.warning, 6000); edit((e) => ed.insert(e, r.insert)); }
   });
 
   /** Mouse reporting (press, release and wheel, in the SGR form) only while it is on; always switched off again on the way out. */
@@ -258,7 +259,7 @@ export function App({ ctl, tier, keys }: AppProps) {
               <>
                 {showTasks ? <Box paddingX={1} height={tasksH}><TaskList items={s.tasks} maxRows={rows >= 34 ? 10 : 5} width={mainW - 2} unicode={tier !== 'none'} /></Box> : null}
                 {popupH ? <SlashPopup matches={matches} sel={s.slashSel} width={mainW} onPick={(c) => { const t = '/' + c.name + (c.args ? ' ' : ''); ctl.patch({ input: t, cursor: t.length, anchor: undefined, slashSel: 0 }); if (!c.args) void ctl.submit('/' + c.name); }} /> : null}
-                <Prompt text={s.input} cursor={s.cursor} anchor={s.anchor} busy={s.busy} width={mainW} active={s.mode === 'chat' || s.mode === 'night'} placeholder={nightOpen ? 'Add a task for tonight…' : placeholder} />
+                <Prompt text={s.input} cursor={s.cursor} anchor={s.anchor} maxRows={maxInput} busy={s.busy} width={mainW} active={s.mode === 'chat' || s.mode === 'night'} placeholder={nightOpen ? 'Add a task for tonight…' : placeholder} />
               </>
             )}
           </Box>
