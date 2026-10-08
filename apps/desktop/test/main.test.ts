@@ -13,5 +13,8 @@ describe('the main process (read as source: Electron itself is not started here)
   it('the preload exposes a small fixed surface: no Electron objects, no Node', () => { const p = src('preload.ts'); expect(p.match(/exposeInMainWorld\('centcom'/g)).toHaveLength(1); for (const name of ['desktop', 'platform', 'onLink', 'openExternal']) expect(p).toContain(name); expect(p).not.toMatch(/require\(|child_process|\bfs\b|ipcRenderer,?\s*\}\)|exposeInMainWorld\('[^c]/); expect(p).toContain("typeof url === 'string'"); });
 });
 describe('the bundle', () => {
-  it('builds both files with Electron left out and nothing unsafe in them', async () => { const dir = mkdtempSync(join(tmpdir(), 'cc-desktop-')); const files = await bundle(join(process.cwd(), 'apps/desktop'), dir); expect(readdirSync(dir).sort()).toEqual(['main.mjs', 'preload.cjs']); const main = readFileSync(files[0]!, 'utf8'); expect(main).toMatch(/from ?"electron"/); expect(main).not.toMatch(/nodeIntegration:\s*(!0|true)/); expect(main.length).toBeLessThan(8_000_000); expect(readFileSync(files[1]!, 'utf8')).toContain('contextBridge'); });
+  it('builds both files with Electron left out and nothing unsafe in them', async () => { const dir = mkdtempSync(join(tmpdir(), 'cc-desktop-')); const files = await bundle(join(process.cwd(), 'apps/desktop'), dir); expect(readdirSync(dir).sort()).toEqual(['main.mjs', 'preload.cjs']); const main = readFileSync(files[0]!, 'utf8'); expect(main).toMatch(/from ?"electron"/); expect(main).not.toMatch(/nodeIntegration:\s*(!0|true)/); expect(main.length).toBeLessThan(8_000_000); expect(readFileSync(files[1]!, 'utf8')).toContain('contextBridge');
+    // library data files are found next to their sources, not next to the bundle
+    expect(main).toContain('file://' ); expect(main).toMatch(/file:\/\/[^"]*packages\/tui\/src\/util\/verbs\.ts/); expect(main).not.toMatch(/new URL\([^)]*verbs\.txt[^)]*import\.meta\.url/);
+  });
 });

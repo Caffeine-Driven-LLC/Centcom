@@ -18,8 +18,8 @@ function Picker({ view, send }: { view: LocalView; send: Send }): React.JSX.Elem
   return <Card title="Open a project"><div className="lc-grid">
     <Banner tone={st.ok || demo ? 'info' : 'warning'}>{demo ? 'Demo agent: nothing real runs.' : st.text}</Banner>
     <div className="lc-row">
-      <Button variant="secondary" aria-pressed={engine === 'claude-code'} onClick={() => setEngine('claude-code')}>Claude Code</Button>
-      <Button variant="secondary" aria-pressed={engine === 'codex'} onClick={() => setEngine('codex')}>Codex</Button>
+      <Button variant="secondary" aria-pressed={engine === 'claude-code'} onClick={() => setEngine('claude-code')}>{engine === 'claude-code' ? '✓ ' : ''}Claude Code</Button>
+      <Button variant="secondary" aria-pressed={engine === 'codex'} onClick={() => setEngine('codex')}>{engine === 'codex' ? '✓ ' : ''}Codex</Button>
       <label className="lc-row"><input type="checkbox" checked={demo} onChange={(e) => setDemo(e.target.checked)} /> Demo agent</label>
     </div>
     <form className="lc-row" onSubmit={(e) => { e.preventDefault(); send({ t: 'browse', path: typed }); }}><div className="lc-grow"><Input label="Folder" value={typed} onChange={(e) => setTyped(e.target.value)} /></div><Button type="submit">Go</Button></form>
