@@ -143,7 +143,7 @@ export class AppController {
   get state() { return this.store.get(); }
   /** The display name of an agent ("you" for the main one). */
   agentName(id: string) { return this.state.agents.find((a) => a.id === id)?.name ?? 'an agent'; }
-  private set(p: Partial<AppState> | ((s: AppState) => Partial<AppState>)) { this.store.set((st) => { const q = typeof p === 'function' ? p(st) : p; if (q.input === '') this.pastes.clear(); /* an empty prompt has no chips left */ return 'input' in q && !('anchor' in q) ? { ...q, anchor: undefined } : q; }); } // a new prompt text drops any selection
+  private set(p: Partial<AppState> | ((s: AppState) => Partial<AppState>)) { this.store.set((st) => { const q = typeof p === 'function' ? p(st) : p; if (q.input === '') { this.pastes.clear(); /* an empty prompt has no chips left */ this.undoStack = []; this.redoStack = []; } return 'input' in q && !('anchor' in q) ? { ...q, anchor: undefined } : q; }); } // a new prompt text drops any selection
   /** UI-level state changes (input buffer, scroll, mode, overlay selections). */
   patch(p: Partial<AppState>) { if (p.input === '') this.pastes.clear(); this.store.set('input' in p && !('anchor' in p) ? { ...p, anchor: undefined } : p, 'input' in p || 'cursor' in p); }
   /** The terminal bell, when it is turned on: for what needs you, or a long task that just finished. */
@@ -666,19 +666,36 @@ export class AppController {
     const ids = await this.pick({ title: `${hits.length} message${hits.length === 1 ? '' : 's'} mention "${arg.trim()}"`, note: hits.length > 40 ? 'The last 40, newest last. The one you choose is scrolled into view.' : 'Newest last. The one you choose is scrolled into view.', multi: false, confirm: 'go there', options: hits.slice(-40).map((i) => ({ id: i.id, label: snippet(text(i)), hint: who(i) })) });
     if (ids?.[0]) this.patch({ jumpTo: ids[0] });
   }
+  /* ------------------------------------------------------------------ undo for the prompt */
+  private undoStack: { text: string; cursor: number }[] = []; private redoStack: { text: string; cursor: number }[] = []; private lastUndoAt = 0; private lastUndoKind = '';
+  /** Replace the prompt text as an edit that ctrl+_ can take back. Typing (or deleting) a run of single characters is one step. */
+  setInputUndoable(text: string, cursor: number, extra: Partial<AppState> = {}) {
+    const cur = this.state.input;
+    if (text !== cur) {
+      const d = text.length - cur.length; const kind = d === 1 ? 'type' : d === -1 ? 'delete' : 'other'; const now = Date.now();
+      if (!(kind !== 'other' && kind === this.lastUndoKind && now - this.lastUndoAt < 700)) { this.undoStack.push({ text: cur, cursor: this.state.cursor }); if (this.undoStack.length > 100) this.undoStack.shift(); }
+      this.lastUndoKind = kind; this.lastUndoAt = now; this.redoStack = [];
+    }
+    this.patch({ input: text, cursor, ...extra });
+  }
+  /** ctrl+_: take back the last change to the prompt. */
+  undoInput(): boolean { const prev = this.undoStack.pop(); if (!prev) return false; this.redoStack.push({ text: this.state.input, cursor: this.state.cursor }); this.lastUndoKind = ''; this.patch({ input: prev.text, cursor: prev.cursor, anchor: undefined, slashSel: 0 }); return true; }
+  /** alt+y: put back what ctrl+_ took away. */
+  redoInput(): boolean { const next = this.redoStack.pop(); if (!next) return false; this.undoStack.push({ text: this.state.input, cursor: this.state.cursor }); this.lastUndoKind = ''; this.patch({ input: next.text, cursor: next.cursor, anchor: undefined, slashSel: 0 }); return true; }
+
   /** ctrl+z: put the app in the background (`fg` brings it back where it was). */
   suspend() { if (!this.o.external) { this.toast('info', 'Suspending is not available here.'); return; } this.o.external({ kind: 'suspend' }); }
   /** ctrl+g: write the message in your editor ($VISUAL or $EDITOR); what you save comes back into the prompt. */
   editPrompt() {
     if (!this.o.external) { this.toast('info', 'Editing in your editor is not available here.'); return; }
-    this.o.external({ kind: 'editor', text: this.state.input, done: (t) => { if (t === undefined) this.toast('warn', 'Your editor did not save anything, so the prompt is unchanged.'); else this.patch({ input: t, cursor: t.length }); } });
+    this.o.external({ kind: 'editor', text: this.state.input, done: (t) => { if (t === undefined) this.toast('warn', 'Your editor did not save anything, so the prompt is unchanged.'); else this.setInputUndoable(t, t.length); } });
   }
   /** ctrl+r: pick one of your earlier messages in this project; it goes in the prompt for you to change or send. */
   async historyPick() {
     const seen = new Set<string>(); const items = [...this.state.history].reverse().filter((h) => !h.startsWith('/') && !seen.has(h) && !!seen.add(h)).slice(0, 40);
     if (!items.length) { this.toast('info', 'No earlier messages in this project yet.'); return; }
     const ids = await this.pick({ title: 'Earlier messages', note: 'Newest first. The one you choose goes in the prompt.', multi: false, confirm: 'use', options: items.map((h, i) => ({ id: String(i), label: h.replace(/\s+/g, ' ') })) });
-    if (ids?.[0] !== undefined) { const t = items[Number(ids[0])]!; const was = this.state.input; this.patch({ input: t, cursor: t.length, ...(was ? { draft: was, histIdx: Math.max(0, this.state.history.lastIndexOf(t)) } : {}) }); } // a draft you had is one step down (the arrows), as with the up arrow
+    if (ids?.[0] !== undefined) { const t = items[Number(ids[0])]!; const was = this.state.input; this.setInputUndoable(t, t.length, was ? { draft: was, histIdx: Math.max(0, this.state.history.lastIndexOf(t)) } : {}); } // a draft you had is one step down (the arrows), as with the up arrow
   }
   /** Put text at the end of the prompt (a file mention, a skill hint). */
   insertIntoPrompt(t: string) { const input = this.state.input; const sep = input && !/\s$/.test(input) ? ' ' : ''; const next = input + sep + t; this.patch({ input: next, cursor: next.length }); }

@@ -325,3 +325,23 @@ describe('the terminal tab title', () => {
     await t.ctl.runCommand('/title off'); await wait(80); const n = t.raw().length; t.ctl.patch({ busy: true }); await wait(150); expect(titles(t.raw().slice(n))).toEqual([]); expect(t.ctl.state.settings.title).toBe(false); t.unmount();
   });
 });
+
+describe('undo and redo in the prompt (ctrl+_ and alt+y)', () => {
+  const UNDO = '\x1f', REDO = '\x1by';
+  it('a run of typing is one step; select-all and delete, a word kill and a replaced selection can each be taken back', async () => {
+    const t = await mount(); for (const ch of 'hello world') await t.send(ch, 12); expect(t.text()).toBe('hello world'); // typed one key at a time, as a person does
+    await t.send('\x1ba', 30); await t.send('\x7f', 30); expect(t.text()).toBe(''); await t.send(UNDO, 60); expect(t.text()).toBe('hello world'); // the delete is undone
+    await t.send(UNDO, 60); expect(t.text()).toBe(''); // the whole run of typing is one step
+    await t.send(REDO, 60); expect(t.text()).toBe('hello world'); await t.send(REDO, 60); expect(t.text()).toBe('');
+  });
+  it('undo works after killing a word and after typing over a selection; a new edit ends the redo', async () => {
+    const t = await mount(); for (const ch of 'one two three') await t.send(ch, 12); await wait(750); await t.send('\x17', 60); expect(t.text()).toBe('one two '); await wait(750); await t.send('\x1b[1;2D', 40); await t.send('X', 60); expect(t.text()).toBe('one X');
+    await t.send(UNDO, 60); expect(t.text()).toBe('one two '); await t.send(UNDO, 60); expect(t.text()).toBe('one two three'); await t.send(REDO, 60); expect(t.text()).toBe('one two '); await t.send('\x05', 40); await t.send('y', 60); await t.send(REDO, 60); expect(t.text()).toBe('one two y'); // typing cleared the redo (ctrl+e first: undo puts the cursor where it was)
+  });
+  it('Esc that clears the prompt, a completed @file and a message from ctrl+r can all be taken back; sending starts over; an empty history does nothing', async () => {
+    const t = await mount({ cwd: REPO_ROOT }); await t.send('a draft worth keeping', 40); await wait(750); await t.send('\x1b', 80); expect(t.text()).toBe(''); await t.send(UNDO, 60); expect(t.text()).toBe('a draft worth keeping');
+    await t.send('\x15', 40); await wait(750); await t.send(' @ptkeys', 50); await t.until(() => !!t.ctl.state.mention?.items.length); await t.send('\t', 100); expect(t.text()).toMatch(/@packages\/tui\/test\/prompt-keys\.test\.tsx $/); await t.send(UNDO, 60); expect(t.text()).toBe(' @ptkeys');
+    const sent: string[] = []; t.ctl.submit = (async (x: string) => { sent.push(x); }) as never; const empty = await mount(); await empty.send(UNDO, 60); await empty.send(REDO, 60); expect(empty.text()).toBe('');
+    const u = await mount(); await u.send('keep me', 30); await u.ctl.submit('keep me'); await u.send(UNDO, 60); expect(u.text()).toBe(''); // a sent message is not brought back by undo
+  });
+});

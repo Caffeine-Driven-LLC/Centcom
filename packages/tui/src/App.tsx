@@ -90,9 +90,9 @@ export function App({ ctl, tier, keys }: AppProps) {
   /** An edit that changes the text replaces the selection first; `extend` moves the cursor and keeps (or starts) a selection; any other move drops it. */
   const edit = (fn: (e: ed.Ed) => ed.Ed, how: 'text' | 'move' | 'extend' = 'text') => {
     let e: ed.Ed = { text: s.input, cursor: s.cursor };
-    if (how === 'text' && sel) { e = ed.removeRange(e, sel[0], sel[1]); if (fn === ed.backspace || fn === ed.del || fn === ed.killWordLeft || fn === ed.killWordRight) { ctl.patch({ input: e.text, cursor: e.cursor, anchor: undefined, slashSel: 0, histIdx: null }); return; } }
+    if (how === 'text' && sel) { e = ed.removeRange(e, sel[0], sel[1]); if (fn === ed.backspace || fn === ed.del || fn === ed.killWordLeft || fn === ed.killWordRight) { ctl.setInputUndoable(e.text, e.cursor, { anchor: undefined, slashSel: 0, histIdx: null }); return; } }
     e = fn(e);
-    ctl.patch({ input: e.text, cursor: e.cursor, anchor: how === 'extend' ? (s.anchor !== undefined && s.anchor !== s.cursor ? s.anchor : s.cursor) : undefined, slashSel: 0, histIdx: how === 'text' ? null : s.histIdx });
+    ctl.setInputUndoable(e.text, e.cursor, { anchor: how === 'extend' ? (s.anchor !== undefined && s.anchor !== s.cursor ? s.anchor : s.cursor) : undefined, slashSel: 0, histIdx: how === 'text' ? null : s.histIdx });
   };
   const complete = () => {
     const m = matches[s.slashSel % Math.max(1, matches.length)]; if (!m) return false;
@@ -180,10 +180,12 @@ export function App({ ctl, tier, keys }: AppProps) {
         case 'palette.open': ctl.patch({ mode: 'palette', palette: { query: '', sel: 0 } }); return;
         case 'models.open': void ctl.openModels(); return;
         case 'mode.cycle': ctl.cycleMode(); return;
-        case 'agent.interrupt': if (s.busy) void ctl.interrupt(); else if (s.input) ctl.patch({ input: '', cursor: 0 }); else ctl.escIdle(); return;
+        case 'agent.interrupt': if (s.busy) void ctl.interrupt(); else if (s.input) ctl.setInputUndoable('', 0); else ctl.escIdle(); return;
         case 'tasks.toggle': ctl.patch({ tasksOpen: !s.tasksOpen }); return;
         case 'night.toggle': ctl.openNight(); return;
         case 'history.search': void ctl.historyPick(); return;
+        case 'prompt.undo': ctl.undoInput(); return;
+        case 'prompt.redo': ctl.redoInput(); return;
         case 'app.suspend': ctl.suspend(); return;
         case 'prompt.edit': ctl.editPrompt(); return;
         case 'fleet.toggle': ctl.patch({ fleet: !s.fleet }); return;
@@ -197,7 +199,7 @@ export function App({ ctl, tier, keys }: AppProps) {
       }
     }
     if (mentions.length && mentionNow) { // a file is being suggested: arrows choose, Tab or Enter completes
-      const pickAt = (path: string) => { const e = ed.completeMention({ text: s.input, cursor: s.cursor }, mentionNow, path); ctl.patch({ input: e.text, cursor: e.cursor, slashSel: 0 }); ctl.clearMentions(); };
+      const pickAt = (path: string) => { const e = ed.completeMention({ text: s.input, cursor: s.cursor }, mentionNow, path); ctl.setInputUndoable(e.text, e.cursor, { slashSel: 0 }); ctl.clearMentions(); };
       if (key.tab || (key.return && !s.input.endsWith('\\'))) { pickAt(mentions[s.mention!.sel % mentions.length]!); return; }
       if (key.upArrow) { ctl.patch({ mention: { ...s.mention!, sel: (s.mention!.sel + mentions.length - 1) % mentions.length } }); return; }
       if (key.downArrow) { ctl.patch({ mention: { ...s.mention!, sel: (s.mention!.sel + 1) % mentions.length } }); return; }
@@ -276,7 +278,7 @@ export function App({ ctl, tier, keys }: AppProps) {
             {pending ? <Approval a={pending} width={mainW} confirming={confirming} maxDiff={maxDiff} onChoose={(c) => { if (approvalGrace()) return; if (c === 'no') ctl.answerApproval('deny'); else if (c === 'always') { if (pending.req.risk !== 'high') ctl.answerApproval('approve', 'always'); } else if (c === 'session') { if (pending.req.risk !== 'high') ctl.answerApproval('approve', 'session'); } else if (pending.req.risk === 'high' && !confirming) setConfirming(true); else ctl.answerApproval('approve'); }} /> : (
               <>
                 {showTasks ? <Box paddingX={1} height={tasksH}><TaskList items={s.tasks} maxRows={rows >= 34 ? 10 : 5} width={mainW - 2} unicode={tier !== 'none'} /></Box> : null}
-                {mentions.length && !matches.length ? <MentionPopup items={mentions.slice(0, 6)} sel={s.mention!.sel} width={mainW} onPick={(p) => { const e = ed.completeMention({ text: s.input, cursor: s.cursor }, mentionNow!, p); ctl.patch({ input: e.text, cursor: e.cursor }); ctl.clearMentions(); }} /> : null}
+                {mentions.length && !matches.length ? <MentionPopup items={mentions.slice(0, 6)} sel={s.mention!.sel} width={mainW} onPick={(p) => { const e = ed.completeMention({ text: s.input, cursor: s.cursor }, mentionNow!, p); ctl.setInputUndoable(e.text, e.cursor); ctl.clearMentions(); }} /> : null}
                 {popupH && matches.length ? <SlashPopup matches={matches} sel={s.slashSel} width={mainW} onPick={(c) => { const t = '/' + c.name + (c.args ? ' ' : ''); ctl.patch({ input: t, cursor: t.length, anchor: undefined, slashSel: 0 }); if (!c.args) void ctl.submit('/' + c.name); }} /> : null}
                 <Prompt text={s.maskInput ? s.input.replace(/[^\n]/g, '•') : s.input} cursor={s.cursor} anchor={s.anchor} maxRows={maxInput} busy={s.busy} width={mainW} active={s.mode === 'chat' || s.mode === 'night'} placeholder={nightOpen ? 'Add a task for tonight…' : placeholder} />
               </>

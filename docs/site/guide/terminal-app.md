@@ -13,6 +13,7 @@ Run `centcom` in a project folder. Type what you want done and press Enter. `?` 
 | `ctrl+x` | cut the selection |
 | `ctrl+delete`, `alt+delete` | delete the word after the cursor |
 | `ctrl+w`, `alt+backspace` | delete the word before |
+| `ctrl+_` / `alt+y` | undo / redo changes to the message (a run of typing is one step; Esc-clear, a deleted word, a replaced selection and a completed `@file` can all be taken back) |
 | `ctrl+j`, or `\` then Enter | a new line instead of sending |
 | `ctrl+r` | search your earlier messages in this project |
 | `ctrl+g` | write the message in your editor (`$VISUAL`, then `$EDITOR`, else `vi`); what you save comes back into the prompt |
