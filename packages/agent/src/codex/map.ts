@@ -1,5 +1,13 @@
 /** Codex app-server notifications -> normalised events. Pure apart from small per-turn bookkeeping, so it is easy to test with recorded traffic. */
 import { classifyCommand } from '../risk.js';
+
+/** Codex runs commands as `/bin/zsh -lc <cmd>`; the wrapper made every command look medium risk. Prefer the parsed actions, else strip the wrapper. */
+export function innerCommand(command: string, actions?: { command?: unknown }[]): string {
+  const parts = (actions ?? []).map((a) => (typeof a?.command === 'string' ? a.command : '')).filter(Boolean);
+  if (parts.length) return parts.join(' && ');
+  const m = /^(?:\S*\/)?(?:ba|z|da|fi)?sh\s+-l?c\s+(?:'([^']*)'|"([^"]*)"|(.+))$/s.exec(command.trim());
+  return m ? (m[1] ?? m[2] ?? m[3] ?? command) : command;
+}
 import type { EventBody, ProviderErrorCode, Risk } from '../types.js';
 import { editDiff } from '../claude/diff.js';
 
@@ -14,6 +22,15 @@ export function diffFor(changes: J[]): string {
     if (c.kind?.type === 'delete') return editDiff(path, d.split('\n').slice(0, 60).join('\n'), '');
     return `--- a/${path}\n+++ b/${path}\n${d}`;
   }).join('\n');
+}
+
+/** Codex's structured error info (`codexErrorInfo`) is exact; the message text is the fallback. */
+export function errorCodeFromInfo(info: unknown, message: string): ProviderErrorCode {
+  const key = typeof info === 'string' ? info : info && typeof info === 'object' ? Object.keys(info)[0] : undefined;
+  const status = info && typeof info === 'object' ? Number((Object.values(info)[0] as { httpStatusCode?: number } | null)?.httpStatusCode) : NaN;
+  if (status === 401 || status === 403) return 'provider_not_signed_in';
+  if (status === 429) return 'provider_rate_limited';
+  switch (key) { case 'usageLimitExceeded': case 'sessionBudgetExceeded': return 'provider_cap_reached'; case 'rateLimitExceeded': return 'provider_rate_limited'; case 'unauthorized': return 'provider_not_signed_in'; default: return errorCodeFor(message); }
 }
 
 export function errorCodeFor(message: string): ProviderErrorCode {
@@ -44,8 +61,8 @@ export class CodexMapper {
       case 'item/reasoning/textDelta': case 'item/reasoning/summaryTextDelta': return [{ type: 'thinking.delta', message_id: p.itemId, text: String(p.delta ?? '') }];
       case 'item/fileChange/patchUpdated': if (Array.isArray(p.changes)) this.changes.set(p.itemId, p.changes); return [];
       case 'thread/tokenUsage/updated': {
-        const last = p.tokenUsage?.last ?? {}; const win = p.tokenUsage?.modelContextWindow; const total = p.tokenUsage?.total?.totalTokens;
-        return [{ type: 'usage.report', input_tokens: last.inputTokens ?? 0, output_tokens: last.outputTokens ?? 0, ...(last.cachedInputTokens ? { cache_read_tokens: last.cachedInputTokens } : {}), cost_is_estimate: true, ...(win && total ? { context_used_pct: Math.min(100, Math.round((total / win) * 100)), context_tokens: total, context_window: win } : {}) }];
+        const last = p.tokenUsage?.last ?? {}; const win = p.tokenUsage?.modelContextWindow; const ctx = last.totalTokens ?? (last.inputTokens ?? 0) + (last.outputTokens ?? 0); /* `total` is cumulative for the whole thread and overstates the context */
+        return [{ type: 'usage.report', input_tokens: last.inputTokens ?? 0, output_tokens: last.outputTokens ?? 0, ...(last.cachedInputTokens ? { cache_read_tokens: last.cachedInputTokens } : {}), cost_is_estimate: true, ...(win && ctx ? { context_used_pct: Math.min(100, Math.round((ctx / win) * 100)), context_tokens: ctx, context_window: win } : {}) }];
       }
       case 'account/rateLimits/updated': {
         const r = p.rateLimits ?? {}; const windows: { name: string; utilization: number; resets_at: number }[] = [];
@@ -54,13 +71,13 @@ export class CodexMapper {
       }
       case 'turn/completed': {
         const t = p.turn ?? {}; const out: EventBody[] = [];
-        if (t.status === 'failed' && t.error) out.push({ type: 'error', code: errorCodeFor(String(t.error.message ?? '')), tool_message: String(t.error.message ?? 'The turn failed'), fatal: true });
+        if (t.status === 'failed' && t.error) out.push({ type: 'error', code: errorCodeFromInfo(t.error.codexErrorInfo, String(t.error.message ?? '')), tool_message: String(t.error.message ?? 'The turn failed'), fatal: true });
         out.push({ type: 'status', state: t.status === 'failed' ? 'error' : 'idle' });
         out.push({ type: 'turn.done', outcome: t.status === 'completed' ? 'ok' : t.status === 'interrupted' ? 'canceled' : 'error', ...(t.status ? { stop_reason: String(t.status) } : {}) });
         return out;
       }
       case 'error': {
-        const msg = String(p.error?.message ?? 'Codex reported an error'); const code = errorCodeFor(msg);
+        const msg = String(p.error?.message ?? 'Codex reported an error'); const code = errorCodeFromInfo(p.error?.codexErrorInfo, msg);
         if (p.willRetry) return [{ type: 'error', code, tool_message: msg, fatal: false, retry: { attempt: 1, max_retries: 5, delay_ms: 1000 } }];
         return [{ type: 'error', code, tool_message: msg, fatal: true }];
       }
@@ -72,7 +89,7 @@ export class CodexMapper {
 
   private itemStarted(it: J): EventBody[] {
     switch (it.type) {
-      case 'commandExecution': { const command = String(it.command ?? ''); return [{ type: 'status', state: 'running-command' }, { type: 'tool.requested', tool_id: it.id, name: 'Bash', input_summary: command.slice(0, 300), risk: classifyCommand(command), command }]; }
+      case 'commandExecution': { const command = innerCommand(String(it.command ?? ''), it.commandActions); return [{ type: 'status', state: 'running-command' }, { type: 'tool.requested', tool_id: it.id, name: 'Bash', input_summary: command.slice(0, 300), risk: classifyCommand(command), command }]; }
       case 'fileChange': {
         const ch: J[] = it.changes ?? []; this.changes.set(it.id, ch);
         const adds = ch.length > 0 && ch.every((c) => c.kind?.type === 'add'); const path = ch[0]?.path;
@@ -113,7 +130,7 @@ export class CodexMapper {
   /** Describe a server-side approval request for the UI (needs the file changes remembered from item/started). */
   approval(method: string, p: J): ApprovalInfo {
     if (method === 'item/commandExecution/requestApproval') {
-      const command = String(p.command ?? ''); return { tool_id: String(p.itemId), tool: 'Bash', summary: command.split('\n')[0]!.slice(0, 120) || 'run a command', risk: classifyCommand(command), command, ...(p.cwd ? { cwd: String(p.cwd) } : {}), ...(p.reason ? { reason: String(p.reason) } : {}) };
+      const command = innerCommand(String(p.command ?? ''), p.commandActions); return { tool_id: String(p.itemId), tool: 'Bash', summary: command.split('\n')[0]!.slice(0, 120) || 'run a command', risk: classifyCommand(command), command, ...(p.cwd ? { cwd: String(p.cwd) } : {}), ...(p.reason ? { reason: String(p.reason) } : {}) };
     }
     if (method === 'item/fileChange/requestApproval') {
       const ch = this.changes.get(String(p.itemId)) ?? []; const adds = ch.length > 0 && ch.every((c) => c.kind?.type === 'add'); const path = ch[0]?.path;

@@ -6,7 +6,7 @@ import { ClaudeCodeEngine, CodexEngine } from '../../src/index.js';
 function fakeChild() { const c = new EventEmitter() as any; c.stdout = new PassThrough(); c.stderr = new PassThrough(); c.stdin = new PassThrough(); return c; }
 const collect = async (it: AsyncIterable<any>, until: (e: any) => boolean) => { const out: any[] = []; for await (const e of it) { out.push(e); if (until(e)) break; } return out; };
 
-describe('1 MiB line cap in the real parsers', () => {
+describe('Line caps in the real parsers (Claude 1 MiB, Codex 8 MiB)', () => {
   it('Claude: a 1 MiB + 1 byte line ends the turn with provider_protocol_error and kills the child', async () => {
     const child = fakeChild(); const kills: string[] = []; child.kill = (s: string) => { kills.push(s); return true; };
     const s = await new ClaudeCodeEngine({ spawn: (() => child) as never }).start({ agentId: 'agt_x', cwd: '/tmp', envExact: true, env: { PATH: '/bin' } }); await s.send('hi');
@@ -21,9 +21,9 @@ describe('1 MiB line cap in the real parsers', () => {
     let seen: any; const child = fakeChild(); child.kill = () => true; process.env.SOME_LEAK_CHECK = 'leak'; const s = await new ClaudeCodeEngine({ spawn: ((_b: string, _a: string[], o: any) => { seen = o; return child; }) as never }).start({ agentId: 'agt_x', cwd: '/tmp', envExact: true, env: { PATH: '/bin' } }); await s.send('hi'); delete process.env.SOME_LEAK_CHECK;
     expect(seen.env).toEqual({ PATH: '/bin' });
   });
-  it('Codex: a 1 MiB + 1 byte line produces a fatal protocol error and SIGKILL', async () => {
+  it('Codex: an 8 MiB + 1 byte line produces a fatal protocol error and SIGKILL', async () => {
     const child = fakeChild(); const kills: string[] = []; child.kill = (s: string) => { kills.push(s); return true; };
-    const p = new CodexEngine({ spawn: (() => child) as never }).start({ agentId: 'agt_x', cwd: '/tmp' }); await new Promise((r) => setTimeout(r, 20)); child.stdout.write('y'.repeat(1024 * 1024 + 1) + '\n'); const s = await Promise.race([p, new Promise<never>((_r, rej) => setTimeout(() => rej(new Error('init stuck')), 1500))]).catch(() => undefined);
+    const p = new CodexEngine({ spawn: (() => child) as never }).start({ agentId: 'agt_x', cwd: '/tmp' }); await new Promise((r) => setTimeout(r, 20)); child.stdout.write('y'.repeat(8 * 1024 * 1024 + 1) + '\n'); const s = await Promise.race([p, new Promise<never>((_r, rej) => setTimeout(() => rej(new Error('init stuck')), 1500))]).catch(() => undefined);
     await new Promise((r) => setTimeout(r, 30)); expect(kills).toContain('SIGKILL'); void s;
   });
 });
