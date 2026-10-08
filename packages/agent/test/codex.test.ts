@@ -34,7 +34,7 @@ describe('codex mapping', () => {
     expect(started.find((e) => e.type === 'tool.requested')).toMatchObject({ name: 'Bash', risk: 'high', command: 'rm -rf build' });
     expect(m.notification('item/completed', { item: { type: 'commandExecution', id: 'c', status: 'completed', exitCode: 2, aggregatedOutput: 'bad' } })[0]).toMatchObject({ type: 'tool.result', status: 'error' });
     expect(m.notification('account/rateLimits/updated', { rateLimits: { primary: { usedPercent: 50, windowDurationMins: 300, resetsAt: 9 } } })[0]).toEqual({ type: 'limits.report', windows: [{ name: 'five_hour', utilization: 0.5, resets_at: 9 }] });
-    expect(m.notification('thread/tokenUsage/updated', { tokenUsage: { last: { inputTokens: 5, outputTokens: 2 }, total: { totalTokens: 50 }, modelContextWindow: 100 } })[0]).toMatchObject({ input_tokens: 5, context_used_pct: 50 });
+    expect(m.notification('thread/tokenUsage/updated', { tokenUsage: { last: { inputTokens: 5, outputTokens: 2, totalTokens: 7 }, total: { totalTokens: 50 }, modelContextWindow: 100 } })[0]).toMatchObject({ input_tokens: 5, context_used_pct: 7, context_tokens: 7 }); /* total is cumulative: the gauge uses last */
   });
 });
 

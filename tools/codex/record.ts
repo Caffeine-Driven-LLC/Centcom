@@ -40,7 +40,7 @@ function project(): string {
   return dir;
 }
 function scrub(text: string, work: string): string {
-  let t = text.split(work).join('$WORK'); const home = homedir(); if (home) t = t.split(home).join('$HOME'); const user = userInfo().username; if (user && user.length > 2) t = t.replace(new RegExp(`\\b${user.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'g'), '$USER'); return t;
+  let t = text.split(work).join('$WORK'); const home = homedir(); if (home) t = t.split(home).join('$HOME'); const user = userInfo().username; if (user && user.length > 2) t = t.replace(new RegExp(`\\b${user.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'g'), '$USER'); t = t.replace(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, 'user@example.test').replace(/(\\?"(?:serverName|hostName|computerName)\\?":\\?")[^"\\]*/g, (_m, a: string) => a + 'host.local').replace(/(\\?"(?:installationId|accountId|chatgptAccountId|account_id)\\?":\\?")[0-9a-fA-F-]{16,}/g, (_m, a: string) => a + '00000000-0000-0000-0000-000000000000'); return t;
 }
 async function record(sc: Scenario, threads: Map<string, string>, report: string[]) {
   const work = project(); const frames: Frame[] = []; const t0 = Date.now(); const events: NormalisedEvent[] = [];

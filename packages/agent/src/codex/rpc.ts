@@ -4,7 +4,8 @@ import type { ChildProcess } from 'node:child_process';
 export interface RpcError { code: number; message: string; data?: unknown }
 export type ServerRequestHandler = (id: number | string, method: string, params: any) => void;
 
-export const MAX_RPC_LINE = 1024 * 1024;
+/** A single ordinary command can produce a 1.2 MB line (real Codex 0.161.0), so the cap is 8 MiB. */
+export const MAX_RPC_LINE = 8 * 1024 * 1024;
 
 export class RpcClient {
   private next = 1;
@@ -14,7 +15,7 @@ export class RpcClient {
   onNotification: (method: string, params: any) => void = () => undefined;
   onServerRequest: ServerRequestHandler = () => undefined;
   onClose: (code: number | null) => void = () => undefined;
-  /** Called once when a line longer than 1 MiB arrives; the stream cannot be trusted after that. */
+  /** Called once when a line longer than 8 MiB arrives; the stream cannot be trusted after that. */
   onLineTooLong: () => void = () => undefined;
 
   constructor(private child: ChildProcess) {
