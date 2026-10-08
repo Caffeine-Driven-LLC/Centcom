@@ -75,7 +75,7 @@ class CodexSession implements EngineSession {
   async init() {
     const spawnFn = this.deps.spawn ?? nodeSpawn;
     let child: ChildProcess;
-    try { child = spawnFn(this.deps.bin ?? 'codex', ['app-server', '--listen', 'stdio://'], { cwd: this.o.cwd, env: this.o.envExact ? { ...this.o.env } : { ...process.env, ...this.deps.env, ...this.o.env }, stdio: ['pipe', 'pipe', 'pipe'], detached: GROUPS }); }
+    try { child = spawnFn(this.deps.bin ?? process.env.CENTCOM_CODEX_BIN ?? 'codex', ['app-server', '--listen', 'stdio://'], { cwd: this.o.cwd, env: this.o.envExact ? { ...this.o.env } : { ...process.env, ...this.deps.env, ...this.o.env }, stdio: ['pipe', 'pipe', 'pipe'], detached: GROUPS }); }
     catch (e) { return this.fail(e); }
     this.child = child; const unreg = child.pid ? this.procs().register(this.agentId, child.pid, { group: GROUPS }) : () => undefined;
     this.childExit = new Promise<void>((res) => { child.once('close', () => { unreg(); res(); }); child.once('error', () => { unreg(); res(); }); });
@@ -149,7 +149,8 @@ class CodexSession implements EngineSession {
 
   private onNotification(method: string, p: any) {
     this.lastActivity = Date.now(); this.stallWarned = false;
-    if (p?.turnId && this.codexTurn && p.turnId !== this.codexTurn && method !== 'account/rateLimits/updated') return; // another turn (e.g. a sub-thread)
+    if (p?.threadId && this.threadId && p.threadId !== this.threadId) return; // another thread
+    if (this.running && p?.turnId && this.codexTurn && p.turnId !== this.codexTurn && method !== 'account/rateLimits/updated') return; // another turn while ours runs; between turns (compaction) everything on our thread counts
     const evs = this.mapper.notification(method, p ?? {});
     for (const b of evs) {
       if (b.type === 'turn.done') { if (!this.running) continue; this.running = false; this.turnDone?.(); }
