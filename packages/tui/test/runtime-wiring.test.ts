@@ -52,9 +52,19 @@ describe('permission policy in the app', () => {
 describe('checkpoints and /rewind in the app', () => {
   it('a checkpoint is taken before the prompt; /rewind lists it; /rewind 1 asks, then puts the file back', async () => {
     const { ctl, cwd, engine } = await app(); await ctl.submit('change a.txt please'); await until(() => engine.sessions[0]!.prompts.length === 1); writeFileSync(join(cwd, 'a.txt'), 'changed by the agent\n'); await until(() => !ctl.state.busy);
-    await ctl.runCommand('/rewind'); expect(notices(ctl).at(-1)).toMatch(/change a\.txt please/);
+    const list = ctl.runCommand('/rewind'); await until(() => ctl.state.mode === 'pick'); expect(ctl.state.pick!.options.map((o) => o.label)).toEqual(['change a.txt please']); ctl.pickKey('cancel'); await list; expect(readFileSync(join(cwd, 'a.txt'), 'utf8')).toBe('changed by the agent\n'); // listing and cancelling changes nothing
     await ctl.runCommand('/rewind 1'); expect(notices(ctl).at(-1)).toMatch(/Type y to confirm[\s\S]*Put back 1 file: a\.txt[\s\S]*not undone/); expect(readFileSync(join(cwd, 'a.txt'), 'utf8')).toBe('changed by the agent\n');
     await ctl.submit('y'); await until(() => readFileSync(join(cwd, 'a.txt'), 'utf8') === 'original\n'); expect(notices(ctl).at(-1)).toMatch(/Rewound to before "change a\.txt please": 1 put back/); expect(engine.sessions[0]!.prompts).toEqual(['change a.txt please']); ctl.stop();
+  });
+  it('bare /rewind guides you: pick the prompt, pick what to put back, review, confirm from a list; no, or Esc anywhere, changes nothing', async () => {
+    const { ctl, cwd, engine } = await app(); await ctl.submit('change a.txt please'); await until(() => engine.sessions[0]!.prompts.length === 1); writeFileSync(join(cwd, 'a.txt'), 'changed by the agent\n'); await until(() => !ctl.state.busy);
+    const title = () => ctl.state.pick?.title; const readA = () => readFileSync(join(cwd, 'a.txt'), 'utf8');
+    let run = ctl.runCommand('/rewind'); await until(() => title() === 'Go back to before which prompt?'); ctl.pickKey('enter'); await until(() => title() === 'Put back what?'); expect(ctl.state.pick!.options.map((o) => o.id)).toEqual(['files', 'conversation', 'both']); ctl.pickKey('enter');
+    await until(() => title() === 'Rewind to before "change a.txt please"?'); expect(notices(ctl).at(-1)).toMatch(/Put back 1 file: a\.txt[\s\S]*not undone/); expect(readA()).toBe('changed by the agent\n'); // reviewed, not done yet
+    ctl.pickKey('down'); ctl.pickKey('enter'); await run; expect(readA()).toBe('changed by the agent\n'); expect(notices(ctl).at(-1)).toMatch(/Nothing was rewound/);
+    run = ctl.runCommand('/rewind'); await until(() => title() === 'Go back to before which prompt?'); ctl.pickKey('enter'); await until(() => title() === 'Put back what?'); ctl.pickKey('cancel'); await run; expect(readA()).toBe('changed by the agent\n');
+    run = ctl.runCommand('/rewind'); await until(() => title() === 'Go back to before which prompt?'); ctl.pickKey('enter'); await until(() => title() === 'Put back what?'); ctl.pickKey('enter'); await until(() => title()?.startsWith('Rewind to before') === true); ctl.pickKey('enter'); await run;
+    await until(() => readA() === 'original\n'); expect(notices(ctl).at(-1)).toMatch(/Rewound to before "change a\.txt please": 1 put back/); ctl.stop();
   });
   it('anything but y cancels; a missing number or a busy agent is explained', async () => { const { ctl, cwd, engine } = await app(); await ctl.submit('one'); await until(() => engine.sessions[0]!.prompts.length === 1); writeFileSync(join(cwd, 'a.txt'), 'x\n'); await until(() => !ctl.state.busy); await ctl.runCommand('/rewind 1'); await ctl.submit('no'); expect(notices(ctl).at(-1)).toMatch(/Nothing was rewound/); expect(readFileSync(join(cwd, 'a.txt'), 'utf8')).toBe('x\n'); await ctl.runCommand('/rewind 9'); expect(ctl.state.toasts.at(-1)!.text).toMatch(/No checkpoint 9/); ctl.stop(); });
   it('conversation rewind drops the later messages and resumes the engine at that point', async () => {

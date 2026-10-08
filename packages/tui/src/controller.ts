@@ -893,12 +893,17 @@ export class AppController {
     let out = lines.join('\n'); while (Buffer.byteLength(out) > maxBytes && lines.length) { lines.shift(); out = '…\n' + lines.join('\n'); } return Buffer.byteLength(out) > maxBytes ? out.slice(-Math.floor(maxBytes / 4)) : out;
   }
   private checkpointLine(c: Checkpoint, i: number) { return `${String(c.n).padStart(3)}  ${ago(Date.parse(c.at))}  ${c.label || '(no text)'}${c.commit ? `  +${c.files.added} ~${c.files.changed} -${c.files.removed}` : '  (conversation only)'}${i === 0 ? '  ← latest' : ''}`; }
-  async rewindCommand(arg: string) {
+  async rewindCommand(arg: string, viaMenu = false) {
     if (!this.cp) { this.toast('info', 'Checkpoints are off in this session.'); return; }
     if (this.state.busy) { this.toast('warn', 'Cento is still working. Press Esc to interrupt, then rewind.'); return; }
     await this.cp.ready().catch(() => undefined); const list = [...this.cp.list()].reverse();
     const [nArg, modeArg] = arg.split(/\s+/).filter(Boolean);
-    if (!nArg) { if (!list.length) { this.notice('info', 'No checkpoints yet. One is saved before every prompt.'); return; } this.notice('info', 'Checkpoints (newest first). Type /rewind <number> to go back to before that prompt; add "conversation" or "both" to also rewind the conversation.', list.slice(0, 15).map((c, i) => this.checkpointLine(c, i)).join('\n')); return; }
+    if (!nArg) {
+      if (!list.length) { this.notice('info', 'No checkpoints yet. One is saved before every prompt.'); return; }
+      const pickedCp = await this.pick({ title: 'Go back to before which prompt?', note: 'Newest first. One is saved before every prompt.', multi: false, confirm: 'next', options: list.slice(0, 30).map((c) => ({ id: String(c.n), label: c.label, hint: `#${c.n}` })) }); if (!pickedCp?.[0]) return;
+      const what = await this.pick({ title: 'Put back what?', multi: false, confirm: 'review', options: [{ id: 'files', label: 'The files', hint: 'the folder as it was then' }, { id: 'conversation', label: 'The conversation', hint: 'forget what was said after' }, { id: 'both', label: 'Both' }] }); if (!what?.[0]) return;
+      await this.rewindCommand(`${pickedCp[0]} ${what[0]}`, true); return;
+    }
     const mode = (modeArg ?? 'files') as RewindMode; if (!['files', 'conversation', 'both'].includes(mode)) { this.toast('warn', 'Rewind what: files, conversation or both?'); return; }
     const target = list.find((c) => String(c.n) === nArg); if (!target) { this.toast('warn', `No checkpoint ${nArg}. Type /rewind to see the list.`); return; }
     let plan; try { plan = await this.cp.preview(target.id, mode); } catch (e) { this.notice('warn', 'Cannot rewind files here.', String((e as Error).message ?? e)); return; }
@@ -907,12 +912,19 @@ export class AppController {
     if (plan.conversation !== 'none') parts.push(plan.conversation === 'engine-resume' ? 'The conversation goes back to that point.' : 'The conversation starts again from a short summary of what came before.');
     if (mode !== 'conversation') parts.push('Only files in this folder are put back. What commands did elsewhere (installs, network, databases) is not undone.');
     if (!plan.restore.length && !plan.delete.length && plan.conversation === 'none') { this.notice('info', 'Nothing to put back: the files are already as they were then.', plan.skippedModifiedOutside.length ? parts.join('\n') : undefined); return; }
-    this.pendingMemory = { diff: parts.join('\n'), no: 'Nothing was rewound.', apply: async () => {
+    const pending = { diff: parts.join('\n'), no: 'Nothing was rewound.', apply: async () => {
       const r = await this.cp!.rewind(target.id, mode);
       if (r.conversation) { void this.session?.stop(); this.adopt(r.conversation.session); }
       if (r.failed) return `Stopped part way: ${r.failed.unrestored.length} file(s) not put back. Your state before the rewind is saved: /rewind ${this.cp!.list().at(-1)?.n ?? ''} undoes it.`;
       return `Rewound to before "${target.label}": ${r.restored.length} put back, ${r.deleted.length} removed${r.skipped.length ? `, ${r.skipped.length} left alone` : ''}.${r.undoRef ? ` To undo, /rewind ${this.cp!.list().at(-1)?.n}.` : ''}${r.conversation?.resumeError ? ` (The tool said: ${r.conversation.resumeError})` : ''}`;
     } };
+    if (viaMenu) { // from the guided flow: review, then confirm from a list
+      this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: `Rewind to before "${target.label}"`, detail: parts.join('\n') });
+      const ok = await this.pick({ title: `Rewind to before "${target.label}"?`, note: 'The details are above in the conversation.', multi: false, confirm: 'ok', options: [{ id: 'yes', label: 'Yes, rewind' }, { id: 'no', label: 'No, leave everything as it is' }] });
+      if (ok?.[0] === 'yes') { try { this.addItem({ kind: 'notice', id: nid('n'), level: 'ok', text: await pending.apply() }); } catch (e) { this.addItem({ kind: 'notice', id: nid('n'), level: 'warn', text: 'Could not rewind: ' + String((e as Error).message ?? e) }); } } else this.notice('info', pending.no);
+      return;
+    }
+    this.pendingMemory = pending;
     this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: `Rewind to before "${target.label}"? Type y to confirm, anything else cancels.`, detail: parts.join('\n') });
   }
   /** Esc twice within 600 ms while idle opens the checkpoint list. */
