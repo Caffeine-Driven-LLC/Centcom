@@ -19,8 +19,13 @@ centcom [options] | centcom -p "task"
 - `--no-save`: do not save this conversation or your prompt history
 - `--no-checkpoints`: do not snapshot the folder before each prompt
 - `--model <name>`: model to use (same ids as /model)
+- `--cwd <folder>`: with -p: run in this folder
+- `--allow <rule>`: with -p: allow what would be declined, e.g. --allow "Bash(npm test)" (repeat for more)
+- `--permission-mode <ask|accept-edits|plan>`: with -p: how approvals are handled (ask declines them and exits 3)
+- `--max-turns <n>`: with -p: stop after this many tool steps (default 50)
+- `--timeout <seconds>`: with -p: stop after this long (exit code 124)
 - `--mode <default|plan|acceptEdits|bypassPermissions>`: start in a permission mode
-- `--dangerously-skip-permissions`: never ask: run commands and edit files freely (alias: --yolo)
+- `--dangerously-skip-permissions, --yolo`: never ask: run commands and edit files freely
 - `--mascot <large|small|off>`: Cento size (default: auto from terminal height)
 - `--cento-color <violet|red|yellow|green|brown>`: Cento's color
 - `--theme <dark|light|hc>`: Graphite (default), Paper (for light terminals) or high contrast

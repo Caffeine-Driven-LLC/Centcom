@@ -38,11 +38,26 @@ do not snapshot the folder before each prompt
 .B \-\-model <name>
 model to use (same ids as /model)
 .TP
+.B \-\-cwd <folder>
+with \-p: run in this folder
+.TP
+.B \-\-allow <rule>
+with \-p: allow what would be declined, e.g. \-\-allow "Bash(npm test)" (repeat for more)
+.TP
+.B \-\-permission\-mode <ask|accept\-edits|plan>
+with \-p: how approvals are handled (ask declines them and exits 3)
+.TP
+.B \-\-max\-turns <n>
+with \-p: stop after this many tool steps (default 50)
+.TP
+.B \-\-timeout <seconds>
+with \-p: stop after this long (exit code 124)
+.TP
 .B \-\-mode <default|plan|acceptEdits|bypassPermissions>
 start in a permission mode
 .TP
-.B \-\-dangerously\-skip\-permissions
-never ask: run commands and edit files freely (alias: \-\-yolo)
+.B \-\-dangerously\-skip\-permissions, \-\-yolo
+never ask: run commands and edit files freely
 .TP
 .B \-\-mascot <large|small|off>
 Cento size (default: auto from terminal height)

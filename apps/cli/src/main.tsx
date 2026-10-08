@@ -26,6 +26,8 @@ import { CrashStore, installCrashHandlers, runCrash } from './crash/index.js';
 import { realDoctorContext, runDoctor } from './doctor/index.js';
 import { CONTRACT_VERSION } from '@centcom/protocol';
 import { find as findCommand, helpFor, renderHelp, topHelp } from './help/index.js';
+import { COMMANDS } from './help/commands.js';
+import { checkArgs, normalizeArgs } from './flags.js';
 import { runUpdate } from './commands/update/index.js';
 import { createInterface } from 'node:readline';
 import { dirname as pathDirname } from 'node:path';
@@ -94,6 +96,11 @@ async function main() {
   if (process.argv[2] === 'hooks') await done(await runHooksCli(process.argv.slice(3)));
   if (isAccount) await done(await runAccountCli(process.argv[2]!, process.argv.slice(3).filter((a) => a !== '--debug'), { version: VERSION }));
   if (process.argv[2] === 'lan') { await done(await runLanCli(process.argv.slice(3), { out: (l) => console.log(l), err: (l) => console.error(l) })); }
+  { // the terminal app and print mode take only the options in the help: a typo is a clear message, not a silent no-op
+    const top = findCommand('centcom')!; process.argv.splice(2, process.argv.length - 2, ...normalizeArgs(process.argv.slice(2), top.flags));
+    const bad = checkArgs(process.argv.slice(2), top.flags, { print: has('-p') || has('--print'), commands: [...COMMANDS.map((c) => c.name).filter((n) => n !== 'centcom'), 'help'] });
+    if (bad) { process.stderr.write(bad + '\n'); process.exit(2); }
+  }
   if (has('-p') || has('--print')) {
     const i = Math.max(process.argv.indexOf('-p'), process.argv.indexOf('--print'));
     const next = process.argv[i + 1]; const text = next && !next.startsWith('-') ? next : undefined;
