@@ -1,6 +1,7 @@
 import { PassThrough } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import { DemoEngine } from '@centcom/agent';
+import { FakeEngine } from '@centcom/testkit';
 import { buildPrompt, readStdin, runPrint } from '../src/print/index.js';
 
 const sink = () => { const s = new PassThrough(); let t = ''; s.on('data', (c) => (t += c)); return { s, text: () => t }; };
@@ -77,5 +78,28 @@ describe('secrets split across streamed pieces', () => {
   it('never loses or reorders text, and flush returns the unfinished last word', async () => {
     const { Holdback } = await import('../src/print/format.js'); const h = new Holdback(); const bits = ['Hel', 'lo wor', 'ld, how a', 're you', '?\nFine'];
     const got = bits.map((b) => h.push(b)).join('') + h.flush(); expect(got).toBe(bits.join('')); expect(h.push('abc')).toBe(''); expect(h.flush()).toBe('abc'); expect(h.flush()).toBe('');
+  });
+});
+
+describe('print mode when the agent fails', () => {
+  const failing = (code: string, message: string) => new FakeEngine({ script: { events: [{ type: 'status', state: 'thinking' }, { type: 'error', code: code as never, tool_message: message, fatal: true }], outcome: 'error' } });
+  const CASES: [string, string, number][] = [['provider_cap_reached', 'You have used your plan for now.', 5], ['provider_rate_limited', 'Too many requests.', 5], ['provider_not_signed_in', 'Please sign in.', 4], ['provider_not_installed', 'claude was not found.', 4], ['provider_protocol_error', 'Could not read the reply.', 6]];
+  it.each(CASES)('%s: exit %i, a JSON error with its code, and the message on stderr in text mode', async (code, message, exit) => {
+    const j = await run({ engine: failing(code, message), format: 'json', prompt: 'hello' }); expect(j.code).toBe(exit);
+    const d = JSON.parse(j.out.trim().split('\n').at(-1)!); expect(d).toMatchObject({ type: 'result', is_error: true, error: { code } }); expect(d.error.message).toContain(message.slice(0, 12));
+    const t = await run({ engine: failing(code, message), format: 'text', prompt: 'hello' }); expect(t.code).toBe(exit); expect(t.err).toContain('Error:'); expect(t.err).toContain(message.slice(0, 12)); expect(t.out).not.toContain('Error:');
+  });
+  it('a secret in the error message never reaches stdout or stderr', async () => {
+    const r = await run({ engine: failing('provider_protocol_error', 'bad reply, key sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789ABCDEF'), format: 'json', prompt: 'hello' });
+    expect(r.out + r.err).not.toContain('abcdefghijklmnopqrstuvwxyz0123456789'); expect(r.out + r.err).toContain('bad reply');
+  });
+});
+
+describe('print mode when the reader goes away (| head -1)', () => {
+  it('stops quietly and exits 0 within a second, with no stack trace', async () => {
+    const { Writable } = await import('node:stream'); const err = sink(); let writes = 0;
+    const out = new Writable({ write(_c, _e, cb) { writes++; const e = Object.assign(new Error('write EPIPE'), { code: 'EPIPE' }); cb(e); } });
+    const t0 = Date.now(); const code = await runPrint({ engine: new DemoEngine({ speed: 30 }), demo: true, cwd: '/tmp', branch: '', version: 't', mode: 'default', prompt: 'find where isExpired is used', format: 'text', save: false, out: out as never, err: err.s });
+    expect(code).toBe(0); expect(Date.now() - t0).toBeLessThan(1500); expect(writes).toBeGreaterThan(0); expect(err.text()).not.toMatch(/at \S+ \(|EPIPE|Unhandled/);
   });
 });
