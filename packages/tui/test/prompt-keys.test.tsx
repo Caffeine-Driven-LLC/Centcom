@@ -60,3 +60,15 @@ describe('mouse wheel', () => {
     expect(t.ctl.state.mouse).toBe(true); await t.ctl.runCommand('/mouse off'); expect(t.ctl.state.mouse).toBe(false); await t.ctl.runCommand('/mouse'); expect(t.ctl.state.mouse).toBe(true);
   });
 });
+
+describe('text and Enter in one chunk', () => {
+  it('sends the message instead of inserting a line break', async () => {
+    const t = await mount(); const sent: string[] = []; t.ctl.submit = (async (x: string) => { sent.push(x); }) as never;
+    await t.send('hello there\r'); expect(sent).toEqual(['hello there']); expect(t.text()).toBe('hello there'.length ? t.text() : ''); // the real submit clears the prompt
+  });
+  it('a partial slash command completes like Enter does, and a pasted block with line breaks inside stays text', async () => {
+    const t = await mount(); const sent: string[] = []; t.ctl.submit = (async (x: string) => { sent.push(x); }) as never;
+    await t.send('/mou\r'); expect(sent).toEqual([]); expect(t.text()).toBe('/mouse '); await t.send('\x15');
+    await t.send('line one\nline two\r'); expect(t.text()).toBe('line one\nline two\n');
+  });
+});

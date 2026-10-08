@@ -210,7 +210,18 @@ export function App({ ctl, tier, keys }: AppProps) {
     if (key.ctrl && input === 'j') { edit((e) => ed.insert(e, '\n')); return; }
     if (key.meta && input === 'b') { edit(ed.wordLeft, 'move'); return; }
     if (key.meta && input === 'f') { edit(ed.wordRight, 'move'); return; }
-    if (input && !key.ctrl && !key.meta) edit((e) => ed.insert(e, input.replace(/\r\n?/g, '\n')));
+    if (input && !key.ctrl && !key.meta) {
+      // Text and Enter in one chunk (fast typing, a paste without bracketed paste, scripts) arrives as one string: the trailing Enter sends, it is not a line break.
+      if (input.length > 1 && /[\r\n]$/.test(input) && !key.return && !s.input.endsWith('\\') && !/[\r\n]./s.test(input.slice(0, -1))) {
+        const body = input.replace(/[\r\n]+$/, ''); if (!body && !s.input) return;
+        const e = ed.insert(sel ? ed.removeRange({ text: s.input, cursor: s.cursor }, sel[0], sel[1]) : { text: s.input, cursor: s.cursor }, body);
+        ctl.patch({ input: e.text, cursor: e.cursor, anchor: undefined, slashSel: 0, histIdx: null });
+        const m = slashMatches(e.text)[0]; // same as Enter with the command menu open: a partial command completes
+        if (m && m.name !== e.text.slice(1)) { const t = '/' + m.name + (m.args ? ' ' : ''); ctl.patch({ input: t, cursor: t.length, anchor: undefined }); if (!m.args) void ctl.submit('/' + m.name); return; }
+        void ctl.submit(e.text); return;
+      }
+      edit((e) => ed.insert(e, input.replace(/\r\n?/g, '\n')));
+    }
   });
 
   if (cols < 60 || rows < 14) {
