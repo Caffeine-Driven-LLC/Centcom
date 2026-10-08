@@ -78,7 +78,7 @@ Flags: `--mode plan|acceptEdits`, `--mascot large|small|off`, `--cento-color red
 
 **Auto skills:** before each prompt Centcom matches your installed skills and commands (`~/.claude/skills`, plugins, `.claude/skills`, `.claude/commands`) against it locally, shows what it picked, and tells Claude to apply them. `/auto on|off`, `/skills [filter]`.
 
-**The `centcom` command:** `pnpm install && pnpm install:cli` once, then run `centcom` in any folder to start the terminal app there, the way you start `claude` (`centcom --engine codex`, `centcom --help`). It runs from this checkout, so `git pull` is an update.
+**The `centcom` command:** `pnpm onboard` (checks Node/pnpm/git, installs, links the command, reports which agents it found; `sh tools/dev/onboard.sh --check` only reports) or `pnpm install && pnpm install:cli` once, then run `centcom` in any folder to start the terminal app there, the way you start `claude` (`centcom --engine codex`, `centcom --help`). It runs from this checkout, so `git pull` is an update.
 
 **Night cycle:** `ctrl+n` (or `/night`) opens a queue: write many tasks, press Enter on an empty line, and the agent works through them while you sleep, never asking you anything. Questions are answered "decide yourself"; high-risk actions and anything that pushes, publishes or deploys are refused; a morning report is written to `~/.centcom/night/`. See [`docs/night-cycle.md`](docs/night-cycle.md).
 

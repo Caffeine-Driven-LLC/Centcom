@@ -37,7 +37,8 @@
     "app:mock": "CENTCOM_CODEX_BIN=\"$PWD/tools/codex/bin/codex\" pnpm app",
     "lanes:next": "node tools/dev/lane-tasks.mjs",
     "dogfood": "node tools/dev/lane-tasks.mjs --seed ; tsx apps/cli/src/main.tsx",
-    "install:cli": "sh tools/dev/install-cli.sh"
+    "install:cli": "sh tools/dev/install-cli.sh",
+    "onboard": "sh tools/dev/onboard.sh"
   },
   "devDependencies": {
     "@changesets/cli": "3.0.3",
