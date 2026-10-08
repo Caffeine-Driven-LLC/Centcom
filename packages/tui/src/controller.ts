@@ -320,6 +320,7 @@ export class AppController {
         break;
       case 'turn.done':
         this.cancelQuestions(); // a question of a finished turn is stale
+        { const q = this.queuedAnswer; if (q && ev.outcome !== 'canceled') { this.queuedAnswer = undefined; queueMicrotask(() => { void this.submit(q); }); } else if (ev.outcome === 'canceled') this.queuedAnswer = undefined; }
         if (ev.outcome !== 'canceled' && this.state.turnStartedAt && Date.now() - this.state.turnStartedAt >= LONG_TURN_MS) this.ring(); // you may have stepped away
         this.set((s) => ({ busy: false, turnStartedAt: undefined, items: s.items.map((i) => (i.kind === 'thinking' && !i.done ? { ...i, done: true, ms: Date.now() - i.ms } : i.kind === 'tool' && i.status === 'running' && ev.outcome === 'canceled' ? { ...i, status: 'canceled' as const } : i)) }));
         this.updateAgent(me, () => ({ busy: false }));
@@ -713,8 +714,12 @@ export class AppController {
   private async answerQuestion(text: string, options: string[], multi = true) {
     if (this.night.active() || this.state.approvals.length) return;
     this.ring(); const ids = await this.pickForQuestion({ title: text, note: multi ? 'Pick one or more. Esc to type your own answer.' : 'Esc to type your own answer.', options: options.map((o, i) => ({ id: String(i), label: o })), multi, confirm: 'send' });
-    if (ids?.length) await this.submit(ids.map((i) => options[Number(i)]).join(', '));
+    if (!ids?.length) return; const answer = ids.map((i) => options[Number(i)]).join(', ');
+    if (this.state.busy) { this.queuedAnswer = answer; this.toast('info', 'Your answer goes to the agent as soon as it finishes this turn.', 5000); return; } // an agent that is still working cannot take a message
+    await this.submit(answer);
   }
+  /** An answer to a question that came while the agent was still working: sent when the turn ends. */
+  private queuedAnswer?: string;
   /** `/night remove` with no number: tick the queued tasks to take out. */
   private async nightPickRemove() {
     const tasks = this.state.night.tasks.filter((t) => t.status !== 'running');

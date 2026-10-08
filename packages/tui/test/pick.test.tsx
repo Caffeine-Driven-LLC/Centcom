@@ -221,3 +221,15 @@ describe('/bell', () => {
     const run = c.runCommand('/settings'); await new Promise((r) => setTimeout(r, 5)); expect(c.state.pick!.options.map((o) => o.label)).toContain('Bell: on'); c.pickKey('cancel'); await run; await c.runCommand('/bell loud'); expect(c.state.toasts.at(-1)!.text).toMatch(/on or \/bell off/);
   });
 });
+describe('an answer to a question that came while the agent was working', () => {
+  const done = (c: AppController, outcome: 'ok' | 'canceled') => c.apply({ v: 1, seq: 1, ts: new Date().toISOString(), agent_id: c.state.activeAgent, type: 'turn.done', outcome } as never);
+  it('waits for the turn to end and is then sent once; a stopped turn drops it', async () => {
+    const c = make(); const sent: string[] = []; c.submit = (async (t: string) => { sent.push(t); }) as never; c.patch({ busy: true, turnStartedAt: Date.now() });
+    const a = (c as any).answerQuestion('Which?', ['red', 'blue'], false); await new Promise((r) => setTimeout(r, 0)); c.pickKey('down'); c.pickKey('enter'); await a;
+    expect(sent).toEqual([]); expect(c.state.toasts.at(-1)!.text).toMatch(/as soon as it finishes/); done(c, 'ok'); await new Promise((r) => setTimeout(r, 5)); expect(sent).toEqual(['blue']); done(c, 'ok'); await new Promise((r) => setTimeout(r, 5)); expect(sent).toEqual(['blue']);
+    c.patch({ busy: true }); const b = (c as any).answerQuestion('Again?', ['x'], false); await new Promise((r) => setTimeout(r, 0)); c.pickKey('enter'); await b; done(c, 'canceled'); await new Promise((r) => setTimeout(r, 5)); done(c, 'ok'); await new Promise((r) => setTimeout(r, 5)); expect(sent).toEqual(['blue']);
+  });
+  it('when the agent is idle the answer is sent at once', async () => {
+    const c = make(); const sent: string[] = []; c.submit = (async (t: string) => { sent.push(t); }) as never; const a = (c as any).answerQuestion('Which?', ['red', 'blue'], true); await new Promise((r) => setTimeout(r, 0)); c.pickKey('toggle'); c.pickKey('down'); c.pickKey('toggle'); c.pickKey('enter'); await a; expect(sent).toEqual(['red, blue']);
+  });
+});
