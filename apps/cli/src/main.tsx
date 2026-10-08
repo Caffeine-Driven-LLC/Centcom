@@ -155,7 +155,7 @@ async function main() {
   }
   const ctl = new AppController({ ...rt.options, views: appViews(process.cwd(), { doctor: () => realDoctorContext({ version: VERSION, contract: CONTRACT_VERSION, apiBase: cc.cfg.api.base_url, stateDir: stateDir(defaultDeps()) }) }),
     engine, demo, cwd: process.cwd(), branch, version: VERSION, permissionMode: mode, dangerous: dangerous || mode === 'bypassPermissions', ghosts: has('--demo-team'),
-    logger, settings, ...cc.options({ ...initialSettings(), ...settings }, { saveHistory: !has('--no-save') }),
+    logger, settings, bell: () => { try { process.stdout.write('\x07'); } catch { /* no terminal */ } }, ...cc.options({ ...initialSettings(), ...settings }, { saveHistory: !has('--no-save') }),
     sessions: sessionStore, night: demo ? undefined : { dir: pathJoin(homedir(), '.centcom', 'night') },
     modelCache: { read: async (f) => { try { return await readFile(pathJoin(stateDir(defaultDeps()), f), 'utf8'); } catch { return undefined; } }, write: async (f, t) => { const d = stateDir(defaultDeps()); await mkdir(d, { recursive: true, mode: 0o700 }); await writeFile(pathJoin(d, f), t, { mode: 0o600 }); } },
     resume: resumeId,

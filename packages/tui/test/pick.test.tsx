@@ -201,3 +201,21 @@ describe('/model for Codex', () => {
     const d = make(); await d.runCommand('/model'); expect(d.state.mode).toBe('models'); d.stop(); c.stop();
   });
 });
+describe('/bell', () => {
+  const mk = () => { let rings = 0; const c = new AppController({ engine: new DemoEngine({ speed: 100 }), demo: true, cwd: '/tmp', version: 't', skills: [], bell: () => { rings++; } }); return { c, rings: () => rings }; };
+  const req = (id: string) => ({ approval_id: id, agent_id: 'me', tool_id: 't' + id, tool: 'Bash', summary: 'x', risk: 'medium', command: 'npm run ' + id } as never);
+  const done = (c: AppController, outcome: 'ok' | 'canceled') => c.apply({ v: 1, seq: 1, ts: new Date().toISOString(), agent_id: c.state.activeAgent, type: 'turn.done', outcome } as never);
+  it('is silent until you turn it on; then an approval, a question and a long task that finished ring it, a short or cancelled one does not', async () => {
+    const { c, rings } = mk(); void c.decide(req('a')); c.answerApproval('deny'); expect(rings()).toBe(0);
+    await c.runCommand('/bell on'); expect(c.state.settings.bell).toBe(true); void c.decide(req('b')); expect(rings()).toBe(1); c.answerApproval('deny');
+    void (c as any).answerQuestion('Which?', ['x', 'y'], false); await new Promise((r) => setTimeout(r, 0)); expect(rings()).toBe(2); c.pickKey('cancel');
+    c.patch({ busy: true, turnStartedAt: Date.now() - 3000 }); done(c, 'ok'); expect(rings()).toBe(2); // short
+    c.patch({ busy: true, turnStartedAt: Date.now() - 30_000 }); done(c, 'canceled'); expect(rings()).toBe(2); // you stopped it yourself
+    c.patch({ busy: true, turnStartedAt: Date.now() - 30_000 }); done(c, 'ok'); expect(rings()).toBe(3);
+    await c.runCommand('/bell off'); void c.decide(req('c')); expect(rings()).toBe(3); c.answerApproval('deny');
+  });
+  it('never rings during a night cycle (nobody is there), and /bell and the settings list agree', async () => {
+    const { c, rings } = mk(); await c.runCommand('/bell on'); c.nightAdd('task'); (c as any).night.active = () => true; void c.decide(req('n')); expect(rings()).toBe(0);
+    const run = c.runCommand('/settings'); await new Promise((r) => setTimeout(r, 5)); expect(c.state.pick!.options.map((o) => o.label)).toContain('Bell: on'); c.pickKey('cancel'); await run; await c.runCommand('/bell loud'); expect(c.state.toasts.at(-1)!.text).toMatch(/on or \/bell off/);
+  });
+});

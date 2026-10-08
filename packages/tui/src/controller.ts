@@ -27,11 +27,15 @@ import { emptyText } from './onboarding/copy.js';
 import { reduceTasks } from './tasks/model.js';
 import { VerbRotator } from './util/verbs.js';
 
+/** A turn this long rings the bell when it ends (if the bell is on). */
+const LONG_TURN_MS = 15_000;
 /** The longest message Centcom sends in one go. */
 export const MAX_MESSAGE = 65_536;
 export interface ControllerOptions {
   /** How long an approval waits before the engine declines it (shown as a countdown). */
   approvalTimeoutMs?: number;
+  /** Ring the terminal bell (a sound or a flash in most terminals). */
+  bell?: () => void;
   /** Where copied text goes (tests pass a recorder). Default: the system clipboard. */
   clipboard?: (text: string) => void;
   /** Mouse wheel on at start (default: when stdout is a terminal). */
@@ -136,6 +140,8 @@ export class AppController {
   private set(p: Partial<AppState> | ((s: AppState) => Partial<AppState>)) { this.store.set((st) => { const q = typeof p === 'function' ? p(st) : p; return 'input' in q && !('anchor' in q) ? { ...q, anchor: undefined } : q; }); } // a new prompt text drops any selection
   /** UI-level state changes (input buffer, scroll, mode, overlay selections). */
   patch(p: Partial<AppState>) { this.store.set('input' in p && !('anchor' in p) ? { ...p, anchor: undefined } : p, 'input' in p || 'cursor' in p); }
+  /** The terminal bell, when it is turned on: for what needs you, or a long task that just finished. */
+  private ring() { if (this.state.settings.bell && !this.night.active()) this.o.bell?.(); }
   /** Copy to the clipboard and say so. */
   copy(text: string) { if (!text) return; (this.o.clipboard ?? ((t) => copyToClipboard(t)))(text); this.toast('ok', `Copied ${text.length} character${text.length === 1 ? '' : 's'}`, 1400); }
   private updateAgent(id: string, fn: (a: AgentView) => Partial<AgentView>) { this.set((s) => ({ agents: s.agents.map((a) => (a.id === id ? { ...a, ...fn(a) } : a)) })); }
@@ -310,6 +316,7 @@ export class AppController {
         this.night.noteError(ev.code, !!ev.fatal);
         break;
       case 'turn.done':
+        if (ev.outcome !== 'canceled' && this.state.turnStartedAt && Date.now() - this.state.turnStartedAt >= LONG_TURN_MS) this.ring(); // you may have stepped away
         this.set((s) => ({ busy: false, turnStartedAt: undefined, items: s.items.map((i) => (i.kind === 'thinking' && !i.done ? { ...i, done: true, ms: Date.now() - i.ms } : i.kind === 'tool' && i.status === 'running' && ev.outcome === 'canceled' ? { ...i, status: 'canceled' as const } : i)) }));
         this.updateAgent(me, () => ({ busy: false }));
         if (ev.outcome === 'canceled') { this.notice('warn', 'Interrupted.'); this.setAgentState(me, 'idle'); }
@@ -361,7 +368,7 @@ export class AppController {
     return new Promise((resolve) => {
       const me = this.state.agents.find((a) => a.id === r.agent_id);
       const pending: PendingApproval = { req: r, agentName: me?.name ?? 'agent', color: me?.color ?? 'violet', resolve, confirmHigh: r.risk === 'high' };
-      this.set((s) => ({ approvals: [...s.approvals, pending] }));
+      this.set((s) => ({ approvals: [...s.approvals, pending] })); this.ring();
     });
   }
 
@@ -382,7 +389,7 @@ export class AppController {
       const me = this.state.agents.find((a) => a.id === req.agent_id);
       const pending: PendingApproval = { req, agentName: me?.name ?? 'agent', color: me?.color ?? 'violet', resolve, confirmHigh: req.risk === 'high', expiresAt: Date.now() + (this.o.approvalTimeoutMs ?? 600_000) };
       signal.addEventListener('abort', () => { this.set((s) => ({ approvals: s.approvals.filter((a) => a !== pending) })); resolve({ decision: 'deny', scope: 'once', reason: 'cancelled' }); }, { once: true });
-      this.set((s) => ({ approvals: [...s.approvals, pending] }));
+      this.set((s) => ({ approvals: [...s.approvals, pending] })); this.ring();
     });
   }
 
@@ -423,6 +430,7 @@ export class AppController {
   private async askEngine(qs: EngineQuestion[]): Promise<Record<string, string[]> | undefined> {
     const out: Record<string, string[]> = {};
     if (this.night.active()) { for (const q of qs) out[q.id] = ['Decide for yourself: nobody is here to answer. Pick the most reasonable option and say what you assumed.']; return out; } // the night cycle never waits for a person
+    this.ring();
     for (const q of qs) {
       if (q.options?.length) {
         const OTHER = '\u0000other';
@@ -602,7 +610,7 @@ export class AppController {
       const rows: { id: string; label: string; value: string; hint?: string }[] = [
         { id: 'mode', label: 'Permissions', value: val('mode'), hint: 'when the agent asks' }, { id: 'model', label: 'Model', value: st.model || 'default' }, { id: 'effort', label: 'Effort', value: this.effort || 'default', hint: 'how hard it thinks' },
         { id: 'theme', label: 'Theme', value: st.theme }, { id: 'mascot', label: 'Cento size', value: st.mascot }, { id: 'color', label: "Cento's colour", value: st.color }, { id: 'motion', label: 'Animation', value: st.reducedMotion ? 'reduced' : 'full' },
-        { id: 'spinner', label: 'Waiting line', value: st.spinner }, { id: 'density', label: 'Spacing', value: st.density }, { id: 'mouse', label: 'Mouse', value: st.mouse ? 'on' : 'off', hint: 'wheel and clicks' }, { id: 'auto', label: 'Auto skills', value: st.autoSkills ? 'on' : 'off' },
+        { id: 'spinner', label: 'Waiting line', value: st.spinner }, { id: 'density', label: 'Spacing', value: st.density }, { id: 'bell', label: 'Bell', value: st.bell ? 'on' : 'off', hint: 'when you are needed' }, { id: 'mouse', label: 'Mouse', value: st.mouse ? 'on' : 'off', hint: 'wheel and clicks' }, { id: 'auto', label: 'Auto skills', value: st.autoSkills ? 'on' : 'off' },
       ];
       const ids = await this.pick({ title: 'Settings', note: 'Choose one to change it. Esc closes.', options: rows.map((r) => ({ id: r.id, label: `${r.label}: ${r.value}`, hint: r.hint })), multi: false, confirm: 'change' });
       const id = ids?.[0]; if (!id) return;
@@ -657,7 +665,7 @@ export class AppController {
   /** The agent asked with options: tick one or more and your choice goes back as your next message (Esc to type your own). */
   private async answerQuestion(text: string, options: string[], multi = true) {
     if (this.night.active() || this.state.approvals.length) return;
-    const ids = await this.pick({ title: text, note: multi ? 'Pick one or more. Esc to type your own answer.' : 'Esc to type your own answer.', options: options.map((o, i) => ({ id: String(i), label: o })), multi, confirm: 'send' });
+    this.ring(); const ids = await this.pick({ title: text, note: multi ? 'Pick one or more. Esc to type your own answer.' : 'Esc to type your own answer.', options: options.map((o, i) => ({ id: String(i), label: o })), multi, confirm: 'send' });
     if (ids?.length) await this.submit(ids.map((i) => options[Number(i)]).join(', '));
   }
   /** `/night remove` with no number: tick the queued tasks to take out. */
@@ -706,6 +714,7 @@ export class AppController {
       theme: { title: 'Theme', current: st.theme, options: o(['dark', 'Graphite'], ['light', 'Paper, for light terminals'], ['hc', 'high contrast: black, white, bold borders']) },
       mascot: { title: 'Cento size', current: st.mascot, options: o(['auto', 'by window height'], ['large'], ['small'], ['off']) },
       color: { title: "Cento's colour", current: st.color, options: o(['violet'], ['red'], ['yellow'], ['green'], ['brown']) },
+      bell: { title: 'Terminal bell', current: st.bell ? 'on' : 'off', options: o(['off', 'silent'], ['on', 'a sound or flash when you are needed or a long task is done']) },
       density: { title: 'Space between messages', current: st.density, options: o(['comfortable', 'a blank row between messages'], ['compact', 'fits more on screen']) },
       spinner: { title: 'While the agent works', current: st.spinner, options: o(['fun', 'rotating verbs'], ['plain', 'just "Working…"']) },
       motion: { title: 'Animation', current: st.reducedMotion ? 'reduced' : 'full', options: o(['full', 'Cento moves'], ['reduced', 'still, quieter']) },
@@ -747,6 +756,7 @@ export class AppController {
       case 'mascot': if (['large', 'small', 'off', 'auto'].includes(arg)) this.setSettings({ mascot: arg as Settings['mascot'] }); else this.toast('info', 'Try /mascot large, small, off or auto'); break;
       case 'color': if (['violet', 'red', 'yellow', 'green', 'brown'].includes(arg)) this.setSettings({ color: arg as CentoColor }); else this.toast('info', 'Colours: violet red yellow green brown'); break;
       case 'theme': if (arg === 'dark' || arg === 'light' || arg === 'hc') this.setSettings({ theme: arg }); else this.toast('info', 'Try /theme dark, /theme light or /theme hc (high contrast)'); break;
+      case 'bell': if (arg === 'on' || arg === 'off') { this.setSettings({ bell: arg === 'on' }); this.toast('info', arg === 'on' ? 'Bell on: you will hear it when an approval or question needs you, or a long task finishes' : 'Bell off'); } else this.toast('info', 'Try /bell on or /bell off'); break;
       case 'density': if (arg === 'comfortable' || arg === 'compact') { this.setSettings({ density: arg }); this.toast('info', arg === 'compact' ? 'Compact: fewer blank rows' : 'Comfortable: a blank row between messages'); } else this.toast('info', 'Try /density comfortable or /density compact'); break;
       case 'spinner': if (arg === 'fun' || arg === 'plain') { this.setSettings({ spinner: arg }); this.toast('info', arg === 'plain' ? 'The waiting line says Working…' : 'The waiting line rotates its verbs'); } else this.toast('info', 'Try /spinner fun or /spinner plain'); break;
       case 'mouse': { const on = arg ? arg === 'on' : !this.state.settings.mouse; this.setSettings({ mouse: on }); this.toast('info', on ? 'Mouse wheel scrolls. /mouse off lets you select text with the mouse.' : 'Mouse off: select text with the mouse as usual.'); break; }
