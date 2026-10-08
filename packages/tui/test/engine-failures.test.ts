@@ -52,3 +52,33 @@ describe('review fixes: restarts, questions, and what is left open', () => {
     const again = c.pastes.add(big).insert; c.patch({ input: again, cursor: again.length }); c.patch({ input: '', cursor: 0 }); expect(c.pastes.expand(again)).toBe(again); // nothing left to expand
   });
 });
+
+describe('second review: typed questions, drafts, the night queue, and other agents\' approvals', () => {
+  const mk = (extra: Record<string, unknown> = {}) => { const exits: (number | undefined)[] = []; const c = new AppController({ engine: new FakeEngine({ script: { hang: true } }) as never, demo: false, cwd: '/tmp', version: 't', skills: [], onExit: (code?: number) => exits.push(code), ...extra }); ctl = c; return { c, exits }; };
+  const turnDone = (c: AppController) => c.apply({ v: 1, seq: 1, ts: new Date().toISOString(), agent_id: c.state.activeAgent, type: 'turn.done', outcome: 'ok' } as never);
+  it('ctrl+c on a question that waits for typing only declines the question (your next message is not swallowed); the next ctrl+c is the usual one', async () => {
+    const { c, exits } = mk(); await c.start(); await c.submit('x'); await until(() => c.state.busy);
+    const r = (c as any).askEngine([{ id: 'q', text: 'Name?', secret: true }]); await wait(20); expect(c.awaitingAnswer).toBe(true); expect(c.state.maskInput).toBe(true);
+    c.ctrlC(); expect(await r).toBeUndefined(); expect(c.awaitingAnswer).toBe(false); expect(c.state.maskInput).toBeFalsy(); expect(exits).toEqual([]); expect(c.state.busy).toBe(true);
+  });
+  it('a finished turn drops a question that was still open, but never a list you opened yourself', async () => {
+    const { c } = mk(); await c.start(); const r = (c as any).askEngine([{ id: 'q', text: 'Name?' }]); await wait(20); turnDone(c); expect(await r).toBeUndefined(); expect(c.awaitingAnswer).toBe(false);
+    const own = c.runCommand('/mode'); await wait(20); expect(c.state.mode).toBe('pick'); turnDone(c); expect(c.state.mode).toBe('pick'); c.pickKey('cancel'); await own;
+    const q = (c as any).askEngine([{ id: 'q', text: 'Which?', options: [{ label: 'a' }] }]); await wait(20); expect(c.state.mode).toBe('pick'); turnDone(c); expect(await q).toBeUndefined(); expect(c.state.mode).toBe('chat'); // a question's own list does go
+  });
+  it('what you were typing is put back after a typed question, and cannot be sent as its answer', async () => {
+    const { c } = mk(); c.patch({ input: 'my half-written message', cursor: 23 }); const r = (c as any).askEngine([{ id: 'q', text: 'Name?' }]); await wait(20); expect(c.state.input).toBe('');
+    await c.submit('Ada'); expect(await r).toEqual({ q: ['Ada'] }); expect(c.state.input).toBe('my half-written message'); expect(c.state.cursor).toBe(23);
+    const r2 = (c as any).askEngine([{ id: 'q', text: 'Again?' }]); await wait(20); c.cancelAnswer(); expect(await r2).toBeUndefined(); expect(c.state.input).toBe('my half-written message');
+  });
+  it('the night queue keeps what it cannot take: a full queue refuses and says so, a partly full one says how many were queued', async () => {
+    const { c } = mk(); const { NIGHT_MAX_TASKS } = await import('../src/night/model.js'); expect(c.nightAdd(Array.from({ length: NIGHT_MAX_TASKS - 1 }, (_, i) => `task ${i}`).join('\n'))).toBe(true);
+    expect(c.nightAdd('one\ntwo\nthree')).toBe(true); expect(c.state.toasts.at(-1)!.text).toBe(`Queued 1 of 3: the night queue holds ${NIGHT_MAX_TASKS} tasks`); expect(c.nightAdd('one more')).toBe(false); expect(c.state.toasts.at(-1)!.text).toMatch(/queue is full/);
+    c.patch({ mode: 'night', input: 'a refused task', cursor: 14 }); await c.submit('a refused task'); expect(c.state.input).toBe('a refused task'); // still in the prompt
+  });
+  it('when the main agent dies only its own approvals are declined', async () => {
+    const { c } = mk(); const fake = (c as any).o.engine as FakeEngine; await c.start(); await c.submit('x'); await until(() => c.state.busy);
+    const mine = c.decide({ approval_id: 'm', agent_id: c.state.activeAgent, tool_id: 't', tool: 'Bash', summary: 'x', risk: 'medium', command: 'ls' } as never); const other = c.decide({ approval_id: 'o', agent_id: 'agt_someone_else', tool_id: 't2', tool: 'Bash', summary: 'y', risk: 'medium', command: 'pwd' } as never);
+    await until(() => c.state.approvals.length === 2); (fake.sessions[0] as any).crash('SIGKILL'); await until(() => !c.state.busy); expect(await mine).toMatchObject({ decision: 'deny' }); expect(c.state.approvals.map((a) => a.req.approval_id)).toEqual(['o']); c.answerApproval('deny'); await other;
+  });
+});

@@ -51,7 +51,7 @@ export function App({ ctl, tier, keys }: AppProps) {
   const stripH = welcome ? 0 : tight ? 1 : mascot === 'large' ? LARGE_H : mascot === 'small' ? 4 : 1;
   const stripSize = tight && mascot !== 'off' ? 'off' : mascot;
   const matches = (s.mode === 'chat' || s.mode === 'night') && !pending ? slashMatches(s.input) : [];
-  const mentionNow = (s.mode === 'chat' || s.mode === 'night') && !pending && !matches.length ? ed.mentionAt(s.input, s.cursor) : undefined; const mentions = mentionNow && s.mention && s.mention.q === mentionNow.query ? s.mention.items : [];
+  const mentionNow = (s.mode === 'chat' || s.mode === 'night') && !pending && !matches.length ? ed.mentionAt(s.input, s.cursor) : undefined; const mentionFresh = !!mentionNow && !!s.mention && s.mention.q === mentionNow.query; const related = !!mentionNow && !!s.mention && (mentionNow.query.startsWith(s.mention.q) || s.mention.q.startsWith(mentionNow.query)); const mentions = mentionNow && s.mention && (mentionFresh || related) ? s.mention.items : []; // while the next search runs the last list stays, so the layout does not jump
   const popupH = Math.min(6, matches.length) || Math.min(6, mentions.length);
   const maxInput = Math.max(3, Math.min(12, Math.floor(rows / 3))); // the box grows with the window, up to 12 lines
   const inputRows = promptRows(s.input, s.cursor, mainW, maxInput);
@@ -160,7 +160,7 @@ export function App({ ctl, tier, keys }: AppProps) {
     }
     if (s.mode === 'night') { // the prompt below stays live: Enter adds a task (an empty Enter starts the night), Esc hides the panel
       if (key.escape) { ctl.closeNight(); return; }
-      if (key.return && !s.input.endsWith('\\')) { if (s.input.trim()) void ctl.submit(s.input); else ctl.nightStart(); return; }
+      if (key.return && !s.input.endsWith('\\') && !(mentions.length && mentionNow)) { if (s.input.trim()) void ctl.submit(s.input); else ctl.nightStart(); return; } // (a file being suggested is completed first, as in the chat)
     }
     /* chat: shortcuts are actions in the keymap; anything else is editing */
     focusRef.current = ['prompt', 'transcript']; const step = fromInk(input, key);
@@ -189,7 +189,7 @@ export function App({ ctl, tier, keys }: AppProps) {
         default: break;
       }
     }
-    if (mentions.length && mentionNow) { // a file is being suggested: arrows choose, Tab or Enter completes
+    if (mentions.length && mentionNow && mentionFresh) { // a file is being suggested: arrows choose, Tab or Enter completes
       const pickAt = (path: string) => { const e = ed.completeMention({ text: s.input, cursor: s.cursor }, mentionNow, path); ctl.patch({ input: e.text, cursor: e.cursor, slashSel: 0 }); ctl.clearMentions(); };
       if (key.tab || (key.return && !s.input.endsWith('\\'))) { pickAt(mentions[s.mention!.sel % mentions.length]!); return; }
       if (key.upArrow) { ctl.patch({ mention: { ...s.mention!, sel: (s.mention!.sel + mentions.length - 1) % mentions.length } }); return; }
@@ -208,11 +208,11 @@ export function App({ ctl, tier, keys }: AppProps) {
     if (key.tab) { complete(); return; }
     if (key.upArrow) {
       if (matches.length) { ctl.patch({ slashSel: (s.slashSel + matches.length - 1) % matches.length }); return; }
-      const m = ed.moveVertical({ text: s.input, cursor: s.cursor }, -1); if (m) ctl.patch({ cursor: m.cursor, anchor: undefined }); else ctl.historyStep(-1); return;
+      const m = ed.moveVertical({ text: s.input, cursor: s.cursor }, -1); if (m) ctl.patch({ cursor: m.cursor, anchor: undefined }); else if (!s.maskInput) ctl.historyStep(-1); return;
     }
     if (key.downArrow) {
       if (matches.length) { ctl.patch({ slashSel: (s.slashSel + 1) % matches.length }); return; }
-      const m = ed.moveVertical({ text: s.input, cursor: s.cursor }, 1); if (m) ctl.patch({ cursor: m.cursor, anchor: undefined }); else ctl.historyStep(1); return;
+      const m = ed.moveVertical({ text: s.input, cursor: s.cursor }, 1); if (m) ctl.patch({ cursor: m.cursor, anchor: undefined }); else if (!s.maskInput) ctl.historyStep(1); return;
     }
     const how = key.shift ? 'extend' : 'move';
     if (key.leftArrow) { if (sel && how === 'move' && !key.ctrl && !key.meta) { ctl.patch({ cursor: sel[0], anchor: undefined }); return; } edit(key.ctrl || key.meta || key.shift ? ed.wordLeft : ed.left, how); return; }

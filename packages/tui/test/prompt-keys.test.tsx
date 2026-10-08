@@ -20,8 +20,10 @@ async function mount(o: { cwd?: string } = {}) {
   const send = async (s: string, ms = 25) => { inp.write(s); await wait(ms); };
   /** Click on the first screen cell where `label` is drawn (a real SGR press and release). */
   const click = async (label: string, dx = 0) => { await wait(60); const lines = frame.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').split('\n'); const row = lines.findIndex((l) => l.includes(label)); if (row < 0) throw new Error(`"${label}" is not on the screen:\n${lines.join('\n')}`); const col = lines[row]!.indexOf(label) + 1 + dx; await send(`\x1b[<0;${col};${row + 1}M`); await send(`\x1b[<0;${col};${row + 1}m`); };
+  /** Wait until something is true (a slow machine takes longer than a fixed sleep). */
+  const until = async (f: () => boolean, ms = 8000) => { const t0 = Date.now(); while (!f()) { if (Date.now() - t0 > ms) throw new Error('timeout waiting; screen:\n' + frame.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '')); await wait(15); } };
   const screen = () => frame.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '');
-  return { ctl, copied, send, click, frame: screen, text: () => ctl.state.input, cursor: () => ctl.state.cursor };
+  return { ctl, copied, send, click, until, frame: screen, text: () => ctl.state.input, cursor: () => ctl.state.cursor };
 }
 const SHIFT_LEFT = '\x1b[1;2D', SHIFT_RIGHT = '\x1b[1;2C', CTRL_DELETE = '\x1b[3;5~', DELETE = '\x1b[3~', LEFT = '\x1b[D', SHIFT_HOME = '\x1b[1;2H';
 
@@ -192,7 +194,7 @@ describe('approval: countdown and session scope', () => {
 describe('the palette (ctrl+k)', () => {
   it('opens, searches commands as you type (fuzzy), runs the chosen one and closes', async () => {
     const t = await mount(); await t.send('\x0b', 120); expect(t.ctl.state.mode).toBe('palette');
-    await t.send('mode pl', 400); await t.send('\r', 200); expect(t.ctl.state.mode).toBe('chat');
+    await t.send('mode pl', 50); await t.until(() => t.frame().includes('/mode plan')); await t.send('\r', 200); expect(t.ctl.state.mode).toBe('chat');
   });
   it('shows what you usually want before anything is typed, and esc closes it without running anything', async () => {
     const t = await mount(); await t.send('\x0b', 400); await t.click('Recent'); void 0; expect(t.ctl.state.mode).toBe('palette');
@@ -202,11 +204,11 @@ describe('the palette (ctrl+k)', () => {
 
 describe('the palette with the mouse', () => {
   it('clicking a result runs it and closes the palette', async () => {
-    const t = await mount(); await t.send('\x0b', 200); await t.send('theme h', 500); await t.click('theme hc'); await wait(150);
+    const t = await mount(); await t.send('\x0b', 200); await t.send('theme h', 50); await t.until(() => t.frame().includes('theme hc')); await t.click('theme hc'); await wait(150);
     expect(t.ctl.state.settings.theme).toBe('hc'); expect(t.ctl.state.mode).toBe('chat');
   });
   it('clicking a recent command with nothing typed also works', async () => {
-    const t = await mount(); await t.send('\x0b', 500); await t.click('/settings'); await wait(150); expect(t.ctl.state.mode).toBe('pick'); expect(t.ctl.state.pick!.title).toBe('Settings'); t.ctl.pickKey('cancel');
+    const t = await mount(); await t.send('\x0b', 50); await t.until(() => t.frame().includes('Recent')); await t.click('/settings'); await wait(150); expect(t.ctl.state.mode).toBe('pick'); expect(t.ctl.state.pick!.title).toBe('Settings'); t.ctl.pickKey('cancel');
   });
 });
 
@@ -237,18 +239,18 @@ describe('review fixes: the night panel, masked answers and modified clicks', ()
 describe('@file suggestions', () => {
   const repo = REPO_ROOT;
   it('typing @ and a few letters suggests project files; Tab completes the chosen one with a space', async () => {
-    const t = await mount({ cwd: repo }); await t.send('look at @ptkeys', 700);
+    const t = await mount({ cwd: repo }); await t.send('look at @ptkeys', 50); await t.until(() => t.frame().includes('@prompt-keys.test.tsx'));
     expect(t.frame()).toContain('@prompt-keys.test.tsx'); expect(t.frame()).toContain('packages/tui/test/'); await t.send('\t', 150);
     expect(t.text()).toBe('look at @packages/tui/test/prompt-keys.test.tsx '); expect(t.frame()).not.toContain('▸ @'); // the suggestions are gone
   });
   it('Enter completes instead of sending while a file is suggested; the arrows choose between them', async () => {
     const t = await mount({ cwd: repo }); const sent: string[] = []; t.ctl.submit = (async (x: string) => { sent.push(x); }) as never;
-    await t.send('@palette/Comm', 700); expect(t.ctl.state.mention!.items.length).toBeGreaterThan(0); const first = t.ctl.state.mention!.items[0]!; await t.send('\r', 150); expect(sent).toEqual([]); expect(t.text()).toBe('@' + first + ' ');
-    await t.send('\x1ba'); await t.send('\x7f'); await t.send('@prompt', 700); const n = t.ctl.state.mention!.items.length; expect(n).toBeGreaterThan(1); await t.send('\x1b[B', 100); expect(t.ctl.state.mention!.sel).toBe(1);
+    await t.send('@palette/Comm', 50); await t.until(() => !!t.ctl.state.mention?.items.length); expect(t.ctl.state.mention!.items.length).toBeGreaterThan(0); const first = t.ctl.state.mention!.items[0]!; await t.send('\r', 150); expect(sent).toEqual([]); expect(t.text()).toBe('@' + first + ' ');
+    await t.send('\x1ba'); await t.send('\x7f'); await t.send('@prompt', 50); await t.until(() => (t.ctl.state.mention?.items.length ?? 0) > 1 && t.ctl.state.mention!.q === 'prompt'); const n = t.ctl.state.mention!.items.length; expect(n).toBeGreaterThan(1); await t.send('\x1b[B', 100); expect(t.ctl.state.mention!.sel).toBe(1);
     const second = t.ctl.state.mention!.items[1]!; await t.send('\t', 150); expect(t.text()).toBe('@' + second + ' ');
   });
   it('a click on a suggestion completes it', async () => {
-    const t = await mount({ cwd: repo }); await t.send('@ptkeys', 700); await t.click('@prompt-keys.test.tsx'); await wait(100); expect(t.text()).toBe('@packages/tui/test/prompt-keys.test.tsx ');
+    const t = await mount({ cwd: repo }); await t.send('@ptkeys', 50); await t.until(() => t.frame().includes('@prompt-keys.test.tsx')); await t.click('@prompt-keys.test.tsx'); await wait(100); expect(t.text()).toBe('@packages/tui/test/prompt-keys.test.tsx ');
   });
   it('an email address, a finished mention and a word with no matching file show nothing, and Enter still sends', async () => {
     const t = await mount({ cwd: repo }); const sent: string[] = []; t.ctl.submit = (async (x: string) => { sent.push(x); }) as never;
@@ -278,5 +280,20 @@ describe('/find', () => {
   it('says so when nothing matches or nothing was typed, and Esc changes nothing', async () => {
     const t = await mount(); t.ctl.patch({ items: many() }); await t.ctl.runCommand('/find'); expect(t.ctl.state.toasts.at(-1)!.text).toMatch(/Type what to look for/);
     await t.ctl.runCommand('/find giraffe'); expect(t.ctl.state.toasts.at(-1)!.text).toBe('Nothing in this conversation mentions "giraffe".'); const run = t.ctl.runCommand('/find ZEBRA'); await wait(60); t.ctl.pickKey('cancel'); await run; expect(t.ctl.state.scroll).toBe(0);
+  });
+});
+
+describe('second review: app-level', () => {
+  it('ctrl+r keeps your draft one step down (the down arrow brings it back)', async () => {
+    const t = await mount(); t.ctl.patch({ history: ['older', 'newer'] }); await t.send('my draft', 50); await t.send('\x12', 150); await t.send('\r', 150); expect(t.text()).toBe('newer');
+    await t.send('\x1b[B', 100); expect(t.text()).toBe('my draft');
+  });
+  it('during a secret question the arrows do not pull earlier messages into the dots, and an earlier draft is not what gets sent', async () => {
+    const t = await mount(); t.ctl.patch({ history: ['an earlier message'] }); await t.send('half a thought', 50); const r = (t.ctl as any).askEngine([{ id: 'p', text: 'Password?', secret: true }]) as Promise<unknown>; await wait(80);
+    expect(t.text()).toBe(''); await t.send('\x1b[A', 100); expect(t.text()).toBe(''); await t.send('pw', 50); await t.send('\r', 100); expect(await r).toEqual({ p: ['pw'] }); expect(t.text()).toBe('half a thought');
+  });
+  it('in the night panel Enter completes a suggested file instead of queueing the half-typed word', async () => {
+    const t = await mount({ cwd: REPO_ROOT }); t.ctl.openNight(); await t.send('do @ptkeys', 50); await t.until(() => t.ctl.state.mention?.q === 'ptkeys' && !!t.ctl.state.mention.items.length);
+    await t.send('\r', 150); expect(t.ctl.state.night.tasks).toHaveLength(0); expect(t.text()).toMatch(/^do @packages\/tui\/test\/prompt-keys\.test\.tsx $/); await t.send('\r', 150); expect(t.ctl.state.night.tasks).toHaveLength(1); expect(t.text()).toBe('');
   });
 });

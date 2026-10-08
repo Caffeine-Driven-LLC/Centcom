@@ -17,6 +17,7 @@ import { animationEntries, commandEntries, createFileIndex, FIRST_LABELS, listPr
 import { errorGuide } from './errors.js';
 import { copyToClipboard } from './util/clipboard.js';
 import { newPick, pickAll, pickMove, pickResult, pickToggle, type PickOption } from './pick/model.js';
+import { NIGHT_MAX_TASKS, parseTasks } from './night/model.js';
 import { NightCycle, initialNight, counts as nightCounts, type NightState, type NightTask } from './night/index.js';
 import { LIBRARY_DIR, MASTER_DIR, discover, injection, librarySkills, masterSkills, match, mergeLibrary, setEnabled, loadEntries, type Skill } from '@centcom/skills';
 import { MascotDriver, bakedByCategory, bakedCategories, getBaked, type CentoColor } from '@centcom/mascot';
@@ -261,7 +262,7 @@ export class AppController {
   /** The agent's event stream ended on its own (the process died without a word). Stop waiting, say so, and start it again on the next message. */
   private sessionLost(s: EngineSession) {
     this.deadToken = s.resumeToken?.() ?? this.deadToken; this.session = undefined; this.cancelQuestions();
-    for (const a of this.state.approvals) a.resolve({ decision: 'deny', scope: 'once', reason: 'cancelled' }); this.set({ approvals: [] }); // nobody is left to answer for
+    const mine = this.state.approvals.filter((a) => a.req.agent_id === this.me); for (const a of mine) a.resolve({ decision: 'deny', scope: 'once', reason: 'cancelled' }); this.set((st) => ({ approvals: st.approvals.filter((a) => !mine.includes(a)) })); // this agent is gone, nobody is left to answer for it (other agents' approvals stay)
     this.set((st) => ({ busy: false, turnStartedAt: undefined, items: st.items.map((i) => (i.kind === 'thinking' && !i.done ? { ...i, done: true, ms: Date.now() - i.ms } : i.kind === 'tool' && i.status === 'running' ? { ...i, status: 'error' as const } : i)) }));
     this.updateAgent(this.me, () => ({ busy: false })); this.setAgentState(this.me, 'error');
     this.addItem({ kind: 'notice', id: nid('n'), level: 'error', text: `${this.o.engine.label} stopped unexpectedly`, detail: 'Your conversation is safe. Send your next message and it starts again where it left off. If this keeps happening, run `centcom doctor`.' });
@@ -318,6 +319,7 @@ export class AppController {
         this.night.noteError(ev.code, !!ev.fatal);
         break;
       case 'turn.done':
+        this.cancelQuestions(); // a question of a finished turn is stale
         if (ev.outcome !== 'canceled' && this.state.turnStartedAt && Date.now() - this.state.turnStartedAt >= LONG_TURN_MS) this.ring(); // you may have stepped away
         this.set((s) => ({ busy: false, turnStartedAt: undefined, items: s.items.map((i) => (i.kind === 'thinking' && !i.done ? { ...i, done: true, ms: Date.now() - i.ms } : i.kind === 'tool' && i.status === 'running' && ev.outcome === 'canceled' ? { ...i, status: 'canceled' as const } : i)) }));
         this.updateAgent(me, () => ({ busy: false }));
@@ -423,9 +425,11 @@ export class AppController {
   }
 
   /** A typed answer to an engine's question: the next line you send is the answer, never a message to the agent and never kept in the transcript. */
-  private pendingAnswer?: (text: string | undefined) => void;
+  private pendingAnswer?: (text: string | undefined) => void; private draftBeforeAnswer?: string;
+  private restoreDraft() { const d = this.draftBeforeAnswer; this.draftBeforeAnswer = undefined; if (d !== undefined) this.set({ input: d, cursor: d.length }); }
   private askText(q: EngineQuestion): Promise<string | undefined> {
     this.pendingAnswer?.(undefined); // a newer question replaces an older one
+    if (this.draftBeforeAnswer === undefined && this.state.input) { this.draftBeforeAnswer = this.state.input; this.set({ input: '', cursor: 0 }); } // what you were writing is put back afterwards, and cannot be sent as the answer
     const answer = new Promise<string | undefined>((resolve) => { this.pendingAnswer = resolve; }); // registered before anything is announced: listeners may react at once
     this.set({ maskInput: !!q.secret }); // an answer that is a secret is shown as dots
     this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: q.text, detail: q.secret ? 'Type your answer and press Enter. It is not kept in this conversation. Esc cancels.' : 'Type your answer and press Enter. Esc cancels.' });
@@ -439,7 +443,7 @@ export class AppController {
     for (const q of qs) {
       if (q.options?.length) {
         const OTHER = '\u0000other';
-        const ids = await this.pick({ title: q.header ? `${q.header}: ${q.text}` : q.text, note: 'Esc cancels the question.', options: [...q.options.map((o, i) => ({ id: String(i), label: o.label, hint: o.description })), ...(q.allowOther ? [{ id: OTHER, label: 'Something else…' }] : [])], multi: false, confirm: 'answer' });
+        const ids = await this.pickForQuestion({ title: q.header ? `${q.header}: ${q.text}` : q.text, note: 'Esc cancels the question.', options: [...q.options.map((o, i) => ({ id: String(i), label: o.label, hint: o.description })), ...(q.allowOther ? [{ id: OTHER, label: 'Something else…' }] : [])], multi: false, confirm: 'answer' });
         if (!ids?.length) return undefined;
         if (ids[0] === OTHER) { const t = await this.askText(q); if (t === undefined) return undefined; out[q.id] = [t]; } else out[q.id] = [q.options[Number(ids[0])]!.label];
       } else { const t = await this.askText(q); if (t === undefined) return undefined; out[q.id] = [t]; }
@@ -451,7 +455,7 @@ export class AppController {
   get awaitingAnswer() { return !!this.pendingAnswer; }
   /** Give up on the typed answer being waited for. */
   cancelAnswer() { this.cancelQuestions(); }
-  private cancelQuestions() { const a = this.pendingAnswer; this.pendingAnswer = undefined; if (this.state.maskInput) this.set({ maskInput: false }); a?.(undefined); if (this.state.mode === 'pick') this.pickKey('cancel'); }
+  private cancelQuestions() { const a = this.pendingAnswer; this.pendingAnswer = undefined; if (this.state.maskInput) this.set({ maskInput: false }); this.restoreDraft(); a?.(undefined); if (this.questionPick && this.state.mode === 'pick') this.pickKey('cancel'); }
 
   /** A question waiting for y (memory notes, rewinds): the answer never goes to the engine or into history. */
   private pendingMemory?: { diff: string; apply: () => Promise<string>; no?: string };
@@ -460,9 +464,9 @@ export class AppController {
     if (!text) return;
     const expanded = this.pastes.expand(text);
     if (expanded.length > MAX_MESSAGE) { this.toast('warn', `That message is ${expanded.length.toLocaleString('en-US')} characters; the limit is ${MAX_MESSAGE.toLocaleString('en-US')}. Shorten it, or put the long part in a file and mention the path.`, 7000); return; } // your text stays in the prompt
-    if (this.state.mode === 'night' && !this.nightSending && !text.startsWith('/')) { this.nightAdd(text); this.set({ input: '', cursor: 0 }); return; } // in the night panel, a message is a task (the prompt is cleared here, so a message that was refused stays in it)
+    if (this.pendingAnswer) { const a = this.pendingAnswer; this.pendingAnswer = undefined; const full = this.pastes.expand(text); this.set({ input: '', cursor: 0, maskInput: false }); this.restoreDraft(); a(full); return; } // expanded before the emptied prompt forgets its chips
+    if (this.state.mode === 'night' && !this.nightSending && !text.startsWith('/')) { if (this.nightAdd(expanded)) this.set({ input: '', cursor: 0 }); return; } // in the night panel, a message is a task (the prompt is cleared only when it was taken, so a refused one stays in it)
     if (this.night.active() && !this.nightSending && !text.startsWith('/')) { this.toast('warn', 'Night cycle is running. Add tasks with /night add …, stop it with /night stop.'); return; }
-    if (this.pendingAnswer) { const a = this.pendingAnswer; this.pendingAnswer = undefined; const full = this.pastes.expand(text); this.set({ input: '', cursor: 0, maskInput: false }); a(full); return; } // expanded before the emptied prompt forgets its chips
     if (this.pendingMemory) { // the answer to "add this to memory?": never goes to the engine or into the prompt history
       const p = this.pendingMemory; this.pendingMemory = undefined; this.set({ input: '', cursor: 0 });
       if (/^(y|yes)$/i.test(text)) { try { this.addItem({ kind: 'notice', id: nid('n'), level: 'ok', text: await p.apply() }); } catch (e) { this.addItem({ kind: 'notice', id: nid('n'), level: 'warn', text: String((e as Error).message ?? e) }); } } else this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: p.no ?? 'Nothing was added to memory.' });
@@ -551,6 +555,7 @@ export class AppController {
   quit(code = 0) { void this.o.ledger?.flush().catch(() => undefined); this.o.onExit?.(code); }
   /** ctrl+c: during a turn, the first stops it and a second within 1 s stops it hard and exits 130; idle, press twice within 2 s to quit. */
   ctrlC() {
+    if (this.pendingAnswer) { this.cancelQuestions(); return; } // the first ctrl+c declines a question that waits for typing; the next one stops the turn
     const r = this.interrupts.ctrlC();
     if (r === 'interrupted') this.toast('info', 'Stopping. Press ctrl+c again to force it and quit.');
     else if (r === 'hard') this.quit(130);
@@ -597,7 +602,12 @@ export class AppController {
     return cycle;
   }
   /** Tasks from the panel's prompt or `/night add`. */
-  nightAdd(text: string) { const n = this.night.add(text); if (!n) { this.toast('warn', 'Nothing to add.'); return; } this.toast('ok', `Queued: ${this.state.night.tasks.length} in all`, 1600); }
+  /** Add tasks to the night queue. False when none were taken (a full queue says so; nothing is lost). */
+  nightAdd(text: string): boolean {
+    if (NIGHT_MAX_TASKS - this.state.night.tasks.length <= 0) { this.toast('warn', `The night queue is full (${NIGHT_MAX_TASKS} tasks). Remove some with /night remove.`); return false; }
+    const wanted = parseTasks(text).length; const n = this.night.add(text); if (!n) { this.toast('warn', 'Nothing to add.'); return false; }
+    this.toast(n < wanted ? 'warn' : 'ok', n < wanted ? `Queued ${n} of ${wanted}: the night queue holds ${NIGHT_MAX_TASKS} tasks` : `Queued: ${this.state.night.tasks.length} in all`, n < wanted ? 5000 : 1600); return true;
+  }
   openNight() { this.night.arm(true); this.patch({ mode: 'night', input: '', cursor: 0, scroll: 0 }); }
   closeNight() { this.patch({ mode: 'chat' }); }
   nightStart() { const r = this.night.start(); if (!r.ok) this.toast('warn', r.why!); }
@@ -642,12 +652,12 @@ export class AppController {
   clearMentions() { this.mentionSearch?.abort(); if (this.state.mention) this.set({ mention: undefined }); }
   /** `/find words`: the messages of this conversation that contain them; the one you pick is scrolled into view. */
   private async findCommand(arg: string) {
-    const q = arg.trim().toLowerCase(); if (!q) { this.toast('info', 'Type what to look for: /find <words>'); return; }
+    const q = arg.trim().toLowerCase().replace(/\s+/g, ' '); if (!q) { this.toast('info', 'Type what to look for: /find <words>'); return; }
     const who = (i: Item) => (i.kind === 'user' ? 'You' : i.kind === 'assistant' ? 'Cento' : i.kind === 'tool' ? i.name : i.kind === 'notice' ? 'Note' : '');
     const text = (i: Item) => (i.kind === 'user' || i.kind === 'assistant' ? i.text : i.kind === 'tool' ? `${i.summary} ${i.result ?? ''}` : i.kind === 'notice' ? `${i.text} ${i.detail ?? ''}` : '');
-    const hits = this.state.items.filter((i) => i.kind !== 'thinking' && text(i).toLowerCase().includes(q)); if (!hits.length) { this.toast('info', `Nothing in this conversation mentions "${arg.trim()}".`); return; }
+    const hits = this.state.items.filter((i) => i.kind !== 'thinking' && text(i).replace(/\s+/g, ' ').toLowerCase().includes(q)); if (!hits.length) { this.toast('info', `Nothing in this conversation mentions "${arg.trim()}".`); return; }
     const snippet = (t: string) => { const flat = t.replace(/\s+/g, ' '); const at = flat.toLowerCase().indexOf(q); const from = Math.max(0, at - 30); return (from > 0 ? '…' : '') + flat.slice(from, from + 90) + (flat.length > from + 90 ? '…' : ''); };
-    const ids = await this.pick({ title: `${hits.length} message${hits.length === 1 ? '' : 's'} mention "${arg.trim()}"`, note: 'Newest last. The one you choose is scrolled into view.', multi: false, confirm: 'go there', options: hits.slice(-40).map((i) => ({ id: i.id, label: snippet(text(i)), hint: who(i) })) });
+    const ids = await this.pick({ title: `${hits.length} message${hits.length === 1 ? '' : 's'} mention "${arg.trim()}"`, note: hits.length > 40 ? 'The last 40, newest last. The one you choose is scrolled into view.' : 'Newest last. The one you choose is scrolled into view.', multi: false, confirm: 'go there', options: hits.slice(-40).map((i) => ({ id: i.id, label: snippet(text(i)), hint: who(i) })) });
     if (ids?.[0]) this.patch({ jumpTo: ids[0] });
   }
   /** ctrl+r: pick one of your earlier messages in this project; it goes in the prompt for you to change or send. */
@@ -655,7 +665,7 @@ export class AppController {
     const seen = new Set<string>(); const items = [...this.state.history].reverse().filter((h) => !h.startsWith('/') && !seen.has(h) && !!seen.add(h)).slice(0, 40);
     if (!items.length) { this.toast('info', 'No earlier messages in this project yet.'); return; }
     const ids = await this.pick({ title: 'Earlier messages', note: 'Newest first. The one you choose goes in the prompt.', multi: false, confirm: 'use', options: items.map((h, i) => ({ id: String(i), label: h.replace(/\s+/g, ' ') })) });
-    if (ids?.[0] !== undefined) { const t = items[Number(ids[0])]!; this.patch({ input: t, cursor: t.length }); }
+    if (ids?.[0] !== undefined) { const t = items[Number(ids[0])]!; const was = this.state.input; this.patch({ input: t, cursor: t.length, ...(was ? { draft: was, histIdx: Math.max(0, this.state.history.lastIndexOf(t)) } : {}) }); } // a draft you had is one step down (the arrows), as with the up arrow
   }
   /** Put text at the end of the prompt (a file mention, a skill hint). */
   insertIntoPrompt(t: string) { const input = this.state.input; const sep = input && !/\s$/.test(input) ? ' ' : ''; const next = input + sep + t; this.patch({ input: next, cursor: next.length }); }
@@ -697,9 +707,12 @@ export class AppController {
     else { const done = this.pickDone; this.pickDone = undefined; this.set({ mode: this.pickBack, pick: undefined }); done?.(k === 'enter' ? pickResult(p) : undefined); }
   }
   /** The agent asked with options: tick one or more and your choice goes back as your next message (Esc to type your own). */
+  /** A list opened for the agent's question (so that only these are closed when the question goes stale). */
+  private questionPick = false;
+  private async pickForQuestion(o: Parameters<AppController['pick']>[0]) { this.questionPick = true; try { return await this.pick(o); } finally { this.questionPick = false; } }
   private async answerQuestion(text: string, options: string[], multi = true) {
     if (this.night.active() || this.state.approvals.length) return;
-    this.ring(); const ids = await this.pick({ title: text, note: multi ? 'Pick one or more. Esc to type your own answer.' : 'Esc to type your own answer.', options: options.map((o, i) => ({ id: String(i), label: o })), multi, confirm: 'send' });
+    this.ring(); const ids = await this.pickForQuestion({ title: text, note: multi ? 'Pick one or more. Esc to type your own answer.' : 'Esc to type your own answer.', options: options.map((o, i) => ({ id: String(i), label: o })), multi, confirm: 'send' });
     if (ids?.length) await this.submit(ids.map((i) => options[Number(i)]).join(', '));
   }
   /** `/night remove` with no number: tick the queued tasks to take out. */
