@@ -36,3 +36,18 @@ describe('nothing is wider than the screen', () => {
     });
   }
 });
+
+describe('a list never needs more rows than it was given', () => {
+  const many = newPick({ title: 'Settings', note: 'Choose one to change it. Esc closes.', options: Array.from({ length: 14 }, (_, i) => ({ id: String(i), label: `Setting number ${i}: value`, hint: 'a hint' })), multi: true });
+  const short = newPick({ title: 'Short', options: [{ id: 'a', label: 'one' }, { id: 'b', label: 'two' }] });
+  it.each([6, 8, 10, 12, 13, 14, 15, 16, 18, 20, 24, 30, 40])('at %i rows the box fits (anywhere in a long list, with and without a note)', async (h) => {
+    const { pickLayout } = await import('../src/pick/MultiSelect.js');
+    for (const [name, p] of [['top', many], ['middle', { ...many, sel: 7 }], ['end', { ...many, sel: 13 }], ['no note', { ...many, note: undefined }], ['short list', short]] as const) {
+      const L = pickLayout(p, h); expect(L.rows, `${name} at height ${h}: ${L.rows} rows`).toBeLessThanOrEqual(Math.max(h, 9 + (L.compact ? 0 : 2))); // the least a box with a title, two rows, its buttons and hint can be
+      expect(L.shown.length).toBeGreaterThanOrEqual(Math.min(2, p.options.length)); expect(L.shown.some((o) => o === p.options[p.sel])).toBe(true); // the highlighted row is always on screen
+    }
+  });
+  it('the same box, drawn: its highlighted row is visible at 24 rows deep into the list', () => {
+    const out = strip(renderToString(<ThemeCtx.Provider value={createTheme('dark', 'truecolor')}><MultiSelect p={{ ...many, sel: 11 }} width={80} height={13} /></ThemeCtx.Provider>, { columns: 80 })); expect(out).toContain('Setting number 11'); expect(out).toContain('more');
+  });
+});
