@@ -262,10 +262,10 @@ export class AppController {
   }
   private stopped = false; private deadToken?: string; private starting?: Promise<void>;
   /** Stop the agent on purpose (a new conversation, a resume): it is detached first, so its closing stream is not mistaken for a crash. */
-  private async dropSession() { const s = this.session; this.session = undefined; await s?.stop(); }
+  private async dropSession() { const s = this.session; this.session = undefined; this.dropQueued('You started another conversation'); await s?.stop(); }
   /** The agent's event stream ended on its own (the process died without a word). Stop waiting, say so, and start it again on the next message. */
   private sessionLost(s: EngineSession) {
-    this.deadToken = s.resumeToken?.() ?? this.deadToken; this.session = undefined; this.cancelQuestions();
+    this.deadToken = s.resumeToken?.() ?? this.deadToken; this.session = undefined; this.cancelQuestions(); this.dropQueued('The agent stopped');
     const mine = this.state.approvals.filter((a) => a.req.agent_id === this.me); for (const a of mine) a.resolve({ decision: 'deny', scope: 'once', reason: 'cancelled' }); this.set((st) => ({ approvals: st.approvals.filter((a) => !mine.includes(a)) })); // this agent is gone, nobody is left to answer for it (other agents' approvals stay)
     this.set((st) => ({ busy: false, turnStartedAt: undefined, items: st.items.map((i) => (i.kind === 'thinking' && !i.done ? { ...i, done: true, ms: Date.now() - i.ms } : i.kind === 'tool' && i.status === 'running' ? { ...i, status: 'error' as const } : i)) }));
     this.updateAgent(this.me, () => ({ busy: false })); this.setAgentState(this.me, 'error');
@@ -315,7 +315,7 @@ export class AppController {
       case 'limits.report': this.set({ limits: ev.windows }); break;
       case 'tasks.updated': this.set((st) => ({ tasks: reduceTasks({ items: st.tasks }, { tasks: ev.tasks }).items })); break;
       case 'compaction.ended': this.notice('info', `Compacted the context${ev.tokens_before ? ` (${Math.round(ev.tokens_before / 1000)}k → ${Math.round((ev.tokens_after ?? 0) / 1000)}k tokens)` : ''}.`); break;
-      case 'question.asked': this.notice('info', ev.text, ev.options?.join('  ·  ')); if (ev.options?.length) void this.answerQuestion(ev.text, ev.options, ev.multi === true); break;
+      case 'question.asked': this.notice('info', ev.text, ev.options?.join('  ·  ')); if (ev.options?.length && !ev.direct) void this.answerQuestion(ev.text, ev.options, ev.multi === true); break; // (a question the engine puts to the question gate itself is not opened a second time)
       case 'engine.warning': this.notice('warn', ev.text); break;
       case 'error':
         if (ev.retry) { this.toast('warn', `Retrying (${ev.retry.attempt}/${ev.retry.max_retries})…`); break; }
@@ -324,7 +324,7 @@ export class AppController {
         break;
       case 'turn.done':
         this.cancelQuestions(); // a question of a finished turn is stale
-        { const q = this.queuedAnswer; if (q && ev.outcome !== 'canceled') { this.queuedAnswer = undefined; queueMicrotask(() => { void this.submit(q); }); } else if (ev.outcome === 'canceled') this.queuedAnswer = undefined; }
+        { const q = this.queuedAnswer; if (q && ev.outcome !== 'canceled') { this.queuedAnswer = undefined; queueMicrotask(() => { void this.submit(q, { asMessage: true }); }); } else if (q) this.dropQueued('You stopped the turn first'); }
         if (ev.outcome !== 'canceled' && this.state.turnStartedAt && Date.now() - this.state.turnStartedAt >= LONG_TURN_MS) this.ring(); // you may have stepped away
         this.set((s) => ({ busy: false, turnStartedAt: undefined, items: s.items.map((i) => (i.kind === 'thinking' && !i.done ? { ...i, done: true, ms: Date.now() - i.ms } : i.kind === 'tool' && i.status === 'running' && ev.outcome === 'canceled' ? { ...i, status: 'canceled' as const } : i)) }));
         this.updateAgent(me, () => ({ busy: false }));
@@ -431,7 +431,8 @@ export class AppController {
 
   /** A typed answer to an engine's question: the next line you send is the answer, never a message to the agent and never kept in the transcript. */
   private pendingAnswer?: (text: string | undefined) => void; private draftBeforeAnswer?: string;
-  private restoreDraft() { const d = this.draftBeforeAnswer; this.draftBeforeAnswer = undefined; if (d !== undefined) this.set({ input: d, cursor: d.length }); }
+  /** After a typed question (answered or cancelled) the prompt holds what you were writing before it, or nothing: never the half-typed answer. */
+  private restoreDraft() { const d = this.draftBeforeAnswer ?? ''; this.draftBeforeAnswer = undefined; this.set({ input: d, cursor: d.length }); }
   private askText(q: EngineQuestion): Promise<string | undefined> {
     this.pendingAnswer?.(undefined); // a newer question replaces an older one
     if (this.draftBeforeAnswer === undefined && this.state.input) { this.draftBeforeAnswer = this.state.input; this.set({ input: '', cursor: 0 }); } // what you were writing is put back afterwards, and cannot be sent as the answer
@@ -460,17 +461,17 @@ export class AppController {
   get awaitingAnswer() { return !!this.pendingAnswer; }
   /** Give up on the typed answer being waited for. */
   cancelAnswer() { this.cancelQuestions(); }
-  private cancelQuestions() { const a = this.pendingAnswer; this.pendingAnswer = undefined; if (this.state.maskInput) this.set({ maskInput: false }); this.restoreDraft(); a?.(undefined); if (this.questionPick && this.state.mode === 'pick') this.pickKey('cancel'); }
+  private cancelQuestions() { const a = this.pendingAnswer; this.pendingAnswer = undefined; if (this.state.maskInput) this.set({ maskInput: false }); if (a) this.restoreDraft(); a?.(undefined); if (this.questionPick && this.state.mode === 'pick') this.pickKey('cancel'); }
 
   /** A question waiting for y (memory notes, rewinds): the answer never goes to the engine or into history. */
   private pendingMemory?: { diff: string; apply: () => Promise<string>; no?: string };
-  async submit(raw: string, opts: { wire?: string } = {}) {
+  async submit(raw: string, opts: { wire?: string; /** Send as a message to the agent even when the night panel is open (an answer to its question). */ asMessage?: boolean } = {}) {
     const text = raw.trim();
     if (!text) return;
     const expanded = this.pastes.expand(text);
     if (expanded.length > MAX_MESSAGE) { this.toast('warn', `That message is ${expanded.length.toLocaleString('en-US')} characters; the limit is ${MAX_MESSAGE.toLocaleString('en-US')}. Shorten it, or put the long part in a file and mention the path.`, 7000); return; } // your text stays in the prompt
     if (this.pendingAnswer) { const a = this.pendingAnswer; this.pendingAnswer = undefined; const full = this.pastes.expand(text); this.set({ input: '', cursor: 0, maskInput: false }); this.restoreDraft(); a(full); return; } // expanded before the emptied prompt forgets its chips
-    if (this.state.mode === 'night' && !this.nightSending && !text.startsWith('/')) { if (this.nightAdd(expanded)) this.set({ input: '', cursor: 0 }); return; } // in the night panel, a message is a task (the prompt is cleared only when it was taken, so a refused one stays in it)
+    if (this.state.mode === 'night' && !this.nightSending && !opts.asMessage && !text.startsWith('/')) { if (this.nightAdd(expanded)) this.set({ input: '', cursor: 0 }); return; } // in the night panel, a message is a task (the prompt is cleared only when it was taken, so a refused one stays in it)
     if (this.night.active() && !this.nightSending && !text.startsWith('/')) { this.toast('warn', 'Night cycle is running. Add tasks with /night add …, stop it with /night stop.'); return; }
     if (this.pendingMemory) { // the answer to "add this to memory?": never goes to the engine or into the prompt history
       const p = this.pendingMemory; this.pendingMemory = undefined; this.set({ input: '', cursor: 0 });
@@ -731,6 +732,7 @@ export class AppController {
   }
   /** An answer to a question that came while the agent was still working: sent when the turn ends. */
   private queuedAnswer?: string;
+  private dropQueued(why: string) { if (this.queuedAnswer === undefined) return; this.queuedAnswer = undefined; this.toast('warn', `${why}, so your answer to the agent's question was not sent. Send it again if you still want to.`, 7000); }
   /** `/night remove` with no number: tick the queued tasks to take out. */
   private async nightPickRemove() {
     const tasks = this.state.night.tasks.filter((t) => t.status !== 'running');
@@ -1010,7 +1012,7 @@ export class AppController {
     if (!plan.restore.length && !plan.delete.length && plan.conversation === 'none') { this.notice('info', 'Nothing to put back: the files are already as they were then.', plan.skippedModifiedOutside.length ? parts.join('\n') : undefined); return; }
     const pending = { diff: parts.join('\n'), no: 'Nothing was rewound.', apply: async () => {
       const r = await this.cp!.rewind(target.id, mode);
-      if (r.conversation) { void this.session?.stop(); this.adopt(r.conversation.session); }
+      if (r.conversation) { this.dropQueued('You rewound the conversation'); void this.session?.stop(); this.adopt(r.conversation.session); }
       if (r.failed) return `Stopped part way: ${r.failed.unrestored.length} file(s) not put back. Your state before the rewind is saved: /rewind ${this.cp!.list().at(-1)?.n ?? ''} undoes it.`;
       return `Rewound to before "${target.label}": ${r.restored.length} put back, ${r.deleted.length} removed${r.skipped.length ? `, ${r.skipped.length} left alone` : ''}.${r.undoRef ? ` To undo, /rewind ${this.cp!.list().at(-1)?.n}.` : ''}${r.conversation?.resumeError ? ` (The tool said: ${r.conversation.resumeError})` : ''}`;
     } };

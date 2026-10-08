@@ -178,7 +178,7 @@ async function main() {
     const r = await markFirstRunDone({ stateFile: firstRunFile }); if (!r.ok) firstRunNote = r.message; process.stdout.write('\x1b[2J\x1b[H');
   }
   /** Put the terminal back as it was: out of the alternate screen, mouse reporting off, cursor shown. Safe to call twice. */
-  const leave = () => { try { process.stdout.write('\x1b[?1000l\x1b[?1006l\x1b[?25h' + (a11y.screenReader ? '' : '\x1b[?1049l') + (titlePushed ? TITLE_POP : '')); titlePushed = false; } catch { /* the terminal is gone */ } };
+  const leave = () => { if (a11y.screenReader) return; /* plain-text mode never wrote a control code, so it takes none back */ try { process.stdout.write('\x1b[?1000l\x1b[?1006l\x1b[?25h\x1b[?1049l' + (titlePushed ? TITLE_POP : '')); titlePushed = false; } catch { /* the terminal is gone */ } };
   process.on('exit', leave);
   for (const [sig, code] of [['SIGTERM', 143], ['SIGHUP', 129]] as const) process.on(sig, () => { leave(); process.exit(code); }); // `kill` and a closing window must not leave your shell in the alternate screen with the mouse captured
   rt.bind(ctl);

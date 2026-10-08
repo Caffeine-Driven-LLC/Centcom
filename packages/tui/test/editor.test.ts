@@ -51,3 +51,10 @@ describe('@file mentions', () => {
     expect(completeMention({ text, cursor: 12 }, m, 'src/app.ts')).toEqual({ text: 'check @src/app.ts and then', cursor: 18 }); const end = 'check @sr'; expect(completeMention({ text: end, cursor: 9 }, mentionAt(end, 9)!, 'src/x.ts')).toEqual({ text: 'check @src/x.ts ', cursor: 16 });
   });
 });
+
+describe('suggestions while the next search runs', () => {
+  it('a fresh list is shown whole; a stale one is cut to what still matches what was typed', async () => {
+    const { visibleMentions } = await import('../src/util/editor.js'); const old = ['src/app.ts', 'scripts/build.sh', 'docs/readme.md', 'README.md'];
+    expect(visibleMentions('sr', old, true)).toEqual(old); expect(visibleMentions('sr', old, false)).toEqual(['src/app.ts', 'scripts/build.sh', 'docs/readme.md']); expect(visibleMentions('src', old, false)).toEqual(['src/app.ts']); expect(visibleMentions('srcx', old, false)).toEqual([]); expect(visibleMentions('s', old, false)).toEqual(['src/app.ts', 'scripts/build.sh', 'docs/readme.md']);
+  });
+});

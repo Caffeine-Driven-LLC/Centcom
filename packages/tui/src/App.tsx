@@ -53,7 +53,7 @@ export function App({ ctl, tier, keys }: AppProps) {
   const stripH = welcome || overlay ? 0 : tight ? 1 : mascot === 'large' ? LARGE_H : mascot === 'small' ? 4 : 1;
   const stripSize = tight && mascot !== 'off' ? 'off' : mascot;
   const matches = (s.mode === 'chat' || s.mode === 'night') && !pending ? slashMatches(s.input) : [];
-  const mentionNow = (s.mode === 'chat' || s.mode === 'night') && !pending && !matches.length ? ed.mentionAt(s.input, s.cursor) : undefined; const mentionFresh = !!mentionNow && !!s.mention && s.mention.q === mentionNow.query; const related = !!mentionNow && !!s.mention && (mentionNow.query.startsWith(s.mention.q) || s.mention.q.startsWith(mentionNow.query)); const mentions = mentionNow && s.mention && (mentionFresh || related) ? s.mention.items : []; // while the next search runs the last list stays, so the layout does not jump
+  const mentionNow = (s.mode === 'chat' || s.mode === 'night') && !pending && !matches.length ? ed.mentionAt(s.input, s.cursor) : undefined; const mentionFresh = !!mentionNow && !!s.mention && s.mention.q === mentionNow.query; const related = !!mentionNow && !!s.mention && (mentionNow.query.startsWith(s.mention.q) || s.mention.q.startsWith(mentionNow.query)); const mentions = mentionNow && s.mention && (mentionFresh || related) ? ed.visibleMentions(mentionNow.query, s.mention.items, mentionFresh) : []; // while the next search runs the last list stays (cut to what still matches), so the layout does not jump and every entry shown works
   const popupH = Math.min(6, matches.length) || Math.min(6, mentions.length);
   const maxInput = Math.max(3, Math.min(12, Math.floor(rows / 3))); // the box grows with the window, up to 12 lines
   const inputRows = promptRows(s.input, s.cursor, mainW, maxInput);
@@ -196,7 +196,7 @@ export function App({ ctl, tier, keys }: AppProps) {
         default: break;
       }
     }
-    if (mentions.length && mentionNow && mentionFresh) { // a file is being suggested: arrows choose, Tab or Enter completes
+    if (mentions.length && mentionNow) { // a file is being suggested: arrows choose, Tab or Enter completes
       const pickAt = (path: string) => { const e = ed.completeMention({ text: s.input, cursor: s.cursor }, mentionNow, path); ctl.patch({ input: e.text, cursor: e.cursor, slashSel: 0 }); ctl.clearMentions(); };
       if (key.tab || (key.return && !s.input.endsWith('\\'))) { pickAt(mentions[s.mention!.sel % mentions.length]!); return; }
       if (key.upArrow) { ctl.patch({ mention: { ...s.mention!, sel: (s.mention!.sel + mentions.length - 1) % mentions.length } }); return; }

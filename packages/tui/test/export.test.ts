@@ -38,3 +38,18 @@ describe('/copy and /export', () => {
     await c.runCommand('/export notes.md'); expect(existsSync(join(dir, 'notes.md'))).toBe(true); const before = readFileSync(join(dir, 'notes.md'), 'utf8'); c.patch({ items: [items[0]!] }); await c.runCommand('/export notes.md'); expect(c.state.toasts.at(-1)!.text).toMatch(/already exists/); expect(readFileSync(join(dir, 'notes.md'), 'utf8')).toBe(before);
   });
 });
+
+describe('Codex asks through its question gate: one list, and the answer round-trips (real mock Codex process, through the controller)', () => {
+  it('the question appears once, picking an option reaches Codex, and its reply shows in the conversation', async () => {
+    const { CodexEngine } = await import('@centcom/agent'); const { mkdtempSync } = await import('node:fs'); const { resolve } = await import('node:path');
+    const BIN = resolve(__dirname, '../../../tools/codex/bin/codex'); process.env.MOCK_CODEX_HOME = mkdtempSync(join(tmpdir(), 'mock-home-'));
+    const c = new AppController({ engine: new CodexEngine({ bin: BIN, stallMs: 0 }) as never, demo: false, cwd: mkdtempSync(join(tmpdir(), 'mock-proj-')), version: 't', skills: [] });
+    try {
+      await c.start(); await c.submit('ask Which colour? | red | blue');
+      const until = async (f: () => boolean, ms = 10000) => { const t0 = Date.now(); while (!f()) { if (Date.now() - t0 > ms) throw new Error('timeout; mode=' + c.state.mode + ' pick=' + JSON.stringify(c.state.pick?.title)); await new Promise((r) => setTimeout(r, 15)); } };
+      await until(() => c.state.mode === 'pick'); const first = c.state.pick!; expect(first.options.map((o) => o.label)).toEqual(['red', 'blue']); await new Promise((r) => setTimeout(r, 150)); expect(c.state.pick!.title).toBe(first.title); expect(c.state.pick!.options.map((o) => o.label)).toEqual(['red', 'blue']); // nothing replaced it
+      c.pickKey('down'); c.pickKey('enter'); await until(() => c.state.items.some((i) => i.kind === 'assistant' && i.text.includes('You chose: blue.')));
+      await until(() => !c.state.busy); expect(c.state.mode).toBe('chat'); expect(c.state.items.some((i) => i.kind === 'user' && /blue/.test(i.text) && !/ask Which/.test(i.text))).toBe(false); // the choice went to Codex as its answer, not as a chat message
+    } finally { c.stop(); }
+  }, 40_000);
+});

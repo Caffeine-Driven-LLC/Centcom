@@ -82,3 +82,28 @@ describe('second review: typed questions, drafts, the night queue, and other age
     await until(() => c.state.approvals.length === 2); (fake.sessions[0] as any).crash('SIGKILL'); await until(() => !c.state.busy); expect(await mine).toMatchObject({ decision: 'deny' }); expect(c.state.approvals.map((a) => a.req.approval_id)).toEqual(['o']); c.answerApproval('deny'); await other;
   });
 });
+
+describe('fourth review: cancelled answers, queued answers, and Codex asking through its gate', () => {
+  const mk = () => { const c = new AppController({ engine: new FakeEngine({ script: { hang: true } }) as never, demo: false, cwd: '/tmp', version: 't', skills: [] }); ctl = c; return c; };
+  const turnDone = (c: AppController, outcome: 'ok' | 'canceled' = 'ok') => c.apply({ v: 1, seq: 1, ts: new Date().toISOString(), agent_id: c.state.activeAgent, type: 'turn.done', outcome } as never);
+  it('a typed question that is cancelled never leaves the half-typed answer in the prompt (a secret one in clear text, ready to be sent)', async () => {
+    for (const how of ['ctrl+c', 'turn ends', 'agent dies', 'esc']) {
+      const c = mk(); await c.start(); await c.submit('x'); await until(() => c.state.busy); const r = (c as any).askEngine([{ id: 'p', text: 'Password?', secret: true }]); await wait(20);
+      c.patch({ input: 'hunter2', cursor: 7 }); expect(c.state.maskInput).toBe(true);
+      if (how === 'ctrl+c') c.ctrlC(); else if (how === 'esc') await c.interrupt(); else if (how === 'turn ends') turnDone(c); else (c as any).sessionLost((c as any).session);
+      await r; expect(c.state.input, how).toBe(''); expect(c.state.maskInput, how).toBeFalsy(); ctl?.stop();
+    }
+  });
+  it('an answer queued for the end of the turn is dropped with a message when the turn will not end normally, and never becomes a night task', async () => {
+    const sent: string[] = [];
+    for (const how of ['agent dies', 'new conversation', 'stopped by you']) {
+      const c = mk(); await c.start(); c.submit = (async (t: string, o?: unknown) => { sent.push(how + ':' + t + (o ? '+opts' : '')); }) as never; c.patch({ busy: true, turnStartedAt: Date.now() });
+      const a = (c as any).answerQuestion('Which?', ['red', 'blue'], false); await wait(10); c.pickKey('enter'); await a; expect((c as any).queuedAnswer, how).toBe('red');
+      if (how === 'agent dies') (c as any).sessionLost((c as any).session); else if (how === 'new conversation') await (c as any).dropSession(); else turnDone(c, 'canceled');
+      expect((c as any).queuedAnswer, how).toBeUndefined(); expect(c.state.toasts.at(-1)!.text, how).toMatch(/was not sent/); turnDone(c); await wait(10); ctl?.stop();
+    }
+    expect(sent).toEqual([]); // nothing went out later
+    const c = mk(); await c.start(); const calls: unknown[] = []; const realSubmit = c.submit.bind(c); c.submit = (async (t: string, o?: { asMessage?: boolean }) => { calls.push(o); return realSubmit(t, o); }) as never; c.patch({ busy: true, turnStartedAt: Date.now(), mode: 'night' });
+    const a = (c as any).answerQuestion('Which?', ['red'], false); await wait(10); c.pickKey('enter'); await a; turnDone(c); await wait(20); expect(calls).toEqual([{ asMessage: true }]); expect(c.state.night.tasks).toHaveLength(0);
+  });
+});

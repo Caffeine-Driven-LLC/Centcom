@@ -184,7 +184,7 @@ class CodexSession implements EngineSession {
     const raw: any[] = Array.isArray(p.questions) ? p.questions.slice(0, 8) : [];
     const questions = raw.filter((q) => q && typeof q.id === 'string' && typeof q.question === 'string').map((q): EngineQuestion => ({ id: q.id, ...(q.header ? { header: String(q.header) } : {}), text: String(q.question).slice(0, 500), ...(Array.isArray(q.options) && q.options.length ? { options: q.options.slice(0, 20).map((o: any) => ({ label: String(o?.label ?? o), ...(o?.description ? { description: String(o.description) } : {}) })) } : {}), ...(q.isOther ? { allowOther: true } : {}), ...(q.isSecret ? { secret: true } : {}) }));
     if (!questions.length) { this.rpc?.respond(id, { answers: {} }); return; }
-    for (const q of questions) this.emit({ type: 'question.asked', question_id: q.id, text: q.text, ...(q.options ? { options: q.options.map((o) => o.label) } : {}) });
+    for (const q of questions) this.emit({ type: 'question.asked', question_id: q.id, text: q.text, direct: true, ...(q.options ? { options: q.options.map((o) => o.label) } : {}) });
     this.emit({ type: 'status', state: 'asking-question' });
     let got: Record<string, string[]> | undefined;
     try { got = await this.o.questionGate!.ask(questions); } catch { got = undefined; }

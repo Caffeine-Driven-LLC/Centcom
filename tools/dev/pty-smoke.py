@@ -93,8 +93,8 @@ def job_control_with_a_real_shell():
 
 @check
 def screen_reader_mode_is_plain_text():
-    t = Term([BIN, '--screen-reader', '--demo']); t.pump(4.0); t.send('/demo fix\r', 7.0); t.send('y\r', 4.0); txt = t.raw.decode('utf8', 'ignore'); t.close()
-    return '\x1b' not in txt and 'Allow Cento to' in txt and '[y/n/a]' in txt, 'no escape code at all; approvals asked as [y/n/a]'
+    t = Term([BIN, '--screen-reader', '--demo']); t.pump(4.0); t.send('/demo fix\r', 7.0); t.send('y\r', 4.0); t.send('\x04', 1.5); txt = t.raw.decode('utf8', 'ignore'); t.close()
+    return '\x1b' not in txt and 'Allow Cento to' in txt and '[y/n/a]' in txt, 'no escape code at all, also when it exits; approvals asked as [y/n/a]'
 
 @check
 def bad_command_line_is_one_line():

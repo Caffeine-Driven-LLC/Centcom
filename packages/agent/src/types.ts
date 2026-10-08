@@ -35,7 +35,7 @@ export type EventBody =
   /** The agent's own plan (Claude Code's TodoWrite, Codex's plan updates): the whole list each time. */
   | { type: 'tasks.updated'; tasks: { id: string; text: string; status: 'pending' | 'in_progress' | 'completed' }[] }
   | { type: 'compaction.started' } | { type: 'compaction.ended'; tokens_before?: number; tokens_after?: number }
-  | { type: 'question.asked'; question_id: string; text: string; options?: string[]; /** The agent allows ticking several options. */ multi?: boolean }
+  | { type: 'question.asked'; question_id: string; text: string; options?: string[]; /** The agent allows ticking several options. */ multi?: boolean; /** The engine asks the person itself through its question gate and takes the answer directly: the app must not open a second list for this event. */ direct?: boolean }
   | { type: 'engine.warning'; code: string; text: string }
   | { type: 'error'; code: ProviderErrorCode; tool_message: string; fatal: boolean; retry?: { attempt: number; max_retries: number; delay_ms: number } }
   | { type: 'turn.done'; outcome: 'ok' | 'error' | 'canceled'; stop_reason?: string };
