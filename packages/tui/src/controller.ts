@@ -208,7 +208,7 @@ export class AppController {
   /** Start over with an empty context. The old conversation stays saved and can be resumed. */
   async newSession() {
     if (this.state.busy) { this.toast('warn', 'Cento is still working. Press Esc to interrupt, then try again.'); return; }
-    this.persist(); this.o.sessions?.close(this.state.sessionId); await this.session?.stop();
+    this.persist(); this.o.sessions?.close(this.state.sessionId); await this.dropSession();
     this.createdAt = undefined; this.lastItems = undefined;
     this.set({ items: [], scroll: 0, sessionId: newId('ses'), approvals: [], tasks: [] });
     await this.startEngine();
@@ -221,7 +221,7 @@ export class AppController {
     const id = /^\d+$/.test(which) ? list[Number(which) - 1]?.id : which;
     const saved = id ? this.o.sessions.load(id) : undefined;
     if (!saved) { this.toast('warn', `No saved conversation "${which}". Type /resume to see the list.`); return; }
-    this.persist(); this.o.sessions?.close(this.state.sessionId); await this.session?.stop();
+    this.persist(); this.o.sessions?.close(this.state.sessionId); await this.dropSession();
     this.lastItems = undefined; this.set({ items: [], approvals: [] }); this.loadSaved(saved.meta, saved.items);
     if (saved.meta.engine === this.o.engine.id) await this.startEngine(saved.meta.resumeToken); else await this.startEngine(undefined, this.carryOver(saved.meta));
   }
@@ -234,7 +234,7 @@ export class AppController {
   }
 
   stop() {
-    this.persist(); this.o.sessions?.close(); void this.o.ledger?.flush().catch(() => undefined);
+    this.stopped = true; this.persist(); this.o.sessions?.close(); void this.o.ledger?.flush().catch(() => undefined);
     this.driver.stop(); this.ghostTimers.forEach(clearTimeout); if (this.verbTimer) clearInterval(this.verbTimer);
     this.toastTimers.forEach(clearTimeout);
     for (const a of this.state.approvals) a.resolve({ decision: 'deny', scope: 'once', reason: 'exit' });
@@ -244,7 +244,20 @@ export class AppController {
   /** Fleet agents are this app's own processes: stop them before exiting (at most about 8 s). */
   stopFleet(): Promise<void> { return this.o.fleet ? this.o.fleet.manager.stopAll().catch(() => undefined) : Promise.resolve(); }
 
-  private async consume(s: EngineSession) { for await (const ev of s.events) { if (s !== this.session) break; this.apply(ev); } } // a replaced session's leftovers are not shown
+  private async consume(s: EngineSession) {
+    for await (const ev of s.events) { if (s !== this.session) break; this.apply(ev); } // a replaced session's leftovers are not shown
+    if (s === this.session && !this.stopped) this.sessionLost(s);
+  }
+  private stopped = false; private deadToken?: string;
+  /** Stop the agent on purpose (a new conversation, a resume): it is detached first, so its closing stream is not mistaken for a crash. */
+  private async dropSession() { const s = this.session; this.session = undefined; await s?.stop(); }
+  /** The agent's event stream ended on its own (the process died without a word). Stop waiting, say so, and start it again on the next message. */
+  private sessionLost(s: EngineSession) {
+    this.deadToken = s.resumeToken?.() ?? this.deadToken; this.session = undefined; this.cancelQuestions();
+    this.set((st) => ({ busy: false, turnStartedAt: undefined, items: st.items.map((i) => (i.kind === 'thinking' && !i.done ? { ...i, done: true, ms: Date.now() - i.ms } : i.kind === 'tool' && i.status === 'running' ? { ...i, status: 'error' as const } : i)) }));
+    this.updateAgent(this.me, () => ({ busy: false })); this.setAgentState(this.me, 'error');
+    this.addItem({ kind: 'notice', id: nid('n'), level: 'error', text: `${this.o.engine.label} stopped unexpectedly`, detail: 'Your conversation is safe. Send your next message and it starts again where it left off. If this keeps happening, run `centcom doctor`.' });
+  }
 
   /* ------------------------------------------------------------------ events -> state */
   apply(ev: NormalisedEvent) {
@@ -459,6 +472,7 @@ export class AppController {
     }
     await this.checkpointBefore(text);
     this.pastes.clear(); // the chips are spent
+    if (!this.session && !this.stopped) { try { await this.startEngine(this.deadToken); this.deadToken = undefined; } catch (e) { this.addItem({ kind: 'notice', id: nid('n'), level: 'error', text: `Could not start ${this.o.engine.label} again`, detail: String((e as Error).message ?? e) }); this.set({ busy: false }); return; } }
     try { await this.session?.send(outgoing); } catch (e) { this.addItem({ kind: 'notice', id: nid('n'), level: 'error', text: 'Could not send the prompt', detail: String(e) }); }
   }
 
