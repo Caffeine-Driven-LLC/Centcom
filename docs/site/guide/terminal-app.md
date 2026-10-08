@@ -17,6 +17,8 @@ Run `centcom` in a project folder. Type what you want done and press Enter. `?` 
 
 Typing over a selection replaces it. Copying uses your terminal's clipboard support and the system clipboard tool (`wl-copy`, `xclip`, `xsel`, `pbcopy`).
 
+Type `@` and a few letters of a file name to mention a file: matching files from this project are suggested (`↑↓` choose, `Tab` or `Enter` completes, or click). The agent gets the path.
+
 A big paste (more than 10 lines or 2,000 characters) shows as a chip like `[Pasted text #1 +42 lines]` and is put back in full when you send. A message can be up to 65,536 characters.
 
 ## The mouse

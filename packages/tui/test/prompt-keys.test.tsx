@@ -7,9 +7,9 @@ import { App, AppController } from '../src/index.js';
 
 const wait = (ms = 25) => new Promise((r) => setTimeout(r, ms));
 let cleanup: (() => void) | undefined; afterEach(() => { cleanup?.(); cleanup = undefined; });
-async function mount() {
+async function mount(o: { cwd?: string } = {}) {
   const copied: string[] = [];
-  const ctl = new AppController({ engine: new DemoEngine({ speed: 100 }), demo: true, cwd: '/tmp', version: 't', skills: [], clipboard: (t) => copied.push(t), mouse: true });
+  const ctl = new AppController({ engine: new DemoEngine({ speed: 100 }), demo: true, cwd: o.cwd ?? '/tmp', version: 't', skills: [], clipboard: (t) => copied.push(t), mouse: true });
   const out: any = new PassThrough(); out.columns = 100; out.rows = 30; out.isTTY = true; let frame = ''; out.on('data', (d: Buffer) => { frame = d.toString(); });
   const inp: any = new PassThrough(); inp.isTTY = true; inp.setRawMode = () => inp; inp.ref = () => inp; inp.unref = () => inp;
   const inst = render(<App ctl={ctl} tier="none" />, { stdout: out, stdin: inp, exitOnCtrlC: false, patchConsole: false, debug: true });
@@ -229,5 +229,28 @@ describe('review fixes: the night panel, masked answers and modified clicks', ()
   it('a click with shift, alt or ctrl held is not a click; a plain one is', async () => {
     const { clicksIn } = await import('../src/click.js');
     expect(clicksIn('\x1b[<0;10;5M')).toEqual([{ col: 10, row: 5 }]); for (const b of [4, 8, 16, 32, 64, 65, 1, 2]) expect(clicksIn(`\x1b[<${b};10;5M`)).toEqual([]); expect(clicksIn('\x1b[<0;10;5m')).toEqual([]);
+  });
+});
+
+describe('@file suggestions', () => {
+  const repo = process.cwd();
+  it('typing @ and a few letters suggests project files; Tab completes the chosen one with a space', async () => {
+    const t = await mount({ cwd: repo }); await t.send('look at @ptkeys', 700);
+    expect(t.frame()).toContain('@prompt-keys.test.tsx'); expect(t.frame()).toContain('packages/tui/test/'); await t.send('\t', 150);
+    expect(t.text()).toBe('look at @packages/tui/test/prompt-keys.test.tsx '); expect(t.frame()).not.toContain('▸ @'); // the suggestions are gone
+  });
+  it('Enter completes instead of sending while a file is suggested; the arrows choose between them', async () => {
+    const t = await mount({ cwd: repo }); const sent: string[] = []; t.ctl.submit = (async (x: string) => { sent.push(x); }) as never;
+    await t.send('@palette/Comm', 700); expect(t.ctl.state.mention!.items.length).toBeGreaterThan(0); const first = t.ctl.state.mention!.items[0]!; await t.send('\r', 150); expect(sent).toEqual([]); expect(t.text()).toBe('@' + first + ' ');
+    await t.send('\x1ba'); await t.send('\x7f'); await t.send('@prompt', 700); const n = t.ctl.state.mention!.items.length; expect(n).toBeGreaterThan(1); await t.send('\x1b[B', 100); expect(t.ctl.state.mention!.sel).toBe(1);
+    const second = t.ctl.state.mention!.items[1]!; await t.send('\t', 150); expect(t.text()).toBe('@' + second + ' ');
+  });
+  it('a click on a suggestion completes it', async () => {
+    const t = await mount({ cwd: repo }); await t.send('@ptkeys', 700); await t.click('@prompt-keys.test.tsx'); await wait(100); expect(t.text()).toBe('@packages/tui/test/prompt-keys.test.tsx ');
+  });
+  it('an email address, a finished mention and a word with no matching file show nothing, and Enter still sends', async () => {
+    const t = await mount({ cwd: repo }); const sent: string[] = []; t.ctl.submit = (async (x: string) => { sent.push(x); }) as never;
+    await t.send('mail me at a@prompt-keys', 500); expect(t.ctl.state.mention).toBeUndefined(); await t.send('\r', 100); expect(sent).toEqual(['mail me at a@prompt-keys']);
+    await t.send('\x1ba'); await t.send('\x7f'); await t.send('@zzzqqq', 600); expect(t.ctl.state.mention).toBeUndefined(); await t.send('\r', 100); expect(sent.at(-1)).toBe('@zzzqqq');
   });
 });

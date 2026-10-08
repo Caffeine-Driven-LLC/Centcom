@@ -38,3 +38,16 @@ describe('editor', () => {
     expect(selRange('hi', 2, 99)).toBeUndefined(); // an anchor past the end is clamped, and equals the cursor
   });
 });
+
+describe('@file mentions', () => {
+  it('finds the word being typed, only when the @ starts a word', async () => {
+    const { mentionAt } = await import('../src/util/editor.js');
+    expect(mentionAt('look at @src/ap', 15)).toEqual({ start: 8, end: 15, query: 'src/ap' }); expect(mentionAt('@x', 2)).toEqual({ start: 0, end: 2, query: 'x' }); expect(mentionAt('see @', 5)).toEqual({ start: 4, end: 5, query: '' });
+    expect(mentionAt('mail me at a@b.com', 18)).toBeUndefined(); expect(mentionAt('no mention here', 5)).toBeUndefined(); expect(mentionAt('done @file.ts and more', 22)).toBeUndefined(); // the cursor is past the word
+    expect(mentionAt('two @a.ts @b', 12)).toEqual({ start: 10, end: 12, query: 'b' }); expect(mentionAt('line one\n@src', 13)).toEqual({ start: 9, end: 13, query: 'src' });
+  });
+  it('completion replaces the whole word (also the part after the cursor), adds a space, and puts the cursor after it', async () => {
+    const { mentionAt, completeMention } = await import('../src/util/editor.js'); const text = 'check @src/a and then'; const m = mentionAt(text, 12)!;
+    expect(completeMention({ text, cursor: 12 }, m, 'src/app.ts')).toEqual({ text: 'check @src/app.ts and then', cursor: 18 }); const end = 'check @sr'; expect(completeMention({ text: end, cursor: 9 }, mentionAt(end, 9)!, 'src/x.ts')).toEqual({ text: 'check @src/x.ts ', cursor: 16 });
+  });
+});

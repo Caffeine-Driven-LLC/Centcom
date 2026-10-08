@@ -630,7 +630,16 @@ export class AppController {
   }
 
   /* ------------------------------------------------------------------ command palette */
-  private fileIndex?: FileIndex;
+  private fileIndex?: FileIndex; private mentionSearch?: AbortController;
+  private files(): FileIndex { return (this.fileIndex ??= createFileIndex({ cwd: this.o.cwd, onPick: (p) => this.insertIntoPrompt('@' + p + ' ') })); }
+  /** Suggest project files for the `@word` being typed. Results from an older word are dropped. */
+  searchMentions(query: string) {
+    this.mentionSearch?.abort(); if (!query) { if (this.state.mention) this.set({ mention: undefined }); return; }
+    const mine = new AbortController(); this.mentionSearch = mine;
+    void this.files().search(query, mine.signal).then((hits) => { if (mine.signal.aborted) return; const items = hits.map((h) => h.label).filter((p) => !/\s/.test(p)).slice(0, 6); this.set({ mention: items.length ? { q: query, items, sel: 0 } : undefined }); }).catch(() => undefined);
+  }
+  /** Stop suggesting (the word was finished or deleted). */
+  clearMentions() { this.mentionSearch?.abort(); if (this.state.mention) this.set({ mention: undefined }); }
   /** Put text at the end of the prompt (a file mention, a skill hint). */
   insertIntoPrompt(t: string) { const input = this.state.input; const sep = input && !/\s$/.test(input) ? ' ' : ''; const next = input + sep + t; this.patch({ input: next, cursor: next.length }); }
   /** Run a command line from the palette. Commands that cannot do anything without a value are filled in for you to finish. */
@@ -638,8 +647,7 @@ export class AppController {
   /** What ctrl+k searches: commands, the quick settings and animations, files of this project, saved conversations and skills. */
   paletteProviders(): PaletteProvider[] {
     const run = (cmd: string) => () => this.runPaletteCommand(cmd); const item = (e: { id: string; label: string; detail: string; cmd: string }) => ({ id: e.id, label: e.label, detail: e.detail, run: run(e.cmd) });
-    this.fileIndex ??= createFileIndex({ cwd: this.o.cwd, onPick: (p) => this.insertIntoPrompt('@' + p + ' ') });
-    const files = this.fileIndex; const cmds = commandEntries(); const quick = quickEntries(); const anims = animationEntries();
+    const files = this.files(); const cmds = commandEntries(); const quick = quickEntries(); const anims = animationEntries();
     return [
       { ...listProvider('commands', 'Commands', () => [...cmds, ...quick, ...anims].map(item), { max: 8, recent: () => FIRST_LABELS }) },
       { id: 'files', group: 'Files', search: (q, signal) => files.search(q, signal) },

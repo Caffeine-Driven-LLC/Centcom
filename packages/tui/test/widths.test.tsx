@@ -11,6 +11,7 @@ import { Approval } from '../src/components/Approval.js';
 import { Prompt, SlashPopup, slashMatches } from '../src/components/Prompt.js';
 import { Toasts } from '../src/components/Toasts.js';
 import { MultiSelect } from '../src/pick/MultiSelect.js';
+import { MentionPopup } from '../src/components/MentionPopup.js';
 import { newPick } from '../src/pick/model.js';
 import { textWidth } from '../src/util/text.js';
 
@@ -24,6 +25,7 @@ const SCREENS: [string, (w: number) => React.ReactElement][] = [
   ['header', (w) => <Header s={ctl.state} width={w} />], ['status line', (w) => <StatusLine s={ctl.state} width={w} />],
   ['approval', (w) => <Approval a={approval('medium')} width={w} confirming={false} />], ['approval (destructive)', (w) => <Approval a={approval('high')} width={w} confirming />],
   ['prompt', (w) => <Prompt text={'a long line of text '.repeat(12)} cursor={20} busy={false} width={w} active placeholder="Message Cento…" />], ['command menu', (w) => <SlashPopup matches={slashMatches('/')} sel={0} width={w} />],
+  ['file suggestions', (w) => <MentionPopup items={['packages/tui/src/components/a-rather-long-file-name-for-testing.tsx', 'README.md', 'apps/cli/src/main.tsx']} sel={1} width={w} />],
   ['toasts', (w) => <Toasts toasts={ctl.state.toasts} width={w - 1} />], ['list picker', (w) => <MultiSelect p={pick} width={w} height={20} />],
 ];
 describe('nothing is wider than the screen', () => {

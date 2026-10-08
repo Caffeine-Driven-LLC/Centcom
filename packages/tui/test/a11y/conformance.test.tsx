@@ -17,6 +17,7 @@ import { Transcript } from '../../src/components/Transcript.js';
 import { TranscriptLayout } from '../../src/transcript/layout.js';
 import { NightPanel } from '../../src/night/NightPanel.js';
 import { MultiSelect } from '../../src/pick/MultiSelect.js';
+import { MentionPopup } from '../../src/components/MentionPopup.js';
 import { newPick, pickToggle } from '../../src/pick/model.js';
 import { HelpBody, actions, defaultKeymap } from '../../src/keys/index.js';
 
@@ -40,6 +41,7 @@ const SCREENS: [string, () => React.ReactElement][] = [
   ['fleet panel', () => <FleetPanel s={ctl.state} width={30} height={10} />],
   ['transcript', () => <Transcript layout={layout} items={items} width={70} height={12} scroll={0} />],
   ['night panel', () => <NightPanel n={ctl.state.night} width={80} height={20} />],
+  ['file suggestions', () => <MentionPopup items={['src/a.ts', 'docs/b.md']} sel={0} width={80} />],
   ['list picker', () => <MultiSelect p={pick} width={80} height={16} />],
   ['help', () => <HelpBody actions={actions()} keymap={defaultKeymap(actions())} warnings={[]} width={100} height={30} filter="" />],
   ['help, editing page', () => <HelpBody actions={actions()} keymap={defaultKeymap(actions())} warnings={[]} width={100} height={30} filter="" page={1} />],

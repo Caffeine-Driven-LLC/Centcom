@@ -19,6 +19,7 @@ import { CommandPalette } from './palette/index.js';
 import { Gallery, ModelPicker, galleryList, paletteItems } from './components/Overlays.js';
 import { Toasts } from './components/Toasts.js';
 import { MultiSelect } from './pick/MultiSelect.js';
+import { MentionPopup } from './components/MentionPopup.js';
 import { ClickContext, clicksIn, createClickRegistry } from './click.js';
 import { NightPanel } from './night/NightPanel.js';
 import { COMMANDS } from './state/commands.js';
@@ -50,7 +51,8 @@ export function App({ ctl, tier, keys }: AppProps) {
   const stripH = welcome ? 0 : tight ? 1 : mascot === 'large' ? LARGE_H : mascot === 'small' ? 4 : 1;
   const stripSize = tight && mascot !== 'off' ? 'off' : mascot;
   const matches = (s.mode === 'chat' || s.mode === 'night') && !pending ? slashMatches(s.input) : [];
-  const popupH = Math.min(6, matches.length);
+  const mentionNow = (s.mode === 'chat' || s.mode === 'night') && !pending && !matches.length ? ed.mentionAt(s.input, s.cursor) : undefined; const mentions = mentionNow && s.mention && s.mention.q === mentionNow.query ? s.mention.items : [];
+  const popupH = Math.min(6, matches.length) || Math.min(6, mentions.length);
   const maxInput = Math.max(3, Math.min(12, Math.floor(rows / 3))); // the box grows with the window, up to 12 lines
   const inputRows = promptRows(s.input, s.cursor, mainW, maxInput);
   const promptH = inputRows + 2;
@@ -72,6 +74,10 @@ export function App({ ctl, tier, keys }: AppProps) {
   useEffect(() => { if (s.scroll > 0) anchor.current = layout.anchorAt(Math.max(0, total - s.scroll - bodyH)); else anchor.current = undefined; });
   const maxScroll = Math.max(0, total - bodyH);
   const setScroll = (n: number) => ctl.patch({ scroll: Math.max(0, Math.min(maxScroll, n)) });
+
+  /* ---- @file suggestions follow the word at the cursor ---- */
+  const mentionQuery = mentionNow?.query;
+  useEffect(() => { if (mentionQuery) ctl.searchMentions(mentionQuery); else ctl.clearMentions(); }, [ctl, mentionQuery]);
 
   /* ---- keys ---- */
   const sel = ed.selRange(s.input, s.cursor, s.anchor);
@@ -178,6 +184,12 @@ export function App({ ctl, tier, keys }: AppProps) {
         default: break;
       }
     }
+    if (mentions.length && mentionNow) { // a file is being suggested: arrows choose, Tab or Enter completes
+      const pickAt = (path: string) => { const e = ed.completeMention({ text: s.input, cursor: s.cursor }, mentionNow, path); ctl.patch({ input: e.text, cursor: e.cursor, slashSel: 0 }); ctl.clearMentions(); };
+      if (key.tab || (key.return && !s.input.endsWith('\\'))) { pickAt(mentions[s.mention!.sel % mentions.length]!); return; }
+      if (key.upArrow) { ctl.patch({ mention: { ...s.mention!, sel: (s.mention!.sel + mentions.length - 1) % mentions.length } }); return; }
+      if (key.downArrow) { ctl.patch({ mention: { ...s.mention!, sel: (s.mention!.sel + 1) % mentions.length } }); return; }
+    }
     if (key.end && !s.input) { setScroll(0); return; }
     if (key.return) {
       if (matches.length) {
@@ -252,7 +264,8 @@ export function App({ ctl, tier, keys }: AppProps) {
             {pending ? <Approval a={pending} width={mainW} confirming={confirming} maxDiff={maxDiff} onChoose={(c) => { if (approvalGrace()) return; if (c === 'no') ctl.answerApproval('deny'); else if (c === 'always') { if (pending.req.risk !== 'high') ctl.answerApproval('approve', 'always'); } else if (c === 'session') { if (pending.req.risk !== 'high') ctl.answerApproval('approve', 'session'); } else if (pending.req.risk === 'high' && !confirming) setConfirming(true); else ctl.answerApproval('approve'); }} /> : (
               <>
                 {showTasks ? <Box paddingX={1} height={tasksH}><TaskList items={s.tasks} maxRows={rows >= 34 ? 10 : 5} width={mainW - 2} unicode={tier !== 'none'} /></Box> : null}
-                {popupH ? <SlashPopup matches={matches} sel={s.slashSel} width={mainW} onPick={(c) => { const t = '/' + c.name + (c.args ? ' ' : ''); ctl.patch({ input: t, cursor: t.length, anchor: undefined, slashSel: 0 }); if (!c.args) void ctl.submit('/' + c.name); }} /> : null}
+                {mentions.length && !matches.length ? <MentionPopup items={mentions.slice(0, 6)} sel={s.mention!.sel} width={mainW} onPick={(p) => { const e = ed.completeMention({ text: s.input, cursor: s.cursor }, mentionNow!, p); ctl.patch({ input: e.text, cursor: e.cursor }); ctl.clearMentions(); }} /> : null}
+                {popupH && matches.length ? <SlashPopup matches={matches} sel={s.slashSel} width={mainW} onPick={(c) => { const t = '/' + c.name + (c.args ? ' ' : ''); ctl.patch({ input: t, cursor: t.length, anchor: undefined, slashSel: 0 }); if (!c.args) void ctl.submit('/' + c.name); }} /> : null}
                 <Prompt text={s.maskInput ? s.input.replace(/[^\n]/g, '•') : s.input} cursor={s.cursor} anchor={s.anchor} maxRows={maxInput} busy={s.busy} width={mainW} active={s.mode === 'chat' || s.mode === 'night'} placeholder={nightOpen ? 'Add a task for tonight…' : placeholder} />
               </>
             )}
