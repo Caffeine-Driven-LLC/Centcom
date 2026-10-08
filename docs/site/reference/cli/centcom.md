@@ -23,9 +23,10 @@ centcom [options] | centcom -p "task"
 - `--dangerously-skip-permissions`: never ask: run commands and edit files freely (alias: --yolo)
 - `--mascot <large|small|off>`: Cento size (default: auto from terminal height)
 - `--cento-color <violet|red|yellow|green|brown>`: Cento's color
-- `--theme <dark|light>`: Graphite (default) or Paper (for light terminals)
+- `--theme <dark|light|hc>`: Graphite (default), Paper (for light terminals) or high contrast
 - `--colors <truecolor|256|16|never>`: force a colour tier (NO_COLOR is honoured)
 - `--debug`: write detailed logs to ~/.centcom/logs/centcom.log
+- `--screen-reader`: plain lines for a screen reader: no colour, boxes, animation or redraws (also CENTO_SCREEN_READER=1)
 - `--no-motion`: turn animation off (also CENTCOM_REDUCED_MOTION=1; the older CENTCOM_REDUCE_MOTION works too)
 - `-v, --version`: print the version
 - `-h, --help`: print this help

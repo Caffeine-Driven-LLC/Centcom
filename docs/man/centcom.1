@@ -50,14 +50,17 @@ Cento size (default: auto from terminal height)
 .B \-\-cento\-color <violet|red|yellow|green|brown>
 Cento's color
 .TP
-.B \-\-theme <dark|light>
-Graphite (default) or Paper (for light terminals)
+.B \-\-theme <dark|light|hc>
+Graphite (default), Paper (for light terminals) or high contrast
 .TP
 .B \-\-colors <truecolor|256|16|never>
 force a colour tier (NO_COLOR is honoured)
 .TP
 .B \-\-debug
 write detailed logs to ~/.centcom/logs/centcom.log
+.TP
+.B \-\-screen\-reader
+plain lines for a screen reader: no colour, boxes, animation or redraws (also CENTO_SCREEN_READER=1)
 .TP
 .B \-\-no\-motion
 turn animation off (also CENTCOM_REDUCED_MOTION=1; the older CENTCOM_REDUCE_MOTION works too)

@@ -113,6 +113,11 @@ const ENV: [string, Key, (v: string) => Value | undefined][] = [
   ['CENTCOM_LOG_LEVEL', 'log.level', (v) => v.toLowerCase()],
   ['CENTCOM_REDUCE_MOTION', 'ui.reduced_motion', (v) => (/^(1|true|on|yes)$/i.test(v) ? true : /^(0|false|off|no)$/i.test(v) ? false : undefined)], // the older spelling still works; CENTCOM_REDUCED_MOTION below wins if both are set
   ['CENTCOM_REDUCED_MOTION', 'ui.reduced_motion', (v) => (/^(1|true|on|yes)$/i.test(v) ? true : /^(0|false|off|no)$/i.test(v) ? false : undefined)],
+  /* the short CENTO_* names listed in `centcom help env` */
+  ['CENTO_THEME', 'ui.theme', (v) => v.toLowerCase()], ['CENTO_SPINNER', 'ui.spinner', (v) => v.toLowerCase()],
+  ['CENTO_MASCOT', 'ui.mascot', (v) => (/^(on|1|true|yes)$/i.test(v) ? true : /^(off|0|false|no)$/i.test(v) ? false : undefined)],
+  ['CENTO_REDUCE_MOTION', 'ui.reduced_motion', (v) => (/^(1|true|on|yes)$/i.test(v) ? true : /^(0|false|off|no)$/i.test(v) ? false : undefined)],
+  ['CENTO_SCREEN_READER', 'a11y.screen_reader', (v) => (/^(1|true|on|yes)$/i.test(v) ? true : /^(0|false|off|no)$/i.test(v) ? false : undefined)],
   ['NO_COLOR', 'ui.color', (v) => (v ? 'never' : undefined)],
 ];
 function fromEnv(d: LoadDeps): Partial<Record<Key, Value>> {

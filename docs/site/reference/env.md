@@ -8,7 +8,8 @@
 | `CENTO_MASCOT` | on or off: show or hide Cento |
 | `CENTO_REDUCE_MOTION` | 1 turns animation off |
 | `CENTO_SPINNER` | fun or plain words next to the spinner |
-| `CENTO_THEME` | dark, light or auto |
+| `CENTO_THEME` | dark, light, hc (high contrast) or auto |
+| `CENTO_SCREEN_READER` | 1 runs the whole app as plain lines for a screen reader (same as --screen-reader) |
 | `DO_NOT_TRACK` | 1 turns telemetry off, whatever else is set |
 | `CENTCOM_TELEMETRY` | on or off (off always wins) |
 | `CENTCOM_CONFIG_DIR` | where config.json lives |
