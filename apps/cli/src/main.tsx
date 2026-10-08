@@ -173,8 +173,10 @@ async function main() {
     await new Promise<void>((done) => { const fr = render(<FirstRun onDone={() => { fr.unmount(); done(); }} width={process.stdout.columns ?? 80} height={process.stdout.rows ?? 24} tier={tier} mascotAllowed={settings.mascot !== 'off'} reducedMotion={settings.reducedMotion} color={settings.color} theme={settings.theme} />, { exitOnCtrlC: true, patchConsole: false }); });
     const r = await markFirstRunDone({ stateFile: firstRunFile }); if (!r.ok) firstRunNote = r.message; process.stdout.write('\x1b[2J\x1b[H');
   }
-  const leave = () => { if (!a11y.screenReader) process.stdout.write('\x1b[?1049l'); };
+  /** Put the terminal back as it was: out of the alternate screen, mouse reporting off, cursor shown. Safe to call twice. */
+  const leave = () => { try { process.stdout.write('\x1b[?1000l\x1b[?1006l\x1b[?25h' + (a11y.screenReader ? '' : '\x1b[?1049l')); } catch { /* the terminal is gone */ } };
   process.on('exit', leave);
+  for (const [sig, code] of [['SIGTERM', 143], ['SIGHUP', 129]] as const) process.on(sig, () => { leave(); process.exit(code); }); // `kill` and a closing window must not leave your shell in the alternate screen with the mouse captured
   rt.bind(ctl);
   await ctl.start();
   if (note) ctl.notice('warn', note);
