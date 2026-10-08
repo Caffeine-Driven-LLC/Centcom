@@ -11,8 +11,8 @@ let cleanup: (() => void) | undefined; afterEach(() => { cleanup?.(); cleanup = 
 function rng(seed: number) { let s = seed >>> 0; return () => { s = (s + 0x6d2b79f5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 const KEYS = [
   'a', 'b', 'hello ', 'world', ' ', '\x7f', '\x7f', '\x1b[3~', '\x1b[D', '\x1b[C', '\x1b[A', '\x1b[B', '\x1b[1;2D', '\x1b[1;2C', '\x1b[1;5D', '\x1b[1;5C', '\x1b[H', '\x1b[F', '\x1b[1;2H', '\x1b[1;2F', '\x1b[3;5~', '\x1b[5~', '\x1b[6~',
-  '\x01', '\x05', '\x15', '\x17', '\x0a', '\x18', '\x03', '\x0b', '\x12', '\x0f', '\x14', '\x0e', '\x02', '\x0c', '\t', '\x1b[Z', '\r', '\x1b', '\x1b\x1b', '\x1ba', '\x1bb', '\x1bf',
-  '😀', '日本語', 'é', '\\', '@', '@pr', '@src/', '/', '/he', '/mode', '/theme', '/settings', '/find x', '/copy', '/bell', '/density', '/spinner', '/mouse', '/effort', '/help', '/fleet', '/rewind', '/night', '/permissions', '/skills', '/resume', '/export',
+  '\x1f', '\x1by', '\x07', '\x1a', '\x01', '\x05', '\x15', '\x17', '\x0a', '\x18', '\x03', '\x0b', '\x12', '\x0f', '\x14', '\x0e', '\x02', '\x0c', '\t', '\x1b[Z', '\r', '\x1b', '\x1b\x1b', '\x1ba', '\x1bb', '\x1bf',
+  '😀', '日本語', 'é', '\\', '@', '@pr', '@src/', '/', '/he', '/mode', '/theme', '/settings', '/find x', '/title', '/density', '/copy', '/bell', '/density', '/spinner', '/mouse', '/effort', '/help', '/fleet', '/rewind', '/night', '/permissions', '/skills', '/resume', '/export',
   '?', 'y', 'n', 's', 'q', 'j', 'k', '1', '9', '\x1b[200~line one\nline two\nline three\x1b[201~', `\x1b[200~${'x'.repeat(3000)}\x1b[201~`, `\x1b[200~${Array.from({ length: 30 }, (_, i) => `row ${i}`).join('\n')}\x1b[201~`,
   '\x1b[<64;10;5M', '\x1b[<65;10;5M', '\x1b[<0;12;8M', '\x1b[<0;12;8m', '\x1b[<0;3;3M', '\x1b[<4;9;9M',
 ];
