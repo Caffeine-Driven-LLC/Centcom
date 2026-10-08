@@ -20,6 +20,8 @@ export const COMMANDS: SlashCommand[] = [
   { name: 'spinner', args: '[fun|plain]', desc: 'The waiting line: rotating verbs, or just "Working…"' },
   { name: 'mouse', args: '[on|off]', desc: 'Scroll with the mouse wheel (off lets you select text with the mouse)' },
   { name: 'settings', desc: 'Every setting in one list: choose one to change it' },
+  { name: 'copy', args: '[code]', desc: 'Copy the last answer (or just its last code block) to the clipboard' },
+  { name: 'export', args: '[file]', desc: 'Save this conversation as a Markdown file in this folder' },
   { name: 'config', desc: 'Show the settings in effect and where each came from' },
   { name: 'auto', args: '[on|off]', desc: 'Auto skills: apply matching skills and commands to your prompts' },
   { name: 'skills', args: '[filter | enable <id> | disable <id>]', desc: 'List, enable or disable the skills Centcom can auto-apply' },

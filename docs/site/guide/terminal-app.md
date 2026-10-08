@@ -49,6 +49,10 @@ Type a few letters of anything: commands (`thm hc` finds `/theme hc`), project f
 
 Everything you change is remembered. `/config` shows where each value comes from.
 
+## Taking things with you
+
+`/copy` puts the last answer on the clipboard, `/copy code` just its last code block. `/export` saves the whole conversation as a Markdown file in this folder (`/export notes.md` to name it; it never overwrites). Secrets are scrubbed from the file.
+
 ## Approvals
 
 A new approval ignores keys for a third of a second so a key you were typing cannot approve something you have not read. It shows how long is left before it is declined on its own (`agent.approval_timeout_ms`, ten minutes by default). `s` allows it for this session only.

@@ -9,8 +9,9 @@ import type { AgentBus, AgentId, FleetManager, FleetNode, Ledger, Checkpoint, Ch
 import type { PendingApproval as PolicyPending } from '@centcom/agent';
 import type { Logger } from '@centcom/net';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve as resolvePath } from 'node:path';
 import { SessionStore, ago, titleFrom, type SessionMeta } from './sessions.js';
+import { codeBlocks, lastAnswer, toMarkdown } from './util/export.js';
 import { PasteStore } from './prompt/paste.js';
 import { animationEntries, commandEntries, createFileIndex, FIRST_LABELS, listProvider, quickEntries, type FileIndex, type PaletteProvider } from './palette/index.js';
 import { errorGuide } from './errors.js';
@@ -761,6 +762,19 @@ export class AppController {
       case 'spinner': if (arg === 'fun' || arg === 'plain') { this.setSettings({ spinner: arg }); this.toast('info', arg === 'plain' ? 'The waiting line says Working…' : 'The waiting line rotates its verbs'); } else this.toast('info', 'Try /spinner fun or /spinner plain'); break;
       case 'mouse': { const on = arg ? arg === 'on' : !this.state.settings.mouse; this.setSettings({ mouse: on }); this.toast('info', on ? 'Mouse wheel scrolls. /mouse off lets you select text with the mouse.' : 'Mouse off: select text with the mouse as usual.'); break; }
       case 'settings': await this.settingsMenu(); break;
+      case 'copy': {
+        const a = lastAnswer(this.state.items); if (!a) { this.toast('info', 'Nothing to copy yet.'); break; }
+        if (arg === 'code') { const blocks = codeBlocks(a); if (!blocks.length) { this.toast('info', 'The last answer has no code block.'); break; } this.copy(blocks.at(-1)!); break; }
+        if (arg && arg !== 'answer') { this.toast('info', 'Try /copy (the last answer) or /copy code (its last code block).'); break; }
+        this.copy(a); break;
+      }
+      case 'export': {
+        if (!this.state.items.length) { this.toast('info', 'Nothing to export yet.'); break; }
+        const when = new Date(); const iso = when.toISOString(); const stamp = iso.slice(0, 10).replace(/-/g, '') + '-' + iso.slice(11, 16).replace(':', ''); const file = resolvePath(this.o.cwd, arg || `centcom-${stamp}.md`);
+        try { writeFileSync(file, toMarkdown(this.state.items, { title: titleFrom(this.state.items), engine: this.o.engine.label, cwd: this.o.cwd, when }), { flag: 'wx', mode: 0o600 }); this.toast('ok', `Saved ${this.state.items.filter((i) => i.kind === 'user').length} message${this.state.items.filter((i) => i.kind === 'user').length === 1 ? '' : 's'} to ${file}`, 6000); }
+        catch (e) { this.toast('warn', (e as NodeJS.ErrnoException).code === 'EEXIST' ? `${file} already exists. Pick another name: /export <file>` : `Could not save: ${(e as Error).message}`, 6000); }
+        break;
+      }
       case 'effort': await this.effortCommand(arg); break;
       case 'model': {
         if (!arg) { await this.openModels(); break; }
