@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { render } from 'ink';
 import { detectColorTier } from '@centcom/theme';
 import { ClaudeCodeEngine, CodexEngine, DemoEngine, detectClaude, detectCodex, type AgentEngine, type PermissionMode } from '@centcom/agent';
+import { chooseEngine } from './engine-pick.js';
 import { App, AppController, ClientConfig, FirstRun, SessionStore, buildRuntime, initialSettings, isFirstRun, markFirstRunDone, settingsFromConfig } from '@centcom/tui';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename as pathBase, join as pathJoin, resolve as pathResolve } from 'node:path';
@@ -55,15 +56,10 @@ function cliFlags(): FlatFlags {
 }
 
 async function pickEngine(preferred: 'claude-code' | 'codex' = 'claude-code'): Promise<{ engine: AgentEngine; demo: boolean; note: string }> {
-  let demo = has('--demo') || arg('--engine') === 'demo'; let note = '';
-  const wantCodex = (arg('--engine') ?? preferred) === 'codex';
-  if (wantCodex && !demo) { const cx = await detectCodex(); if (!cx.installed) { demo = true; note = 'Codex was not found, so this is the demo agent. Install Codex (npm i -g @openai/codex) and run `codex login`.'; } }
-  if (!demo && !wantCodex) {
-    const st = await detectClaude();
-    if (!st.installed) { demo = true; note = 'Claude Code was not found, so this is the demo agent. Install Claude Code and sign in to use the real one.'; }
-  }
-  const engine: AgentEngine = demo ? new DemoEngine({ speed: 1 }) : wantCodex ? new CodexEngine() : new ClaudeCodeEngine();
-  return { engine, demo, note };
+  const explicit = arg('--engine') === 'codex' || arg('--engine') === 'claude-code' ? (arg('--engine') as 'codex' | 'claude-code') : undefined;
+  const pick = await chooseEngine({ demo: has('--demo') || arg('--engine') === 'demo', explicit, preferred, installed: async (e) => (e === 'codex' ? await detectCodex() : await detectClaude()).installed });
+  const engine: AgentEngine = pick.engine === 'demo' ? new DemoEngine({ speed: 1 }) : pick.engine === 'codex' ? new CodexEngine() : new ClaudeCodeEngine();
+  return { engine, demo: pick.engine === 'demo', note: pick.note };
 }
 
 async function main() {
