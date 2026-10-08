@@ -10,7 +10,7 @@ export interface FlagDef<T extends FlagValue = FlagValue> { readonly key: string
 export const FLAG_KEY_RE = /^[a-z0-9_.-]{1,64}$/;
 
 /** Known flags and their value types. Extend it here (one key per feature lane); empty until the first feature lane adds one. */
-export interface FlagRegistry {}
+export interface FlagRegistry { 'provider.claude_code': boolean; 'provider.codex': boolean; 'provider.command_post.subscription': boolean }
 
 /** Declare one flag: its key, type and the safe default used when the server never answered, left it out or sent the wrong type. */
 export function defineFlag<K extends string, T extends FlagValue>(key: K, def: { type: TypeOf<T>; default: T }): FlagDef<T> {
@@ -21,7 +21,11 @@ export function defineFlag<K extends string, T extends FlagValue>(key: K, def: {
 
 /** Every flag's definition, keyed like FlagRegistry. */
 export type FlagDefs<R> = { readonly [K in keyof R]: R[K] extends FlagValue ? FlagDef<R[K]> : never };
-export const FLAG_DEFS: FlagDefs<FlagRegistry> = Object.freeze({});
+export const FLAG_DEFS: FlagDefs<FlagRegistry> = Object.freeze({
+  'provider.claude_code': defineFlag('provider.claude_code', { type: 'boolean', default: true }),
+  'provider.codex': defineFlag('provider.codex', { type: 'boolean', default: true }),
+  'provider.command_post.subscription': defineFlag('provider.command_post.subscription', { type: 'boolean', default: false }),
+});
 
 /** The value if it has the flag's type, else undefined (the caller falls back to the default). */
 export function typed<T extends FlagValue>(def: FlagDef<T>, v: unknown): T | undefined {
