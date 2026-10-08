@@ -85,8 +85,9 @@ export function match(prompt: string, skills: Skill[], opts: MatchOptions = {}):
 /** Text prepended to the prompt that goes to the engine. The transcript keeps the user's original words. */
 export function injection(picks: Pick[]): string {
   if (!picks.length) return '';
-  const lines = picks.map((p) => p.skill.source === 'master' ? `- Read ${p.skill.path} and follow it: ${p.skill.description.replace(/\s+/g, ' ').slice(0, 160)}` : p.skill.kind === 'skill' ? `- Use the "${p.skill.name}" skill (Skill tool): ${p.skill.description.slice(0, 160)}` : `- Follow the instructions of the /${p.skill.name} command: ${p.skill.description.slice(0, 160)}`);
+  const lines = picks.map((p) => p.skill.source === 'bundled' ? `- Read ${p.skill.path} and follow it (its references/ folder next to it has the depth; read only the files the task needs): ${p.skill.description.replace(/\s+/g, ' ').slice(0, 160)}` : p.skill.source === 'master' ? `- Read ${p.skill.path} and follow it: ${p.skill.description.replace(/\s+/g, ' ').slice(0, 160)}` : p.skill.kind === 'skill' ? `- Use the "${p.skill.name}" skill (Skill tool): ${p.skill.description.slice(0, 160)}` : `- Follow the instructions of the /${p.skill.name} command: ${p.skill.description.slice(0, 160)}`);
   return `[Centcom auto skills: the user's tooling matched these to the request below. Apply them where they genuinely fit; ignore any that do not.]\n${lines.join('\n')}\n\n`;
 }
 
 export * from './master.js';
+export * from './library.js';

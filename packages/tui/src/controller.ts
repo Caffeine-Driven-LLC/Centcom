@@ -9,7 +9,7 @@ import type { AgentBus, AgentId, FleetManager, FleetNode, Ledger, Checkpoint, Ch
 import type { PendingApproval as PolicyPending } from '@centcom/agent';
 import type { Logger } from '@centcom/net';
 import { SessionStore, ago, titleFrom, type SessionMeta } from './sessions.js';
-import { MASTER_DIR, discover, injection, masterSkills, match, setEnabled, type Skill } from '@centcom/skills';
+import { LIBRARY_DIR, MASTER_DIR, discover, injection, librarySkills, masterSkills, match, mergeLibrary, setEnabled, type Skill } from '@centcom/skills';
 import { MascotDriver, bakedByCategory, bakedCategories, getBaked, type CentoColor } from '@centcom/mascot';
 import type { AgentEngine, ApprovalDecision, ApprovalRequest, EngineSession, NormalisedEvent, PermissionGate, PermissionMode } from '@centcom/agent';
 import { Store } from './state/store.js';
@@ -144,7 +144,7 @@ export class AppController {
 
   private startOptions(resumeToken?: string, carry?: string): EngineStartOptions {
     const gate: PermissionGate = { decide: (r) => this.decide(r) };
-    return { agentId: this.me, cwd: this.o.cwd, permissionMode: this.state.settings.permissionMode, model: this.state.settings.model || undefined, addDirs: this.o.demo ? undefined : [MASTER_DIR], approvalGate: gate, ...(resumeToken ? { resume: { engine_session_id: resumeToken } } : {}), ...(carry ? { systemPromptAppend: carry } : {}) };
+    return { agentId: this.me, cwd: this.o.cwd, permissionMode: this.state.settings.permissionMode, model: this.state.settings.model || undefined, addDirs: this.o.demo ? undefined : [MASTER_DIR, LIBRARY_DIR], approvalGate: gate, ...(resumeToken ? { resume: { engine_session_id: resumeToken } } : {}), ...(carry ? { systemPromptAppend: carry } : {}) };
   }
   private async startEngine(resumeToken?: string, carry?: string) { this.adopt(await this.o.engine.start(this.startOptions(resumeToken, carry))); }
   /** A conversation saved with the other engine cannot be resumed by this one (its session id means nothing here): this one starts fresh with a summary of what was said. */
@@ -413,7 +413,7 @@ export class AppController {
   /** Your own skills first; bundled ones fill in, skipping any you already have under the same name. */
   private loadSkills(): Skill[] {
     const own = discover({ cwd: this.o.cwd }); const have = new Set(own.map((k) => k.name.toLowerCase()));
-    return [...own, ...masterSkills().filter((k) => !have.has(k.name.split('--').slice(1).join('--').toLowerCase()))];
+    return mergeLibrary([...own, ...masterSkills().filter((k) => !have.has(k.name.split('--').slice(1).join('--').toLowerCase()))], librarySkills());
   }
   skills(): Skill[] { return (this.skillCache ??= this.o.skills ?? this.loadSkills()); }
 
