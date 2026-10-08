@@ -115,6 +115,7 @@ export function App({ ctl, tier, keys }: AppProps) {
         if (d.action === 'approval.deny') { ctl.answerApproval('deny'); return; }
         if (d.action === 'approval.approve') { if (high) setConfirming(true); else ctl.answerApproval('approve'); return; }
         if (d.action === 'approval.always' && !high) { ctl.answerApproval('approve', 'always'); return; }
+        if (d.action === 'approval.session' && !high) { ctl.answerApproval('approve', 'session'); return; }
         if (d.action === 'transcript.page_up') { setScroll(s.scroll + Math.floor(bodyH / 2)); return; } if (d.action === 'transcript.page_down') { setScroll(s.scroll - Math.floor(bodyH / 2)); return; }
       }
       return;
@@ -255,7 +256,7 @@ export function App({ ctl, tier, keys }: AppProps) {
                       : <Box paddingX={1}><Transcript layout={layout} items={s.items} width={mainW - 2} height={bodyH} scroll={s.scroll} unseen={unseen} /></Box>}
             </Box>
             {stripH > 0 ? <Box paddingX={1} height={stripH}><LiveStrip s={s} driver={ctl.driver} width={mainW - 2} size={stripSize as 'large' | 'small' | 'off'} /></Box> : null}
-            {pending ? <Approval a={pending} width={mainW} confirming={confirming} maxDiff={maxDiff} onChoose={(c) => { if (approvalGrace()) return; if (c === 'no') ctl.answerApproval('deny'); else if (c === 'always') { if (pending.req.risk !== 'high') ctl.answerApproval('approve', 'always'); } else if (pending.req.risk === 'high' && !confirming) setConfirming(true); else ctl.answerApproval('approve'); }} /> : (
+            {pending ? <Approval a={pending} width={mainW} confirming={confirming} maxDiff={maxDiff} onChoose={(c) => { if (approvalGrace()) return; if (c === 'no') ctl.answerApproval('deny'); else if (c === 'always') { if (pending.req.risk !== 'high') ctl.answerApproval('approve', 'always'); } else if (c === 'session') { if (pending.req.risk !== 'high') ctl.answerApproval('approve', 'session'); } else if (pending.req.risk === 'high' && !confirming) setConfirming(true); else ctl.answerApproval('approve'); }} /> : (
               <>
                 {showTasks ? <Box paddingX={1} height={tasksH}><TaskList items={s.tasks} maxRows={rows >= 34 ? 10 : 5} width={mainW - 2} unicode={tier !== 'none'} /></Box> : null}
                 {popupH ? <SlashPopup matches={matches} sel={s.slashSel} width={mainW} onPick={(c) => { const t = '/' + c.name + (c.args ? ' ' : ''); ctl.patch({ input: t, cursor: t.length, anchor: undefined, slashSel: 0 }); if (!c.args) void ctl.submit('/' + c.name); }} /> : null}

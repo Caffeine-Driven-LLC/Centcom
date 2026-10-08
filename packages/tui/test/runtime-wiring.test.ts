@@ -115,3 +115,13 @@ describe('resuming across engines', () => {
     const store2 = new SessionStore(tmp('centcom-sess-')); store2.save({ id: 'ses_01JTEST0000000000000000002', cwd, engine: 'codex', title: 'old', resumeToken: 'thread_codex_123', createdAt: 1, updatedAt: 2, messages: 1 }, [{ kind: 'user', id: 'u1', text: 'hi', ts: 1 }]); const same = new FakeEngine({ id: 'codex' }); const c2 = new AppController({ engine: same as never, demo: false, cwd, version: 't', skills: [], sessions: store2, resume: 'last' }); await c2.start(); expect(same.starts[0]!.resume).toBe('thread_codex_123'); c2.stop(); // the same engine resumes its own session
   });
 });
+
+describe('agent.approval_timeout_ms reaches the permission engine', () => {
+  it('an approval nobody answers is declined after the configured time, and the controller knows the deadline', async () => {
+    const cwd = repo(); const rt = await buildRuntime({ cwd, engineId: 'claude-code', demo: false, configDir: tmp('centcom-cfg-'), home: tmp('centcom-home-'), checkpoints: false, approvalTimeoutMs: 1500 });
+    expect(rt.options.approvalTimeoutMs).toBe(1500);
+    const ctl = new AppController({ ...rt.options, engine: new FakeEngine({ id: 'claude-code' }) as never, demo: false, cwd, version: 't', skills: [] }); rt.bind(ctl);
+    const p = ctl.decide(req({ tool: 'Bash', command: 'npm test' })); await until(() => ctl.state.approvals.length === 1); const left = ctl.state.approvals[0]!.expiresAt! - Date.now(); expect(left).toBeGreaterThan(1000); expect(left).toBeLessThanOrEqual(1500);
+    expect(await p).toMatchObject({ decision: 'deny' }); expect(ctl.state.approvals).toHaveLength(0); ctl.stop();
+  }, 15_000);
+});

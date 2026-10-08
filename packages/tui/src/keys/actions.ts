@@ -32,4 +32,5 @@ def('transcript.line_down', 'Transcript', 'Scroll down three lines', ['shift+dow
 def('approval.approve', 'Approvals', 'Approve this once', ['y', 'permission']);
 def('approval.deny', 'Approvals', 'Deny', ['n', 'permission'], ['esc', 'permission']);
 def('approval.always', 'Approvals', 'Always allow (this project)', ['a', 'permission']);
+def('approval.session', 'Approvals', 'Allow for this session only', ['s', 'permission']);
 def('overlay.close', 'General', 'Close the open screen', ['esc', 'overlay'], ['q', 'overlay']);

@@ -29,6 +29,8 @@ import { VerbRotator } from './util/verbs.js';
 /** The longest message Centcom sends in one go. */
 export const MAX_MESSAGE = 65_536;
 export interface ControllerOptions {
+  /** How long an approval waits before the engine declines it (shown as a countdown). */
+  approvalTimeoutMs?: number;
   /** Where copied text goes (tests pass a recorder). Default: the system clipboard. */
   clipboard?: (text: string) => void;
   /** Mouse wheel on at start (default: when stdout is a terminal). */
@@ -364,7 +366,7 @@ export class AppController {
     if (this.night.active()) return Promise.resolve(this.nightAnswer(req));
     return new Promise((resolve) => {
       const me = this.state.agents.find((a) => a.id === req.agent_id);
-      const pending: PendingApproval = { req, agentName: me?.name ?? 'agent', color: me?.color ?? 'violet', resolve, confirmHigh: req.risk === 'high' };
+      const pending: PendingApproval = { req, agentName: me?.name ?? 'agent', color: me?.color ?? 'violet', resolve, confirmHigh: req.risk === 'high', expiresAt: Date.now() + (this.o.approvalTimeoutMs ?? 600_000) };
       signal.addEventListener('abort', () => { this.set((s) => ({ approvals: s.approvals.filter((a) => a !== pending) })); resolve({ decision: 'deny', scope: 'once', reason: 'cancelled' }); }, { once: true });
       this.set((s) => ({ approvals: [...s.approvals, pending] }));
     });

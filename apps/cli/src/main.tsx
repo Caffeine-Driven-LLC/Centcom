@@ -137,7 +137,7 @@ async function main() {
   const { logger } = createAppLogger({ level: cc.cfg.log.level, maxBytes: cc.cfg.log.max_file_bytes, maxFiles: cc.cfg.log.max_files });
   logger.info('app.start', { version: VERSION, engine: engine.id, demo, mode });
   let instance: ReturnType<typeof render> | undefined;
-  const rt = await buildRuntime({ cwd: process.cwd(), engineId: engine.id, demo, dangerous: dangerous || mode === 'bypassPermissions', checkpoints: !has('--no-checkpoints'), sessionUsd: cfg0?.budget?.session_usd || undefined, stateDir: stateDir(defaultDeps()) });
+  const rt = await buildRuntime({ cwd: process.cwd(), engineId: engine.id, demo, dangerous: dangerous || mode === 'bypassPermissions', checkpoints: !has('--no-checkpoints'), approvalTimeoutMs: cc.cfg.agent.approval_timeout_ms, sessionUsd: cfg0?.budget?.session_usd || undefined, stateDir: stateDir(defaultDeps()) });
   // --continue / --resume [id]: decided before the screen starts, so a wrong id is one line and exit 1
   const sessionStore = has('--no-save') ? undefined : new SessionStore(); let resumeId: string | undefined;
   if (sessionStore && (has('-c') || has('--continue') || has('--resume'))) {

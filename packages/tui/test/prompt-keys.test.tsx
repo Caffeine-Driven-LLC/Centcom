@@ -164,3 +164,24 @@ describe('prompt height', () => {
     expect(promptRows(text, text.length, 80)).toBe(6); expect(promptRows(text, text.length, 80, 12)).toBe(10); expect(promptRows(text + '\n'.repeat(20), 0, 80, 12)).toBe(12);
   });
 });
+
+describe('approval: countdown and session scope', () => {
+  const req = (id: string, risk: 'medium' | 'high' = 'medium', command = 'npm test') => ({ approval_id: id, agent_id: 'me', tool_id: 't' + id, tool: 'Bash', summary: 'x', risk, command } as never);
+  it('the s key (and the [s] button) allows it for this session only; a destructive one has no such shortcut', async () => {
+    const t = await mount(); const a = t.ctl.decide(req('1')); await wait(330); await t.send('s'); expect(await a).toMatchObject({ decision: 'approve', scope: 'session' });
+    const b = t.ctl.decide(req('2', 'medium', 'pnpm build')); await wait(330); await t.click('[s]'); expect(await b).toMatchObject({ decision: 'approve', scope: 'session' });
+    const c = t.ctl.decide(req('3', 'high', 'rm -rf build')); await wait(330); await t.send('s'); expect(t.ctl.state.approvals).toHaveLength(1); await t.send('n'); await c;
+  });
+  it('the countdown formats as m:ss and the prompt shows it once the engine gave a deadline', async () => {
+    const { countdown, Approval } = await import('../src/components/Approval.js'); const React = (await import('react')).default; const { renderToString } = await import('ink');
+    expect(countdown(598_000)).toBe('9:58'); expect(countdown(5_000)).toBe('0:05'); expect(countdown(0)).toBe('0:00'); expect(countdown(7_500_000)).toBe('2h 05m');
+    const mk = (expiresAt?: number) => ({ req: { approval_id: 'a', agent_id: 'me', tool_id: 't', tool: 'Bash', summary: 'x', risk: 'medium', command: 'npm test' }, agentName: 'you', color: 'violet', resolve() {}, confirmHigh: false, expiresAt } as never);
+    const show = (a: unknown) => renderToString(React.createElement(Approval, { a: a as never, width: 80, confirming: false }), { columns: 80 });
+    expect(show(mk(Date.now() + 120_000))).toMatch(/Declines on its own in 1:5\d|Declines on its own in 2:00/); expect(show(mk())).not.toContain('Declines on its own');
+  });
+  it('the policy prompter stamps each approval with when it expires', async () => {
+    const c = new AppController({ engine: new DemoEngine({ speed: 100 }), demo: true, cwd: '/tmp', version: 't', skills: [], approvalTimeoutMs: 90_000 });
+    const ac = new AbortController(); void c.promptApproval({ approval_id: 'p1', agent_id: c.state.activeAgent, tool: 'Bash', summary: 'x', command: 'ls', risk: 'medium' } as never, ac.signal);
+    const e = c.state.approvals[0]!.expiresAt!; expect(e - Date.now()).toBeGreaterThan(88_000); expect(e - Date.now()).toBeLessThanOrEqual(90_000); ac.abort(); c.stop();
+  });
+});

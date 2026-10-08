@@ -19,7 +19,7 @@ export type Item =
 
 export interface Toast { id: string; level: 'info' | 'ok' | 'warn' | 'error'; text: string; until: number }
 
-export interface PendingApproval { req: ApprovalRequest; agentName: string; color: CentoColor; resolve: (d: ApprovalDecision) => void; confirmHigh: boolean }
+export interface PendingApproval { req: ApprovalRequest; agentName: string; color: CentoColor; resolve: (d: ApprovalDecision) => void; confirmHigh: boolean; /** When the engine declines it by itself (ms since the epoch). */ expiresAt?: number }
 
 export interface Settings { theme: 'dark' | 'light' | 'hc'; mascot: MascotSize | 'auto'; permissionMode: PermissionMode; reducedMotion: boolean; color: CentoColor; autoSkills: boolean; model: string; /** Mouse wheel scrolls the transcript; off gives the terminal's own text selection back. */ mouse: boolean; /** Rotating fun verbs while the agent works, or a plain "Working…". */ spinner: 'fun' | 'plain' }
 
