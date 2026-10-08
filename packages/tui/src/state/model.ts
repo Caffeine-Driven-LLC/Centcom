@@ -21,7 +21,7 @@ export interface Toast { id: string; level: 'info' | 'ok' | 'warn' | 'error'; te
 
 export interface PendingApproval { req: ApprovalRequest; agentName: string; color: CentoColor; resolve: (d: ApprovalDecision) => void; confirmHigh: boolean }
 
-export interface Settings { theme: 'dark' | 'light' | 'hc'; mascot: MascotSize | 'auto'; permissionMode: PermissionMode; reducedMotion: boolean; color: CentoColor; autoSkills: boolean; model: string; /** Mouse wheel scrolls the transcript; off gives the terminal's own text selection back. */ mouse: boolean }
+export interface Settings { theme: 'dark' | 'light' | 'hc'; mascot: MascotSize | 'auto'; permissionMode: PermissionMode; reducedMotion: boolean; color: CentoColor; autoSkills: boolean; model: string; /** Mouse wheel scrolls the transcript; off gives the terminal's own text selection back. */ mouse: boolean; /** Rotating fun verbs while the agent works, or a plain "Working…". */ spinner: 'fun' | 'plain' }
 
 export interface AppState {
   items: Item[];
@@ -55,7 +55,7 @@ export interface AppState {
   night: import('../night/model.js').NightState;
 }
 
-export const initialSettings = (): Settings => ({ theme: 'dark', mascot: 'auto', permissionMode: 'default', reducedMotion: false, color: 'violet', autoSkills: true, model: '', mouse: true });
+export const initialSettings = (): Settings => ({ theme: 'dark', mascot: 'auto', permissionMode: 'default', reducedMotion: false, color: 'violet', autoSkills: true, model: '', mouse: true, spinner: 'fun' });
 
 export function stateToMini(state: string): MiniState {
   switch (state) {

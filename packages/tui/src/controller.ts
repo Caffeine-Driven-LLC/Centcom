@@ -644,6 +644,7 @@ export class AppController {
       theme: { title: 'Theme', current: st.theme, options: o(['dark', 'Graphite'], ['light', 'Paper, for light terminals'], ['hc', 'high contrast: black, white, bold borders']) },
       mascot: { title: 'Cento size', current: st.mascot, options: o(['auto', 'by window height'], ['large'], ['small'], ['off']) },
       color: { title: "Cento's colour", current: st.color, options: o(['violet'], ['red'], ['yellow'], ['green'], ['brown']) },
+      spinner: { title: 'While the agent works', current: st.spinner, options: o(['fun', 'rotating verbs'], ['plain', 'just "Working…"']) },
       motion: { title: 'Animation', current: st.reducedMotion ? 'reduced' : 'full', options: o(['full', 'Cento moves'], ['reduced', 'still, quieter']) },
     };
   }
@@ -683,6 +684,7 @@ export class AppController {
       case 'mascot': if (['large', 'small', 'off', 'auto'].includes(arg)) this.setSettings({ mascot: arg as Settings['mascot'] }); else this.toast('info', 'Try /mascot large, small, off or auto'); break;
       case 'color': if (['violet', 'red', 'yellow', 'green', 'brown'].includes(arg)) this.setSettings({ color: arg as CentoColor }); else this.toast('info', 'Colours: violet red yellow green brown'); break;
       case 'theme': if (arg === 'dark' || arg === 'light' || arg === 'hc') this.setSettings({ theme: arg }); else this.toast('info', 'Try /theme dark, /theme light or /theme hc (high contrast)'); break;
+      case 'spinner': if (arg === 'fun' || arg === 'plain') { this.setSettings({ spinner: arg }); this.toast('info', arg === 'plain' ? 'The waiting line says Working…' : 'The waiting line rotates its verbs'); } else this.toast('info', 'Try /spinner fun or /spinner plain'); break;
       case 'mouse': { const on = arg ? arg === 'on' : !this.state.settings.mouse; this.setSettings({ mouse: on }); this.toast('info', on ? 'Mouse wheel scrolls. /mouse off lets you select text with the mouse.' : 'Mouse off: select text with the mouse as usual.'); break; }
       case 'effort': await this.effortCommand(arg); break;
       case 'model': {

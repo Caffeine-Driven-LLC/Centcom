@@ -20,7 +20,7 @@ function infoLines(s: AppState, spin: string, width: number, now: number): Line[
     const elapsed = s.turnStartedAt ? formatElapsed(now - s.turnStartedAt) : '';
     const tok = me.inTok + me.outTok;
     const act = running && running.kind === 'tool' ? `${running.name} ${running.path ?? running.command ?? running.summary}` : '';
-    const verb = s.settings.reducedMotion ? 'Working…' : s.verb;
+    const verb = s.settings.reducedMotion || s.settings.spinner === 'plain' ? 'Working…' : s.verb;
     return [
       [sp(spin + ' ', { c: 'signal', b: true }), sp(truncate(verb, width - 3), { c: 'text.secondary' })],
       [sp([elapsed, tok ? `↑ ${formatTokens(tok)} tokens` : '', 'esc to interrupt'].filter(Boolean).join('  ·  '), { c: 'text.muted' })],

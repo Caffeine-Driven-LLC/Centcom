@@ -127,3 +127,13 @@ describe('high contrast theme', () => {
     const run = c.runCommand('/theme'); await new Promise((r) => setTimeout(r, 0)); expect(c.state.pick!.options.map((o) => o.id)).toEqual(['dark', 'light', 'hc']); expect(c.state.pick!.checked).toEqual(['hc']); c.pickKey('cancel'); await run;
   });
 });
+describe('/spinner', () => {
+  it('plain shows "Working…" in the waiting line, fun rotates; bare /spinner is a list; it is remembered', async () => {
+    const React = (await import('react')).default; const { renderToString } = await import('ink'); const { LiveStrip } = await import('../src/components/LiveStrip.js'); const { MascotDriver } = await import('@centcom/mascot');
+    const c = make(); c.patch({ busy: true, verb: 'Pondering', items: [{ id: 'u', kind: 'user', text: 'x' } as never] });
+    const strip = () => renderToString(React.createElement(LiveStrip, { s: c.state, driver: new MascotDriver({}) as never, width: 60, size: 'off' as const }), { columns: 70 });
+    expect(strip()).toContain('Pondering'); await c.runCommand('/spinner plain'); expect(c.state.settings.spinner).toBe('plain'); const t = strip(); expect(t).toContain('Working…'); expect(t).not.toContain('Pondering');
+    await c.runCommand('/spinner fun'); expect(strip()).toContain('Pondering'); await c.runCommand('/spinner loud'); expect(c.state.toasts.at(-1)!.text).toMatch(/fun or \/spinner plain/);
+    const run = c.runCommand('/spinner'); await new Promise((r) => setTimeout(r, 0)); expect(c.state.pick!.options.map((o) => o.id)).toEqual(['fun', 'plain']); c.pickKey('down'); c.pickKey('enter'); await run; expect(c.state.settings.spinner).toBe('plain');
+  });
+});
