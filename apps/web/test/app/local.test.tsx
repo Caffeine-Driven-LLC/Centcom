@@ -34,6 +34,8 @@ describe('the local agent screen', () => {
     await act(async () => push({ t: 'opened', dir: '/h/p', history: [] }));
     await act(async () => push({ t: 'state', state: { busy: true, verb: 'Thinking', branch: 'main', engineLabel: 'Claude Code', approvals: [{ id: 'ap1', tool: 'Bash', summary: 'ls', risk: 'low', agentName: 'Cento', command: 'ls' }] }, changed: [{ kind: 'assistant', id: 'a', messageId: 'm', agentId: 'x', text: 'working on it', done: false }], order: ['a'] }));
     expect(screen.getByText('working on it')).toBeTruthy(); fireEvent.click(screen.getByText('Deny')); expect(sent.at(-1)).toEqual({ t: 'approve', decision: 'deny' });
+    expect(sent.at(-2)).toEqual({ t: 'models' }); await act(async () => push({ t: 'models', models: [{ id: 'm1', label: 'M1', note: '', efforts: ['low', 'high'], defaultEffort: 'low', isDefault: true }] }));
+    fireEvent.change(screen.getByLabelText('Effort'), { target: { value: 'high' } }); expect(sent.at(-1)).toEqual({ t: 'setEffort', effort: 'high' }); fireEvent.change(screen.getByLabelText('Mode'), { target: { value: 'plan' } }); expect(sent.at(-1)).toEqual({ t: 'setMode', mode: 'plan' }); fireEvent.click(screen.getByText('Compact')); expect(sent.at(-1)).toEqual({ t: 'compact' });
     fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'do it' } }); fireEvent.click(screen.getByText('Send')); expect(sent.at(-1)).toEqual({ t: 'submit', text: 'do it' });
   });
 });
