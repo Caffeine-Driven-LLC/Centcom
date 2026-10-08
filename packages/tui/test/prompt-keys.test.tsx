@@ -1,0 +1,62 @@
+import React from 'react';
+import { PassThrough } from 'node:stream';
+import { render } from 'ink';
+import { afterEach, describe, expect, it } from 'vitest';
+import { DemoEngine } from '@centcom/agent';
+import { App, AppController } from '../src/index.js';
+
+const wait = (ms = 25) => new Promise((r) => setTimeout(r, ms));
+let cleanup: (() => void) | undefined; afterEach(() => { cleanup?.(); cleanup = undefined; });
+async function mount() {
+  const copied: string[] = [];
+  const ctl = new AppController({ engine: new DemoEngine({ speed: 100 }), demo: true, cwd: '/tmp', version: 't', skills: [], clipboard: (t) => copied.push(t), mouse: true });
+  const out: any = new PassThrough(); out.columns = 100; out.rows = 30; out.isTTY = true; out.resume();
+  const inp: any = new PassThrough(); inp.isTTY = true; inp.setRawMode = () => inp; inp.ref = () => inp; inp.unref = () => inp;
+  const inst = render(<App ctl={ctl} tier="none" />, { stdout: out, stdin: inp, exitOnCtrlC: false, patchConsole: false, debug: true });
+  cleanup = () => { inst.unmount(); ctl.stop(); };
+  await wait(50);
+  const send = async (s: string) => { inp.write(s); await wait(); };
+  return { ctl, copied, send, text: () => ctl.state.input, cursor: () => ctl.state.cursor };
+}
+const SHIFT_LEFT = '\x1b[1;2D', SHIFT_RIGHT = '\x1b[1;2C', CTRL_DELETE = '\x1b[3;5~', DELETE = '\x1b[3~', LEFT = '\x1b[D', SHIFT_HOME = '\x1b[1;2H';
+
+describe('prompt keys', () => {
+  it('shift+arrow skips whole words', async () => {
+    const t = await mount(); await t.send('one two three'); await t.send(SHIFT_LEFT); expect(t.cursor()).toBe(8); await t.send(SHIFT_LEFT); expect(t.cursor()).toBe(4); await t.send(SHIFT_RIGHT); expect(t.cursor()).toBe(7);
+  });
+  it('shift+arrow also selects; ctrl+c copies the selection and keeps the text', async () => {
+    const t = await mount(); await t.send('hello world'); await t.send(SHIFT_LEFT);
+    expect(t.ctl.state.anchor).toBe(11); expect(t.cursor()).toBe(6);
+    await t.send('\x03'); expect(t.copied).toEqual(['world']); expect(t.text()).toBe('hello world'); expect(t.ctl.state.anchor).toBeUndefined();
+  });
+  it('typing replaces the selection; backspace deletes it; ctrl+x cuts it', async () => {
+    let t = await mount(); await t.send('hello world'); await t.send(SHIFT_LEFT); await t.send('X'); expect(t.text()).toBe('hello X'); cleanup!();
+    t = await mount(); await t.send('hello world'); await t.send(SHIFT_LEFT); await t.send('\x7f'); expect(t.text()).toBe('hello '); cleanup!();
+    t = await mount(); await t.send('hello world'); await t.send(SHIFT_LEFT); await t.send('\x18'); expect(t.copied).toEqual(['world']); expect(t.text()).toBe('hello ');
+  });
+  it('a plain arrow collapses the selection to its edge; shift+home selects to the line start', async () => {
+    const t = await mount(); await t.send('hello world'); await t.send(SHIFT_LEFT); await t.send(LEFT); expect(t.cursor()).toBe(6); expect(t.ctl.state.anchor).toBeUndefined();
+    await t.send(SHIFT_HOME); expect(t.cursor()).toBe(0); expect(t.ctl.state.anchor).toBe(6);
+  });
+  it('ctrl+delete deletes the next word; delete deletes one character; alt+a selects all', async () => {
+    const t = await mount(); await t.send('one two three'); await t.send('\x01'); expect(t.cursor()).toBe(0); await t.send(CTRL_DELETE); expect(t.text()).toBe(' two three'); await t.send(DELETE); expect(t.text()).toBe('two three');
+    await t.send('\x1ba'); expect(t.ctl.state.anchor).toBe(0); expect(t.cursor()).toBe(9); await t.send('\x03'); expect(t.copied).toEqual(['two three']);
+  });
+  it('sending the message drops the selection', async () => {
+    const t = await mount(); await t.send('hi there'); await t.send(SHIFT_LEFT); await t.send('\r'); expect(t.ctl.state.anchor).toBeUndefined(); expect(t.text()).toBe('');
+  });
+});
+
+describe('mouse wheel', () => {
+  const UP = '\x1b[<64;10;5M', DOWN = '\x1b[<65;10;5M', CLICK = '\x1b[<0;10;5M', RELEASE = '\x1b[<0;10;5m';
+  it('scrolls the transcript, never types into the prompt, and ignores clicks', async () => {
+    const t = await mount(); for (let i = 0; i < 60; i++) t.ctl.patch({ items: [...t.ctl.state.items, { id: 'm' + i, kind: 'user', text: 'line ' + i } as never] });
+    await wait(); await t.send(UP); expect(t.ctl.state.scroll).toBe(3); await t.send(UP + UP); expect(t.ctl.state.scroll).toBe(9); await t.send(DOWN); expect(t.ctl.state.scroll).toBe(6);
+    await t.send(CLICK); await t.send(RELEASE); expect(t.ctl.state.scroll).toBe(6); expect(t.text()).toBe('');
+  });
+  it('wheel moves the highlight in a list, and /mouse off stops the reporting', async () => {
+    const t = await mount(); void t.ctl.pick({ title: 't', options: ['a', 'b', 'c'].map((id) => ({ id, label: id })) }); await wait();
+    await t.send(DOWN); expect(t.ctl.state.pick!.sel).toBe(1); await t.send(UP); expect(t.ctl.state.pick!.sel).toBe(0); t.ctl.pickKey('cancel');
+    expect(t.ctl.state.mouse).toBe(true); await t.ctl.runCommand('/mouse off'); expect(t.ctl.state.mouse).toBe(false); await t.ctl.runCommand('/mouse'); expect(t.ctl.state.mouse).toBe(true);
+  });
+});

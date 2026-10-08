@@ -11,18 +11,24 @@ import type { Logger } from '@centcom/net';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SessionStore, ago, titleFrom, type SessionMeta } from './sessions.js';
+import { copyToClipboard } from './util/clipboard.js';
+import { newPick, pickAll, pickMove, pickResult, pickToggle, type PickOption } from './pick/model.js';
 import { NightCycle, initialNight, counts as nightCounts, type NightState, type NightTask } from './night/index.js';
-import { LIBRARY_DIR, MASTER_DIR, discover, injection, librarySkills, masterSkills, match, mergeLibrary, setEnabled, type Skill } from '@centcom/skills';
+import { LIBRARY_DIR, MASTER_DIR, discover, injection, librarySkills, masterSkills, match, mergeLibrary, setEnabled, loadEntries, type Skill } from '@centcom/skills';
 import { MascotDriver, bakedByCategory, bakedCategories, getBaked, type CentoColor } from '@centcom/mascot';
 import type { AgentEngine, ApprovalDecision, ApprovalRequest, EngineSession, NormalisedEvent, PermissionGate, PermissionMode } from '@centcom/agent';
 import { Store } from './state/store.js';
-import { initialSettings, isBusyState, stateToMini, type AgentView, type AppState, type Item, type PendingApproval, type Settings } from './state/model.js';
+import { initialSettings, isBusyState, stateToMini, type AgentView, type AppState, type Item, type Mode, type PendingApproval, type Settings } from './state/model.js';
 import { COMMANDS } from './state/commands.js';
 import { emptyText } from './onboarding/copy.js';
 import { reduceTasks } from './tasks/model.js';
 import { VerbRotator } from './util/verbs.js';
 
 export interface ControllerOptions {
+  /** Where copied text goes (tests pass a recorder). Default: the system clipboard. */
+  clipboard?: (text: string) => void;
+  /** Mouse wheel on at start (default: when stdout is a terminal). */
+  mouse?: boolean;
   engine: AgentEngine; demo: boolean; cwd: string; branch?: string; version: string; permissionMode?: PermissionMode;
   /** `code` is the process exit code to use (130 after a forced interrupt). */ onExit?: (code?: number) => void; ghosts?: boolean; settings?: Partial<Settings>; verbs?: VerbRotator;
   skills?: Skill[]; // pass [] to disable discovery (tests)
@@ -95,7 +101,7 @@ export class AppController {
     const settings = { ...initialSettings(), permissionMode: o.permissionMode ?? 'default', ...o.settings };
     const me: AgentView = { id: this.me, name: 'you', color: settings.color, mine: true, engine: o.engine.label, provider: o.engine.provider, model: '', loginKind: 'unknown', state: 'idle', mini: 'idle', busy: false, branch: o.branch ?? '', runsOn: 'you', cost: 0, inTok: 0, outTok: 0 };
     this.store = new Store<AppState>({
-      items: [], agents: [me], activeAgent: this.me, mode: 'chat', input: '', cursor: 0, history: o.history ?? [], histIdx: null, draft: '', scroll: 0, toasts: [], approvals: [], settings,
+      items: [], agents: [me], activeAgent: this.me, mode: 'chat', mouse: o.mouse ?? !!process.stdout.isTTY, input: '', cursor: 0, history: o.history ?? [], histIdx: null, draft: '', scroll: 0, toasts: [], approvals: [], settings,
       busy: false, verb: this.verbs.next(), limits: [], cwd: o.cwd, branch: o.branch ?? '', engineId: o.engine.id, engineLabel: o.engine.label, demo: o.demo, fleet: true, tasks: [], tasksOpen: true,
       slashSel: 0, palette: { query: '', sel: 0 }, modelSel: 0, gallery: { cat: 0, idx: 0, color: 0, query: '' }, version: o.version, sessionId: newId('ses'), sessions: [], night: initialNight(),
     });
@@ -120,9 +126,11 @@ export class AppController {
   get state() { return this.store.get(); }
   /** The display name of an agent ("you" for the main one). */
   agentName(id: string) { return this.state.agents.find((a) => a.id === id)?.name ?? 'an agent'; }
-  private set(p: Partial<AppState> | ((s: AppState) => Partial<AppState>)) { this.store.set(p); }
+  private set(p: Partial<AppState> | ((s: AppState) => Partial<AppState>)) { this.store.set((st) => { const q = typeof p === 'function' ? p(st) : p; return 'input' in q && !('anchor' in q) ? { ...q, anchor: undefined } : q; }); } // a new prompt text drops any selection
   /** UI-level state changes (input buffer, scroll, mode, overlay selections). */
-  patch(p: Partial<AppState>) { this.store.set(p); }
+  patch(p: Partial<AppState>) { this.store.set('input' in p && !('anchor' in p) ? { ...p, anchor: undefined } : p, 'input' in p || 'cursor' in p); }
+  /** Copy to the clipboard and say so. */
+  copy(text: string) { if (!text) return; (this.o.clipboard ?? ((t) => copyToClipboard(t)))(text); this.toast('ok', `Copied ${text.length} character${text.length === 1 ? '' : 's'}`, 1400); }
   private updateAgent(id: string, fn: (a: AgentView) => Partial<AgentView>) { this.set((s) => ({ agents: s.agents.map((a) => (a.id === id ? { ...a, ...fn(a) } : a)) })); }
   private addItem(it: Item) { this.set((s) => ({ items: [...s.items, it] })); }
   private patchItem(pred: (i: Item) => boolean, fn: (i: Item) => Item) { this.set((s) => ({ items: s.items.map((i) => (pred(i) ? fn(i) : i)) })); }
@@ -158,7 +166,7 @@ export class AppController {
   private carryOver(meta: SessionMeta): string { const other = meta.engine === 'codex' ? 'Codex' : meta.engine === 'claude-code' ? 'Claude Code' : meta.engine; this.notice('info', `This conversation was with ${other}. ${this.o.engine.label} continues it from a summary of what was said.`); const n = this.state.items.filter((i) => i.kind === 'user').length; return `This conversation started with another coding agent. Summary of it so far:\n\n${this.summaryUpTo(n + 1, 8 * 1024)}`; }
   /** Make `s` the running engine session (after a start, or a conversation rewind). */
   private adopt(s: EngineSession) {
-    this.session = s;
+    this.session = s; if (this.effort) s.setEffort?.(this.effort);
     this.models.attach({ agentId: this.me, engine: this.o.engine.id, setModel: (m) => s.setModel?.(m) });
     const m = this.state.settings.model; if (m) s.setModel?.(m);
     void this.consume(s);
@@ -209,10 +217,12 @@ export class AppController {
     this.lastItems = undefined; this.set({ items: [], approvals: [] }); this.loadSaved(saved.meta, saved.items);
     if (saved.meta.engine === this.o.engine.id) await this.startEngine(saved.meta.resumeToken); else await this.startEngine(undefined, this.carryOver(saved.meta));
   }
-  private listSessions() {
+  private async listSessions() {
     const list = this.o.sessions?.list(this.o.cwd, 10) ?? [];
     if (!list.length) { this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: emptyText('no-sessions') }); return; }
-    this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: 'Saved conversations in this folder. Type /resume 1 (or another number) to continue one.', detail: list.map((m, i) => `${i + 1}${m.id === this.state.sessionId ? '*' : ' '} ${m.title}  ·  ${m.messages} msg  ·  ${ago(m.updatedAt)}`).join('\n') });
+    const ago = (t: number) => { const m = Math.max(0, Math.round((Date.now() - t) / 60000)); return m < 60 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`; };
+    const ids = await this.pick({ title: 'Continue a saved conversation', options: list.map((m) => ({ id: m.id, label: (m.id === this.state.sessionId ? '● ' : '') + m.title, hint: `${m.messages} msg · ${ago(m.updatedAt)}` })), checked: [this.state.sessionId], multi: false, confirm: 'resume' });
+    if (ids?.[0] && ids[0] !== this.state.sessionId) await this.resumeSession(ids[0]);
   }
 
   stop() {
@@ -271,7 +281,7 @@ export class AppController {
       case 'limits.report': this.set({ limits: ev.windows }); break;
       case 'tasks.updated': this.set((st) => ({ tasks: reduceTasks({ items: st.tasks }, { tasks: ev.tasks }).items })); break;
       case 'compaction.ended': this.notice('info', `Compacted the context${ev.tokens_before ? ` (${Math.round(ev.tokens_before / 1000)}k → ${Math.round((ev.tokens_after ?? 0) / 1000)}k tokens)` : ''}.`); break;
-      case 'question.asked': this.notice('info', ev.text, ev.options?.join('  ·  ')); break;
+      case 'question.asked': this.notice('info', ev.text, ev.options?.join('  ·  ')); if (ev.options?.length) void this.answerQuestion(ev.text, ev.options, ev.multi === true); break;
       case 'engine.warning': this.notice('warn', ev.text); break;
       case 'error':
         if (ev.retry) { this.toast('warn', `Retrying (${ev.retry.attempt}/${ev.retry.max_retries})…`); break; }
@@ -419,7 +429,21 @@ export class AppController {
   }
 
   /** Reasoning effort for the next turns, if the engine has the setting (Codex). Returns false when it does not. */
-  setEffort(effort: string): boolean { if (!this.session?.setEffort) return false; this.session.setEffort(effort); this.toast('ok', `Reasoning effort: ${effort || 'default'}`); return true; }
+  setEffort(effort: string): boolean { if (!this.session?.setEffort) return false; this.session.setEffort(effort); this.effort = effort; this.toast('ok', `Reasoning effort: ${effort || 'default'}`); return true; }
+  private effort = '';
+  /** The levels the running engine accepts: Claude Code's fixed list, or the current Codex model's own. */
+  private async effortLevels(): Promise<string[]> {
+    if (this.state.engineId === 'claude-code') return ['low', 'medium', 'high', 'xhigh', 'max'];
+    return (await this.engineModels()).find((m) => m.id === this.state.settings.model)?.efforts ?? ['low', 'medium', 'high'];
+  }
+  private async effortCommand(arg: string) {
+    if (!this.session?.setEffort) { this.toast('warn', 'This engine has no effort setting.'); return; }
+    const levels = await this.effortLevels(); const want = arg.trim().toLowerCase();
+    if (want === 'default' || want === 'off' || want === 'auto') { this.setEffort(''); return; }
+    if (want) { if (levels.includes(want)) this.setEffort(want); else this.toast('warn', `Effort is one of: ${levels.join(', ')} (or default).`); return; }
+    const ids = await this.pick({ title: 'Reasoning effort', note: 'Higher thinks longer and costs more', options: [{ id: '', label: 'default', hint: "the engine's own choice" }, ...levels.map((l) => ({ id: l, label: l }))], checked: [this.effort], multi: false, confirm: 'use' });
+    if (ids) this.setEffort(ids[0] ?? '');
+  }
   /** The models this engine's account offers, when the engine can list them (Codex). Empty otherwise. */
   async engineModels(): Promise<import('@centcom/agent').ModelChoice[]> { const l = (this.session as { listModels?: () => Promise<import('@centcom/agent').ModelChoice[]> } | undefined)?.listModels; try { return l ? await l.call(this.session) : []; } catch { return []; } }
   /** Switch model for the next turn (the running turn keeps its model). */
@@ -504,6 +528,49 @@ export class AppController {
   openNight() { this.night.arm(true); this.patch({ mode: 'night', input: '', cursor: 0, scroll: 0 }); }
   closeNight() { this.patch({ mode: 'chat' }); }
   nightStart() { const r = this.night.start(); if (!r.ok) this.toast('warn', r.why!); }
+  /* ------------------------------------------------------------------ multi-select */
+  private pickDone?: (ids: string[] | undefined) => void; private pickBack: Mode = 'chat';
+  /** Open the picker and wait: the ticked ids, or undefined when cancelled. */
+  pick(o: { title: string; note?: string; options: PickOption[]; checked?: string[]; multi?: boolean; confirm?: string }): Promise<string[] | undefined> {
+    this.pickDone?.(undefined);
+    return new Promise((resolve) => {
+      this.pickBack = this.state.mode === 'night' ? 'night' : 'chat'; this.pickDone = resolve;
+      this.set({ mode: 'pick', pick: newPick(o) });
+    });
+  }
+  pickKey(k: 'up' | 'down' | 'toggle' | 'all' | 'enter' | 'cancel') {
+    const p = this.state.pick; if (!p) return;
+    if (k === 'up' || k === 'down') this.set({ pick: pickMove(p, k === 'up' ? -1 : 1) });
+    else if (k === 'toggle') this.set({ pick: pickToggle(p) });
+    else if (k === 'all') this.set({ pick: pickAll(p) });
+    else { const done = this.pickDone; this.pickDone = undefined; this.set({ mode: this.pickBack, pick: undefined }); done?.(k === 'enter' ? pickResult(p) : undefined); }
+  }
+  /** The agent asked with options: tick one or more and your choice goes back as your next message (Esc to type your own). */
+  private async answerQuestion(text: string, options: string[], multi = true) {
+    if (this.night.active() || this.state.approvals.length) return;
+    const ids = await this.pick({ title: text, note: multi ? 'Pick one or more. Esc to type your own answer.' : 'Esc to type your own answer.', options: options.map((o, i) => ({ id: String(i), label: o })), multi, confirm: 'send' });
+    if (ids?.length) await this.submit(ids.map((i) => options[Number(i)]).join(', '));
+  }
+  /** `/night remove` with no number: tick the queued tasks to take out. */
+  private async nightPickRemove() {
+    const tasks = this.state.night.tasks.filter((t) => t.status !== 'running');
+    if (!tasks.length) { this.toast('info', 'The queue is empty.'); return; }
+    const ids = await this.pick({ title: 'Remove tasks from the night queue', options: tasks.map((t) => ({ id: t.id, label: t.text.split('\n')[0]!, hint: t.status })), confirm: 'remove' });
+    if (!ids?.length) return;
+    let n = 0; for (const id of ids) { const i = this.state.night.tasks.findIndex((t) => t.id === id); if (i >= 0 && this.night.remove(i + 1)) n++; }
+    this.toast('ok', `Removed ${n} task${n === 1 ? '' : 's'}.`);
+  }
+  /** `/skills` with no argument: tick the bundled skills Centcom may auto-apply. */
+  private async skillsPick() {
+    const entries = loadEntries().filter((e) => e.status === 'ok' || e.status === 'quarantined');
+    if (!entries.length) { this.toast('info', 'No bundled skills are installed. Run the skills sync first.'); return; }
+    const was = entries.filter((e) => e.enabled).map((e) => e.id);
+    const ids = await this.pick({ title: 'Skills Centcom may apply automatically', note: 'Tick the ones to keep on', options: entries.map((e) => ({ id: e.id, label: e.skill, hint: e.description })), checked: was, confirm: 'save' });
+    if (!ids) return;
+    let changed = 0; for (const e of entries) { const on = ids.includes(e.id); if (on !== was.includes(e.id)) { setEnabled(e.id, on); changed++; } }
+    this.skillCache = undefined; this.toast('ok', changed ? `Updated ${changed} skill${changed === 1 ? '' : 's'}.` : 'No changes.');
+  }
+
   private async nightCommand(arg: string) {
     const m = /^(\S*)[ \t]*([\s\S]*)$/.exec(arg.trim())!; const sub = m[1]!; const tail = m[2]!.trim(); const n = this.state.night; // the text after the word keeps its line breaks: one task per line
     switch (sub.toLowerCase()) {
@@ -512,9 +579,9 @@ export class AppController {
       case 'start': case 'go': this.nightStart(); break;
       case 'stop': await this.night.stop(); this.toast('info', 'Night cycle stopped.'); break;
       case 'add': if (!tail) { this.openNight(); break; } this.nightAdd(tail); break;
-      case 'remove': case 'rm': if (!this.night.remove(Number(tail))) this.toast('warn', `No removable task ${tail || ''}.`); break;
+      case 'remove': case 'rm': if (!tail) { await this.nightPickRemove(); break; } if (!this.night.remove(Number(tail))) this.toast('warn', `No removable task ${tail || ''}.`); break;
       case 'clear': this.night.clear(); this.toast('info', 'Queue cleared.'); break;
-      case 'allow': { const w = tail.toLowerCase(); if (w === 'push') { this.night.setAllowPush(true); this.toast('ok', 'Night cycle may push work branches and open pull requests (never main, never force, never merge).', 5000); } else if (w === 'none' || w === 'nothing') { this.night.setAllowPush(false); this.toast('ok', 'Night cycle pushes nothing.'); } else this.toast('info', n.allowPush ? 'Allowed: pushing work branches and opening pull requests.' : 'Allowed: nothing leaves the machine. /night allow push to let it push work branches and open PRs.', 5000); break; }
+      case 'allow': { if (!tail) { const ids = await this.pick({ title: 'What may the night cycle do?', options: [{ id: 'none', label: 'Nothing leaves this machine', hint: 'no pushes' }, { id: 'push', label: 'Push work branches and open pull requests', hint: 'never main, never force, never merge' }], checked: [n.allowPush ? 'push' : 'none'], multi: false, confirm: 'use' }); if (ids?.[0]) await this.nightCommand('allow ' + ids[0]); break; } const w = tail.toLowerCase(); if (w === 'push') { this.night.setAllowPush(true); this.toast('ok', 'Night cycle may push work branches and open pull requests (never main, never force, never merge).', 5000); } else if (w === 'none' || w === 'nothing') { this.night.setAllowPush(false); this.toast('ok', 'Night cycle pushes nothing.'); } else this.toast('info', n.allowPush ? 'Allowed: pushing work branches and opening pull requests.' : 'Allowed: nothing leaves the machine. /night allow push to let it push work branches and open PRs.', 5000); break; }
       case 'timeout': { const m = Number(tail); if (!Number.isFinite(m) || m < 1) { this.toast('warn', `Per-task limit is ${n.taskTimeoutMin} minutes. Use /night timeout <minutes>.`); break; } this.night.setTimeoutMin(m); this.toast('ok', `Per-task limit: ${this.state.night.taskTimeoutMin} minutes.`); break; }
       case 'list': { const c = nightCounts(n); this.notice('info', `Night cycle: ${c.total} tasks (${c.done} done, ${c.failed} failed, ${c.queued} queued)`, n.tasks.map((t, i) => `${i + 1}. [${t.status}] ${t.text.split('\n')[0]!.slice(0, 90)}`).join('\n') || 'The queue is empty.'); break; }
       case 'report': this.notice('info', n.reportPath ? `Last report: ${n.reportPath}` : 'No report yet. One is written when a night cycle ends.'); break;
@@ -522,14 +589,30 @@ export class AppController {
     }
   }
 
+  /** The settings that are a pick from a short list: shown as a list when the command has no value. */
+  private choices(): Record<string, { title: string; current: string; options: PickOption[] }> {
+    const st = this.state.settings; const o = (...a: [string, string?][]): PickOption[] => a.map(([id, hint]) => ({ id, label: id, hint }));
+    return {
+      mode: { title: 'Permissions', current: ({ default: 'ask', acceptEdits: 'edits', plan: 'plan', bypassPermissions: 'bypass' } as Record<string, string>)[st.permissionMode] ?? 'ask', options: o(['ask', 'ask before commands and edits'], ['edits', 'edits go through, commands ask'], ['plan', 'read-only, nothing is changed'], ['bypass', 'dangerously skip all permission prompts']) },
+      theme: { title: 'Theme', current: st.theme, options: o(['dark', 'Graphite'], ['light', 'Paper, for light terminals']) },
+      mascot: { title: 'Cento size', current: st.mascot, options: o(['auto', 'by window height'], ['large'], ['small'], ['off']) },
+      color: { title: "Cento's colour", current: st.color, options: o(['violet'], ['red'], ['yellow'], ['green'], ['brown']) },
+      motion: { title: 'Animation', current: st.reducedMotion ? 'reduced' : 'full', options: o(['full', 'Cento moves'], ['reduced', 'still, quieter']) },
+    };
+  }
+
   async runCommand(line: string) {
     const [cmd, ...rest] = line.slice(1).trim().split(/\s+/); const arg = rest.join(' ');
     const known = COMMANDS.find((c) => c.name === cmd);
     if (!known) { this.toast('warn', `Unknown command /${cmd}. Type / to see the list.`); return; }
+    if (!arg && cmd! in this.choices()) { // a setting with no value: choose from a list instead of remembering the words
+      const c = this.choices()[cmd!]!; const ids = await this.pick({ title: c.title, options: c.options, checked: [c.current], multi: false, confirm: 'use' });
+      if (ids?.[0]) await this.runCommand(`/${cmd} ${ids[0]}`); return;
+    }
     switch (cmd) {
       case 'help': this.set({ mode: 'help' }); break;
       case 'clear': case 'new': await this.newSession(); break;
-      case 'resume': if (arg) await this.resumeSession(arg); else this.listSessions(); break;
+      case 'resume': if (arg) await this.resumeSession(arg); else await this.listSessions(); break;
       case 'agents': this.set((s) => ({ fleet: !s.fleet })); break;
       case 'quit': this.o.onExit?.(); break;
       case 'night': await this.nightCommand(line.replace(/^\/night\b[ \t]*/, '')); break;
@@ -553,6 +636,8 @@ export class AppController {
       case 'mascot': if (['large', 'small', 'off', 'auto'].includes(arg)) this.setSettings({ mascot: arg as Settings['mascot'] }); else this.toast('info', 'Try /mascot large, small, off or auto'); break;
       case 'color': if (['violet', 'red', 'yellow', 'green', 'brown'].includes(arg)) this.setSettings({ color: arg as CentoColor }); else this.toast('info', 'Colours: violet red yellow green brown'); break;
       case 'theme': if (arg === 'dark' || arg === 'light') this.setSettings({ theme: arg }); else this.toast('info', 'Try /theme dark or /theme light'); break;
+      case 'mouse': { const on = arg ? arg === 'on' : !this.state.mouse; this.set({ mouse: on }); this.toast('info', on ? 'Mouse wheel scrolls. /mouse off lets you select text with the mouse.' : 'Mouse off: select text with the mouse as usual.'); break; }
+      case 'effort': await this.effortCommand(arg); break;
       case 'model': {
         if (!arg) { const i = CLAUDE_MODELS.findIndex((m) => m.id === this.state.settings.model); this.set({ mode: 'models', modelSel: Math.max(0, i) }); break; }
         const q = arg.toLowerCase(); const m = CLAUDE_MODELS.find((x) => x.id.toLowerCase() === q || x.label.toLowerCase() === q) ?? CLAUDE_MODELS.find((x) => (x.id + ' ' + x.label).toLowerCase().includes(q));
@@ -565,6 +650,7 @@ export class AppController {
         this.toast('info', on ? `Auto skills on (${this.skills().length} found)` : 'Auto skills off'); break;
       }
       case 'skills': {
+        if (!arg) { await this.skillsPick(); break; }
         const sub = /^(enable|disable)\s+(.+)$/i.exec(arg);
         if (sub) { this.toast('info', setEnabled(sub[2]!.trim(), sub[1]!.toLowerCase() === 'enable')); this.skillCache = undefined; break; }
         const f = arg.toLowerCase(); const all = this.skills().filter((k) => !f || (k.name + ' ' + k.description).toLowerCase().includes(f));
@@ -624,6 +710,15 @@ export class AppController {
     else this.updateAgent(n.id, () => view);
     if (n.state === 'failed') this.notice('warn', `Agent ${this.fleetIds.indexOf(n.id) + 1} (${n.label}) stopped with an error${n.error_code ? `: ${n.error_code}` : ''}.`);
   }
+  /** `/fleet stop` or `/fleet remove` with no number: tick the agents. */
+  private async fleetPick(verb: 'stop' | 'remove') {
+    const f = this.o.fleet!; const nodes = f.manager.list().filter((n) => n.kind === 'agent');
+    if (!nodes.length) { this.toast('info', 'No fleet agents yet.'); return; }
+    const ids = await this.pick({ title: `${verb === 'stop' ? 'Stop' : 'Remove'} fleet agents`, options: nodes.map((n) => ({ id: n.id, label: `${this.fleetIds.indexOf(n.id) + 1}. ${n.branch ?? n.id}`, hint: String((n as { state?: string }).state ?? '') })), confirm: verb });
+    if (!ids?.length) return;
+    for (const id of ids) { if (verb === 'stop') await f.manager.stop(id as AgentId); else { await f.manager.remove(id as AgentId, {}); this.fleetIds = this.fleetIds.map((x) => (x === id ? '' : x)); this.set((s) => ({ agents: s.agents.filter((a) => a.id !== id) })); } }
+    this.toast('ok', `${verb === 'stop' ? 'Stopped' : 'Removed'} ${ids.length} agent${ids.length === 1 ? '' : 's'}.`);
+  }
   private fleetAgent(nArg: string | undefined): FleetNode | undefined { const n = Number(nArg); const id = Number.isInteger(n) ? this.fleetIds[n - 1] : undefined; return id ? this.o.fleet!.manager.list().find((x) => x.id === id) : undefined; }
   private async fleetCommand(arg: string) {
     const f = this.o.fleet; if (!f) { this.toast('info', this.o.demo ? 'The fleet needs a real engine (not the demo).' : 'Parallel agents are off in this session.'); return; }
@@ -637,9 +732,9 @@ export class AppController {
           for (let i = 1; i <= count; i++) { const h = await f.manager.spawn({ repoRoot: this.o.cwd, engine: this.o.engine.id, prompt: task, ownerSlug: f.ownerSlug, label: count > 1 ? `${label} ${i}` : label, ...(this.state.settings.model ? { model: this.state.settings.model } : {}) }); void h.done().then((r) => { if (r.outcome !== 'ok' && r.error_code === 'fleet_timeout') this.notice('warn', `Agent ${this.fleetIds.indexOf(h.id) + 1} was stopped after its time limit.`); }); }
           this.toast('ok', `Started ${count} agent${count === 1 ? '' : 's'} on their own branches.`); break;
         }
-        case 'stop': { if (rest[0] === 'all') { await f.manager.stopAll(); this.toast('ok', 'All fleet agents stopped.'); break; } const n = this.fleetAgent(rest[0]); if (!n) { this.toast('warn', 'Which agent? /fleet stop <number> or /fleet stop all'); return; } await f.manager.stop(n.id as AgentId); this.toast('ok', `Agent ${rest[0]} stopped.`); break; }
+        case 'stop': { if (!rest.length) { await this.fleetPick('stop'); break; } if (rest[0] === 'all') { await f.manager.stopAll(); this.toast('ok', 'All fleet agents stopped.'); break; } const n = this.fleetAgent(rest[0]); if (!n) { this.toast('warn', 'Which agent? /fleet stop <number> or /fleet stop all'); return; } await f.manager.stop(n.id as AgentId); this.toast('ok', `Agent ${rest[0]} stopped.`); break; }
         case 'preview': { const n = this.fleetAgent(rest[0]); if (!n) { this.toast('warn', 'Which agent? /fleet preview <number>'); return; } const r = await f.manager.mergePreview(n.id as AgentId); this.notice(r.conflicts.length ? 'warn' : 'ok', r.conflicts.length ? `Merging ${n.branch} would conflict in ${r.conflicts.length} file${r.conflicts.length === 1 ? '' : 's'}.` : `${n.branch} merges cleanly into its base.`, r.conflicts.join('\n') || undefined); break; }
-        case 'remove': { const n = this.fleetAgent(rest[0]); if (!n) { this.toast('warn', 'Which agent? /fleet remove <number> [force]'); return; } await f.manager.remove(n.id as AgentId, { force: rest[1] === 'force' }); this.fleetIds = this.fleetIds.map((x) => (x === n.id ? '' : x)); this.set((s) => ({ agents: s.agents.filter((a) => a.id !== n.id) })); this.toast('ok', `Agent ${rest[0]} and its worktree were removed.`); break; }
+        case 'remove': { if (!rest.length) { await this.fleetPick('remove'); break; } const n = this.fleetAgent(rest[0]); if (!n) { this.toast('warn', 'Which agent? /fleet remove <number> [force]'); return; } await f.manager.remove(n.id as AgentId, { force: rest[1] === 'force' }); this.fleetIds = this.fleetIds.map((x) => (x === n.id ? '' : x)); this.set((s) => ({ agents: s.agents.filter((a) => a.id !== n.id) })); this.toast('ok', `Agent ${rest[0]} and its worktree were removed.`); break; }
         case 'clean': { const o = await f.manager.recoverOrphans(this.o.cwd); this.notice('info', o.length ? `${o.length} worktree${o.length === 1 ? '' : 's'} left from an earlier run. Nothing was removed.` : 'Nothing left over from earlier runs.', o.map((w) => `${w.branch}  ${w.path}`).join('\n') || undefined); break; }
         case 'resume': { const engine = rest[0] === 'codex' ? 'codex' : 'claude-code'; f.manager.resume(engine); this.toast('ok', `New ${engine} agents may start again.`); break; }
         default: this.toast('info', 'Try /fleet, /fleet start [count] <task>, /fleet stop <n|all>, /fleet preview <n>, /fleet remove <n>, /fleet clean');
@@ -697,6 +792,11 @@ export class AppController {
     const [sub, id] = arg.split(/\s+/).filter(Boolean);
     if (sub === 'remove' && id) { const ok = await p.engine.rules.remove(id); this.toast(ok ? 'ok' : 'warn', ok ? `Rule ${id} removed.` : `There is no rule ${id}.`); return; }
     const rules = p.engine.rules.list(p.root); const warn = p.engine.rules.warnings(); const trust = p.engine.rules.needsTrust();
+    if (!sub && rules.length) { // a list to tick: the rules to take away
+      const ids = await this.pick({ title: 'Saved permission rules', note: 'Tick the ones to remove. They are checked before the permission mode.', options: rules.map((r) => ({ id: r.id, label: `${r.tool}${r.matcher?.command ? ' ' + r.matcher.command : ''}`, hint: r.action })), confirm: 'remove' });
+      if (ids?.length) { let n = 0; for (const id of ids) if (await p.engine.rules.remove(id)) n++; this.toast('ok', `Removed ${n} rule${n === 1 ? '' : 's'}.`); }
+      return;
+    }
     this.notice('info', rules.length ? `${rules.length} permission rule${rules.length === 1 ? '' : 's'} (checked before the mode)` : 'No permission rules yet. Answering "always" to an approval saves one for this project.', [...rules.map((r) => `${r.id}  ${r.action.padEnd(5)} ${r.tool}${r.matcher?.command ? ` ${r.matcher.command}` : ''}${r.matcher?.path_glob ? ` ${r.matcher.path_glob}` : ''}  (${r.scope})`), ...warn.map((w) => `! ${w}`), ...(trust.length ? ['! This project has its own rules file that you have not trusted yet: /trust rules to use it.'] : []), ...(rules.length ? ['Remove one with /permissions remove <id>.'] : [])].join('\n') || undefined);
   }
   private async trustCommand(arg: string) {

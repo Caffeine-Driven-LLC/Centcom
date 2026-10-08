@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Text, useInput, usePaste, useWindowSize } from 'ink';
+import { Box, Text, useInput, usePaste, useStdin, useStdout, useWindowSize } from 'ink';
 import { createTheme, type ColorTier } from '@centcom/theme';
 import { bakedCategories } from '@centcom/mascot';
 import { CLAUDE_MODELS } from '@centcom/agent';
@@ -17,6 +17,7 @@ import { FleetPanel, FLEET_W } from './components/FleetPanel.js';
 import { Transcript, useTranscriptLayout } from './components/Transcript.js';
 import { Palette, Gallery, ModelPicker, galleryList, paletteItems } from './components/Overlays.js';
 import { Toasts } from './components/Toasts.js';
+import { MultiSelect } from './pick/MultiSelect.js';
 import { NightPanel } from './night/NightPanel.js';
 import { COMMANDS } from './state/commands.js';
 import * as ed from './util/editor.js';
@@ -67,7 +68,14 @@ export function App({ ctl, tier, keys }: AppProps) {
   const setScroll = (n: number) => ctl.patch({ scroll: Math.max(0, Math.min(maxScroll, n)) });
 
   /* ---- keys ---- */
-  const edit = (fn: (e: ed.Ed) => ed.Ed) => { const e = fn({ text: s.input, cursor: s.cursor }); ctl.patch({ input: e.text, cursor: e.cursor, slashSel: 0, histIdx: null }); };
+  const sel = ed.selRange(s.input, s.cursor, s.anchor);
+  /** An edit that changes the text replaces the selection first; `extend` moves the cursor and keeps (or starts) a selection; any other move drops it. */
+  const edit = (fn: (e: ed.Ed) => ed.Ed, how: 'text' | 'move' | 'extend' = 'text') => {
+    let e: ed.Ed = { text: s.input, cursor: s.cursor };
+    if (how === 'text' && sel) { e = ed.removeRange(e, sel[0], sel[1]); if (fn === ed.backspace || fn === ed.del || fn === ed.killWordLeft || fn === ed.killWordRight) { ctl.patch({ input: e.text, cursor: e.cursor, anchor: undefined, slashSel: 0, histIdx: null }); return; } }
+    e = fn(e);
+    ctl.patch({ input: e.text, cursor: e.cursor, anchor: how === 'extend' ? (s.anchor !== undefined && s.anchor !== s.cursor ? s.anchor : s.cursor) : undefined, slashSel: 0, histIdx: how === 'text' ? null : s.histIdx });
+  };
   const complete = () => {
     const m = matches[s.slashSel % Math.max(1, matches.length)]; if (!m) return false;
     const t = '/' + m.name + (m.args ? ' ' : ''); ctl.patch({ input: t, cursor: t.length, slashSel: 0 }); return true;
@@ -78,8 +86,19 @@ export function App({ ctl, tier, keys }: AppProps) {
     if (s.mode === 'chat' && !pending) edit((e) => ed.insert(e, text.replace(/\r\n?/g, '\n')));
   });
 
+  /** Mouse reporting (press, release and wheel, in the SGR form) only while it is on; always switched off again on the way out. */
+  const { write } = useStdout(); const { stdin } = useStdin(); const wheelRef = useRef<(n: number) => void>(() => undefined);
+  wheelRef.current = (notches) => { if (s.mode === 'pick') { for (let i = 0; i < Math.abs(notches); i++) ctl.pickKey(notches > 0 ? 'up' : 'down'); } else if (s.mode === 'chat' || s.mode === 'night' || pending) ctl.patch({ scroll: Math.max(0, Math.min(maxScroll, ctl.state.scroll + notches * 3)) }); }; // from the live value: events can arrive faster than renders
+  // Ink drops mouse reports before `useInput` sees them, so the wheel is read from the raw bytes (Ink keeps reading them too).
+  useEffect(() => {
+    if (!s.mouse) return;
+    const onData = (d: Buffer | string) => { let n = 0; for (const m of String(d).matchAll(/\x1b\[<(\d+);\d+;\d+M/g)) { const b = Number(m[1]); if (b & 64) n += b & 1 ? -1 : 1; } if (n) wheelRef.current(n); };
+    stdin.on('data', onData); return () => { stdin.off('data', onData); };
+  }, [s.mouse, stdin]);
+  useEffect(() => { if (!s.mouse) return; write('\x1b[?1000h\x1b[?1006h'); return () => { write('\x1b[?1000l\x1b[?1006l'); }; }, [s.mouse, write]);
+
   useInput((input, key) => {
-    if (key.ctrl && input === 'c') { ctl.ctrlC(); return; }
+    if (key.ctrl && input === 'c') { if (sel && !pending && (s.mode === 'chat' || s.mode === 'night')) { ctl.copy(ed.selectedText(s.input, s.cursor, s.anchor)); ctl.patch({ anchor: undefined }); return; } ctl.ctrlC(); return; }
     /* approvals */
     if (pending) {
       focusRef.current = ['permission']; const high = pending.req.risk === 'high'; const step = fromInk(input, key);
@@ -94,6 +113,10 @@ export function App({ ctl, tier, keys }: AppProps) {
       return;
     }
     /* overlays */
+    if (s.mode === 'pick') {
+      if (key.escape) ctl.pickKey('cancel'); else if (key.return) ctl.pickKey('enter'); else if (key.upArrow || input === 'k') ctl.pickKey('up'); else if (key.downArrow || key.tab || input === 'j') ctl.pickKey('down'); else if (input === ' ') ctl.pickKey('toggle'); else if (input === 'a') ctl.pickKey('all');
+      return;
+    }
     if (s.mode === 'help') return; // the help screen reads its own keys (filter, esc)
     if (s.mode === 'palette') {
       if (key.escape) { ctl.patch({ mode: 'chat' }); return; }
@@ -167,23 +190,26 @@ export function App({ ctl, tier, keys }: AppProps) {
     if (key.tab) { complete(); return; }
     if (key.upArrow) {
       if (matches.length) { ctl.patch({ slashSel: (s.slashSel + matches.length - 1) % matches.length }); return; }
-      const m = ed.moveVertical({ text: s.input, cursor: s.cursor }, -1); if (m) ctl.patch({ cursor: m.cursor }); else ctl.historyStep(-1); return;
+      const m = ed.moveVertical({ text: s.input, cursor: s.cursor }, -1); if (m) ctl.patch({ cursor: m.cursor, anchor: undefined }); else ctl.historyStep(-1); return;
     }
     if (key.downArrow) {
       if (matches.length) { ctl.patch({ slashSel: (s.slashSel + 1) % matches.length }); return; }
-      const m = ed.moveVertical({ text: s.input, cursor: s.cursor }, 1); if (m) ctl.patch({ cursor: m.cursor }); else ctl.historyStep(1); return;
+      const m = ed.moveVertical({ text: s.input, cursor: s.cursor }, 1); if (m) ctl.patch({ cursor: m.cursor, anchor: undefined }); else ctl.historyStep(1); return;
     }
-    if (key.leftArrow) { edit(key.ctrl || key.meta ? ed.wordLeft : ed.left); return; }
-    if (key.rightArrow) { edit(key.ctrl || key.meta ? ed.wordRight : ed.right); return; }
-    if (key.home || (key.ctrl && input === 'a')) { edit(ed.lineStart); return; }
-    if (key.end || (key.ctrl && input === 'e')) { edit(ed.lineEnd); return; }
-    if (key.backspace) { edit(key.meta ? ed.killWordLeft : ed.backspace); return; }
-    if (key.delete) { edit(ed.del); return; }
+    const how = key.shift ? 'extend' : 'move';
+    if (key.leftArrow) { if (sel && how === 'move' && !key.ctrl && !key.meta) { ctl.patch({ cursor: sel[0], anchor: undefined }); return; } edit(key.ctrl || key.meta || key.shift ? ed.wordLeft : ed.left, how); return; }
+    if (key.rightArrow) { if (sel && how === 'move' && !key.ctrl && !key.meta) { ctl.patch({ cursor: sel[1], anchor: undefined }); return; } edit(key.ctrl || key.meta || key.shift ? ed.wordRight : ed.right, how); return; }
+    if (key.home || (key.ctrl && input === 'a')) { edit(ed.lineStart, how); return; }
+    if (key.end || (key.ctrl && input === 'e')) { edit(ed.lineEnd, how); return; }
+    if (key.meta && input === 'a') { ctl.patch({ anchor: 0, cursor: s.input.length }); return; } // select all
+    if (key.ctrl && input === 'x') { if (sel) { ctl.copy(ed.selectedText(s.input, s.cursor, s.anchor)); edit(ed.backspace); } return; }
+    if (key.backspace) { edit(key.meta || key.ctrl ? ed.killWordLeft : ed.backspace); return; }
+    if (key.delete) { edit(key.meta || key.ctrl || key.shift ? ed.killWordRight : ed.del); return; }
     if (key.ctrl && input === 'w') { edit(ed.killWordLeft); return; }
     if (key.ctrl && input === 'u') { edit(ed.killToLineStart); return; }
     if (key.ctrl && input === 'j') { edit((e) => ed.insert(e, '\n')); return; }
-    if (key.meta && input === 'b') { edit(ed.wordLeft); return; }
-    if (key.meta && input === 'f') { edit(ed.wordRight); return; }
+    if (key.meta && input === 'b') { edit(ed.wordLeft, 'move'); return; }
+    if (key.meta && input === 'f') { edit(ed.wordRight, 'move'); return; }
     if (input && !key.ctrl && !key.meta) edit((e) => ed.insert(e, input.replace(/\r\n?/g, '\n')));
   });
 
@@ -201,19 +227,20 @@ export function App({ ctl, tier, keys }: AppProps) {
           <Box flexDirection="column" width={mainW} height={bodyH + stripH + bottomH}>
             <Box height={bodyH} width={mainW} flexDirection="column">
               {nightOpen ? <NightPanel n={s.night} width={mainW} height={bodyH} unicode={tier !== 'none'} />
+                : s.mode === 'pick' && s.pick ? <MultiSelect p={s.pick} width={mainW} height={bodyH} unicode={tier !== 'none'} />
                 : s.mode === 'models' ? <ModelPicker sel={s.modelSel} current={s.settings.model} width={mainW} />
                 : s.mode === 'palette' ? <Palette query={s.palette.query} sel={s.palette.sel} width={mainW} />
                 : s.mode === 'help' ? <HelpScreen actions={allActions()} keymap={keymap} warnings={keys?.warnings ?? []} onClose={() => ctl.patch({ mode: 'chat' })} width={mainW} height={bodyH} />
                   : s.mode === 'gallery' ? <Gallery cat={s.gallery.cat} idx={s.gallery.idx} color={s.gallery.color} width={mainW} height={gallerySize} reduced={s.settings.reducedMotion} />
                     : welcome ? <Welcome s={s} width={mainW} height={bodyH} color={s.settings.color} reduced={s.settings.reducedMotion} />
-                      : <Box paddingX={1}><Transcript layout={layout} width={mainW - 2} height={bodyH} scroll={s.scroll} unseen={unseen} /></Box>}
+                      : <Box paddingX={1}><Transcript layout={layout} items={s.items} width={mainW - 2} height={bodyH} scroll={s.scroll} unseen={unseen} /></Box>}
             </Box>
             {stripH > 0 ? <Box paddingX={1} height={stripH}><LiveStrip s={s} driver={ctl.driver} width={mainW - 2} size={stripSize as 'large' | 'small' | 'off'} /></Box> : null}
             {pending ? <Approval a={pending} width={mainW} confirming={confirming} maxDiff={maxDiff} /> : (
               <>
                 {showTasks ? <Box paddingX={1} height={tasksH}><TaskList items={s.tasks} maxRows={rows >= 34 ? 10 : 5} width={mainW - 2} unicode={tier !== 'none'} /></Box> : null}
                 {popupH ? <SlashPopup matches={matches} sel={s.slashSel} width={mainW} /> : null}
-                <Prompt text={s.input} cursor={s.cursor} busy={s.busy} width={mainW} active={s.mode === 'chat' || s.mode === 'night'} placeholder={nightOpen ? 'Add a task for tonight…' : placeholder} />
+                <Prompt text={s.input} cursor={s.cursor} anchor={s.anchor} busy={s.busy} width={mainW} active={s.mode === 'chat' || s.mode === 'night'} placeholder={nightOpen ? 'Add a task for tonight…' : placeholder} />
               </>
             )}
           </Box>

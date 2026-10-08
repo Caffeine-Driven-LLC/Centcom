@@ -1,27 +1,39 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import { Rich, useCol } from './ui.js';
-import { layoutInput } from '../util/editor.js';
+import { layoutInput, selRange } from '../util/editor.js';
 import { COMMANDS, type SlashCommand } from '../state/commands.js';
 import { sp, truncate, type Line } from '../util/text.js';
 
 export const MAX_INPUT_ROWS = 6;
 
+/** What people reach for first comes first when the list is just opened. */
+const FIRST = ['model', 'effort', 'mode', 'resume', 'new', 'night', 'fleet', 'skills', 'compact', 'usage', 'help'];
+const rank = (name: string) => { const i = FIRST.indexOf(name); return i < 0 ? FIRST.length : i; };
+/** Long argument syntax stays out of the popup; `/help` and the palette still show it. */
+export const argHint = (args?: string) => (!args ? '' : args.length <= 18 ? ' ' + args : ' …');
 export function slashMatches(text: string): SlashCommand[] {
   if (!text.startsWith('/') || text.includes(' ') || text.includes('\n')) return [];
   const q = text.slice(1).toLowerCase();
+  if (!q) return [...COMMANDS].sort((a, b) => rank(a.name) - rank(b.name));
   return COMMANDS.filter((c) => c.name.startsWith(q)).concat(COMMANDS.filter((c) => !c.name.startsWith(q) && c.name.includes(q)));
 }
 
 export function promptRows(text: string, cursor: number, width: number): number { return Math.min(MAX_INPUT_ROWS, layoutInput({ text, cursor }, width - 6).rows.length); }
 
-export function Prompt({ text, cursor, busy, width, active, placeholder }: { text: string; cursor: number; busy: boolean; width: number; active: boolean; placeholder: string }) {
+/** One row with the selected part highlighted. */
+function selectedRow(row: string, rowStart: number, [lo, hi]: [number, number], fg: string | undefined, bg: string | undefined) {
+  const a = Math.max(0, lo - rowStart); const b = Math.min(row.length, hi - rowStart);
+  if (b <= a) return <Text color={fg}>{row}</Text>;
+  return <><Text color={fg}>{row.slice(0, a)}</Text><Text color={fg} backgroundColor={bg} inverse={!bg}>{row.slice(a, b)}</Text><Text color={fg}>{row.slice(b)}</Text></>;
+}
+export function Prompt({ text, cursor, anchor, busy, width, active, placeholder }: { text: string; cursor: number; anchor?: number; busy: boolean; width: number; active: boolean; placeholder: string }) {
   const col = useCol();
   const inner = width - 6;
   const lay = layoutInput({ text, cursor }, inner);
   // keep the cursor row visible when the buffer is taller than the box
   const start = Math.max(0, Math.min(lay.row - MAX_INPUT_ROWS + 1, lay.rows.length - MAX_INPUT_ROWS));
-  const rows = lay.rows.slice(start, start + MAX_INPUT_ROWS);
+  const rows = lay.rows.slice(start, start + MAX_INPUT_ROWS); const sel = selRange(text, cursor, anchor);
   return (
     <Box flexDirection="column" borderStyle="round" borderColor={col(busy ? 'signal' : active ? 'border.strong' : 'border.default')} width={width} paddingX={1}>
       {rows.map((r, i) => {
@@ -34,7 +46,8 @@ export function Prompt({ text, cursor, busy, width, active, placeholder }: { tex
             <Text color={col(busy ? 'signal' : 'accent.hover')} bold>{start + i === 0 ? '❯ ' : '  '}</Text>
             {showPlaceholder ? (
               <>{active ? <Text inverse> </Text> : null}<Text color={col('text.muted')}>{truncate(placeholder, inner - 1)}</Text></>
-            ) : isCursorRow && active ? (
+            ) : sel && active ? (selectedRow(r, lay.starts[start + i]!, sel, col('text.primary'), col('bg.selected')))
+            : isCursorRow && active ? (
               <><Text color={col('text.primary')}>{before}</Text><Text inverse>{at}</Text><Text color={col('text.primary')}>{after}</Text></>
             ) : <Text color={col('text.primary')}>{r}</Text>}
           </Text>
@@ -50,7 +63,7 @@ export function SlashPopup({ matches, sel, width }: { matches: SlashCommand[]; s
     <Box flexDirection="column" width={width} paddingX={1}>
       {shown.map((c, i): React.ReactNode => {
         const on = i === sel % Math.max(1, shown.length);
-        const line: Line = [sp(on ? '▸ ' : '  ', { c: 'accent.hover', b: true }), sp('/' + c.name, { c: on ? 'text.primary' : 'text.secondary', b: on, bg: on ? 'bg.selected' : undefined }), ...(c.args ? [sp(' ' + c.args, { c: 'text.muted', bg: on ? 'bg.selected' : undefined })] : []), sp('  ' + truncate(c.desc, Math.max(8, width - c.name.length - (c.args?.length ?? 0) - 10)), { c: 'text.muted' })];
+        const line: Line = [sp(on ? '▸ ' : '  ', { c: 'accent.hover', b: true }), sp('/' + c.name, { c: on ? 'text.primary' : 'text.secondary', b: on, bg: on ? 'bg.selected' : undefined }), ...(c.args ? [sp(argHint(c.args), { c: 'text.muted', bg: on ? 'bg.selected' : undefined })] : []), sp('  ' + truncate(c.desc, Math.max(8, width - c.name.length - (c.args?.length ?? 0) - 10)), { c: 'text.muted' })];
         return <Rich key={c.name} line={line} />;
       })}
     </Box>

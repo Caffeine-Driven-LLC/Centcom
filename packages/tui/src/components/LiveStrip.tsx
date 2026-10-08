@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box } from 'ink';
 import { miniRows, type MascotDriver } from '@centcom/mascot';
-import { PixelView, Rich, useMascotFrame, useTheme, useTick } from './ui.js';
+import { PixelView, Rich, useMascotFrame, useTheme, useTick, sameUnlessTyping } from './ui.js';
 import { SPINNER } from '../util/verbs.js';
 import { formatCost, formatElapsed, formatTokens, sp, truncate, truncateMiddle, type Line } from '../util/text.js';
 import type { AppState } from '../state/model.js';
@@ -37,11 +37,12 @@ function infoLines(s: AppState, spin: string, width: number, now: number): Line[
   ];
 }
 
-export function LiveStrip({ s, driver, width, size }: { s: AppState; driver: MascotDriver; width: number; size: 'large' | 'small' | 'off' }) {
+export const LiveStrip = React.memo(LiveStripImpl, sameUnlessTyping as never) as typeof LiveStripImpl;
+function LiveStripImpl({ s, driver, width, size }: { s: AppState; driver: MascotDriver; width: number; size: 'large' | 'small' | 'off' }) {
   const theme = useTheme();
   const f = useMascotFrame(driver);
   const spinning = s.busy && !s.settings.reducedMotion;
-  const tick = useTick(90, spinning);
+  const tick = useTick(120, spinning);
   const slow = useTick(500, size === 'small' && !s.settings.reducedMotion);
   const spin = spinning ? SPINNER[tick % SPINNER.length]! : '…';
   const me = s.agents.find((a) => a.mine)!;

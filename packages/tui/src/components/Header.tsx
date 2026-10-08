@@ -1,12 +1,13 @@
 import React from 'react';
 import { Box } from 'ink';
 import type { AppState } from '../state/model.js';
-import { Rich } from './ui.js';
+import { Rich, sameUnlessTyping } from './ui.js';
 import { fit, sp, textWidth, truncate, truncateMiddle, type Line } from '../util/text.js';
 
 const homeShort = (p: string) => { const h = process.env.HOME; return h && p.startsWith(h) ? '~' + p.slice(h.length) : p; };
 
-export function Header({ s, width }: { s: AppState; width: number }) {
+export const Header = React.memo(HeaderImpl, sameUnlessTyping as never) as typeof HeaderImpl;
+function HeaderImpl({ s, width }: { s: AppState; width: number }) {
   const me = s.agents.find((a) => a.mine);
   const kind = me?.loginKind === 'subscription' ? 'subscription' : me?.loginKind === 'api_key' ? 'API key' : me?.loginKind === 'cloud' ? 'cloud' : s.demo ? 'demo' : '';
   const right: Line = [sp('● ', { c: s.demo ? 'status.warning' : 'signal' }), sp(s.engineLabel, { c: 'text.primary', b: true }), ...(me?.model ? [sp(' · ' + truncate(me.model, 22), { c: 'text.secondary' })] : []), ...(kind ? [sp(' · ' + kind, { c: 'text.muted' })] : [])];

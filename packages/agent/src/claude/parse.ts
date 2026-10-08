@@ -21,6 +21,12 @@ export function todosFrom(input: J): EventBody | undefined {
   const list = (input as { todos?: unknown }).todos; if (!Array.isArray(list)) return undefined;
   return { type: 'tasks.updated', tasks: list.slice(0, 200).map((t, i) => { const o = (t ?? {}) as Record<string, unknown>; const st = String(o.status ?? ''); return { id: String(o.id ?? i + 1), text: String(o.content ?? o.activeForm ?? ''), status: st === 'in_progress' ? 'in_progress' : st === 'completed' ? 'completed' : 'pending' }; }) };
 }
+/** Claude Code's AskUserQuestion: `{ questions: [{ question, header?, options: [{ label, description? }], multiSelect? }] }`. Only the first question is asked; the answer goes back as the next message. */
+export function questionFrom(id: string, input: J): EventBody | undefined {
+  const q = (input as { questions?: unknown }).questions; const first = Array.isArray(q) ? (q[0] as Record<string, unknown> | undefined) : undefined; if (!first || typeof first.question !== 'string') return undefined;
+  const options = Array.isArray(first.options) ? first.options.map((o) => String((o as Record<string, unknown>)?.label ?? o)).filter(Boolean).slice(0, 20) : [];
+  return { type: 'question.asked', question_id: id, text: first.question.slice(0, 500), ...(options.length ? { options } : {}), ...(first.multiSelect === true ? { multi: true } : {}) };
+}
 function summarise(name: string, input: J): { text: string; path?: string; command?: string } {
   const path = (input.file_path ?? input.path ?? input.notebook_path) as string | undefined;
   if (name === 'Bash') return { text: String(input.command ?? '').slice(0, 300), command: String(input.command ?? '') };
@@ -137,6 +143,7 @@ export class ClaudeStreamParser {
           const s = summarise(name, input);
           if (parent) out.push(...this.sub(parent));
           if (name === 'TodoWrite' && !parent) { const t = todosFrom(input); if (t) out.push(t); }
+          if (name === 'AskUserQuestion' && !parent) { const q = questionFrom(id, input); if (q) out.push(q); }
           out.push({ type: 'tool.requested', tool_id: id, name, input_summary: s.text, risk: classifyTool(name, input), ...(s.path ? { path: s.path } : {}), ...(s.command ? { command: s.command } : {}), ...(parent ? { parent_tool_id: parent } : {}) });
         }
         break;
@@ -167,6 +174,7 @@ export class ClaudeStreamParser {
       if (b.type === 'tool_use') {
         const input = (b.input ?? {}) as J; this.tools.set(String(b.id), { name: String(b.name), input }); const s = summarise(String(b.name), input);
         if (b.name === 'TodoWrite') { const t = todosFrom(input); if (t) out.push(t); }
+        if (b.name === 'AskUserQuestion') { const q = questionFrom(String(b.id), input); if (q) out.push(q); }
         out.push({ type: 'status', state: stateForTool(String(b.name)) }, { type: 'tool.requested', tool_id: String(b.id), name: String(b.name), input_summary: s.text, risk: classifyTool(String(b.name), input), ...(s.path ? { path: s.path } : {}), ...(s.command ? { command: s.command } : {}) });
       }
     }

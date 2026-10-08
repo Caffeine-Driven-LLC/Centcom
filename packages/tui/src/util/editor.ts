@@ -16,6 +16,14 @@ export const killToLineEnd = (e: Ed): Ed => ({ text: e.text.slice(0, e.cursor) +
 export const wordLeft = (e: Ed): Ed => { let i = e.cursor; while (i > 0 && /\s/.test(e.text[i - 1]!)) i--; while (i > 0 && !/\s/.test(e.text[i - 1]!)) i--; return { ...e, cursor: i }; };
 export const wordRight = (e: Ed): Ed => { let i = e.cursor; while (i < e.text.length && /\s/.test(e.text[i]!)) i++; while (i < e.text.length && !/\s/.test(e.text[i]!)) i++; return { ...e, cursor: i }; };
 export const killWordLeft = (e: Ed): Ed => { const w = wordLeft(e).cursor; return { text: e.text.slice(0, w) + e.text.slice(e.cursor), cursor: w }; };
+export const killWordRight = (e: Ed): Ed => { const w = wordRight(e).cursor; return { text: e.text.slice(0, e.cursor) + e.text.slice(w), cursor: e.cursor }; };
+/** Selection: an anchor index; the selected text is between the anchor and the cursor. */
+export const selRange = (text: string, cursor: number, anchor: number | undefined): [number, number] | undefined => {
+  if (anchor === undefined || anchor === cursor) return undefined; const a = Math.min(anchor, text.length);
+  return a === cursor ? undefined : [Math.min(a, cursor), Math.max(a, cursor)];
+};
+export const selectedText = (text: string, cursor: number, anchor: number | undefined): string => { const r = selRange(text, cursor, anchor); return r ? text.slice(r[0], r[1]) : ''; };
+export const removeRange = (e: Ed, lo: number, hi: number): Ed => ({ text: e.text.slice(0, lo) + e.text.slice(hi), cursor: lo });
 export const isSingleLine = (e: Ed) => !e.text.includes('\n');
 
 /** Move the cursor one visual line up/down in a multi-line buffer, keeping the column when possible. Returns null at the edges. */
@@ -28,11 +36,11 @@ export function moveVertical(e: Ed, dir: -1 | 1): Ed | null {
   return { ...e, cursor: Math.min(starts[target]! + col, end) };
 }
 
-export interface InputLayout { rows: string[]; row: number; col: number }
+export interface InputLayout { rows: string[]; row: number; col: number; /** Index in the text where each row starts. */ starts: number[] }
 /** Lay the buffer out in rows of at most `width` columns (hard wrap) and find the cursor's row and column. */
 export function layoutInput(e: Ed, width: number): InputLayout {
   const w = Math.max(4, width);
-  const rows: string[] = []; let row = 0, col = 0; let idx = 0;
+  const rows: string[] = []; const starts: number[] = []; let row = 0, col = 0; let idx = 0;
   const parts = e.text.split('\n');
   parts.forEach((part, pi) => {
     const chars = [...part];
@@ -41,10 +49,10 @@ export function layoutInput(e: Ed, width: number): InputLayout {
       const chunk = chars.slice(offset, offset + w);
       const start = idx; const len = chunk.join('').length;
       if (e.cursor >= start && e.cursor <= start + len && (e.cursor < start + len || offset + w >= chars.length)) { row = rows.length; col = [...e.text.slice(start, e.cursor)].length; }
-      rows.push(chunk.join('')); idx += len; offset += w;
+      starts.push(start); rows.push(chunk.join('')); idx += len; offset += w;
     } while (offset < chars.length);
     idx += 1; // the newline
     void pi;
   });
-  return { rows, row, col };
+  return { rows, row, col, starts };
 }

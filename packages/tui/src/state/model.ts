@@ -2,7 +2,7 @@ import type { ApprovalDecision, ApprovalRequest, EngineId, LoginKind, Permission
 import type { CentoColor, MiniState } from '@centcom/mascot';
 import type { SessionMeta } from '../sessions.js';
 
-export type Mode = 'chat' | 'palette' | 'help' | 'gallery' | 'fleet' | 'models' | 'night';
+export type Mode = 'chat' | 'palette' | 'help' | 'gallery' | 'fleet' | 'models' | 'night' | 'pick';
 export type MascotSize = 'large' | 'small' | 'off';
 
 export interface AgentView {
@@ -28,7 +28,9 @@ export interface AppState {
   agents: AgentView[];
   activeAgent: string;
   mode: Mode;
-  input: string; cursor: number;
+  /** Mouse wheel scrolls the transcript. Turning it off gives the terminal's own text selection back. */
+  mouse: boolean;
+  input: string; cursor: number; /** The other end of the selection in the prompt (the cursor is one end). */ anchor?: number;
   history: string[]; histIdx: number | null; draft: string;
   scroll: number;
   toasts: Toast[];
@@ -43,6 +45,8 @@ export interface AppState {
   tasks: import('../tasks/model.js').TaskItem[]; tasksOpen: boolean;
   slashSel: number;
   palette: { query: string; sel: number };
+  /** The open multi-select (mode 'pick'). */
+  pick?: import('../pick/model.js').PickState;
   modelSel: number;
   gallery: { cat: number; idx: number; color: number; query: string };
   exitArmedAt?: number;

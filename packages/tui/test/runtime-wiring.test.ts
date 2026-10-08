@@ -34,7 +34,7 @@ describe('permission policy in the app', () => {
   it('"always" saves a project rule that answers the next identical request, and /permissions shows and removes it', async () => {
     const { ctl } = await app(); const p = ctl.decide(req({ tool: 'Bash', command: 'npm test', risk: 'medium' })); await until(() => ctl.state.approvals.length === 1); ctl.answerApproval('approve', 'always'); await p; await new Promise((r) => setTimeout(r, 50));
     expect(await ctl.decide(req({ tool: 'Bash', command: 'npm test', risk: 'medium' }))).toMatchObject({ decision: 'approve' }); expect(ctl.state.approvals).toHaveLength(0);
-    await ctl.runCommand('/permissions'); const listed = notices(ctl).at(-1)!; expect(listed).toMatch(/1 permission rule/); const id = /^(\S+)\s+allow/m.exec(listed.split('\n').slice(1).join('\n'))![1]!;
+    await ctl.runCommand('/permissions list'); const listed = notices(ctl).at(-1)!; expect(listed).toMatch(/1 permission rule/); const id = /^(\S+)\s+allow/m.exec(listed.split('\n').slice(1).join('\n'))![1]!;
     await ctl.runCommand(`/permissions remove ${id}`); const again = ctl.decide(req({ tool: 'Bash', command: 'npm test' })); await until(() => ctl.state.approvals.length === 1); ctl.answerApproval('deny'); await again; ctl.stop();
   });
   it('plan mode refuses writes; bypass needs the dangerous flag and never lifts the hard denies', async () => {

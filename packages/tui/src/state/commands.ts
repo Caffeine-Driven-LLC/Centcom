@@ -14,6 +14,8 @@ export const COMMANDS: SlashCommand[] = [
   { name: 'cento', args: '[animation]', desc: 'Browse all 319 Cento animations' },
   { name: 'demo', args: '[fix|search|delete|compact|ask|error|limit]', desc: 'Run a scripted demo story' },
   { name: 'model', args: '[name]', desc: 'Pick the model (ctrl+o)' },
+  { name: 'effort', args: '[low|medium|high|xhigh|max|default]', desc: 'How hard the agent thinks (pick from a list with no argument)' },
+  { name: 'mouse', args: '[on|off]', desc: 'Scroll with the mouse wheel (off lets you select text with the mouse)' },
   { name: 'config', desc: 'Show the settings in effect and where each came from' },
   { name: 'auto', args: '[on|off]', desc: 'Auto skills: apply matching skills and commands to your prompts' },
   { name: 'skills', args: '[filter | enable <id> | disable <id>]', desc: 'List, enable or disable the skills Centcom can auto-apply' },
@@ -25,7 +27,7 @@ export const COMMANDS: SlashCommand[] = [
   { name: 'mcp', args: '[list|status]', desc: 'Show the MCP servers Claude Code and Codex use' },
   { name: 'hooks', args: '[list|validate|templates]', desc: 'Show the Claude Code hooks and check them' },
   { name: 'memory', args: '[show|status]', desc: 'Show the memory files (CLAUDE.md, AGENTS.md); # note adds one' },
-  { name: 'permissions', args: '[remove <id>]', desc: 'Show or remove saved permission rules' },
+  { name: 'permissions', args: '[list | remove <id>]', desc: 'Pick saved permission rules to remove (list prints them)' },
   { name: 'trust', args: 'rules', desc: 'Use this project\'s own permission rules file' },
   { name: 'quit', desc: 'Leave Centcom' },
 ];

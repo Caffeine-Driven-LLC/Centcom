@@ -171,7 +171,7 @@ async function main() {
   cc.onWarn = (w) => ctl.notice('warn', 'Settings: ' + w);
   if (mode === 'bypassPermissions') ctl.notice('warn', 'Dangerously skip permissions is ON', 'Cento will run commands and edit files without asking. Use /mode default to turn approvals back on.');
   const keys = resolvedKeys(); if (keys.warnings.length) ctl.notice('warn', `Some of your key bindings were skipped (${keys.warnings.length}). Press ? to see why.`);
-  instance = render(<App ctl={ctl} tier={tier} keys={keys} />, { exitOnCtrlC: false, patchConsole: false, maxFps: 30 });
+  instance = render(<App ctl={ctl} tier={tier} keys={keys} />, { exitOnCtrlC: false, patchConsole: false, maxFps: 30, incrementalRendering: true });
   await instance.waitUntilExit();
   ctl.stop(); await ctl.stopFleet(); cc.flush();
   leave();
