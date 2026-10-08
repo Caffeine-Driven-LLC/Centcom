@@ -1,5 +1,5 @@
 /** Models the user can pick. `id` is what we pass to `--model`; aliases follow whatever the CLI currently maps them to. */
-export interface ModelChoice { id: string; label: string; note: string; provider: 'anthropic' | 'openai' }
+export interface ModelChoice { id: string; label: string; note: string; provider: 'anthropic' | 'openai'; /** Reasoning efforts this model accepts (Codex), lowest first. */ efforts?: string[]; defaultEffort?: string; isDefault?: boolean }
 export const CLAUDE_MODELS: ModelChoice[] = [
   { id: '', label: 'Default', note: 'whatever your Claude Code is set to', provider: 'anthropic' },
   { id: 'claude-fable-5-1', label: 'Fable 5.1', note: 'most capable, slowest', provider: 'anthropic' },

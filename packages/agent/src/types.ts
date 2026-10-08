@@ -77,6 +77,10 @@ export interface EngineSession {
   stop(): Promise<void | { exit_code: number | null; signal: string | null }>;
   resumeToken(): string | undefined;
   setModel?(model: string): void;
+  /** Reasoning effort for the next turns (Codex: low … max). Empty clears it. */
+  setEffort?(effort: string): void;
+  /** Asks the engine to compact the conversation now (Codex: thread/compact/start). */
+  compact?(): Promise<void>;
   setPermissionMode?(mode: PermissionMode): void;
   /** Sends a signal to the engine's process, if it has one right now. Used by the runner to escalate an ignored interrupt. */
   signal?(sig: 'SIGINT' | 'SIGTERM' | 'SIGKILL'): void;

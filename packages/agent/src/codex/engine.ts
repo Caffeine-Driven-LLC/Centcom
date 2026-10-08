@@ -55,7 +55,7 @@ class CodexSession implements EngineSession {
   private seq = 0; private turn?: string; private codexTurn?: string; private threadId?: string;
   private rpc?: RpcClient; private child?: ChildProcess;
   private mapper = new CodexMapper();
-  private mode: PermissionMode; private model?: string;
+  private mode: PermissionMode; private model?: string; private effort?: string;
   private signedIn = false; private ready = false; private closed = false; private running = false; private interrupted = false;
   private turnDone?: () => void;
   private exitedResolve!: (v: { code?: number; signal?: string }) => void;
@@ -65,6 +65,9 @@ class CodexSession implements EngineSession {
   constructor(private o: EngineStartOptions, private deps: CodexEngineDeps) { this.agentId = o.agentId; this.mode = o.permissionMode ?? 'default'; this.model = o.model; }
   resumeToken() { return this.threadId; }
   setModel(m: string) { this.model = m || undefined; }
+  setEffort(e: string) { this.effort = e || undefined; }
+  /** Compaction runs as items on the current thread; the mapper turns them into compaction events. */
+  async compact(): Promise<void> { if (!this.rpc || !this.ready || !this.threadId) return; await this.rpc.request('thread/compact/start', { threadId: this.threadId }, 30_000); }
   setPermissionMode(m: PermissionMode) { this.mode = m; }
 
   private emit(b: EventBody) { this.events.push({ ...b, v: 1, seq: ++this.seq, ts: (this.deps.now?.() ?? new Date()).toISOString(), agent_id: this.agentId, ...(this.turn ? { turn_id: this.turn } : {}) } as NormalisedEvent); }
@@ -124,7 +127,7 @@ class CodexSession implements EngineSession {
     this.running = true; this.interrupted = false; this.codexTurn = undefined; this.watchStall();
     const done = new Promise<void>((res) => { this.turnDone = res; });
     try {
-      const r = await this.rpc.request('turn/start', { threadId: this.threadId, input: [{ type: 'text', text: prompt }], ...(this.model ? { model: this.model } : {}), ...policyFor(this.mode) }, 30_000);
+      const r = await this.rpc.request('turn/start', { threadId: this.threadId, input: [{ type: 'text', text: prompt }], ...(this.model ? { model: this.model } : {}), ...(this.effort ? { effort: this.effort } : {}), ...policyFor(this.mode) }, 30_000);
       this.codexTurn = r.turn?.id;
     } catch (e) {
       this.emit({ type: 'error', code: 'provider_protocol_error', tool_message: redact(String((e as Error).message ?? e)), fatal: true }); this.finishTurn('error'); return { turn_id: turn };
@@ -150,7 +153,7 @@ class CodexSession implements EngineSession {
     const evs = this.mapper.notification(method, p ?? {});
     for (const b of evs) {
       if (b.type === 'turn.done') { if (!this.running) continue; this.running = false; this.turnDone?.(); }
-      if (b.type === 'error') b.tool_message = redact(b.tool_message);
+      if (b.type === 'error') { b.tool_message = redact(b.tool_message); if (this.model && /model.*(not supported|not found|does not exist)|unknown model/i.test(b.tool_message)) { /* turn overrides persist in Codex: forget the bad model so the next turn does not repeat the error */ this.emit({ type: 'model.changed', model: '', reason: 'fallback' }); this.model = undefined; } }
       if (b.type === 'tool.result') b.summary = redact(b.summary);
       this.emit(b);
     }
@@ -200,7 +203,7 @@ class CodexSession implements EngineSession {
   async listModels(): Promise<ModelChoice[]> {
     if (!this.rpc || !this.ready) return [];
     const r = await this.rpc.request('model/list', {}, 15_000);
-    return (r.data ?? []).filter((m: any) => !m.hidden).map((m: any): ModelChoice => ({ id: m.model, label: m.displayName ?? m.model, note: String(m.description ?? '').slice(0, 80), provider: 'openai' }));
+    return (r.data ?? []).filter((m: any) => !m.hidden).map((m: any): ModelChoice => ({ id: m.model, label: m.displayName ?? m.model, note: String(m.description ?? '').slice(0, 80), provider: 'openai', ...(Array.isArray(m.supportedReasoningEfforts) ? { efforts: m.supportedReasoningEfforts.map((e: any) => String(e.reasoningEffort ?? e)).filter(Boolean) } : {}), ...(m.defaultReasoningEffort ? { defaultEffort: String(m.defaultReasoningEffort) } : {}), ...(m.isDefault ? { isDefault: true } : {}) }));
   }
 
   async stop() {
