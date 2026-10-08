@@ -496,6 +496,13 @@ export class AppController {
   /** The models this engine's account offers, when the engine can list them (Codex). Empty otherwise. */
   async engineModels(): Promise<import('@centcom/agent').ModelChoice[]> { const l = (this.session as { listModels?: () => Promise<import('@centcom/agent').ModelChoice[]> } | undefined)?.listModels; try { return l ? await l.call(this.session) : []; } catch { return []; } }
   /** Switch model for the next turn (the running turn keeps its model). */
+  /** The model list: Claude Code's own screen, or the models the Codex account reports (they differ per account). */
+  async openModels() {
+    if (this.state.engineId !== 'codex') { const i = CLAUDE_MODELS.findIndex((m) => m.id === this.state.settings.model); this.set({ mode: 'models', modelSel: Math.max(0, i) }); return; }
+    const list = await this.engineModels(); if (!list.length) { this.toast('warn', 'Codex did not return its model list. Try again, or type /model <name>.'); return; }
+    const ids = await this.pick({ title: 'Model', note: 'The models your Codex account offers', multi: false, confirm: 'use', checked: [this.state.settings.model], options: list.map((m) => ({ id: m.id, label: m.label || m.id, hint: m.efforts?.length ? `${m.note ? m.note + ' · ' : ''}effort ${m.efforts.join('/')}` : m.note })) });
+    if (ids?.[0]) this.setModel(ids[0]);
+  }
   setModel(id: string) {
     this.setSettings({ model: id }); void this.models.switchTo(this.me, id, 'user').then((c) => { if (c.note?.startsWith('Already')) this.toast('info', c.note); });
     this.updateAgent(this.me, () => ({ model: id || 'default' }));
@@ -746,7 +753,7 @@ export class AppController {
       case 'settings': await this.settingsMenu(); break;
       case 'effort': await this.effortCommand(arg); break;
       case 'model': {
-        if (!arg) { const i = CLAUDE_MODELS.findIndex((m) => m.id === this.state.settings.model); this.set({ mode: 'models', modelSel: Math.max(0, i) }); break; }
+        if (!arg) { await this.openModels(); break; }
         const q = arg.toLowerCase(); const m = CLAUDE_MODELS.find((x) => x.id.toLowerCase() === q || x.label.toLowerCase() === q) ?? CLAUDE_MODELS.find((x) => (x.id + ' ' + x.label).toLowerCase().includes(q));
         if (m) this.setModel(m.id); else if (/^[\w.:-]{3,}$/.test(arg)) this.setModel(arg); else this.toast('warn', `No model called "${arg}"`);
         break;

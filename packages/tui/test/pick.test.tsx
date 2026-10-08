@@ -188,3 +188,16 @@ describe('/settings', () => {
     c.pickKey('cancel'); await run; expect(c.state.mode).toBe('chat');
   });
 });
+describe('/model for Codex', () => {
+  const tick = () => new Promise((r) => setTimeout(r, 5));
+  it('lists the models the Codex account reports (not Claude\'s), with their efforts, and picking one switches to it', async () => {
+    const c = make(); c.patch({ engineId: 'codex' }); const switched: string[] = [];
+    const { AsyncQueue } = await import('@centcom/agent'); (c as any).adopt({ events: new AsyncQueue(), stop: async () => undefined, listModels: async () => [{ id: 'gpt-x', label: 'GPT X', note: 'fast', efforts: ['low', 'high'] }, { id: 'gpt-y', label: 'GPT Y', note: 'smart' }], setModel: (m: string) => switched.push(m), resumeToken: () => undefined });
+    const run = c.runCommand('/model'); await tick(); await tick(); expect(c.state.mode).toBe('pick'); expect(c.state.pick!.options.map((o) => o.label)).toEqual(['GPT X', 'GPT Y']); expect(c.state.pick!.options[0]!.hint).toContain('effort low/high');
+    c.pickKey('down'); c.pickKey('enter'); await run; expect(c.state.settings.model).toBe('gpt-y'); c.stop();
+  });
+  it('says so when Codex returns no list, and Claude Code still gets its own screen', async () => {
+    const c = make(); c.patch({ engineId: 'codex' }); const { AsyncQueue } = await import('@centcom/agent'); (c as any).adopt({ events: new AsyncQueue(), stop: async () => undefined, listModels: async () => [], resumeToken: () => undefined }); await c.runCommand('/model'); expect(c.state.toasts.at(-1)!.text).toMatch(/did not return its model list/); expect(c.state.mode).toBe('chat');
+    const d = make(); await d.runCommand('/model'); expect(d.state.mode).toBe('models'); d.stop(); c.stop();
+  });
+});

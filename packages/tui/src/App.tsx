@@ -163,7 +163,7 @@ export function App({ ctl, tier, keys }: AppProps) {
         case 'help.open': ctl.patch({ mode: 'help' }); return;
         case 'app.quit': if (!s.input) { ctl.quit(); return; } break;
         case 'palette.open': ctl.patch({ mode: 'palette', palette: { query: '', sel: 0 } }); return;
-        case 'models.open': { const i = CLAUDE_MODELS.findIndex((m) => m.id === s.settings.model); ctl.patch({ mode: 'models', modelSel: Math.max(0, i) }); return; }
+        case 'models.open': void ctl.openModels(); return;
         case 'mode.cycle': ctl.cycleMode(); return;
         case 'agent.interrupt': if (s.busy) void ctl.interrupt(); else if (s.input) ctl.patch({ input: '', cursor: 0 }); else ctl.escIdle(); return;
         case 'tasks.toggle': ctl.patch({ tasksOpen: !s.tasksOpen }); return;
