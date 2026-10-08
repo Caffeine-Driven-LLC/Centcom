@@ -33,6 +33,11 @@ describe('user keybindings (acceptance 3, 4, 5)', () => {
 });
 describe('help screen (acceptance 7)', () => {
   const help = (w: number, h: number, filter = '', ctx?: KeyContext) => strip(renderToString(<HelpBody actions={actions()} keymap={km()} warnings={[]} width={w} height={h} filter={filter} />, { columns: w })); void ([] as KeyContext[]);
+  it('page two lists the editing, selection and mouse keys; long descriptions end with an ellipsis instead of running into the next column', () => {
+    const p2 = strip(renderToString(<HelpBody actions={actions()} keymap={km()} warnings={[]} width={100} height={24} filter="" page={1} />, { columns: 100 }));
+    for (const k of ['shift+left/right', 'ctrl+x', 'alt+a', 'ctrl+delete', 'mouse wheel']) expect(p2).toContain(k); expect(p2).not.toContain('Approvals');
+    expect(help(100, 24)).toContain('…'); expect(help(100, 24)).toContain('Tab');
+  });
   it('fits 80x24, groups and key names shown; two columns from 100 wide', () => { const out = help(80, 22).split('\n'); expect(out.length).toBeLessThanOrEqual(24); expect(out.join('\n')).toContain('ctrl+k'); expect(out.join('\n')).toContain('Approvals'); const wide = help(120, 40); expect(wide.split('\n').some((l) => /General.*\S+\s{2,}\S/.test(l) || l.match(/│.*│/))).toBe(true); });
   it('typing pal filters to the palette action', () => { const rows = helpRows(actions(), km(), 'pal'); expect(rows.map((r) => r.id)).toEqual(expect.arrayContaining(['palette.open'])); expect(rows.every((r) => r.id.startsWith('palette.'))).toBe(true); expect(help(80, 22, 'pal')).toContain('Open the command palette'); expect(help(80, 22, 'pal')).not.toContain('Approve this once'); });
   it('30 actions still fit at 80x24', () => { const many = [...actions(), ...Array.from({ length: 30 - actions().length }, (_, i) => ({ id: `x.a${i}`, group: 'Extra', description: `extra action ${i}`, defaults: [] }))]; const out = strip(renderToString(<HelpBody actions={many} keymap={km()} warnings={[]} width={80} height={22} filter="" />, { columns: 80 })).split('\n'); expect(out.length).toBeLessThanOrEqual(24); });

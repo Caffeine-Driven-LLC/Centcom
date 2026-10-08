@@ -9,7 +9,7 @@ export function MultiSelect({ p, width, height, unicode = true }: { p: PickState
   const room = Math.max(3, height - 7); const start = Math.max(0, Math.min(p.options.length - room, p.sel - Math.floor(room / 2))); const shown = p.options.slice(start, start + room);
   const box = (on: boolean) => (p.multi ? (unicode ? (on ? '◉ ' : '○ ') : on ? '[x] ' : '[ ] ') : unicode ? (on ? '● ' : '○ ') : on ? '(*) ' : '( ) ');
   return (
-    <Box width={width} justifyContent="center"><Box flexDirection="column" width={w} borderStyle="round" borderColor={col('accent.primary')} paddingX={2}>
+    <Box width={width} height={height} justifyContent="center" alignItems="center"><Box flexDirection="column" width={w} borderStyle="round" borderColor={col('accent.primary')} paddingX={2}>
       <Rich line={[sp(truncate(p.title, inner), { c: 'accent.hover', b: true })]} />
       {p.note ? <Rich line={[sp(truncate(p.note, inner), { c: 'text.muted' })]} /> : null}
       <Box height={1} />
