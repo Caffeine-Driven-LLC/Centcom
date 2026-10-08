@@ -198,6 +198,16 @@ describe('the palette (ctrl+k)', () => {
   });
 });
 
+describe('the palette with the mouse', () => {
+  it('clicking a result runs it and closes the palette', async () => {
+    const t = await mount(); await t.send('\x0b', 200); await t.send('theme h', 500); await t.click('theme hc'); await wait(150);
+    expect(t.ctl.state.settings.theme).toBe('hc'); expect(t.ctl.state.mode).toBe('chat');
+  });
+  it('clicking a recent command with nothing typed also works', async () => {
+    const t = await mount(); await t.send('\x0b', 500); await t.click('/settings'); await wait(150); expect(t.ctl.state.mode).toBe('pick'); expect(t.ctl.state.pick!.title).toBe('Settings'); t.ctl.pickKey('cancel');
+  });
+});
+
 describe('palette editing', () => {
   it('backspace deletes the last letter of the query, and typing again searches again', async () => {
     const t = await mount(); const q = () => t.frame().split('\n').find((l) => l.includes('›'))!.replace(/[│╭╮╰╯]/g, '').trim();
