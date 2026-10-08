@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
-import { editInEditor, stopUntilContinued } from '../src/external.js';
+import { editInEditor, isForeground, stopUntilContinued } from '../src/external.js';
 
 const tmpEdits = () => readdirSync(tmpdir()).filter((n) => n.startsWith('centcom-edit-'));
 describe('editing the prompt in your editor', () => {
@@ -22,7 +22,15 @@ describe('editing the prompt in your editor', () => {
 });
 describe('being put in the background', () => {
   it('stops the process and resolves when it is continued', async () => {
-    const calls: string[] = []; let cont!: () => void; const proc = { pid: 4242, kill: (pid: number, sig: string) => { calls.push(`${pid}:${sig}`); return true; }, once: (_e: string, f: () => void) => { cont = f; return proc; } } as never;
-    let resolved = false; const p = stopUntilContinued(proc).then(() => { resolved = true; }); await Promise.resolve(); expect(calls).toEqual(['4242:SIGSTOP']); expect(resolved).toBe(false); cont(); await p; expect(resolved).toBe(true);
+    const calls: string[] = []; let cont!: () => void; const proc = { kill: (pid: number, sig: string) => { calls.push(`${pid}:${sig}`); return true; }, once: (_e: string, f: () => void) => { cont = f; return proc; } } as never;
+    let resolved = false; const p = stopUntilContinued(proc).then(() => { resolved = true; }); await Promise.resolve(); expect(calls).toEqual(['0:SIGSTOP']); // pid 0: the whole process group expect(resolved).toBe(false); cont(); await p; expect(resolved).toBe(true);
+  });
+});
+
+describe('is this job the one the terminal is showing', () => {
+  const stat = (pgrp: number, tpgid: number) => `1234 (centcom node) S 1000 ${pgrp} 1000 34816 ${tpgid} 4194560 100 0 0 0`;
+  it('foreground: the process group is the terminal\'s; background (after bg): it is not; no terminal or no /proc: yes', () => {
+    expect(isForeground(() => stat(555, 555))).toBe(true); expect(isForeground(() => stat(555, 777))).toBe(false); expect(isForeground(() => stat(555, -1))).toBe(true); expect(isForeground(() => { throw new Error('no /proc'); })).toBe(true);
+    expect(isForeground(() => '1 (a) b) S 1 9 1 1 9 0')).toBe(true); // a ")" in the program name does not confuse it
   });
 });

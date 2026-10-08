@@ -19,7 +19,11 @@ export function editInEditor(text: string, o: { env?: NodeJS.ProcessEnv; run?: (
   } catch { return undefined; } finally { rmSync(dir, { recursive: true, force: true }); }
 }
 
-/** Stop this process until the shell continues it (`fg`). Resolves when it is running again. */
-export function stopUntilContinued(proc: Pick<NodeJS.Process, 'pid' | 'kill' | 'once'> = process): Promise<void> {
-  return new Promise((resolve) => { proc.once('SIGCONT', () => resolve()); try { proc.kill(proc.pid, 'SIGSTOP'); } catch { resolve(); } });
+/** Stop everything started with this job until the shell continues it: the whole process group, as the terminal's own ctrl+z does, so a wrapper (tsx) and the agent stop with the app. Resolves when it runs again. */
+export function stopUntilContinued(proc: Pick<NodeJS.Process, 'kill' | 'once'> = process): Promise<void> {
+  return new Promise((resolve) => { proc.once('SIGCONT', () => resolve()); try { proc.kill(0, 'SIGSTOP'); } catch { resolve(); } });
+}
+/** Is this job the one the terminal is showing? `bg` continues a job without giving it the terminal; drawing then would scribble over the shell. Linux reads /proc; elsewhere (or without a terminal) the answer is yes. */
+export function isForeground(readStat: () => string = () => readFileSync('/proc/self/stat', 'utf8')): boolean {
+  try { const t = readStat(); const f = t.slice(t.lastIndexOf(')') + 2).split(' '); /* state ppid pgrp session tty_nr tpgid */ const pgrp = Number(f[2]); const tpgid = Number(f[5]); return !Number.isFinite(pgrp) || !Number.isFinite(tpgid) || tpgid <= 0 || pgrp === tpgid; } catch { return true; }
 }
