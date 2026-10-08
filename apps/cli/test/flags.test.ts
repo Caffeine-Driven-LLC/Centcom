@@ -1,7 +1,7 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { checkArgs, normalizeArgs } from '../src/flags.js';
+import { checkArgs, normalizeArgs, specsOf } from '../src/flags.js';
 import { COMMANDS } from '../src/help/commands.js';
 
 const top = COMMANDS.find((c) => c.name === 'centcom')!.flags; const names = [...COMMANDS.map((c) => c.name).filter((n) => n !== 'centcom'), 'help'];
@@ -49,5 +49,23 @@ describe('the allowed values of an option match what the settings accept', () =>
     const { SCHEMA } = await import('@centcom/config'); const spec = (SCHEMA as Record<string, { enum?: readonly string[] }>)[key]!; const allowed = new Set(top.find((f) => f.flag.split(',').map((s) => s.trim()).includes(flag))!.arg!.replace(/[<>]/g, '').split('|'));
     for (const v of [...(spec.enum ?? []), ...extra]) expect(allowed.has(v), `${flag} should accept "${v}"`).toBe(true);
     for (const v of allowed) expect([...(spec.enum ?? []), ...extra].includes(v), `${flag} lists "${v}" but the settings do not accept it`).toBe(true);
+  });
+});
+
+describe('option validation as a property of the help list', () => {
+  const specs = specsOf(top);
+  const rng = (seed: number) => { let s = seed >>> 0; return () => { s = (s + 0x6d2b79f5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+  const valid = (r: () => number): string[] => { const out: string[] = []; for (const s of specs.filter((x) => !x.names.includes('-h') && !x.names.includes('-v'))) if (r() < 0.4) { const name = s.names[Math.floor(r() * s.names.length)]!; out.push(name); if (s.takes !== 'none' && (s.takes === 'required' || r() < 0.5)) out.push(s.allowed ? s.allowed[Math.floor(r() * s.allowed.length)]! : ['x', 'a b', '12', 'path/to'][Math.floor(r() * 4)]!); } return out; };
+  it('300 random valid combinations of the documented options are all accepted (alone, or as the options of -p)', () => {
+    const r = rng(7); for (let i = 0; i < 300; i++) { const args = valid(r); const print = args.includes('-p') || args.includes('--print'); expect(check(args, print), JSON.stringify(args)).toBeUndefined(); }
+  });
+  it('a one-letter typo in any option is rejected, and the right option is suggested whenever it is close', () => {
+    for (const s of specs) for (const name of s.names.filter((n) => n.startsWith('--') && n.length > 6)) {
+      const typo = name.slice(0, 4) + name.slice(5); // one letter missing
+      if (specs.some((x) => x.names.includes(typo))) continue; const msg = check([typo]); expect(msg, typo).toMatch(/^Unknown option /); expect(msg, typo).toContain(`Did you mean ${name}?`);
+    }
+  });
+  it('an allowed value with one letter changed is rejected for every option that lists its values', () => {
+    for (const s of specs.filter((x) => x.allowed)) for (const flag of s.names.filter((n) => n.startsWith('--'))) { const bad = s.allowed![0]! + 'zz'; expect(check([flag, bad]), `${flag} ${bad}`).toContain('must be one of'); }
   });
 });
