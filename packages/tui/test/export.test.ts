@@ -30,7 +30,7 @@ describe('/copy and /export', () => {
   it('/copy takes the last answer, /copy code its last code block; each says when there is nothing', async () => {
     const { c, copied } = make(); await c.runCommand('/copy'); expect(c.state.toasts.at(-1)!.text).toBe('Nothing to copy yet.'); c.patch({ items });
     await c.runCommand('/copy'); await c.runCommand('/copy code'); expect(copied[0]).toContain('And a second one'); expect(copied[1]).toBe('npm test'); await c.runCommand('/copy everything'); expect(c.state.toasts.at(-1)!.text).toMatch(/\/copy code/);
-    c.patch({ items: [items[0]!, { ...(items[2] as object), text: 'no code' } as never] }); await c.runCommand('/copy code'); expect(c.state.toasts.at(-1)!.text).toBe('The last answer has no code block.');
+    c.patch({ items: [items[0]!, { ...(items[2] as unknown as object), text: 'no code' } as never] }); await c.runCommand('/copy code'); expect(c.state.toasts.at(-1)!.text).toBe('The last answer has no code block.');
   });
   it('/export writes a Markdown file in the folder (private to you), never overwrites, and accepts a name', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'cc-export-')); const { c } = make(dir); await c.runCommand('/export'); expect(c.state.toasts.at(-1)!.text).toBe('Nothing to export yet.'); c.patch({ items });
