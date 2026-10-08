@@ -47,3 +47,11 @@ describe('help screen (acceptance 7)', () => {
   it('typing pal filters to the palette action', () => { const rows = helpRows(actions(), km(), 'pal'); expect(rows.map((r) => r.id)).toEqual(expect.arrayContaining(['palette.open'])); expect(rows.every((r) => r.id.startsWith('palette.'))).toBe(true); expect(help(80, 22, 'pal')).toContain('Open the command palette'); expect(help(80, 22, 'pal')).not.toContain('Approve this once'); });
   it('30 actions still fit at 80x24', () => { const many = [...actions(), ...Array.from({ length: 30 - actions().length }, (_, i) => ({ id: `x.a${i}`, group: 'Extra', description: `extra action ${i}`, defaults: [] }))]; const out = strip(renderToString(<HelpBody actions={many} keymap={km()} warnings={[]} width={80} height={22} filter="" />, { columns: 80 })).split('\n'); expect(out.length).toBeLessThanOrEqual(24); });
 });
+
+describe('help on a small screen', () => {
+  const draw = (h: number, page: 0 | 1 | 2, filter = '', w = 80) => strip(renderToString(<HelpBody actions={actions()} keymap={km()} warnings={[]} width={w} height={h} filter={filter} page={page} />, { columns: w })).split('\n').filter((l, i, a) => !(i === a.length - 1 && l === ''));
+  it.each([[10, 0], [12, 0], [12, 1], [12, 2], [14, 0], [20, 2], [24, 0]] as [number, 0 | 1 | 2][])('at %i rows (page %i) it is never taller than it was given, and says what it left out', (h, page) => {
+    const out = draw(h, page); expect(out.length, out.join('\n')).toBeLessThanOrEqual(h); const hidden = out.some((l) => /more not shown/.test(l)); const all = draw(60, page).join('\n'); if (hidden) expect(all).not.toContain('more not shown'); // with room for everything the note is gone
+  });
+  it('a filter finds what was left out', () => { const out = draw(12, 0, 'palette').join('\n'); expect(out).toContain('ctrl+k'); expect(draw(12, 2, 'effort').join('\n')).toContain('/effort'); });
+});

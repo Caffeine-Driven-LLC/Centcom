@@ -48,7 +48,8 @@ export function App({ ctl, tier, keys }: AppProps) {
   const welcome = s.items.length === 0 && !s.busy && s.mode === 'chat' && !pending;
   const nightOpen = s.mode === 'night';
   const tight = !!pending && rows < 30;
-  const stripH = welcome ? 0 : tight ? 1 : mascot === 'large' ? LARGE_H : mascot === 'small' ? 4 : 1;
+  const overlay = s.mode === 'help' || s.mode === 'palette' || s.mode === 'pick' || s.mode === 'models' || s.mode === 'gallery'; // a full-screen list or page: Cento steps aside so it has the rows
+  const stripH = welcome || overlay ? 0 : tight ? 1 : mascot === 'large' ? LARGE_H : mascot === 'small' ? 4 : 1;
   const stripSize = tight && mascot !== 'off' ? 'off' : mascot;
   const matches = (s.mode === 'chat' || s.mode === 'night') && !pending ? slashMatches(s.input) : [];
   const mentionNow = (s.mode === 'chat' || s.mode === 'night') && !pending && !matches.length ? ed.mentionAt(s.input, s.cursor) : undefined; const mentionFresh = !!mentionNow && !!s.mention && s.mention.q === mentionNow.query; const related = !!mentionNow && !!s.mention && (mentionNow.query.startsWith(s.mention.q) || s.mention.q.startsWith(mentionNow.query)); const mentions = mentionNow && s.mention && (mentionFresh || related) ? s.mention.items : []; // while the next search runs the last list stays, so the layout does not jump

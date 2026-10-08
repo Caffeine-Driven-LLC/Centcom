@@ -28,7 +28,9 @@ export function HelpBody({ actions, keymap, warnings, width, height, filter, pag
   } /* the prompt's own keys only when there is room */ const twoCols = lines.length > room || (width >= 100 && lines.length > 12); let perCol = twoCols ? Math.ceil(lines.length / 2) : lines.length;
   if (twoCols && lines[perCol - 1]?.length === 1 && lines[perCol - 1]![0]!.b) perCol -= 1; /* a group heading never ends a column */ const colW = twoCols ? Math.floor((w - 4) / 2) : w - 4;
   const cut = (l: Line): Line => { let left = colW; const total = l.reduce((n, s) => n + s.t.length, 0); const out = l.map((s) => { const t = s.t.slice(0, Math.max(0, left)); left -= t.length; return { ...s, t }; }); if (total > colW && out.length) { const last = out.filter((s) => s.t).at(-1); if (last) last.t = last.t.slice(0, -1) + '…'; } return out; };
-  const colA = lines.slice(0, perCol).map(cut); const colB = twoCols ? lines.slice(perCol).map(cut) : [];
+  // what does not fit is left out (and counted), never drawn over the screen around it
+  const rawA = lines.slice(0, perCol); const rawB = twoCols ? lines.slice(perCol) : []; const hidden = Math.max(0, rawA.length - room) + Math.max(0, rawB.length - room);
+  const colA = rawA.slice(0, room).map(cut); const colB = rawB.slice(0, room).map(cut);
   return (
     <Box width={width} justifyContent="center"><Box flexDirection="column" width={w} borderStyle="round" borderColor={col('accent.primary')} paddingX={1}>
       <Rich line={[sp(page === 1 ? 'Editing' : page === 2 ? 'Commands' : 'Keys', { c: 'accent.hover', b: true }), sp(page === 1 ? '  Tab: commands' : page === 2 ? '  Tab: keys · type to filter: ' : '  Tab: editing keys · type to filter: ', { c: 'text.muted' }), sp(page === 1 ? '' : filter || '…', { c: filter ? 'text.primary' : 'text.muted' })]} />
@@ -37,7 +39,7 @@ export function HelpBody({ actions, keymap, warnings, width, height, filter, pag
         {twoCols ? <Box flexDirection="column" width={colW + 1} marginLeft={1}>{colB.map((l, i) => <Rich key={i} line={l} />)}</Box> : null}
       </Box>
       {warnings.slice(0, 3).map((x, i) => <Rich key={`w${i}`} line={[sp('! ' + x.message, { c: 'status.warning' })]} />)}
-      <Rich line={[sp('Change keys in keybindings.json in your config folder. Esc closes.', { c: 'text.muted' })]} />
+      <Rich line={[sp(hidden > 0 ? `${hidden} more not shown: type to filter, or make the window taller. Esc closes.` : 'Change keys in keybindings.json in your config folder. Esc closes.', { c: hidden > 0 ? 'status.info' : 'text.muted' })]} />
     </Box></Box>
   );
 }
