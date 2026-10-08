@@ -18,6 +18,7 @@ export * from './prompt/index.js';
 export * from './status/index.js';
 export * from './diff/index.js';
 export * from './permission/index.js';
+export * from './provider/index.js';
 export { FleetPanel, agentRow, stateWord, modeFor, RAIL_WIDTH, RAIL_MIN_COLS, stateLabel, type Tier, STATE_LABELS, priorityTier, reduceFleet, sortFleet, type FleetAgent, type FleetState, type FleetEvent, emptyFleet } from './fleet/index.js';
 export { MascotSlot, priorityOf, knownState, SHOWN_STATES, createMascotDriver, type MascotInput, type MascotView, type MascotDriver, type DriverDeps, DWELL_MS, BURST_CALLS, BURST_WINDOW_MS, BEAT_MS, CELEBRATE_GAP_MS, WAIT_VISIBLE_MS, ONE_SHOT_MS } from './mascot/index.js';
 export * from './theme/index.js';
