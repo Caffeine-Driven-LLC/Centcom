@@ -153,7 +153,7 @@ async function main() {
     else if ('pick' in c) { resumeId = await pickSession(c.pick, { input: process.stdin, output: process.stdout }); if (!resumeId) process.exit(0); }
     else resumeId = c.id;
   }
-  const ctl = new AppController({ ...rt.options, views: appViews(process.cwd()),
+  const ctl = new AppController({ ...rt.options, views: appViews(process.cwd(), { doctor: () => realDoctorContext({ version: VERSION, contract: CONTRACT_VERSION, apiBase: cc.cfg.api.base_url, stateDir: stateDir(defaultDeps()) }) }),
     engine, demo, cwd: process.cwd(), branch, version: VERSION, permissionMode: mode, dangerous: dangerous || mode === 'bypassPermissions', ghosts: has('--demo-team'),
     logger, settings, ...cc.options({ ...initialSettings(), ...settings }, { saveHistory: !has('--no-save') }),
     sessions: sessionStore, night: demo ? undefined : { dir: pathJoin(homedir(), '.centcom', 'night') },

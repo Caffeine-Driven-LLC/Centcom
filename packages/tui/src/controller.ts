@@ -66,7 +66,7 @@ export interface ControllerOptions {
   /** Parallel agents in their own worktrees (`/fleet`). Their events, branch-ready news and approvals come over `bus`. */
   fleet?: { manager: FleetManager; bus: AgentBus; ownerSlug: string };
   /** Read-only views for `/mcp`, `/hooks` and `/memory` (the CLI's own list and status output). */
-  views?: Partial<Record<'mcp' | 'hooks' | 'memory', (args: string[]) => Promise<string[]>>>;
+  views?: Partial<Record<'mcp' | 'hooks' | 'memory' | 'doctor' | 'init', (args: string[]) => Promise<string[]>>>;
   /** Called with the main agent's events too (file locks between agents use it). */
   observers?: ((agentId: string, ev: NormalisedEvent) => void)[];
   /** Usage as the engines reported it (lane C029): `/usage`, budget warnings, the informational outbox. Its cost alerts arrive on `ledgerBus`. */
@@ -707,7 +707,7 @@ export class AppController {
       case 'compact': await this.compactCommand(); break;
       case 'fleet': await this.fleetCommand(arg); break;
       case 'usage': this.usageCommand(); break;
-      case 'mcp': case 'hooks': case 'memory': {
+      case 'mcp': case 'hooks': case 'memory': case 'doctor': case 'init': {
         const view = this.o.views?.[cmd]; if (!view) { this.toast('info', `/${cmd} is not available here. Use \`centcom ${cmd}\` in a terminal.`); break; }
         const lines = await view(arg.split(/\s+/).filter(Boolean)).catch((e: unknown) => [String((e as Error)?.message ?? e)]); this.notice('info', lines[0] ?? `(nothing to show)`, lines.slice(1).join('\n') || undefined); break;
       }
