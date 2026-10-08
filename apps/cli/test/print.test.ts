@@ -64,3 +64,18 @@ describe('print mode contract (lane C050)', async () => {
     const r = await run({ engine: new DemoEngine({ speed: 1 }), format: 'json', timeoutS: 0.3 }); expect(r.code).toBe(124); expect(JSON.parse(r.out.trim().split('\n').at(-1)!)).toMatchObject({ is_error: true, error: { code: 'timeout' } });
   });
 });
+
+describe('secrets split across streamed pieces', () => {
+  const SECRET = 'sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789ABCDEF';
+  const pieces = ['The key is ' + SECRET.slice(0, 20), SECRET.slice(20) + ' and that is all.'];
+  it('is scrubbed per piece only if the pieces are cut in the middle of a word, which the hold-back avoids', async () => {
+    const { redact } = await import('@centcom/protocol'); const { Holdback } = await import('../src/print/format.js');
+    expect(pieces.map((p) => redact(p)).join('')).toContain(SECRET.slice(0, 20)); // the problem: each half alone looks harmless
+    const h = new Holdback(); const out = pieces.map((p) => redact(h.push(p))).join('') + redact(h.flush());
+    expect(out).not.toContain(SECRET.slice(0, 20)); expect(out).toContain('The key is '); expect(out).toContain(' and that is all.');
+  });
+  it('never loses or reorders text, and flush returns the unfinished last word', async () => {
+    const { Holdback } = await import('../src/print/format.js'); const h = new Holdback(); const bits = ['Hel', 'lo wor', 'ld, how a', 're you', '?\nFine'];
+    const got = bits.map((b) => h.push(b)).join('') + h.flush(); expect(got).toBe(bits.join('')); expect(h.push('abc')).toBe(''); expect(h.flush()).toBe('abc'); expect(h.flush()).toBe('');
+  });
+});
