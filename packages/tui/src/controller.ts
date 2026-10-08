@@ -881,9 +881,11 @@ export class AppController {
     if (r.ok) this.notice('info', 'Asked the agent to compact its context.'); else this.toast('warn', r.reason === 'unsupported' ? `${this.o.engine.label} has no compact command Centcom can use.` : r.reason === 'busy' ? 'Wait until the agent is idle, then /compact.' : r.reason === 'failed' ? 'The compact request did not go through. Try again in a minute.' : 'The agent is not running.');
   }
 
-  toast(level: 'info' | 'ok' | 'warn' | 'error', text: string, ms = 3800) {
-    const id = nid('toast');
-    this.set((s) => ({ toasts: [...s.toasts.slice(-2), { id, level, text, until: Date.now() + ms }] }));
+  /** A short message over the corner of the screen. Said again while still showing, it stays instead of stacking; problems stay longer than good news. */
+  toast(level: 'info' | 'ok' | 'warn' | 'error', text: string, ms = level === 'error' ? 7000 : level === 'warn' ? 5000 : 3800) {
+    const same = this.state.toasts.find((t) => t.level === level && t.text === text); const id = same?.id ?? nid('toast');
+    if (same) { const old = this.toastTimers.get(id); if (old) clearTimeout(old); this.set((s) => ({ toasts: s.toasts.map((t) => (t.id === id ? { ...t, until: Date.now() + ms } : t)) })); }
+    else this.set((s) => ({ toasts: [...s.toasts.slice(-2), { id, level, text, until: Date.now() + ms }] }));
     this.toastTimers.set(id, setTimeout(() => { this.set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })); this.toastTimers.delete(id); }, ms));
   }
   notice(level: 'info' | 'warn' | 'error' | 'ok', text: string, detail?: string) { this.addItem({ kind: 'notice', id: nid('n'), level, text, ...(detail ? { detail } : {}) }); }
