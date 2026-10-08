@@ -47,6 +47,7 @@ When you change them in the app, these are saved to your user file: theme, Cento
 | `ui.mouse` | boolean | `true` | no | Scroll with the mouse wheel in the terminal app (off gives the terminal its own text selection back) |
 | `ui.reduced_motion` | boolean | `false` | yes | Turn animation off |
 | `ui.color` | auto \| truecolor \| 256 \| 16 \| never | `"auto"` | yes | Terminal color depth |
+| `a11y.screen_reader` | boolean | `false` | no | Plain text for screen readers: no colour, no boxes, no animation, no redraws; one line per event. Same as --screen-reader or CENTO_SCREEN_READER=1 |
 | `lan.enabled` | boolean | `true` | no | Allow LAN sessions |
 | `agent.max_parallel` | number (1 to 16) | `4` | yes | Most agents running at once |
 | `agent.approval_timeout_ms` | number (1000 to 86400000) | `600000` | yes | How long an approval waits before it is declined |

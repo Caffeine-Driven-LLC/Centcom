@@ -11,6 +11,7 @@ import type { Logger } from '@centcom/net';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SessionStore, ago, titleFrom, type SessionMeta } from './sessions.js';
+import { errorGuide } from './errors.js';
 import { copyToClipboard } from './util/clipboard.js';
 import { newPick, pickAll, pickMove, pickResult, pickToggle, type PickOption } from './pick/model.js';
 import { NightCycle, initialNight, counts as nightCounts, type NightState, type NightTask } from './night/index.js';
@@ -286,7 +287,7 @@ export class AppController {
       case 'engine.warning': this.notice('warn', ev.text); break;
       case 'error':
         if (ev.retry) { this.toast('warn', `Retrying (${ev.retry.attempt}/${ev.retry.max_retries})…`); break; }
-        this.addItem({ kind: 'notice', id: nid('n'), level: 'error', text: errorTitle(ev.code), detail: ev.tool_message });
+        { const g = errorGuide(ev.code, this.state.engineLabel); this.addItem({ kind: 'notice', id: nid('n'), level: 'error', text: g.title, detail: [g.help, ev.tool_message ? `Details: ${ev.tool_message}` : ''].filter(Boolean).join('\n') }); }
         this.night.noteError(ev.code, !!ev.fatal);
         break;
       case 'turn.done':
@@ -561,6 +562,15 @@ export class AppController {
       this.pickBack = this.state.mode === 'night' ? 'night' : 'chat'; this.pickDone = resolve;
       this.set({ mode: 'pick', pick: newPick(o) });
     });
+  }
+  /** Watch every event of the main agent (the plain-text mode prints them). */
+  addObserver(fn: (agentId: string, ev: NormalisedEvent) => void) { (this.o.observers ??= []).push(fn); }
+  /** Answer the open list without keys: the ticked option numbers (1-based), or undefined to cancel. A one-of list takes the first. */
+  pickAnswer(numbers: number[] | undefined) {
+    const p = this.state.pick; if (!p) return;
+    if (!numbers) { this.pickKey('cancel'); return; }
+    const ids = numbers.filter((n) => n >= 1 && n <= p.options.length).map((n) => p.options[n - 1]!.id);
+    this.set({ pick: { ...p, checked: p.multi ? ids : ids.slice(0, 1), sel: Math.max(0, p.options.findIndex((o) => o.id === ids[0])) } }); this.pickKey('enter');
   }
   /** A click on option `i`: a list of several toggles it; a one-of list picks it. */
   pickClick(i: number) {
@@ -864,16 +874,6 @@ export class AppController {
   }
 }
 
-export function errorTitle(code: string): string {
-  switch (code) {
-    case 'provider_not_installed': return 'Claude Code is not installed';
-    case 'provider_not_signed_in': return 'Not signed in';
-    case 'provider_cap_reached': return 'Usage limit reached';
-    case 'provider_rate_limited': return 'The service is busy';
-    case 'provider_version_unsupported': return 'This version is not supported';
-    default: return 'Something went wrong';
-  }
-}
 export function modeLabel(m: PermissionMode): string {
   return m === 'plan' ? 'Plan mode: read-only, nothing is changed' : m === 'acceptEdits' ? 'Accept edits: file edits go through, commands still ask' : m === 'bypassPermissions' ? 'Bypass: everything but dangerous commands is allowed' : 'Default: ask before edits and commands';
 }

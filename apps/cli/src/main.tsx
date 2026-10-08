@@ -5,7 +5,7 @@ import { render } from 'ink';
 import { detectColorTier } from '@centcom/theme';
 import { ClaudeCodeEngine, CodexEngine, DemoEngine, detectClaude, detectCodex, type AgentEngine, type PermissionMode } from '@centcom/agent';
 import { chooseEngine } from './engine-pick.js';
-import { App, AppController, ClientConfig, FirstRun, SessionStore, buildRuntime, initialSettings, isFirstRun, markFirstRunDone, settingsFromConfig } from '@centcom/tui';
+import { App, AppController, ClientConfig, FirstRun, SessionStore, resolveA11yMode, runLinear, queryBackground, buildRuntime, initialSettings, isFirstRun, markFirstRunDone, settingsFromConfig } from '@centcom/tui';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename as pathBase, join as pathJoin, resolve as pathResolve } from 'node:path';
 import { homedir } from 'node:os';
@@ -62,6 +62,7 @@ async function pickEngine(preferred: 'claude-code' | 'codex' = 'claude-code'): P
   return { engine, demo: pick.engine === 'demo', note: pick.note };
 }
 
+const screenReaderRequested = () => process.argv.includes('--screen-reader') || /^(1|true|on|yes)$/i.test(process.env.CENTO_SCREEN_READER ?? '');
 async function main() {
   // `centcom help [topic]` and `centcom <command> --help` come from the same list as the docs and the man pages
   const helpOpts = { width: Math.min(80, process.stdout.columns ?? 80), colour: !!process.stdout.isTTY && !process.env.NO_COLOR };
@@ -126,7 +127,11 @@ async function main() {
   let branch = ''; try { branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { /* not a git repo */ }
   const dangerous = has('--dangerously-skip-permissions') || has('--yolo');
   const mode: PermissionMode = dangerous || arg('--mode') === 'bypassPermissions' ? 'bypassPermissions' : cc.cfg.client.permission_mode;
-  const settings = { ...settingsFromConfig(cc.cfg), permissionMode: mode };
+  const a11y = resolveA11yMode({ env: process.env, flags: { screenReader: has('--screen-reader') }, config: { screenReader: cc.cfg.a11y.screen_reader, reducedMotion: cc.cfg.ui.reduced_motion } });
+  const settings = { ...settingsFromConfig(cc.cfg), permissionMode: mode, reducedMotion: a11y.reducedMotion, ...(a11y.screenReader ? { mascot: 'off' as const } : {}) };
+  // theme "auto": ask the terminal for its background colour (150 ms at most, nothing is written without a terminal) so a light terminal gets Paper instead of Graphite
+  if (cc.cfg.ui.theme === 'auto' && !a11y.screenReader) { const bg = await queryBackground({ out: process.stdout, inp: process.stdin }); if (bg === 'light') settings.theme = 'light'; }
+  let quitLinear: () => void = () => undefined; const linearStop = new Promise<void>((r) => { quitLinear = r; });
   if (arg('--engine') === 'codex' || arg('--engine') === 'claude-code') cc.set('client.engine', arg('--engine')!); // the agent you pick is the one you get next time
 
   const { logger } = createAppLogger({ level: cc.cfg.log.level, maxBytes: cc.cfg.log.max_file_bytes, maxFiles: cc.cfg.log.max_files });
@@ -147,20 +152,20 @@ async function main() {
     sessions: sessionStore, night: demo ? undefined : { dir: pathJoin(homedir(), '.centcom', 'night') },
     modelCache: { read: async (f) => { try { return await readFile(pathJoin(stateDir(defaultDeps()), f), 'utf8'); } catch { return undefined; } }, write: async (f, t) => { const d = stateDir(defaultDeps()); await mkdir(d, { recursive: true, mode: 0o700 }); await writeFile(pathJoin(d, f), t, { mode: 0o600 }); } },
     resume: resumeId,
-    onExit: (code) => { if (code) process.exitCode = code; instance?.unmount(); },
+    onExit: (code) => { if (code) process.exitCode = code; instance?.unmount(); quitLinear(); },
     onMemoryAdd: async (text) => { // a line starting with "# " is a note for this tool's memory file (CLAUDE.md or AGENTS.md), shown as a diff and confirmed
       try { const mf = makeMemoryFiles(process.cwd()); const plan = await mf.plan({ engine: engine.id === 'codex' ? 'codex' : 'claude-code', scope: 'project', quickAdd: text, root: process.cwd() });
         return { diff: plan.diff || '(already there)', apply: async () => { await mf.apply(plan, { accepted: true, planHash: plan.planHash }); return 'Added to memory.'; } }; } catch (e) { return { error: String((e as Error).message ?? e) }; }
     },
   });
-  process.stdout.write('\x1b[?1049h\x1b[2J\x1b[H'); // alternate screen: the transcript never pollutes scrollback
+  if (!a11y.screenReader) process.stdout.write('\x1b[?1049h\x1b[2J\x1b[H'); // alternate screen: the transcript never pollutes scrollback (a screen reader gets plain appended lines instead)
   // the one-time welcome, before anything else (never in print mode or without a terminal)
   const firstRunFile = pathJoin(stateDir({ env: process.env, homedir: homedir() }), 'state.json'); let firstRunNote: string | undefined;
-  if (!has('--demo') && await isFirstRun({ stateFile: firstRunFile })) {
+  if (!a11y.screenReader && !has('--demo') && await isFirstRun({ stateFile: firstRunFile })) {
     await new Promise<void>((done) => { const fr = render(<FirstRun onDone={() => { fr.unmount(); done(); }} width={process.stdout.columns ?? 80} height={process.stdout.rows ?? 24} tier={tier} mascotAllowed={settings.mascot !== 'off'} reducedMotion={settings.reducedMotion} color={settings.color} theme={settings.theme} />, { exitOnCtrlC: true, patchConsole: false }); });
     const r = await markFirstRunDone({ stateFile: firstRunFile }); if (!r.ok) firstRunNote = r.message; process.stdout.write('\x1b[2J\x1b[H');
   }
-  const leave = () => process.stdout.write('\x1b[?1049l');
+  const leave = () => { if (!a11y.screenReader) process.stdout.write('\x1b[?1049l'); };
   process.on('exit', leave);
   rt.bind(ctl);
   await ctl.start();
@@ -171,11 +176,11 @@ async function main() {
   cc.onWarn = (w) => ctl.notice('warn', 'Settings: ' + w);
   if (mode === 'bypassPermissions') ctl.notice('warn', 'Dangerously skip permissions is ON', 'Cento will run commands and edit files without asking. Use /mode default to turn approvals back on.');
   const keys = resolvedKeys(); if (keys.warnings.length) ctl.notice('warn', `Some of your key bindings were skipped (${keys.warnings.length}). Press ? to see why.`);
-  instance = render(<App ctl={ctl} tier={tier} keys={keys} />, { exitOnCtrlC: false, patchConsole: false, maxFps: 30, incrementalRendering: true });
-  await instance.waitUntilExit();
+  if (a11y.screenReader) await runLinear(ctl, { input: process.stdin, output: process.stdout }, linearStop);
+  else { instance = render(<App ctl={ctl} tier={tier} keys={keys} />, { exitOnCtrlC: false, patchConsole: false, maxFps: 30, incrementalRendering: true }); await instance.waitUntilExit(); }
   ctl.stop(); await ctl.stopFleet(); cc.flush();
   leave();
   await done(0);
 }
 
-main().catch((e) => { process.stdout.write('\x1b[?1049l'); console.error(e instanceof Error ? e.message : e); process.exit(1); });
+main().catch((e) => { if (!screenReaderRequested()) process.stdout.write('\x1b[?1049l'); console.error(e instanceof Error ? e.message : e); process.exit(1); });
