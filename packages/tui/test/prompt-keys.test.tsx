@@ -254,3 +254,14 @@ describe('@file suggestions', () => {
     await t.send('\x1ba'); await t.send('\x7f'); await t.send('@zzzqqq', 600); expect(t.ctl.state.mention).toBeUndefined(); await t.send('\r', 100); expect(sent.at(-1)).toBe('@zzzqqq');
   });
 });
+
+describe('ctrl+r: earlier messages', () => {
+  it('lists this project\'s earlier messages (newest first, no commands, no repeats); picking one puts it in the prompt without sending', async () => {
+    const t = await mount(); t.ctl.patch({ history: ['first idea', '/mode plan', 'second idea', 'first idea', 'third idea'] }); const sent: string[] = []; t.ctl.submit = (async (x: string) => { sent.push(x); }) as never;
+    await t.send('\x12', 150); expect(t.ctl.state.mode).toBe('pick'); expect(t.ctl.state.pick!.options.map((o) => o.label)).toEqual(['third idea', 'first idea', 'second idea']);
+    await t.send('\x1b[B', 80); await t.send('\r', 150); expect(t.text()).toBe('first idea'); expect(t.cursor()).toBe(10); expect(sent).toEqual([]); expect(t.ctl.state.mode).toBe('chat');
+  });
+  it('says so when there is nothing yet, and Esc leaves the prompt as it was', async () => {
+    const t = await mount(); await t.send('\x12', 100); expect(t.ctl.state.toasts.at(-1)!.text).toMatch(/No earlier messages/); t.ctl.patch({ history: ['one'] }); await t.send('draft', 50); await t.send('\x12', 150); await t.send('\x1b', 100); expect(t.text()).toBe('draft');
+  });
+});

@@ -14,6 +14,7 @@ Run `centcom` in a project folder. Type what you want done and press Enter. `?` 
 | `ctrl+delete`, `alt+delete` | delete the word after the cursor |
 | `ctrl+w`, `alt+backspace` | delete the word before |
 | `ctrl+j`, or `\` then Enter | a new line instead of sending |
+| `ctrl+r` | search your earlier messages in this project |
 
 Typing over a selection replaces it. Copying uses your terminal's clipboard support and the system clipboard tool (`wl-copy`, `xclip`, `xsel`, `pbcopy`).
 

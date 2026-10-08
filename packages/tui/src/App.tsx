@@ -174,6 +174,7 @@ export function App({ ctl, tier, keys }: AppProps) {
         case 'agent.interrupt': if (s.busy) void ctl.interrupt(); else if (s.input) ctl.patch({ input: '', cursor: 0 }); else ctl.escIdle(); return;
         case 'tasks.toggle': ctl.patch({ tasksOpen: !s.tasksOpen }); return;
         case 'night.toggle': ctl.openNight(); return;
+        case 'history.search': void ctl.historyPick(); return;
         case 'fleet.toggle': ctl.patch({ fleet: !s.fleet }); return;
         case 'transcript.bottom': setScroll(0); return;
         case 'transcript.top': setScroll(maxScroll); return;

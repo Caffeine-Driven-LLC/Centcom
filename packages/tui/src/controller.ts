@@ -640,6 +640,13 @@ export class AppController {
   }
   /** Stop suggesting (the word was finished or deleted). */
   clearMentions() { this.mentionSearch?.abort(); if (this.state.mention) this.set({ mention: undefined }); }
+  /** ctrl+r: pick one of your earlier messages in this project; it goes in the prompt for you to change or send. */
+  async historyPick() {
+    const seen = new Set<string>(); const items = [...this.state.history].reverse().filter((h) => !h.startsWith('/') && !seen.has(h) && !!seen.add(h)).slice(0, 40);
+    if (!items.length) { this.toast('info', 'No earlier messages in this project yet.'); return; }
+    const ids = await this.pick({ title: 'Earlier messages', note: 'Newest first. The one you choose goes in the prompt.', multi: false, confirm: 'use', options: items.map((h, i) => ({ id: String(i), label: h.replace(/\s+/g, ' ') })) });
+    if (ids?.[0] !== undefined) { const t = items[Number(ids[0])]!; this.patch({ input: t, cursor: t.length }); }
+  }
   /** Put text at the end of the prompt (a file mention, a skill hint). */
   insertIntoPrompt(t: string) { const input = this.state.input; const sep = input && !/\s$/.test(input) ? ' ' : ''; const next = input + sep + t; this.patch({ input: next, cursor: next.length }); }
   /** Run a command line from the palette. Commands that cannot do anything without a value are filled in for you to finish. */
