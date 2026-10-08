@@ -5,14 +5,16 @@ export type Launcher = Extract<ServerMsg, { t: 'launcher' }>;
 export type DirMsg = Extract<ServerMsg, { t: 'dir' }>;
 export interface Notice { level: 'info' | 'warn' | 'error'; text: string; n: number }
 /** Everything the local-session screens show, rebuilt from the messages the main process sends. */
-export interface LocalView { launcher?: Launcher; dir?: DirMsg; opened?: string; history: string[]; state?: WebState; items: Item[]; notice?: Notice; byId: ReadonlyMap<string, Item> }
-export const emptyView = (): LocalView => ({ history: [], items: [], byId: new Map() });
+export interface LocalView { launcher?: Launcher; dir?: DirMsg; opened?: string; history: string[]; state?: WebState; items: Item[]; notice?: Notice; models: Models; byId: ReadonlyMap<string, Item> }
+export type Models = Extract<ServerMsg, { t: 'models' }>['models'];
+export const emptyView = (): LocalView => ({ models: [], history: [], items: [], byId: new Map() });
 /** One message in, the next view out. State messages carry only the items that changed plus the full order, so unchanged items keep their identity. */
 export function reduceLocal(v: LocalView, m: ServerMsg): LocalView {
   switch (m.t) {
     case 'launcher': return { ...v, launcher: m };
     case 'dir': return { ...v, dir: m };
-    case 'opened': return { ...v, opened: m.dir, history: m.history ?? [], state: undefined, items: [], byId: new Map() };
+    case 'models': return { ...v, models: m.models };
+    case 'opened': return { ...v, opened: m.dir, history: m.history ?? [], state: undefined, items: [], byId: new Map(), models: [] };
     case 'closed': return { ...v, opened: undefined, state: undefined, items: [], byId: new Map() };
     case 'notice': return { ...v, notice: { level: m.level, text: m.text, n: (v.notice?.n ?? 0) + 1 } };
     case 'state': { const byId = new Map(v.byId); for (const it of m.changed) byId.set(it.id, it); return { ...v, byId, state: m.state, items: m.order.map((id) => byId.get(id)).filter((x): x is Item => !!x) }; }

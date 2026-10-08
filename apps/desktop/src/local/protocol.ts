@@ -20,6 +20,9 @@ export type ClientMsg =
   | { t: 'setModel'; id: string }
   | { t: 'cycleMode' }
   | { t: 'setMode'; mode: 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions' }
+  | { t: 'models' }
+  | { t: 'setEffort'; effort: string }
+  | { t: 'compact' }
   | { t: 'auto'; on: boolean };
 
 /** AppState without the parts that only make sense in a terminal or cannot be serialised. */
@@ -33,4 +36,5 @@ export type ServerMsg =
   | { t: 'opened'; dir: string; history: string[] } // prompt history rides along once here, not in every state push
   | { t: 'closed' }
   | { t: 'state'; state: WebState; changed: Item[]; order: string[] }
+  | { t: 'models'; models: { id: string; label: string; note: string; efforts?: string[]; defaultEffort?: string; isDefault?: boolean }[] }
   | { t: 'notice'; level: 'info' | 'warn' | 'error'; text: string };

@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 /** The app's local session service driving the mock Codex, the way a window would (messages in, messages out). */
 const BIN = resolve(__dirname, '../../../tools/codex/bin/codex');
 let svc: import('../src/local/service.js').LocalService; const got: any[] = []; let win: { handle(m: unknown): Promise<void>; detach(): void }; let proj: string;
-const until = async (f: () => boolean, ms = 15000) => { const t0 = Date.now(); while (!f()) { if (Date.now() - t0 > ms) throw new Error('timeout; last: ' + JSON.stringify(got.at(-1))?.slice(0, 300)); await new Promise((r) => setTimeout(r, 20)); } };
+const until = async (f: () => boolean, ms = 15000) => { const t0 = Date.now(); while (!f()) { if (Date.now() - t0 > ms) throw new Error('timeout; items: ' + JSON.stringify(items().slice(-4)).slice(0, 900)); await new Promise((r) => setTimeout(r, 20)); } };
 const lastState = (): any => [...got].reverse().find((m) => m.t === 'state');
 const items = (): any[] => lastState()?.order.map((id: string) => got.flatMap((m) => (m.t === 'state' ? m.changed : [])).reverse().find((i: any) => i.id === id)).filter(Boolean) ?? [];
 beforeAll(async () => {
@@ -23,6 +23,11 @@ describe('Codex in the app, end to end on the mock', () => {
     expect(lastState().state.approvals[0]).toMatchObject({ tool: 'Bash', command: 'echo from-the-app', risk: 'low' });
     await win.handle({ t: 'approve', decision: 'approve' }); await until(() => items().some((i) => i.kind === 'tool' && i.status === 'ok')); expect(items().find((i) => i.kind === 'tool')).toMatchObject({ name: 'Bash', result: 'from-the-app' });
     await until(() => lastState().state.busy === false);
+  }, 30_000);
+  it('lists the account\'s models with their efforts, sets an effort, compacts', async () => {
+    await win.handle({ t: 'models' }); await until(() => got.some((m) => m.t === 'models')); const ms = got.find((m) => m.t === 'models').models; expect(ms.map((x: any) => x.id)).toEqual(['mock-sol', 'mock-luna']); expect(ms[0]).toMatchObject({ efforts: ['low', 'medium', 'high'], isDefault: true });
+    await win.handle({ t: 'setEffort', effort: 'high' }); await until(() => lastState().state.toasts.some((t: any) => /effort: high/i.test(t.text)));
+    await win.handle({ t: 'compact' }); await until(() => items().some((i) => i.kind === 'notice' && /compact/i.test(i.text)), 15000); await until(() => lastState().state.busy === false);
   }, 30_000);
   it('Stop ends a long command for real, and the next message works', async () => {
     await win.handle({ t: 'setMode', mode: 'bypassPermissions' }); await win.handle({ t: 'submit', text: 'sleep 40' }); await until(() => lastState().state.busy === true && items().some((i) => i.kind === 'tool' && i.status === 'running'));

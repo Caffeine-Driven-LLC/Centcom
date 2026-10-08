@@ -28,6 +28,8 @@ export function sanitise(raw: unknown): ClientMsg | undefined {
     case 'approve': return { t, decision: m.decision === 'approve' ? 'approve' : 'deny', ...(m.scope === 'session' || m.scope === 'always' ? { scope: m.scope } : {}) };
     case 'setModel': { const id = str(m.id, 200); return id === undefined ? undefined : { t, id }; }
     case 'setMode': return (MODES as readonly unknown[]).includes(m.mode) ? { t, mode: m.mode as (typeof MODES)[number] } : undefined;
+    case 'models': case 'compact': return { t } as ClientMsg;
+    case 'setEffort': { const e = str(m.effort, 40); return e === undefined || !/^[\w-]*$/.test(e) ? undefined : { t, effort: e }; }
     case 'auto': return { t, on: m.on === true };
     default: return undefined;
   }
@@ -61,6 +63,9 @@ export class LocalService {
       case 'pref': await this.savePref(m); break;
       case 'cycleMode': s.current?.ctl.cycleMode(); break;
       case 'setMode': s.current?.ctl.setMode(m.mode); break;
+      case 'models': { const list = await s.current?.ctl.engineModels(); send({ t: 'models', models: (list ?? []).map((x) => ({ id: x.id, label: x.label, note: x.note, efforts: x.efforts, defaultEffort: x.defaultEffort, isDefault: x.isDefault })) }); break; }
+      case 'setEffort': if (!s.current?.ctl.setEffort(m.effort)) send({ t: 'notice', level: 'info', text: 'This agent has no reasoning effort setting.' }); break;
+      case 'compact': void s.current?.ctl.submit('/compact'); break;
       case 'auto': s.current?.ctl.setSettings({ autoSkills: m.on }); break;
     }
   }

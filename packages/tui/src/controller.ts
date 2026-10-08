@@ -398,6 +398,10 @@ export class AppController {
     try { await this.session?.send(outgoing); } catch (e) { this.addItem({ kind: 'notice', id: nid('n'), level: 'error', text: 'Could not send the prompt', detail: String(e) }); }
   }
 
+  /** Reasoning effort for the next turns, if the engine has the setting (Codex). Returns false when it does not. */
+  setEffort(effort: string): boolean { if (!this.session?.setEffort) return false; this.session.setEffort(effort); this.toast('ok', `Reasoning effort: ${effort || 'default'}`); return true; }
+  /** The models this engine's account offers, when the engine can list them (Codex). Empty otherwise. */
+  async engineModels(): Promise<import('@centcom/agent').ModelChoice[]> { const l = (this.session as { listModels?: () => Promise<import('@centcom/agent').ModelChoice[]> } | undefined)?.listModels; try { return l ? await l.call(this.session) : []; } catch { return []; } }
   /** Switch model for the next turn (the running turn keeps its model). */
   setModel(id: string) {
     this.setSettings({ model: id }); void this.models.switchTo(this.me, id, 'user').then((c) => { if (c.note?.startsWith('Already')) this.toast('info', c.note); });
