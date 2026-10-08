@@ -43,7 +43,7 @@ export async function detectClaude(bin = 'claude'): Promise<ClaudeDetection> {
 
 export interface CodexStatus { engine: 'codex'; installed: boolean; version?: string; signedIn: 'yes' | 'no' | 'unknown'; loginKind: LoginKind }
 /** `codex login status` exits 0 when signed in; its text says whether that is ChatGPT or an API key. We never read auth files. */
-export async function detectCodex(bin = 'codex'): Promise<CodexStatus> {
+export async function detectCodex(bin = process.env.CENTCOM_CODEX_BIN || 'codex'): Promise<CodexStatus> {
   const v = await run(bin, ['--version']);
   if (v.missing || (v.code !== 0 && !v.out)) return { engine: 'codex', installed: false, signedIn: 'unknown', loginKind: 'unknown' };
   const version = /\d+\.\d+\.\d+/.exec(v.out)?.[0];
