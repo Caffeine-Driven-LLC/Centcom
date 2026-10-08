@@ -38,6 +38,11 @@ describe('help screen (acceptance 7)', () => {
     for (const k of ['shift+left/right', 'ctrl+x', 'alt+a', 'ctrl+delete', 'mouse wheel']) expect(p2).toContain(k); expect(p2).not.toContain('Approvals');
     expect(help(100, 24)).toContain('…'); expect(help(100, 24)).toContain('Tab');
   });
+  it('page three lists the slash commands and filters them by what you type', () => {
+    const page = (filter: string) => strip(renderToString(<HelpBody actions={actions()} keymap={km()} warnings={[]} width={100} height={30} filter={filter} page={2} />, { columns: 100 }));
+    const all = page(''); for (const c of ['/help', '/effort', '/theme', '/density', '/night', '/permissions']) expect(all).toContain(c); expect(all).toContain('Commands'); expect(all).not.toContain('Approvals');
+    const some = page('theme'); expect(some).toContain('/theme'); expect(some).not.toContain('/density'); expect(page('zzzz')).toContain('No command matches that.');
+  });
   it('fits 80x24, groups and key names shown; two columns from 100 wide', () => { const out = help(80, 22).split('\n'); expect(out.length).toBeLessThanOrEqual(24); expect(out.join('\n')).toContain('ctrl+k'); expect(out.join('\n')).toContain('Approvals'); const wide = help(120, 40); expect(wide.split('\n').some((l) => /General.*\S+\s{2,}\S/.test(l) || l.match(/│.*│/))).toBe(true); });
   it('typing pal filters to the palette action', () => { const rows = helpRows(actions(), km(), 'pal'); expect(rows.map((r) => r.id)).toEqual(expect.arrayContaining(['palette.open'])); expect(rows.every((r) => r.id.startsWith('palette.'))).toBe(true); expect(help(80, 22, 'pal')).toContain('Open the command palette'); expect(help(80, 22, 'pal')).not.toContain('Approve this once'); });
   it('30 actions still fit at 80x24', () => { const many = [...actions(), ...Array.from({ length: 30 - actions().length }, (_, i) => ({ id: `x.a${i}`, group: 'Extra', description: `extra action ${i}`, defaults: [] }))]; const out = strip(renderToString(<HelpBody actions={many} keymap={km()} warnings={[]} width={80} height={22} filter="" />, { columns: 80 })).split('\n'); expect(out.length).toBeLessThanOrEqual(24); });

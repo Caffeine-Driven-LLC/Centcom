@@ -1,6 +1,6 @@
 # The terminal app
 
-Run `centcom` in a project folder. Type what you want done and press Enter. `?` lists every key, `/` lists every command, `ctrl+k` searches everything.
+Run `centcom` in a project folder. Type what you want done and press Enter. `?` lists every key (press Tab for the editing keys and then every command), `/` opens the command menu, `ctrl+k` searches everything.
 
 ## Typing
 
