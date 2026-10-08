@@ -180,6 +180,8 @@ export function App({ ctl, tier, keys }: AppProps) {
         case 'tasks.toggle': ctl.patch({ tasksOpen: !s.tasksOpen }); return;
         case 'night.toggle': ctl.openNight(); return;
         case 'history.search': void ctl.historyPick(); return;
+        case 'app.suspend': ctl.suspend(); return;
+        case 'prompt.edit': ctl.editPrompt(); return;
         case 'fleet.toggle': ctl.patch({ fleet: !s.fleet }); return;
         case 'transcript.bottom': setScroll(0); return;
         case 'transcript.top': setScroll(maxScroll); return;

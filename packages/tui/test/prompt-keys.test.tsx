@@ -9,9 +9,9 @@ import { App, AppController } from '../src/index.js';
 
 const wait = (ms = 25) => new Promise((r) => setTimeout(r, ms));
 let cleanup: (() => void) | undefined; afterEach(() => { cleanup?.(); cleanup = undefined; });
-async function mount(o: { cwd?: string } = {}) {
+async function mount(o: { cwd?: string; external?: (t: import('../src/index.js').ExternalTask) => void } = {}) {
   const copied: string[] = [];
-  const ctl = new AppController({ engine: new DemoEngine({ speed: 100 }), demo: true, cwd: o.cwd ?? '/tmp', version: 't', skills: [], clipboard: (t) => copied.push(t), mouse: true });
+  const ctl = new AppController({ engine: new DemoEngine({ speed: 100 }), demo: true, cwd: o.cwd ?? '/tmp', version: 't', skills: [], clipboard: (t) => copied.push(t), mouse: true, ...(o.external ? { external: o.external } : {}) });
   const out: any = new PassThrough(); out.columns = 100; out.rows = 30; out.isTTY = true; let frame = ''; out.on('data', (d: Buffer) => { frame = d.toString(); });
   const inp: any = new PassThrough(); inp.isTTY = true; inp.setRawMode = () => inp; inp.ref = () => inp; inp.unref = () => inp;
   const inst = render(<App ctl={ctl} tier="none" />, { stdout: out, stdin: inp, exitOnCtrlC: false, patchConsole: false, debug: true });
@@ -295,5 +295,19 @@ describe('second review: app-level', () => {
   it('in the night panel Enter completes a suggested file instead of queueing the half-typed word', async () => {
     const t = await mount({ cwd: REPO_ROOT }); t.ctl.openNight(); await t.send('do @ptkeys', 50); await t.until(() => t.ctl.state.mention?.q === 'ptkeys' && !!t.ctl.state.mention.items.length);
     await t.send('\r', 150); expect(t.ctl.state.night.tasks).toHaveLength(0); expect(t.text()).toMatch(/^do @packages\/tui\/test\/prompt-keys\.test\.tsx $/); await t.send('\r', 150); expect(t.ctl.state.night.tasks).toHaveLength(1); expect(t.text()).toBe('');
+  });
+});
+
+describe('ctrl+g (your editor) and ctrl+z (the background)', () => {
+  it('ctrl+g hands the prompt to the launcher, and what comes back replaces it; an editor that saved nothing leaves it alone', async () => {
+    const tasks: import('../src/index.js').ExternalTask[] = []; const t = await mount({ external: (x) => { tasks.push(x); } }); await t.send('a draft in the prompt', 50); await t.send('\x07', 100);
+    expect(tasks).toHaveLength(1); expect(tasks[0]).toMatchObject({ kind: 'editor', text: 'a draft in the prompt' });
+    (tasks[0] as { done(x?: string): void }).done('a long message\nwritten in vim\nwith three lines'); expect(t.text()).toBe('a long message\nwritten in vim\nwith three lines'); expect(t.cursor()).toBe(t.text().length);
+    await t.send('\x07', 100); (tasks[1] as { done(x?: string): void }).done(undefined); expect(t.text()).toBe('a long message\nwritten in vim\nwith three lines'); expect(t.ctl.state.toasts.at(-1)!.text).toMatch(/did not save anything/);
+    await t.send('\x15\x15', 50); await t.send('\x07', 100); expect(tasks[2]).toMatchObject({ kind: 'editor' }); // works on an empty prompt too
+  });
+  it('ctrl+z asks to be put in the background; without a launcher both keys say they are not available', async () => {
+    const tasks: import('../src/index.js').ExternalTask[] = []; const t = await mount({ external: (x) => { tasks.push(x); } }); await t.send('\x1a', 100); expect(tasks).toEqual([{ kind: 'suspend' }]);
+    const plain = await mount(); await plain.send('\x1a', 100); expect(plain.ctl.state.toasts.at(-1)!.text).toMatch(/Suspending is not available/); await plain.send('\x07', 100); expect(plain.ctl.state.toasts.at(-1)!.text).toMatch(/Editing in your editor is not available/);
   });
 });

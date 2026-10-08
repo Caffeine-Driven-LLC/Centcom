@@ -29,6 +29,8 @@ import { emptyText } from './onboarding/copy.js';
 import { reduceTasks } from './tasks/model.js';
 import { VerbRotator } from './util/verbs.js';
 
+/** Something that needs the real terminal while the screen steps aside: your editor, or being put in the background. */
+export type ExternalTask = { kind: 'suspend' } | { kind: 'editor'; text: string; done(text: string | undefined): void };
 /** A turn this long rings the bell when it ends (if the bell is on). */
 const LONG_TURN_MS = 15_000;
 /** The longest message Centcom sends in one go. */
@@ -36,6 +38,8 @@ export const MAX_MESSAGE = 65_536;
 export interface ControllerOptions {
   /** How long an approval waits before the engine declines it (shown as a countdown). */
   approvalTimeoutMs?: number;
+  /** Ask the launcher to step the screen aside and run `task` with the real terminal. Without it these keys say they are not available. */
+  external?: (task: ExternalTask) => void;
   /** Ring the terminal bell (a sound or a flash in most terminals). */
   bell?: () => void;
   /** Where copied text goes (tests pass a recorder). Default: the system clipboard. */
@@ -660,6 +664,13 @@ export class AppController {
     const snippet = (t: string) => { const flat = t.replace(/\s+/g, ' '); const at = flat.toLowerCase().indexOf(q); const from = Math.max(0, at - 30); return (from > 0 ? '…' : '') + flat.slice(from, from + 90) + (flat.length > from + 90 ? '…' : ''); };
     const ids = await this.pick({ title: `${hits.length} message${hits.length === 1 ? '' : 's'} mention "${arg.trim()}"`, note: hits.length > 40 ? 'The last 40, newest last. The one you choose is scrolled into view.' : 'Newest last. The one you choose is scrolled into view.', multi: false, confirm: 'go there', options: hits.slice(-40).map((i) => ({ id: i.id, label: snippet(text(i)), hint: who(i) })) });
     if (ids?.[0]) this.patch({ jumpTo: ids[0] });
+  }
+  /** ctrl+z: put the app in the background (`fg` brings it back where it was). */
+  suspend() { if (!this.o.external) { this.toast('info', 'Suspending is not available here.'); return; } this.o.external({ kind: 'suspend' }); }
+  /** ctrl+g: write the message in your editor ($VISUAL or $EDITOR); what you save comes back into the prompt. */
+  editPrompt() {
+    if (!this.o.external) { this.toast('info', 'Editing in your editor is not available here.'); return; }
+    this.o.external({ kind: 'editor', text: this.state.input, done: (t) => { if (t === undefined) this.toast('warn', 'Your editor did not save anything, so the prompt is unchanged.'); else this.patch({ input: t, cursor: t.length }); } });
   }
   /** ctrl+r: pick one of your earlier messages in this project; it goes in the prompt for you to change or send. */
   async historyPick() {

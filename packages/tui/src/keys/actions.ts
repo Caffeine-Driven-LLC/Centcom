@@ -17,6 +17,8 @@ def('palette.next', 'Palette', 'Next result', ['down', 'palette']);
 def('palette.prev', 'Palette', 'Previous result', ['up', 'palette']);
 def('palette.run', 'Palette', 'Run the selected result', ['enter', 'palette']);
 def('models.open', 'General', 'Choose the model', ['ctrl+o', 'global']);
+def('app.suspend', 'General', 'Put the app in the background (fg brings it back)', ['ctrl+z', 'prompt']);
+def('prompt.edit', 'General', 'Write the message in your editor', ['ctrl+g', 'prompt']);
 def('history.search', 'General', 'Search your earlier messages', ['ctrl+r', 'prompt']);
 def('mode.cycle', 'General', 'Cycle permission mode', ['shift+tab', 'global']);
 def('agent.interrupt', 'Agent', 'Stop the agent / clear (twice: rewind)', ['esc', 'prompt']);

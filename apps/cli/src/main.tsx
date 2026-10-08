@@ -28,6 +28,7 @@ import { CONTRACT_VERSION } from '@centcom/protocol';
 import { find as findCommand, helpFor, renderHelp, topHelp } from './help/index.js';
 import { COMMANDS } from './help/commands.js';
 import { checkArgs, normalizeArgs } from './flags.js';
+import { editInEditor, stopUntilContinued, type ExternalTask } from './external.js';
 import { runUpdate } from './commands/update/index.js';
 import { createInterface } from 'node:readline';
 import { dirname as pathDirname } from 'node:path';
@@ -139,6 +140,7 @@ async function main() {
   const settings = { ...settingsFromConfig(cc.cfg), permissionMode: mode, reducedMotion: a11y.reducedMotion, ...(a11y.screenReader ? { mascot: 'off' as const } : {}) };
   // theme "auto": ask the terminal for its background colour (150 ms at most, nothing is written without a terminal) so a light terminal gets Paper instead of Graphite
   if (cc.cfg.ui.theme === 'auto' && !a11y.screenReader) { const bg = await queryBackground({ out: process.stdout, inp: process.stdin }); if (bg === 'light') settings.theme = 'light'; }
+  let pendingExternal: ExternalTask | undefined; // set by ctrl+z and ctrl+g: the screen steps aside, the task runs, the screen comes back
   let quitLinear: () => void = () => undefined; const linearStop = new Promise<void>((r) => { quitLinear = r; });
   if (arg('--engine') === 'codex' || arg('--engine') === 'claude-code') cc.set('client.engine', arg('--engine')!); // the agent you pick is the one you get next time
 
@@ -156,7 +158,7 @@ async function main() {
   }
   const ctl = new AppController({ ...rt.options, views: appViews(process.cwd(), { doctor: () => realDoctorContext({ version: VERSION, contract: CONTRACT_VERSION, apiBase: cc.cfg.api.base_url, stateDir: stateDir(defaultDeps()) }) }),
     engine, demo, cwd: process.cwd(), branch, version: VERSION, permissionMode: mode, dangerous: dangerous || mode === 'bypassPermissions', ghosts: has('--demo-team'),
-    logger, settings, bell: () => { try { process.stdout.write('\x07'); } catch { /* no terminal */ } }, ...cc.options({ ...initialSettings(), ...settings }, { saveHistory: !has('--no-save') }),
+    logger, settings, external: (task) => { pendingExternal = task; instance?.unmount(); }, bell: () => { try { process.stdout.write('\x07'); } catch { /* no terminal */ } }, ...cc.options({ ...initialSettings(), ...settings }, { saveHistory: !has('--no-save') }),
     sessions: sessionStore, night: demo ? undefined : { dir: pathJoin(homedir(), '.centcom', 'night') },
     modelCache: { read: async (f) => { try { return await readFile(pathJoin(stateDir(defaultDeps()), f), 'utf8'); } catch { return undefined; } }, write: async (f, t) => { const d = stateDir(defaultDeps()); await mkdir(d, { recursive: true, mode: 0o700 }); await writeFile(pathJoin(d, f), t, { mode: 0o600 }); } },
     resume: resumeId,
@@ -187,7 +189,15 @@ async function main() {
   if (mode === 'bypassPermissions') ctl.notice('warn', 'Dangerously skip permissions is ON', 'Cento will run commands and edit files without asking. Use /mode default to turn approvals back on.');
   const keys = resolvedKeys(); if (keys.warnings.length) ctl.notice('warn', `Some of your key bindings were skipped (${keys.warnings.length}). Press ? to see why.`);
   if (a11y.screenReader) await runLinear(ctl, { input: process.stdin, output: process.stdout }, linearStop);
-  else { instance = render(<App ctl={ctl} tier={tier} keys={keys} />, { exitOnCtrlC: false, patchConsole: false, maxFps: 30, incrementalRendering: !process.env.CENTCOM_FULL_RENDER }); await instance.waitUntilExit(); }
+  else {
+    for (;;) { // each pass draws the app; a task (your editor, being put in the background) unmounts it, runs on the real terminal, and the loop draws it again from the same state
+      instance = render(<App ctl={ctl} tier={tier} keys={keys} />, { exitOnCtrlC: false, patchConsole: false, maxFps: 30, incrementalRendering: !process.env.CENTCOM_FULL_RENDER });
+      await instance.waitUntilExit(); const task = pendingExternal; pendingExternal = undefined; if (!task) break;
+      process.stdout.write('\x1b[?1000l\x1b[?1006l\x1b[?25h\x1b[?1049l'); // the screen is the shell's again
+      if (task.kind === 'editor') task.done(editInEditor(task.text)); else await stopUntilContinued();
+      process.stdout.write('\x1b[?1049h\x1b[2J\x1b[H');
+    }
+  }
   ctl.stop(); await ctl.stopFleet(); cc.flush();
   leave();
   await done(0);
