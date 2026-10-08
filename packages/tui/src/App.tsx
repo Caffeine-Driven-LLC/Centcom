@@ -20,6 +20,7 @@ import { Gallery, ModelPicker, galleryList, paletteItems } from './components/Ov
 import { Toasts } from './components/Toasts.js';
 import { MultiSelect } from './pick/MultiSelect.js';
 import { MentionPopup } from './components/MentionPopup.js';
+import { setTitle, windowTitle } from './util/title.js';
 import { ClickContext, clicksIn, createClickRegistry } from './click.js';
 import { NightPanel } from './night/NightPanel.js';
 import { COMMANDS } from './state/commands.js';
@@ -105,6 +106,9 @@ export function App({ ctl, tier, keys }: AppProps) {
 
   /** Mouse reporting (press, release and wheel, in the SGR form) only while it is on; always switched off again on the way out. */
   const clicks = useMemo(() => createClickRegistry(), []);
+  const { write: writeTerm } = useStdout();
+  const title = windowTitle({ cwd: s.cwd, busy: s.busy, approvals: s.approvals.length, mode: s.mode, engineLabel: s.engineLabel, demo: s.demo });
+  useEffect(() => { if (s.settings.title) writeTerm(setTitle(title)); }, [s.settings.title, title, writeTerm]); // the tab says what is going on
   const paletteProviders = useMemo(() => (s.mode === 'palette' ? ctl.paletteProviders() : []), [ctl, s.mode]); // rebuilt on each open so the sessions are current
   const { write } = useStdout(); const { stdin } = useStdin(); const wheelRef = useRef<(n: number) => void>(() => undefined);
   wheelRef.current = (notches) => { if (s.mode === 'pick') { for (let i = 0; i < Math.abs(notches); i++) ctl.pickKey(notches > 0 ? 'up' : 'down'); } else if (s.mode === 'chat' || s.mode === 'night' || pending) ctl.patch({ scroll: Math.max(0, Math.min(maxScroll, ctl.state.scroll + notches * 3)) }); }; // from the live value: events can arrive faster than renders

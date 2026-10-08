@@ -12,7 +12,7 @@ let cleanup: (() => void) | undefined; afterEach(() => { cleanup?.(); cleanup = 
 async function mount(o: { cwd?: string; external?: (t: import('../src/index.js').ExternalTask) => void } = {}) {
   const copied: string[] = [];
   const ctl = new AppController({ engine: new DemoEngine({ speed: 100 }), demo: true, cwd: o.cwd ?? '/tmp', version: 't', skills: [], clipboard: (t) => copied.push(t), mouse: true, ...(o.external ? { external: o.external } : {}) });
-  const out: any = new PassThrough(); out.columns = 100; out.rows = 30; out.isTTY = true; let frame = ''; out.on('data', (d: Buffer) => { frame = d.toString(); });
+  const out: any = new PassThrough(); out.columns = 100; out.rows = 30; out.isTTY = true; let frame = ''; let raw = ''; out.on('data', (d: Buffer) => { frame = d.toString(); raw += d.toString(); });
   const inp: any = new PassThrough(); inp.isTTY = true; inp.setRawMode = () => inp; inp.ref = () => inp; inp.unref = () => inp;
   const inst = render(<App ctl={ctl} tier="none" />, { stdout: out, stdin: inp, exitOnCtrlC: false, patchConsole: false, debug: true });
   cleanup = () => { inst.unmount(); ctl.stop(); };
@@ -23,7 +23,7 @@ async function mount(o: { cwd?: string; external?: (t: import('../src/index.js')
   /** Wait until something is true (a slow machine takes longer than a fixed sleep). */
   const until = async (f: () => boolean, ms = 8000) => { const t0 = Date.now(); while (!f()) { if (Date.now() - t0 > ms) throw new Error('timeout waiting; screen:\n' + frame.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '')); await wait(15); } };
   const screen = () => frame.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '');
-  return { ctl, copied, send, click, until, frame: screen, text: () => ctl.state.input, cursor: () => ctl.state.cursor };
+  return { ctl, copied, send, click, until, raw: () => raw, unmount: () => { cleanup?.(); cleanup = undefined; }, frame: screen, text: () => ctl.state.input, cursor: () => ctl.state.cursor };
 }
 const SHIFT_LEFT = '\x1b[1;2D', SHIFT_RIGHT = '\x1b[1;2C', CTRL_DELETE = '\x1b[3;5~', DELETE = '\x1b[3~', LEFT = '\x1b[D', SHIFT_HOME = '\x1b[1;2H';
 
@@ -309,5 +309,19 @@ describe('ctrl+g (your editor) and ctrl+z (the background)', () => {
   it('ctrl+z asks to be put in the background; without a launcher both keys say they are not available', async () => {
     const tasks: import('../src/index.js').ExternalTask[] = []; const t = await mount({ external: (x) => { tasks.push(x); } }); await t.send('\x1a', 100); expect(tasks).toEqual([{ kind: 'suspend' }]);
     const plain = await mount(); await plain.send('\x1a', 100); expect(plain.ctl.state.toasts.at(-1)!.text).toMatch(/Suspending is not available/); await plain.send('\x07', 100); expect(plain.ctl.state.toasts.at(-1)!.text).toMatch(/Editing in your editor is not available/);
+  });
+});
+
+describe('the terminal tab title', () => {
+  const titles = (raw: string) => [...raw.matchAll(/\x1b\]0;([^\x07]*)\x07/g)].map((m) => m[1]!);
+  it('names the folder and says when the agent works or needs you', async () => {
+    const t = await mount({ cwd: '/home/me/projects/shop' }); await t.until(() => titles(t.raw()).length > 0); expect(titles(t.raw()).at(-1)).toBe('shop · Centcom (demo)');
+    t.ctl.patch({ busy: true }); await t.until(() => titles(t.raw()).at(-1)?.startsWith('◐ working') === true); expect(titles(t.raw()).at(-1)).toBe('◐ working · shop · Centcom (demo)');
+    void t.ctl.decide({ approval_id: 'a', agent_id: 'me', tool_id: 't', tool: 'Bash', summary: 'x', risk: 'medium', command: 'ls' } as never); await t.until(() => titles(t.raw()).at(-1)?.startsWith('● needs you') === true);
+    t.ctl.answerApproval('deny'); t.ctl.patch({ busy: false }); await t.until(() => titles(t.raw()).at(-1) === 'shop · Centcom (demo)'); t.unmount();
+  });
+  it('/title off leaves the title alone (and does not touch the saved one); control characters in a folder name cannot break out', async () => {
+    const t = await mount({ cwd: '/tmp/odd\x07name\x1b]0;evil' }); await t.until(() => titles(t.raw()).length > 0); const all = titles(t.raw()); expect(all.every((x) => !/[\x00-\x1f]/.test(x))).toBe(true); expect(t.raw()).not.toMatch(/\x1b\]0;[^\x07]*\x1b\]0;evil/);
+    await t.ctl.runCommand('/title off'); await wait(80); const n = t.raw().length; t.ctl.patch({ busy: true }); await wait(150); expect(titles(t.raw().slice(n))).toEqual([]); expect(t.ctl.state.settings.title).toBe(false); t.unmount();
   });
 });

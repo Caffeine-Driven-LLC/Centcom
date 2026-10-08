@@ -48,6 +48,7 @@ When you change them in the app, these are saved to your user file: theme, Cento
 | `ui.spinner` | fun \| plain | `"fun"` | no | The waiting line: rotating fun verbs, or a plain "Working…" |
 | `ui.density` | comfortable \| compact | `"comfortable"` | no | Blank rows between messages: comfortable, or compact to fit more on screen |
 | `ui.bell` | boolean | `false` | no | Ring the terminal bell when an approval or question needs you, or a long task finishes |
+| `ui.title` | boolean | `true` | no | Show the folder and what the agent is doing in the terminal tab title |
 | `ui.reduced_motion` | boolean | `false` | yes | Turn animation off |
 | `ui.color` | auto \| truecolor \| 256 \| 16 \| never | `"auto"` | yes | Terminal color depth |
 | `a11y.screen_reader` | boolean | `false` | no | Plain text for screen readers: no colour, no boxes, no animation, no redraws; one line per event. Same as --screen-reader or CENTO_SCREEN_READER=1 |

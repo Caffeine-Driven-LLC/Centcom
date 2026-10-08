@@ -101,3 +101,11 @@ describe('diff: "\\ No newline at end of file"', () => {
     const text = renderDiff(D, 60).map((l) => l.map((s) => s.t).join('')).join('\n'); expect(text).toContain('\\ No newline at end of file'); expect(text.split('\n').filter((l) => l.includes('No newline')).every((l) => !/^\s*\d/.test(l))).toBe(true);
   });
 });
+
+describe('window title', () => {
+  it('folder, state, demo marker; control characters and over-long names are cleaned', async () => {
+    const { windowTitle, cleanTitle } = await import('../src/util/title.js'); const base = { cwd: '/a/b/shop', busy: false, approvals: 0, mode: 'chat', engineLabel: 'Claude Code', demo: false };
+    expect(windowTitle(base)).toBe('shop · Centcom'); expect(windowTitle({ ...base, busy: true })).toBe('◐ working · shop · Centcom'); expect(windowTitle({ ...base, busy: true, approvals: 1 })).toBe('● needs you · shop · Centcom'); expect(windowTitle({ ...base, demo: true })).toBe('shop · Centcom (demo)'); expect(windowTitle({ ...base, cwd: '/' })).toContain('Centcom');
+    expect(cleanTitle('a\x07b\x1bc\nd')).toBe('a b c d'); expect(cleanTitle('x'.repeat(200)).length).toBe(80);
+  });
+});

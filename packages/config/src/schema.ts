@@ -18,6 +18,7 @@ export const SCHEMA = {
   'ui.spinner': { kind: 'enum', default: 'fun', enum: ['fun', 'plain'], doc: 'The waiting line: rotating fun verbs, or a plain "Working…"' },
   'ui.density': { kind: 'enum', default: 'comfortable', enum: ['comfortable', 'compact'], doc: 'Blank rows between messages: comfortable, or compact to fit more on screen' },
   'ui.bell': { kind: 'boolean', default: false, doc: 'Ring the terminal bell when an approval or question needs you, or a long task finishes' },
+  'ui.title': { kind: 'boolean', default: true, doc: 'Show the folder and what the agent is doing in the terminal tab title' },
   'ui.reduced_motion': { kind: 'boolean', default: false, project: true, doc: 'Turn animation off' },
   'ui.color': { kind: 'enum', default: 'auto', enum: ['auto', 'truecolor', '256', '16', 'never'], project: true, doc: 'Terminal color depth' },
   'a11y.screen_reader': { kind: 'boolean', default: false, doc: 'Plain text for screen readers: no colour, no boxes, no animation, no redraws; one line per event. Same as --screen-reader or CENTO_SCREEN_READER=1' },

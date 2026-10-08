@@ -50,6 +50,7 @@ Type a few letters of anything: commands (`thm hc` finds `/theme hc`), project f
 | `/density compact` | `ui.density` | fewer blank rows between messages |
 | `/motion reduced` | `ui.reduced_motion` | no animation |
 | `/mouse off` | `ui.mouse` | no wheel or click handling |
+| `/title off` | `ui.title` | leave the terminal tab title alone (by default it shows the folder and whether the agent is working or needs you, and your old title comes back when you leave) |
 | `/bell on` | `ui.bell` | ring the terminal bell when an approval or question needs you, or a task that took 15 seconds or more finishes |
 
 Everything you change is remembered. `/config` shows where each value comes from.

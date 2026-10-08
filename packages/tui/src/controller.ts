@@ -634,7 +634,7 @@ export class AppController {
       const rows: { id: string; label: string; value: string; hint?: string }[] = [
         { id: 'mode', label: 'Permissions', value: val('mode'), hint: 'when the agent asks' }, { id: 'model', label: 'Model', value: st.model || 'default' }, { id: 'effort', label: 'Effort', value: this.effort || 'default', hint: 'how hard it thinks' },
         { id: 'theme', label: 'Theme', value: st.theme }, { id: 'mascot', label: 'Cento size', value: st.mascot }, { id: 'color', label: "Cento's colour", value: st.color }, { id: 'motion', label: 'Animation', value: st.reducedMotion ? 'reduced' : 'full' },
-        { id: 'spinner', label: 'Waiting line', value: st.spinner }, { id: 'density', label: 'Spacing', value: st.density }, { id: 'bell', label: 'Bell', value: st.bell ? 'on' : 'off', hint: 'when you are needed' }, { id: 'mouse', label: 'Mouse', value: st.mouse ? 'on' : 'off', hint: 'wheel and clicks' }, { id: 'auto', label: 'Auto skills', value: st.autoSkills ? 'on' : 'off' },
+        { id: 'spinner', label: 'Waiting line', value: st.spinner }, { id: 'density', label: 'Spacing', value: st.density }, { id: 'title', label: 'Tab title', value: st.title ? 'on' : 'off', hint: 'folder and state' }, { id: 'bell', label: 'Bell', value: st.bell ? 'on' : 'off', hint: 'when you are needed' }, { id: 'mouse', label: 'Mouse', value: st.mouse ? 'on' : 'off', hint: 'wheel and clicks' }, { id: 'auto', label: 'Auto skills', value: st.autoSkills ? 'on' : 'off' },
       ];
       const ids = await this.pick({ title: 'Settings', note: 'Choose one to change it. Esc closes.', options: rows.map((r) => ({ id: r.id, label: `${r.label}: ${r.value}`, hint: r.hint })), multi: false, confirm: 'change' });
       const id = ids?.[0]; if (!id) return;
@@ -777,6 +777,7 @@ export class AppController {
       theme: { title: 'Theme', current: st.theme, options: o(['dark', 'Graphite'], ['light', 'Paper, for light terminals'], ['hc', 'high contrast: black, white, bold borders']) },
       mascot: { title: 'Cento size', current: st.mascot, options: o(['auto', 'by window height'], ['large'], ['small'], ['off']) },
       color: { title: "Cento's colour", current: st.color, options: o(['violet'], ['red'], ['yellow'], ['green'], ['brown']) },
+      title: { title: 'Terminal tab title', current: st.title ? 'on' : 'off', options: o(['on', 'the folder and what the agent is doing'], ['off', 'leave the title alone']) },
       bell: { title: 'Terminal bell', current: st.bell ? 'on' : 'off', options: o(['off', 'silent'], ['on', 'a sound or flash when you are needed or a long task is done']) },
       density: { title: 'Space between messages', current: st.density, options: o(['comfortable', 'a blank row between messages'], ['compact', 'fits more on screen']) },
       spinner: { title: 'While the agent works', current: st.spinner, options: o(['fun', 'rotating verbs'], ['plain', 'just "Working…"']) },
@@ -819,6 +820,7 @@ export class AppController {
       case 'mascot': if (['large', 'small', 'off', 'auto'].includes(arg)) this.setSettings({ mascot: arg as Settings['mascot'] }); else this.toast('info', 'Try /mascot large, small, off or auto'); break;
       case 'color': if (['violet', 'red', 'yellow', 'green', 'brown'].includes(arg)) this.setSettings({ color: arg as CentoColor }); else this.toast('info', 'Colours: violet red yellow green brown'); break;
       case 'theme': if (arg === 'dark' || arg === 'light' || arg === 'hc') this.setSettings({ theme: arg }); else this.toast('info', 'Try /theme dark, /theme light or /theme hc (high contrast)'); break;
+      case 'title': if (arg === 'on' || arg === 'off') { this.setSettings({ title: arg === 'on' }); this.toast('info', arg === 'on' ? 'The tab title shows the folder and what the agent is doing' : 'The tab title is left alone'); } else this.toast('info', 'Try /title on or /title off'); break;
       case 'bell': if (arg === 'on' || arg === 'off') { this.setSettings({ bell: arg === 'on' }); this.toast('info', arg === 'on' ? 'Bell on: you will hear it when an approval or question needs you, or a long task finishes' : 'Bell off'); } else this.toast('info', 'Try /bell on or /bell off'); break;
       case 'density': if (arg === 'comfortable' || arg === 'compact') { this.setSettings({ density: arg }); this.toast('info', arg === 'compact' ? 'Compact: fewer blank rows' : 'Comfortable: a blank row between messages'); } else this.toast('info', 'Try /density comfortable or /density compact'); break;
       case 'spinner': if (arg === 'fun' || arg === 'plain') { this.setSettings({ spinner: arg }); this.toast('info', arg === 'plain' ? 'The waiting line says Working…' : 'The waiting line rotates its verbs'); } else this.toast('info', 'Try /spinner fun or /spinner plain'); break;

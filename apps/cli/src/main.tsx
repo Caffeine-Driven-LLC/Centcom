@@ -5,7 +5,7 @@ import { render } from 'ink';
 import { detectColorTier } from '@centcom/theme';
 import { ClaudeCodeEngine, CodexEngine, DemoEngine, detectClaude, detectCodex, type AgentEngine, type PermissionMode } from '@centcom/agent';
 import { chooseEngine } from './engine-pick.js';
-import { App, AppController, ClientConfig, FirstRun, SessionStore, resolveA11yMode, runLinear, queryBackground, buildRuntime, initialSettings, isFirstRun, markFirstRunDone, settingsFromConfig } from '@centcom/tui';
+import { App, AppController, ClientConfig, FirstRun, SessionStore, TITLE_POP, TITLE_PUSH, resolveA11yMode, runLinear, queryBackground, buildRuntime, initialSettings, isFirstRun, markFirstRunDone, settingsFromConfig } from '@centcom/tui';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename as pathBase, join as pathJoin, resolve as pathResolve } from 'node:path';
 import { homedir } from 'node:os';
@@ -168,6 +168,8 @@ async function main() {
         return { diff: plan.diff || '(already there)', apply: async () => { await mf.apply(plan, { accepted: true, planHash: plan.planHash }); return 'Added to memory.'; } }; } catch (e) { return { error: String((e as Error).message ?? e) }; }
     },
   });
+  let titlePushed = false; // the tab title is saved once, when the app first sets it, and put back when the terminal is given back
+  if (!a11y.screenReader && settings.title) { process.stdout.write(TITLE_PUSH); titlePushed = true; }
   if (!a11y.screenReader) process.stdout.write('\x1b[?1049h\x1b[2J\x1b[H'); // alternate screen: the transcript never pollutes scrollback (a screen reader gets plain appended lines instead)
   // the one-time welcome, before anything else (never in print mode or without a terminal)
   const firstRunFile = pathJoin(stateDir({ env: process.env, homedir: homedir() }), 'state.json'); let firstRunNote: string | undefined;
@@ -176,7 +178,7 @@ async function main() {
     const r = await markFirstRunDone({ stateFile: firstRunFile }); if (!r.ok) firstRunNote = r.message; process.stdout.write('\x1b[2J\x1b[H');
   }
   /** Put the terminal back as it was: out of the alternate screen, mouse reporting off, cursor shown. Safe to call twice. */
-  const leave = () => { try { process.stdout.write('\x1b[?1000l\x1b[?1006l\x1b[?25h' + (a11y.screenReader ? '' : '\x1b[?1049l')); } catch { /* the terminal is gone */ } };
+  const leave = () => { try { process.stdout.write('\x1b[?1000l\x1b[?1006l\x1b[?25h' + (a11y.screenReader ? '' : '\x1b[?1049l') + (titlePushed ? TITLE_POP : '')); titlePushed = false; } catch { /* the terminal is gone */ } };
   process.on('exit', leave);
   for (const [sig, code] of [['SIGTERM', 143], ['SIGHUP', 129]] as const) process.on(sig, () => { leave(); process.exit(code); }); // `kill` and a closing window must not leave your shell in the alternate screen with the mouse captured
   rt.bind(ctl);
