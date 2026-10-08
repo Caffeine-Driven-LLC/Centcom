@@ -42,7 +42,8 @@ import { ACCOUNT_COMMANDS } from './commands/account/index.js';
 const VERSION = '0.1.0';
 const HELP = topHelp(VERSION);
 
-function arg(name: string): string | undefined { const i = process.argv.indexOf(name); return i >= 0 ? process.argv[i + 1] : undefined; }
+/** The word after an option, unless that is another option (`--resume --demo` has no id). */
+function arg(name: string): string | undefined { const i = process.argv.indexOf(name); const v = i >= 0 ? process.argv[i + 1] : undefined; return v !== undefined && v.startsWith('-') && !/^-\d/.test(v) ? undefined : v; }
 const has = (n: string) => process.argv.includes(n);
 
 /** Explicit command-line choices, as the top config layer. They are used for this run and never written back. */

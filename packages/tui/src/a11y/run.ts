@@ -32,6 +32,11 @@ export async function runLinear(ctl: AppController, io: LinearIO = { input: proc
   let asking = false;
   const react = async () => {
     flushNotices(); if (asking) return; const s = ctl.state;
+    if (ctl.awaitingAnswer) { // the agent asked something with no choices: the next line you type is the answer (Enter alone declines)
+      asking = true; const line = await readLine('Your answer (just press Enter to decline): ');
+      if (!line?.trim()) ctl.cancelAnswer(); else await ctl.submit(line);
+      asking = false; void react(); return;
+    }
     if (s.approvals[0]) {
       asking = true; const a = s.approvals[0]!.req; const high = a.risk === 'high';
       const ans = await renderer.ask({ command: a.command, cwd: a.cwd, tool: a.tool, summary: a.path ?? a.summary });

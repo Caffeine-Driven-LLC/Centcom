@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -34,6 +34,12 @@ describe('the launcher: bundle, rebuild and fallback (a fake project root)', () 
     f.run(env); f.run(env); f.run(env); expect(builds()).toBe(1);
     f.touch('packages/a/src/index.ts'); f.run(env); expect(builds()).toBe(2); f.run(env); expect(builds()).toBe(2);
     f.touch('pnpm-lock.yaml'); f.run(env); expect(builds()).toBe(3); f.touch('tools/dev/bundle-cli.mjs'); f.run(env); expect(builds()).toBe(4);
+  });
+  it('says so (one line on stderr) when a rebuild fails but an older build exists, and stays quiet otherwise', () => {
+    const f = fakeRoot(BUNDLER); const quiet = spawnSync(join(f.r, 'bin/centcom'), [], { encoding: 'utf8' }); expect(quiet.stderr).toBe('');
+    writeFileSync(join(f.r, 'tools/dev/bundle-cli.mjs'), 'process.exit(1);'); f.touch('packages/a/src/index.ts');
+    const r = spawnSync(join(f.r, 'bin/centcom'), ['--flag', 'x'], { encoding: 'utf8' }); expect(r.stdout.trim()).toBe('BUNDLED --flag x production'); expect(r.stderr.trim().split('\n')).toHaveLength(1); expect(r.stderr).toContain('could not rebuild');
+    const none = fakeRoot(`process.exit(1);`); expect(spawnSync(join(none.r, 'bin/centcom'), [], { encoding: 'utf8' }).stderr).toBe(''); // no older build: the tsx fallback, quietly
   });
   it('falls back to running the sources with tsx when the bundle cannot be built, and leaves no half-written file behind', () => {
     const f = fakeRoot(`import { writeFileSync } from 'node:fs'; writeFileSync(process.argv[2], 'partial'); process.exit(1);`);

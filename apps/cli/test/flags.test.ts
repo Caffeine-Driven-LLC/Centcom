@@ -9,7 +9,7 @@ const check = (args: string[], print = false) => checkArgs(normalizeArgs(args, t
 
 describe('the command line is checked against the documented options', () => {
   it.each([
-    [[], undefined], [['--demo'], undefined], [['--demo', '--theme', 'hc', '--mascot', 'off'], undefined], [['--theme=light'], undefined], [['-c'], undefined], [['--resume', 'ses_1'], undefined], [['--yolo'], undefined], [['--screen-reader', '--no-motion'], undefined], [['--model', 'claude-opus-5-5'], undefined],
+    [[], undefined], [['--demo'], undefined], [['--demo', '--theme', 'hc', '--mascot', 'off'], undefined], [['--theme=light'], undefined], [['-c'], undefined], [['--resume', 'ses_1'], undefined], [['--yolo'], undefined], [['--screen-reader', '--no-motion'], undefined], [['--model', 'claude-opus-5-5'], undefined], [['--resume'], undefined], [['--resume', '--demo'], undefined], [['--theme', 'auto'], undefined], [['--mascot', 'auto'], undefined], [['--colors', 'auto'], undefined], [['-p', 'x', '--permission-mode', 'acceptEdits'], undefined], [['-p', 'x', '--permission-mode', 'default'], undefined],
     [['-p', 'fix the bug'], undefined], [['-p'], undefined], [['-p', 'task', '--allow', 'Bash(npm test)', '--allow', 'Edit', '--max-turns', '5', '--timeout', '60', '--cwd', '/tmp', '--permission-mode', 'accept-edits'], undefined], [['--output-format', 'stream-json', '-p', 'x'], undefined],
   ] as [string[], string | undefined][])('%j is fine', (args, want) => { expect(check(args, args.includes('-p'))).toBe(want); });
 
@@ -17,8 +17,8 @@ describe('the command line is checked against the documented options', () => {
     expect(check(['--bogus'])).toBe('Unknown option --bogus. Try `centcom --help`.'); expect(check(['--demo-tean'])).toBe('Unknown option --demo-tean. Did you mean --demo-team? Try `centcom --help`.'); expect(check(['--screen-reeder'])).toContain('Did you mean --screen-reader?'); expect(check(['--themee', 'dark'])).toContain('Did you mean --theme?');
   });
   it('a value that is not allowed lists what is, and a missing value says so', () => {
-    expect(check(['--theme', 'purple'])).toBe('--theme must be one of dark, light, hc (you typed "purple").'); expect(check(['--mode', 'nonsense'])).toMatch(/--mode must be one of default, plan, acceptEdits, bypassPermissions/); expect(check(['--engine', 'gpt'])).toMatch(/claude-code, codex, demo/);
-    expect(check(['--model'])).toBe('--model needs a value.'); expect(check(['--theme'])).toBe('--theme needs a value (dark, light, hc).'); expect(check(['--model', '--demo'])).toBe('--model needs a value.'); expect(check(['--theme=purple'])).toContain('must be one of');
+    expect(check(['--theme', 'purple'])).toBe('--theme must be one of auto, dark, light, hc (you typed "purple").'); expect(check(['--mode', 'nonsense'])).toMatch(/--mode must be one of default, plan, acceptEdits, bypassPermissions/); expect(check(['--engine', 'gpt'])).toMatch(/claude-code, codex, demo/);
+    expect(check(['--model'])).toBe('--model needs a value.'); expect(check(['--theme'])).toBe('--theme needs a value (auto, dark, light, hc).'); expect(check(['--model', '--demo'])).toBe('--model needs a value.'); expect(check(['--theme=purple'])).toContain('must be one of');
   });
   it('a stray word in the terminal app is a mistyped command (with a suggestion); in print mode words are the task', () => {
     expect(check(['doctr'])).toBe('Unknown command "doctr". Did you mean `centcom doctor`? Try `centcom --help`.'); expect(check(['hello'])).toBe('Unknown command "hello". Try `centcom --help`.');
@@ -43,3 +43,11 @@ describe('centcom with a bad command line (the real launcher)', () => {
   }, 60_000);
 });
 void execFileSync;
+
+describe('the allowed values of an option match what the settings accept', () => {
+  it.each([['--theme', 'ui.theme', []], ['--mascot', 'client.mascot_size', []], ['--colors', 'ui.color', []], ['--cento-color', 'client.cento_color', []], ['--mode', 'client.permission_mode', ['bypassPermissions']], ['--engine', 'client.engine', ['demo']]] as [string, string, string[]][])('%s accepts every value of %s', async (flag, key, extra) => {
+    const { SCHEMA } = await import('@centcom/config'); const spec = (SCHEMA as Record<string, { enum?: readonly string[] }>)[key]!; const allowed = new Set(top.find((f) => f.flag.split(',').map((s) => s.trim()).includes(flag))!.arg!.replace(/[<>]/g, '').split('|'));
+    for (const v of [...(spec.enum ?? []), ...extra]) expect(allowed.has(v), `${flag} should accept "${v}"`).toBe(true);
+    for (const v of allowed) expect([...(spec.enum ?? []), ...extra].includes(v), `${flag} lists "${v}" but the settings do not accept it`).toBe(true);
+  });
+});

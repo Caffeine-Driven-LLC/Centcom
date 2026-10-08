@@ -43,6 +43,8 @@ export interface AppState {
   tasks: import('../tasks/model.js').TaskItem[]; tasksOpen: boolean;
   slashSel: number;
   palette: { query: string; sel: number };
+  /** The prompt shows dots instead of letters (a typed answer that is a secret). */
+  maskInput?: boolean;
   /** The open multi-select (mode 'pick'). */
   pick?: import('../pick/model.js').PickState;
   modelSel: number;

@@ -138,9 +138,9 @@ export class AppController {
   get state() { return this.store.get(); }
   /** The display name of an agent ("you" for the main one). */
   agentName(id: string) { return this.state.agents.find((a) => a.id === id)?.name ?? 'an agent'; }
-  private set(p: Partial<AppState> | ((s: AppState) => Partial<AppState>)) { this.store.set((st) => { const q = typeof p === 'function' ? p(st) : p; return 'input' in q && !('anchor' in q) ? { ...q, anchor: undefined } : q; }); } // a new prompt text drops any selection
+  private set(p: Partial<AppState> | ((s: AppState) => Partial<AppState>)) { this.store.set((st) => { const q = typeof p === 'function' ? p(st) : p; if (q.input === '') this.pastes.clear(); /* an empty prompt has no chips left */ return 'input' in q && !('anchor' in q) ? { ...q, anchor: undefined } : q; }); } // a new prompt text drops any selection
   /** UI-level state changes (input buffer, scroll, mode, overlay selections). */
-  patch(p: Partial<AppState>) { this.store.set('input' in p && !('anchor' in p) ? { ...p, anchor: undefined } : p, 'input' in p || 'cursor' in p); }
+  patch(p: Partial<AppState>) { if (p.input === '') this.pastes.clear(); this.store.set('input' in p && !('anchor' in p) ? { ...p, anchor: undefined } : p, 'input' in p || 'cursor' in p); }
   /** The terminal bell, when it is turned on: for what needs you, or a long task that just finished. */
   private ring() { if (this.state.settings.bell && !this.night.active()) this.o.bell?.(); }
   /** Copy to the clipboard and say so. */
@@ -255,12 +255,13 @@ export class AppController {
     for await (const ev of s.events) { if (s !== this.session) break; this.apply(ev); } // a replaced session's leftovers are not shown
     if (s === this.session && !this.stopped) this.sessionLost(s);
   }
-  private stopped = false; private deadToken?: string;
+  private stopped = false; private deadToken?: string; private starting?: Promise<void>;
   /** Stop the agent on purpose (a new conversation, a resume): it is detached first, so its closing stream is not mistaken for a crash. */
   private async dropSession() { const s = this.session; this.session = undefined; await s?.stop(); }
   /** The agent's event stream ended on its own (the process died without a word). Stop waiting, say so, and start it again on the next message. */
   private sessionLost(s: EngineSession) {
     this.deadToken = s.resumeToken?.() ?? this.deadToken; this.session = undefined; this.cancelQuestions();
+    for (const a of this.state.approvals) a.resolve({ decision: 'deny', scope: 'once', reason: 'cancelled' }); this.set({ approvals: [] }); // nobody is left to answer for
     this.set((st) => ({ busy: false, turnStartedAt: undefined, items: st.items.map((i) => (i.kind === 'thinking' && !i.done ? { ...i, done: true, ms: Date.now() - i.ms } : i.kind === 'tool' && i.status === 'running' ? { ...i, status: 'error' as const } : i)) }));
     this.updateAgent(this.me, () => ({ busy: false })); this.setAgentState(this.me, 'error');
     this.addItem({ kind: 'notice', id: nid('n'), level: 'error', text: `${this.o.engine.label} stopped unexpectedly`, detail: 'Your conversation is safe. Send your next message and it starts again where it left off. If this keeps happening, run `centcom doctor`.' });
@@ -424,8 +425,11 @@ export class AppController {
   /** A typed answer to an engine's question: the next line you send is the answer, never a message to the agent and never kept in the transcript. */
   private pendingAnswer?: (text: string | undefined) => void;
   private askText(q: EngineQuestion): Promise<string | undefined> {
+    this.pendingAnswer?.(undefined); // a newer question replaces an older one
+    const answer = new Promise<string | undefined>((resolve) => { this.pendingAnswer = resolve; }); // registered before anything is announced: listeners may react at once
+    this.set({ maskInput: !!q.secret }); // an answer that is a secret is shown as dots
     this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: q.text, detail: q.secret ? 'Type your answer and press Enter. It is not kept in this conversation. Esc cancels.' : 'Type your answer and press Enter. Esc cancels.' });
-    return new Promise((resolve) => { this.pendingAnswer = resolve; });
+    return answer;
   }
   /** Codex asks mid-turn and waits for the reply: a list for choices (with a way to type your own), text otherwise. Undefined when you cancel. */
   private async askEngine(qs: EngineQuestion[]): Promise<Record<string, string[]> | undefined> {
@@ -443,7 +447,11 @@ export class AppController {
     return out;
   }
   /** Stop waiting on any open question (an interrupt, a new session). */
-  private cancelQuestions() { const a = this.pendingAnswer; this.pendingAnswer = undefined; a?.(undefined); if (this.state.mode === 'pick') this.pickKey('cancel'); }
+  /** True while the agent waits for a line you type. */
+  get awaitingAnswer() { return !!this.pendingAnswer; }
+  /** Give up on the typed answer being waited for. */
+  cancelAnswer() { this.cancelQuestions(); }
+  private cancelQuestions() { const a = this.pendingAnswer; this.pendingAnswer = undefined; if (this.state.maskInput) this.set({ maskInput: false }); a?.(undefined); if (this.state.mode === 'pick') this.pickKey('cancel'); }
 
   /** A question waiting for y (memory notes, rewinds): the answer never goes to the engine or into history. */
   private pendingMemory?: { diff: string; apply: () => Promise<string>; no?: string };
@@ -452,9 +460,9 @@ export class AppController {
     if (!text) return;
     const expanded = this.pastes.expand(text);
     if (expanded.length > MAX_MESSAGE) { this.toast('warn', `That message is ${expanded.length.toLocaleString('en-US')} characters; the limit is ${MAX_MESSAGE.toLocaleString('en-US')}. Shorten it, or put the long part in a file and mention the path.`, 7000); return; } // your text stays in the prompt
-    if (this.state.mode === 'night' && !this.nightSending && !text.startsWith('/')) { this.nightAdd(text); return; } // in the night panel, a message is a task
+    if (this.state.mode === 'night' && !this.nightSending && !text.startsWith('/')) { this.nightAdd(text); this.set({ input: '', cursor: 0 }); return; } // in the night panel, a message is a task (the prompt is cleared here, so a message that was refused stays in it)
     if (this.night.active() && !this.nightSending && !text.startsWith('/')) { this.toast('warn', 'Night cycle is running. Add tasks with /night add …, stop it with /night stop.'); return; }
-    if (this.pendingAnswer) { const a = this.pendingAnswer; this.pendingAnswer = undefined; this.set({ input: '', cursor: 0 }); a(text); return; }
+    if (this.pendingAnswer) { const a = this.pendingAnswer; this.pendingAnswer = undefined; const full = this.pastes.expand(text); this.set({ input: '', cursor: 0, maskInput: false }); a(full); return; } // expanded before the emptied prompt forgets its chips
     if (this.pendingMemory) { // the answer to "add this to memory?": never goes to the engine or into the prompt history
       const p = this.pendingMemory; this.pendingMemory = undefined; this.set({ input: '', cursor: 0 });
       if (/^(y|yes)$/i.test(text)) { try { this.addItem({ kind: 'notice', id: nid('n'), level: 'ok', text: await p.apply() }); } catch (e) { this.addItem({ kind: 'notice', id: nid('n'), level: 'warn', text: String((e as Error).message ?? e) }); } } else this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: p.no ?? 'Nothing was added to memory.' });
@@ -482,7 +490,7 @@ export class AppController {
     }
     await this.checkpointBefore(text);
     this.pastes.clear(); // the chips are spent
-    if (!this.session && !this.stopped) { try { await this.startEngine(this.deadToken); this.deadToken = undefined; } catch (e) { this.addItem({ kind: 'notice', id: nid('n'), level: 'error', text: `Could not start ${this.o.engine.label} again`, detail: String((e as Error).message ?? e) }); this.set({ busy: false }); return; } }
+    if (!this.session && !this.stopped) { try { this.starting ??= this.startEngine(this.deadToken).then(() => { this.deadToken = undefined; }).finally(() => { this.starting = undefined; }); await this.starting; } catch (e) { this.addItem({ kind: 'notice', id: nid('n'), level: 'error', text: `Could not start ${this.o.engine.label} again`, detail: String((e as Error).message ?? e) }); this.set({ busy: false }); return; } }
     try { await this.session?.send(outgoing); } catch (e) { this.addItem({ kind: 'notice', id: nid('n'), level: 'error', text: 'Could not send the prompt', detail: String(e) }); }
   }
 
@@ -537,7 +545,7 @@ export class AppController {
   });
   /** True when the latest turn was stopped by an interrupt. */
   turnInterrupted(): boolean { return this.interrupts.cancelledTurn(this.currentTurn); }
-  async interrupt(hard = false) { this.cancelQuestions(); if (!this.state.busy) return; await this.interrupts.interrupt(this.me, { mode: hard ? 'hard' : 'soft', reason: 'user' }); }
+  async interrupt(hard = false) { if (this.pendingAnswer) { this.cancelQuestions(); return; } /* Esc on a question only declines the question; the next Esc stops the turn */ this.cancelQuestions(); if (!this.state.busy) return; await this.interrupts.interrupt(this.me, { mode: hard ? 'hard' : 'soft', reason: 'user' }); }
 
   /** Leave the app (the `app.quit` action). */
   quit(code = 0) { void this.o.ledger?.flush().catch(() => undefined); this.o.onExit?.(code); }

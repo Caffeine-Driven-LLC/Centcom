@@ -27,9 +27,9 @@ export function Clickable({ onClick, children, ...box }: { onClick: () => void; 
   return <Box ref={ref} {...box}>{children}</Box>;
 }
 
-/** The left-button presses in a chunk of raw terminal input (SGR mouse reports). Motion, drags and wheel are not clicks. */
+/** The left-button presses in a chunk of raw terminal input (SGR mouse reports). Motion, drags, the wheel and clicks with shift, alt or ctrl held are not clicks. */
 export function clicksIn(data: string): { col: number; row: number }[] {
   const out: { col: number; row: number }[] = [];
-  for (const m of data.matchAll(/\x1b\[<(\d+);(\d+);(\d+)M/g)) { const b = Number(m[1]); if ((b & 3) === 0 && !(b & 64) && !(b & 32)) out.push({ col: Number(m[2]), row: Number(m[3]) }); }
+  for (const m of data.matchAll(/\x1b\[<(\d+);(\d+);(\d+)M/g)) { const b = Number(m[1]); if ((b & 3) === 0 && !(b & (4 | 8 | 16 | 32 | 64))) out.push({ col: Number(m[2]), row: Number(m[3]) }); }
   return out;
 }

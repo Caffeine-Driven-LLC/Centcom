@@ -17,7 +17,10 @@ if [ -z "$CENTCOM_DEV" ]; then
   export NODE_ENV=production NODE_COMPILE_CACHE="$root/node_modules/.cache/centcom/v8" # V8 keeps its compiled code between runs
   bundle="$root/node_modules/.cache/centcom/cli.mjs"
   if [ ! -f "$bundle" ] || [ -n "$(find "$root/apps/cli/src" "$root"/packages/*/src "$root/pnpm-lock.yaml" "$root/tools/dev/bundle-cli.mjs" -newer "$bundle" \( -name '*.ts' -o -name '*.tsx' -o -name '*.json' -o -name "*.mjs" -o -name "pnpm-lock.yaml" \) -print -quit 2>/dev/null)" ]; then
-    tmp="$bundle.$$.tmp"; node "$root/tools/dev/bundle-cli.mjs" "$tmp" >/dev/null 2>&1 && mv -f "$tmp" "$bundle" || rm -f "$tmp"
+    tmp="$bundle.$$.tmp"
+    if node "$root/tools/dev/bundle-cli.mjs" "$tmp" >/dev/null 2>&1; then mv -f "$tmp" "$bundle"
+    else rm -f "$tmp"; [ -f "$bundle" ] && echo "centcom: could not rebuild the app after your changes, so this is the previous build (CENTCOM_DEV=1 runs the sources)." >&2
+    fi
   fi
   if [ -f "$bundle" ]; then exec node "$bundle" "$@"; fi
 fi

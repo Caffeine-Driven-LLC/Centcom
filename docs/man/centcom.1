@@ -26,8 +26,8 @@ with \-\-demo: also show two pretend teammates
 .B \-c, \-\-continue
 continue the most recent conversation in this folder
 .TP
-.B \-\-resume <id>
-continue a specific saved conversation
+.B \-\-resume [id]
+continue a specific saved conversation (without an id: choose from a list)
 .TP
 .B \-\-no\-save
 do not save this conversation or your prompt history
@@ -44,7 +44,7 @@ with \-p: run in this folder
 .B \-\-allow <rule>
 with \-p: allow what would be declined, e.g. \-\-allow "Bash(npm test)" (repeat for more)
 .TP
-.B \-\-permission\-mode <ask|accept\-edits|plan>
+.B \-\-permission\-mode <ask|accept\-edits|plan|default|acceptEdits>
 with \-p: how approvals are handled (ask declines them and exits 3)
 .TP
 .B \-\-max\-turns <n>
@@ -59,16 +59,16 @@ start in a permission mode
 .B \-\-dangerously\-skip\-permissions, \-\-yolo
 never ask: run commands and edit files freely
 .TP
-.B \-\-mascot <large|small|off>
+.B \-\-mascot <auto|large|small|off>
 Cento size (default: auto from terminal height)
 .TP
 .B \-\-cento\-color <violet|red|yellow|green|brown>
 Cento's color
 .TP
-.B \-\-theme <dark|light|hc>
-Graphite (default), Paper (for light terminals) or high contrast
+.B \-\-theme <auto|dark|light|hc>
+Graphite (default), Paper (for light terminals) or high contrast; auto asks the terminal
 .TP
-.B \-\-colors <truecolor|256|16|never>
+.B \-\-colors <auto|truecolor|256|16|never>
 force a colour tier (NO_COLOR is honoured)
 .TP
 .B \-\-debug

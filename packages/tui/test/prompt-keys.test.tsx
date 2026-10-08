@@ -215,3 +215,19 @@ describe('palette editing', () => {
     await t.send('theme h', 400); expect(t.frame()).toContain('theme hc');
   });
 });
+
+describe('review fixes: the night panel, masked answers and modified clicks', () => {
+  it('in the night panel a message over the limit stays in the prompt (it is not lost)', async () => {
+    const t = await mount(); t.ctl.openNight(); const long = 'x'.repeat(70_000); t.ctl.patch({ input: long, cursor: long.length }); await wait(30); await t.send('\r', 60);
+    expect(t.text()).toBe(long); expect(t.ctl.state.night.tasks).toHaveLength(0); expect(t.ctl.state.toasts.at(-1)!.text).toMatch(/limit is 65,536/);
+    t.ctl.patch({ input: 'a short task', cursor: 12 }); await wait(30); await t.send('\r', 60); expect(t.ctl.state.night.tasks.map((x) => x.text)).toEqual(['a short task']); expect(t.text()).toBe('');
+  });
+  it('a secret answer is drawn as dots in the prompt', async () => {
+    const t = await mount(); const r = (t.ctl as any).askEngine([{ id: 'p', text: 'Password?', secret: true }]) as Promise<unknown>; await wait(60); await t.send('hunter2', 80);
+    expect(t.frame()).toContain('•••••••'); expect(t.frame()).not.toContain('hunter2'); await t.send('\r', 80); expect(await r).toEqual({ p: ['hunter2'] });
+  });
+  it('a click with shift, alt or ctrl held is not a click; a plain one is', async () => {
+    const { clicksIn } = await import('../src/click.js');
+    expect(clicksIn('\x1b[<0;10;5M')).toEqual([{ col: 10, row: 5 }]); for (const b of [4, 8, 16, 32, 64, 65, 1, 2]) expect(clicksIn(`\x1b[<${b};10;5M`)).toEqual([]); expect(clicksIn('\x1b[<0;10;5m')).toEqual([]);
+  });
+});

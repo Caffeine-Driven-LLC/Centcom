@@ -49,3 +49,16 @@ describe('screen-reader mode runs the whole app as plain lines', () => {
   });
   it('/quit stops it', async () => { const s = await session(); await s.type('/quit'); s.stop(); await s.done; });
 });
+
+describe('screen-reader mode: questions you answer by typing', () => {
+  it('a question with no choices is asked as a line, the answer reaches the agent, and Enter alone declines', async () => {
+    const s = await session(); const r = (s.ctl as any).askEngine([{ id: 'q', text: 'What should the file be called?' }]) as Promise<Record<string, string[]> | undefined>;
+    await s.until(() => s.out().includes('Your answer')); expect(s.out()).toContain('What should the file be called?'); await s.type('notes.md'); expect(await r).toEqual({ q: ['notes.md'] });
+    const r2 = (s.ctl as any).askEngine([{ id: 'q', text: 'Another?' }]) as Promise<Record<string, string[]> | undefined>; await s.until(() => s.out().includes('Another?')); await s.type(''); expect(await r2).toBeUndefined(); await s.end();
+  });
+  it('the typed answer never lands in the conversation or the prompt history, and the prompt works afterwards', async () => {
+    const s = await session(); const r = (s.ctl as any).askEngine([{ id: 'q', text: 'Name?' }, { id: 'p', text: 'And a password?', secret: true }]) as Promise<Record<string, string[]> | undefined>;
+    await s.until(() => s.out().includes('Name?')); await s.type('Ada'); await s.until(() => s.out().includes('And a password?')); await s.type('hunter2'); expect(await r).toEqual({ q: ['Ada'], p: ['hunter2'] });
+    expect(s.ctl.state.items.some((i) => i.kind === 'user')).toBe(false); expect(s.ctl.state.history).not.toContain('hunter2'); await s.type('/help'); await s.until(() => s.out().includes('Commands:')); await s.end();
+  });
+});

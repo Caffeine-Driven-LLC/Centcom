@@ -150,7 +150,7 @@ export function App({ ctl, tier, keys }: AppProps) {
     }
     if (s.mode === 'night') { // the prompt below stays live: Enter adds a task (an empty Enter starts the night), Esc hides the panel
       if (key.escape) { ctl.closeNight(); return; }
-      if (key.return && !s.input.endsWith('\\')) { if (s.input.trim()) { void ctl.submit(s.input); ctl.patch({ input: '', cursor: 0 }); } else ctl.nightStart(); return; }
+      if (key.return && !s.input.endsWith('\\')) { if (s.input.trim()) void ctl.submit(s.input); else ctl.nightStart(); return; }
     }
     /* chat: shortcuts are actions in the keymap; anything else is editing */
     focusRef.current = ['prompt', 'transcript']; const step = fromInk(input, key);
@@ -253,7 +253,7 @@ export function App({ ctl, tier, keys }: AppProps) {
               <>
                 {showTasks ? <Box paddingX={1} height={tasksH}><TaskList items={s.tasks} maxRows={rows >= 34 ? 10 : 5} width={mainW - 2} unicode={tier !== 'none'} /></Box> : null}
                 {popupH ? <SlashPopup matches={matches} sel={s.slashSel} width={mainW} onPick={(c) => { const t = '/' + c.name + (c.args ? ' ' : ''); ctl.patch({ input: t, cursor: t.length, anchor: undefined, slashSel: 0 }); if (!c.args) void ctl.submit('/' + c.name); }} /> : null}
-                <Prompt text={s.input} cursor={s.cursor} anchor={s.anchor} maxRows={maxInput} busy={s.busy} width={mainW} active={s.mode === 'chat' || s.mode === 'night'} placeholder={nightOpen ? 'Add a task for tonight…' : placeholder} />
+                <Prompt text={s.maskInput ? s.input.replace(/[^\n]/g, '•') : s.input} cursor={s.cursor} anchor={s.anchor} maxRows={maxInput} busy={s.busy} width={mainW} active={s.mode === 'chat' || s.mode === 'night'} placeholder={nightOpen ? 'Add a task for tonight…' : placeholder} />
               </>
             )}
           </Box>
