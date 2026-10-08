@@ -9,7 +9,7 @@ import { sp, truncate, type Line } from '../util/text.js';
 export const MAX_INPUT_ROWS = 6;
 
 /** What people reach for first comes first when the list is just opened. */
-const FIRST = ['model', 'effort', 'mode', 'resume', 'new', 'night', 'fleet', 'skills', 'compact', 'usage', 'help'];
+const FIRST = ['settings', 'model', 'effort', 'mode', 'resume', 'new', 'night', 'fleet', 'skills', 'compact', 'usage', 'help'];
 const rank = (name: string) => { const i = FIRST.indexOf(name); return i < 0 ? FIRST.length : i; };
 /** Long argument syntax stays out of the popup; `/help` and the palette still show it. */
 export const argHint = (args?: string) => (!args ? '' : args.length <= 18 ? ' ' + args : ' …');

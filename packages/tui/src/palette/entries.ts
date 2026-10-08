@@ -21,4 +21,4 @@ export function quickEntries(): Entry[] {
 /** Animations are many (319), so they are searched but not listed until you type. */
 export function animationEntries(): Entry[] { return bakedNames().map((n) => ({ id: 'a:' + n, label: 'cento ' + n, detail: getBaked(n)?.desc ?? '', cmd: '/cento ' + n })); }
 /** What people reach for first: shown as "Recent" before anything is typed. */
-export const FIRST_LABELS = ['model', 'effort', 'mode', 'resume', 'new', 'night', 'skills', 'compact', 'usage', 'help'];
+export const FIRST_LABELS = ['settings', 'model', 'effort', 'mode', 'resume', 'new', 'night', 'skills', 'compact', 'usage', 'help'];

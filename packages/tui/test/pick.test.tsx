@@ -175,3 +175,16 @@ describe('questions during a night cycle', () => {
     expect(c.state.mode).not.toBe('pick'); expect(r.q1![0]).toMatch(/Decide for yourself/); expect(r.q2![0]).toMatch(/Decide for yourself/);
   });
 });
+describe('/settings', () => {
+  const tick = () => new Promise((r) => setTimeout(r, 5));
+  it('lists every setting with its value, changes one through its own list, comes back to the menu, and Esc leaves', async () => {
+    const c = make(); const run = c.runCommand('/settings'); await tick(); const labels = () => c.state.pick!.options.map((o) => o.label);
+    expect(c.state.pick!.title).toBe('Settings'); expect(labels()).toEqual(expect.arrayContaining(['Permissions: ask', 'Theme: dark', 'Waiting line: fun', 'Spacing: comfortable', 'Mouse: off', 'Auto skills: on']));
+    const at = (l: string) => c.state.pick!.options.findIndex((o) => o.label.startsWith(l));
+    while (c.state.pick!.sel !== at('Theme')) c.pickKey('down'); c.pickKey('enter'); await tick(); expect(c.state.pick!.title).toBe('Theme'); c.pickKey('down'); c.pickKey('down'); c.pickKey('enter'); await tick();
+    expect(c.state.settings.theme).toBe('hc'); expect(c.state.pick!.title).toBe('Settings'); expect(labels()).toContain('Theme: hc'); // back at the menu, showing the new value
+    while (c.state.pick!.sel !== at('Mouse')) c.pickKey('down'); c.pickKey('enter'); await tick(); expect(c.state.settings.mouse).toBe(true); expect(labels()).toContain('Mouse: on');
+    while (c.state.pick!.sel !== at('Auto skills')) c.pickKey('down'); c.pickKey('enter'); await tick(); expect(c.state.settings.autoSkills).toBe(false); expect(labels()).toContain('Auto skills: off');
+    c.pickKey('cancel'); await run; expect(c.state.mode).toBe('chat');
+  });
+});

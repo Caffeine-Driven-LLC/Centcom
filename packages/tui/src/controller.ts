@@ -587,6 +587,24 @@ export class AppController {
       this.set({ mode: 'pick', pick: newPick(o) });
     });
   }
+  /* ------------------------------------------------------------------ settings screen */
+  /** `/settings`: every setting and what it is now; choose one to change it, then you are back here. Esc leaves. */
+  private async settingsMenu() {
+    for (;;) {
+      const st = this.state.settings; const ch = this.choices(); const val = (k: string) => ch[k]?.options.find((o) => o.id === ch[k]!.current)?.id ?? ch[k]?.current ?? '';
+      const rows: { id: string; label: string; value: string; hint?: string }[] = [
+        { id: 'mode', label: 'Permissions', value: val('mode'), hint: 'when the agent asks' }, { id: 'model', label: 'Model', value: st.model || 'default' }, { id: 'effort', label: 'Effort', value: this.effort || 'default', hint: 'how hard it thinks' },
+        { id: 'theme', label: 'Theme', value: st.theme }, { id: 'mascot', label: 'Cento size', value: st.mascot }, { id: 'color', label: "Cento's colour", value: st.color }, { id: 'motion', label: 'Animation', value: st.reducedMotion ? 'reduced' : 'full' },
+        { id: 'spinner', label: 'Waiting line', value: st.spinner }, { id: 'density', label: 'Spacing', value: st.density }, { id: 'mouse', label: 'Mouse', value: st.mouse ? 'on' : 'off', hint: 'wheel and clicks' }, { id: 'auto', label: 'Auto skills', value: st.autoSkills ? 'on' : 'off' },
+      ];
+      const ids = await this.pick({ title: 'Settings', note: 'Choose one to change it. Esc closes.', options: rows.map((r) => ({ id: r.id, label: `${r.label}: ${r.value}`, hint: r.hint })), multi: false, confirm: 'change' });
+      const id = ids?.[0]; if (!id) return;
+      if (id === 'mouse') { await this.runCommand(`/mouse ${st.mouse ? 'off' : 'on'}`); continue; }
+      if (id === 'auto') { await this.runCommand(`/auto ${st.autoSkills ? 'off' : 'on'}`); continue; }
+      await this.runCommand('/' + id); if (this.state.mode !== 'chat') return; // /model opens its own screen
+    }
+  }
+
   /* ------------------------------------------------------------------ command palette */
   private fileIndex?: FileIndex;
   /** Put text at the end of the prompt (a file mention, a skill hint). */
@@ -725,6 +743,7 @@ export class AppController {
       case 'density': if (arg === 'comfortable' || arg === 'compact') { this.setSettings({ density: arg }); this.toast('info', arg === 'compact' ? 'Compact: fewer blank rows' : 'Comfortable: a blank row between messages'); } else this.toast('info', 'Try /density comfortable or /density compact'); break;
       case 'spinner': if (arg === 'fun' || arg === 'plain') { this.setSettings({ spinner: arg }); this.toast('info', arg === 'plain' ? 'The waiting line says Working…' : 'The waiting line rotates its verbs'); } else this.toast('info', 'Try /spinner fun or /spinner plain'); break;
       case 'mouse': { const on = arg ? arg === 'on' : !this.state.settings.mouse; this.setSettings({ mouse: on }); this.toast('info', on ? 'Mouse wheel scrolls. /mouse off lets you select text with the mouse.' : 'Mouse off: select text with the mouse as usual.'); break; }
+      case 'settings': await this.settingsMenu(); break;
       case 'effort': await this.effortCommand(arg); break;
       case 'model': {
         if (!arg) { const i = CLAUDE_MODELS.findIndex((m) => m.id === this.state.settings.model); this.set({ mode: 'models', modelSel: Math.max(0, i) }); break; }
