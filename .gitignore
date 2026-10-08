@@ -20,3 +20,6 @@ coverage/
 apps/web/dist-shell
 apps/web/shell/public/mascot
 apps/desktop/dist
+
+# test run output
+test-results/
