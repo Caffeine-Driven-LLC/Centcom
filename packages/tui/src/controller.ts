@@ -8,7 +8,10 @@ import { createInterruptController, createModelRegistry, usageTable, type Interr
 import type { AgentBus, AgentId, FleetManager, FleetNode, Ledger, Checkpoint, CheckpointManager, ContextConfig, ContextView, EngineId, EngineStartOptions, GitRunner, PermissionEngine, PolicyMode, RewindMode } from '@centcom/agent';
 import type { PendingApproval as PolicyPending } from '@centcom/agent';
 import type { Logger } from '@centcom/net';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { SessionStore, ago, titleFrom, type SessionMeta } from './sessions.js';
+import { NightCycle, initialNight, counts as nightCounts, type NightState, type NightTask } from './night/index.js';
 import { LIBRARY_DIR, MASTER_DIR, discover, injection, librarySkills, masterSkills, match, mergeLibrary, setEnabled, type Skill } from '@centcom/skills';
 import { MascotDriver, bakedByCategory, bakedCategories, getBaked, type CentoColor } from '@centcom/mascot';
 import type { AgentEngine, ApprovalDecision, ApprovalRequest, EngineSession, NormalisedEvent, PermissionGate, PermissionMode } from '@centcom/agent';
@@ -55,6 +58,8 @@ export interface ControllerOptions {
   observers?: ((agentId: string, ev: NormalisedEvent) => void)[];
   /** Usage as the engines reported it (lane C029): `/usage`, budget warnings, the informational outbox. Its cost alerts arrive on `ledgerBus`. */
   ledger?: Ledger; ledgerBus?: AgentBus;
+  /** Night cycle: where the queue is kept between runs and the morning reports go. Leave out to keep it in memory only. `gapMs` is the pause between tasks. */
+  night?: { dir: string; gapMs?: number };
   /** Where the cached model lists live (small file; none = not cached). */ modelCache?: { read(p: string): Promise<string | undefined>; write(p: string, t: string): Promise<void> };
 }
 const FLEET_COLORS: CentoColor[] = ['green', 'yellow', 'red', 'brown', 'violet'];
@@ -81,6 +86,7 @@ export class AppController {
   private toastTimers = new Map<string, NodeJS.Timeout>();
   private verbTimer?: NodeJS.Timeout;
   private readonly me = 'agt_you';
+  readonly night: NightCycle; private nightSending = false;
   private bus: AgentBus = createAgentBus({ onError: () => undefined });
   private ctxView?: ContextView; private cp?: CheckpointManager; private pendingReqs = new Map<string, ApprovalRequest>(); private lastEsc = 0;
 
@@ -91,9 +97,10 @@ export class AppController {
     this.store = new Store<AppState>({
       items: [], agents: [me], activeAgent: this.me, mode: 'chat', input: '', cursor: 0, history: o.history ?? [], histIdx: null, draft: '', scroll: 0, toasts: [], approvals: [], settings,
       busy: false, verb: this.verbs.next(), limits: [], cwd: o.cwd, branch: o.branch ?? '', engineId: o.engine.id, engineLabel: o.engine.label, demo: o.demo, fleet: true, tasks: [], tasksOpen: true,
-      slashSel: 0, palette: { query: '', sel: 0 }, modelSel: 0, gallery: { cat: 0, idx: 0, color: 0, query: '' }, version: o.version, sessionId: newId('ses'), sessions: [],
+      slashSel: 0, palette: { query: '', sel: 0 }, modelSel: 0, gallery: { cat: 0, idx: 0, color: 0, query: '' }, version: o.version, sessionId: newId('ses'), sessions: [], night: initialNight(),
     });
     this.driver = new MascotDriver({ reducedMotion: settings.reducedMotion, color: settings.color });
+    this.night = this.makeNight();
     const clock = { now: () => Date.now(), setTimeout: (f: () => void, ms: number) => { const t = setTimeout(f, ms); t.unref?.(); return t; }, clearTimeout: (h: never) => clearTimeout(h as NodeJS.Timeout) };
     this.ctxView = createContextView({ bus: this.bus, clock, config: o.context, engines: { capabilities: () => o.engine.capabilities(), status: () => (this.state.busy ? 'running' : this.session ? 'waiting' : 'starting'), send: async (_id, prompt) => { await this.session?.send(prompt); } } });
     this.bus.on('agent:context_alert', (a) => { if (a.level === 'warn') this.notice('warn', `The context is ${Math.round(a.pct)}% full.`, 'Type /compact to have the agent compact it.'); else if (a.level === 'full') { this.notice('warn', 'The context is almost full.', 'Type /compact now, or start fresh with /new.'); this.driver.setState('context-full'); } });
@@ -239,7 +246,7 @@ export class AppController {
       case 'turn.started':
         this.currentTurn = ev.turn_id;
         this.set({ busy: true, turnStartedAt: Date.now(), verb: this.verbs.next() }); this.updateAgent(me, () => ({ busy: true })); break;
-      case 'status': this.setAgentState(me, ev.state); break;
+      case 'status': if (ev.state === 'awaiting-approval' && this.night.active()) break; /* the night answers by rule: nobody is being waited for */ this.setAgentState(me, ev.state); break;
       case 'text.delta': {
         const exists = this.state.items.some((i) => i.kind === 'assistant' && i.messageId === ev.message_id);
         if (!exists) this.addItem({ kind: 'assistant', id: nid('a'), messageId: ev.message_id, agentId: me, text: ev.text, done: false });
@@ -269,11 +276,13 @@ export class AppController {
       case 'error':
         if (ev.retry) { this.toast('warn', `Retrying (${ev.retry.attempt}/${ev.retry.max_retries})…`); break; }
         this.addItem({ kind: 'notice', id: nid('n'), level: 'error', text: errorTitle(ev.code), detail: ev.tool_message });
+        this.night.noteError(ev.code, !!ev.fatal);
         break;
       case 'turn.done':
         this.set((s) => ({ busy: false, turnStartedAt: undefined, items: s.items.map((i) => (i.kind === 'thinking' && !i.done ? { ...i, done: true, ms: Date.now() - i.ms } : i.kind === 'tool' && i.status === 'running' && ev.outcome === 'canceled' ? { ...i, status: 'canceled' as const } : i)) }));
         this.updateAgent(me, () => ({ busy: false }));
         if (ev.outcome === 'canceled') { this.notice('warn', 'Interrupted.'); this.setAgentState(me, 'idle'); }
+        this.night.turnDone(ev.outcome);
         break;
       default: break;
     }
@@ -310,6 +319,7 @@ export class AppController {
   decide(r: ApprovalRequest): Promise<ApprovalDecision> {
     if (r.agent_id === this.me && this.interrupts.cancelledTurn(this.currentTurn)) return Promise.resolve({ decision: 'deny', scope: 'once', reason: 'interrupt' }); // a late question from a stopped turn is never shown
     if (this.o.policy) return this.decideWithPolicy(r);
+    if (this.night.active()) return Promise.resolve(this.nightAnswer(r));
     const mode = this.state.settings.permissionMode;
     if (mode === 'bypassPermissions') return Promise.resolve({ decision: 'approve', scope: 'once' }); // the user turned approvals off
     const write = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit'].includes(r.tool);
@@ -336,12 +346,20 @@ export class AppController {
   /** The policy engine's prompter: shows the approval and waits for an answer (or for the engine to cancel it). */
   promptApproval(p: PolicyPending, signal: AbortSignal): Promise<ApprovalDecision> {
     const req: ApprovalRequest = { ...(this.pendingReqs.get(p.approval_id) ?? { approval_id: p.approval_id, agent_id: p.agent_id, tool_id: p.approval_id, tool: p.tool, summary: p.summary, ...(p.command ? { command: p.command } : {}), ...(p.path ? { path: p.path } : {}), ...(p.cwd ? { cwd: p.cwd } : {}) }), risk: p.risk };
+    if (this.night.active()) return Promise.resolve(this.nightAnswer(req));
     return new Promise((resolve) => {
       const me = this.state.agents.find((a) => a.id === req.agent_id);
       const pending: PendingApproval = { req, agentName: me?.name ?? 'agent', color: me?.color ?? 'violet', resolve, confirmHigh: req.risk === 'high' };
       signal.addEventListener('abort', () => { this.set((s) => ({ approvals: s.approvals.filter((a) => a !== pending) })); resolve({ decision: 'deny', scope: 'once', reason: 'cancelled' }); }, { once: true });
       this.set((s) => ({ approvals: [...s.approvals, pending] }));
     });
+  }
+
+  /** While the night cycle runs nobody is asked: the rule in `night/model.ts` decides, and the transcript shows what was refused. */
+  private nightAnswer(r: ApprovalRequest): ApprovalDecision {
+    const d = this.night.decide({ tool: r.tool, risk: r.risk, command: r.command });
+    if (d.decision === 'deny') this.notice('info', `Night cycle refused: ${r.tool}${r.command ? ` \`${r.command.slice(0, 80)}\`` : r.path ? ` ${r.path}` : ''}`, d.reason);
+    return { decision: d.decision, scope: 'once', ...(d.reason ? { reason: d.reason } : {}) };
   }
 
   answerApproval(decision: 'approve' | 'deny', scope: 'once' | 'session' | 'always' = 'once') {
@@ -366,9 +384,11 @@ export class AppController {
 
   /** A question waiting for y (memory notes, rewinds): the answer never goes to the engine or into history. */
   private pendingMemory?: { diff: string; apply: () => Promise<string>; no?: string };
-  async submit(raw: string) {
+  async submit(raw: string, opts: { wire?: string } = {}) {
     const text = raw.trim();
     if (!text) return;
+    if (this.state.mode === 'night' && !this.nightSending && !text.startsWith('/')) { this.nightAdd(text); return; } // in the night panel, a message is a task
+    if (this.night.active() && !this.nightSending && !text.startsWith('/')) { this.toast('warn', 'Night cycle is running. Add tasks with /night add …, stop it with /night stop.'); return; }
     if (this.pendingMemory) { // the answer to "add this to memory?": never goes to the engine or into the prompt history
       const p = this.pendingMemory; this.pendingMemory = undefined; this.set({ input: '', cursor: 0 });
       if (/^(y|yes)$/i.test(text)) { try { this.addItem({ kind: 'notice', id: nid('n'), level: 'ok', text: await p.apply() }); } catch (e) { this.addItem({ kind: 'notice', id: nid('n'), level: 'warn', text: String((e as Error).message ?? e) }); } } else this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: p.no ?? 'Nothing was added to memory.' });
@@ -386,12 +406,12 @@ export class AppController {
     if (this.state.busy) { this.toast('warn', 'Cento is still working. Press Esc to interrupt, then send again.'); return; }
     this.addItem({ kind: 'user', id: nid('u'), text, ts: Date.now() }); this.o.sessions?.noteUser(this.state.sessionId, this.o.cwd, text);
     this.setAgentState(this.me, 'prompt-received');
-    let outgoing = text;
+    let outgoing = opts.wire ?? text; // the transcript keeps what the person typed; night tasks carry their rules on the wire only
     if (this.state.settings.autoSkills) {
-      const picks = match(text, this.skills());
+      const picks = match(opts.wire ? text.replace(/^\[night \d+\/\d+\]\s*/, '') : text, this.skills());
       if (picks.length) {
         this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: 'auto skills: ' + picks.map((p) => (p.skill.kind === 'command' ? '/' : '') + p.skill.name).join(' · '), detail: picks.map((p) => `${p.skill.name}: matched ${p.why.join(', ')}`).join('\n') });
-        if (!this.o.demo) outgoing = injection(picks) + text;
+        if (!this.o.demo) outgoing = injection(picks) + (opts.wire ?? text);
       }
     }
     await this.checkpointBefore(text);
@@ -464,6 +484,43 @@ export class AppController {
     if (p.reducedMotion !== undefined) this.driver.setReducedMotion(p.reducedMotion);
   }
 
+  /* ------------------------------------------------------------------ night cycle */
+  private makeNight(): NightCycle {
+    const dir = this.o.night?.dir; const file = dir ? join(dir, 'queue.json') : undefined;
+    const cycle = new NightCycle({
+      get: () => this.state.night, set: (p) => this.set((s) => ({ night: { ...s.night, ...(typeof p === 'function' ? p(s.night) : p) } })),
+      submit: async (shown, wire) => { this.nightSending = true; try { await this.submit(shown, { wire }); } finally { this.nightSending = false; } },
+      interrupt: () => this.interrupt(), lastAssistantText: () => { for (let i = this.state.items.length - 1; i >= 0; i--) { const it = this.state.items[i]!; if (it.kind === 'assistant' && it.text.trim()) return it.text; } return ''; },
+      notice: (l, t, d) => this.notice(l, t, d), now: () => Date.now(), id: () => nid('nt'),
+      setTimer: (f, ms) => { const t = setTimeout(f, ms); t.unref?.(); return t; }, clearTimer: (h) => clearTimeout(h as NodeJS.Timeout),
+      saved: () => { if (!file) return; try { mkdirSync(dir!, { recursive: true, mode: 0o700 }); const n = this.state.night; writeFileSync(file, JSON.stringify({ taskTimeoutMin: n.taskTimeoutMin, tasks: n.tasks.filter((t) => t.status === 'queued' || t.status === 'running').map((t) => t.text) })); } catch { /* the queue is a convenience; a full disk must not stop the night */ } },
+      writeReport: (name, text) => { if (!dir) return undefined; try { mkdirSync(dir, { recursive: true, mode: 0o700 }); const p = join(dir, name); writeFileSync(p, text); return p; } catch { return undefined; } },
+    }, { gapMs: this.o.night?.gapMs });
+    if (file) { try { const q = JSON.parse(readFileSync(file, 'utf8')) as { taskTimeoutMin?: number; tasks?: string[] }; const tasks = (q.tasks ?? []).filter((t) => typeof t === 'string').slice(0, 200); if (tasks.length) { this.set((s) => ({ night: { ...s.night, taskTimeoutMin: Math.max(1, Math.min(480, Number(q.taskTimeoutMin) || s.night.taskTimeoutMin)), tasks: tasks.map((text): NightTask => ({ id: nid('nt'), text, status: 'queued', approved: 0, denied: 0 })) } })); } } catch { /* no queue yet */ } }
+    return cycle;
+  }
+  /** Tasks from the panel's prompt or `/night add`. */
+  nightAdd(text: string) { const n = this.night.add(text); if (!n) { this.toast('warn', 'Nothing to add.'); return; } this.toast('ok', `Queued: ${this.state.night.tasks.length} in all`, 1600); }
+  openNight() { this.night.arm(true); this.patch({ mode: 'night', input: '', cursor: 0, scroll: 0 }); }
+  closeNight() { this.patch({ mode: 'chat' }); }
+  nightStart() { const r = this.night.start(); if (!r.ok) this.toast('warn', r.why!); }
+  private async nightCommand(arg: string) {
+    const m = /^(\S*)[ \t]*([\s\S]*)$/.exec(arg.trim())!; const sub = m[1]!; const tail = m[2]!.trim(); const n = this.state.night; // the text after the word keeps its line breaks: one task per line
+    switch (sub.toLowerCase()) {
+      case '': case 'on': if (this.state.mode === 'night' && sub === '') this.closeNight(); else this.openNight(); break;
+      case 'off': await this.night.stop('you turned it off'); this.night.arm(false); this.closeNight(); break;
+      case 'start': case 'go': this.nightStart(); break;
+      case 'stop': await this.night.stop(); this.toast('info', 'Night cycle stopped.'); break;
+      case 'add': if (!tail) { this.openNight(); break; } this.nightAdd(tail); break;
+      case 'remove': case 'rm': if (!this.night.remove(Number(tail))) this.toast('warn', `No removable task ${tail || ''}.`); break;
+      case 'clear': this.night.clear(); this.toast('info', 'Queue cleared.'); break;
+      case 'timeout': { const m = Number(tail); if (!Number.isFinite(m) || m < 1) { this.toast('warn', `Per-task limit is ${n.taskTimeoutMin} minutes. Use /night timeout <minutes>.`); break; } this.night.setTimeoutMin(m); this.toast('ok', `Per-task limit: ${this.state.night.taskTimeoutMin} minutes.`); break; }
+      case 'list': { const c = nightCounts(n); this.notice('info', `Night cycle: ${c.total} tasks (${c.done} done, ${c.failed} failed, ${c.queued} queued)`, n.tasks.map((t, i) => `${i + 1}. [${t.status}] ${t.text.split('\n')[0]!.slice(0, 90)}`).join('\n') || 'The queue is empty.'); break; }
+      case 'report': this.notice('info', n.reportPath ? `Last report: ${n.reportPath}` : 'No report yet. One is written when a night cycle ends.'); break;
+      default: this.toast('warn', `Unknown /night option "${sub}". Try on, start, stop, add, list, remove, clear, timeout, report.`);
+    }
+  }
+
   async runCommand(line: string) {
     const [cmd, ...rest] = line.slice(1).trim().split(/\s+/); const arg = rest.join(' ');
     const known = COMMANDS.find((c) => c.name === cmd);
@@ -474,6 +531,7 @@ export class AppController {
       case 'resume': if (arg) await this.resumeSession(arg); else this.listSessions(); break;
       case 'agents': this.set((s) => ({ fleet: !s.fleet })); break;
       case 'quit': this.o.onExit?.(); break;
+      case 'night': await this.nightCommand(line.replace(/^\/night\b[ \t]*/, '')); break;
       case 'interrupt': await this.interrupt(); break;
       case 'rewind': await this.rewindCommand(arg); break;
       case 'compact': await this.compactCommand(); break;
