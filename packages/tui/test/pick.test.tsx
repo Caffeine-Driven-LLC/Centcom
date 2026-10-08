@@ -168,3 +168,10 @@ describe('palette providers', () => {
     const sk = await find(c, 'skills', 'review'); await sk[0]!.run(); expect(c.state.input).toBe('Use the review-pr skill: '); c.patch({ input: '', cursor: 0 }); await (await find(c, 'skills', 'ship'))[0]!.run(); expect(c.state.input).toBe('/ship '); c.stop();
   });
 });
+describe('questions during a night cycle', () => {
+  it('are answered "decide yourself" at once; nothing opens and nothing waits', async () => {
+    const c = make(); c.nightAdd('some task'); (c as any).night.active = () => true;
+    const r = await (c as any).askEngine([{ id: 'q1', text: 'Which?', options: [{ label: 'x' }, { label: 'y' }] }, { id: 'q2', text: 'Name?' }]) as Record<string, string[]>;
+    expect(c.state.mode).not.toBe('pick'); expect(r.q1![0]).toMatch(/Decide for yourself/); expect(r.q2![0]).toMatch(/Decide for yourself/);
+  });
+});

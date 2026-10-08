@@ -422,6 +422,7 @@ export class AppController {
   /** Codex asks mid-turn and waits for the reply: a list for choices (with a way to type your own), text otherwise. Undefined when you cancel. */
   private async askEngine(qs: EngineQuestion[]): Promise<Record<string, string[]> | undefined> {
     const out: Record<string, string[]> = {};
+    if (this.night.active()) { for (const q of qs) out[q.id] = ['Decide for yourself: nobody is here to answer. Pick the most reasonable option and say what you assumed.']; return out; } // the night cycle never waits for a person
     for (const q of qs) {
       if (q.options?.length) {
         const OTHER = '\u0000other';
