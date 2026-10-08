@@ -257,10 +257,10 @@ Q072. Does the app-server need network access just to start, or only on the firs
 A: Starting, initialize, account/read and thread/start worked without a model call (thread/start answered in about 70 ms). Network is needed at the first turn_start. Fully offline start: NOT TESTED.
 
 Q073. What error appears when the machine is offline at `thread/start`? At `turn/start`? Paste both.
-A: NOT TESTED (needs the network cut; on the hands-on list for Brandon).
+A: Offline is simulated (no Wi-Fi switching): Codex was pointed at a local HTTPS proxy that we cut. thread/start still SUCCEEDS offline (session.started arrives; the app shows Codex ready). The turn then retries: error notifications "Reconnecting... 2/5" ... "5/5" within about 3 s, a warning "Falling back from WebSockets to HTTPS transport. stream disconnected before completion: URL error: Proxy connection failed: ...", then "Reconnecting... waiting for network" about every 8 s for as long as the network is down (45 s here). When the network came back, the same turn completed normally ("Hi!") with no new request. A truly offline machine (no route at all): NOT TESTED.
 
 Q074. What error appears behind a proxy that blocks api.openai.com? Does Codex honor HTTPS_PROXY?
-A: NOT TESTED.
+A: Yes. With HTTPS_PROXY/HTTP_PROXY pointing at a local CONNECT proxy, every connection of a turn went through it (12 CONNECTs, all to chatgpt.com). When the proxy refused, the error text was "Proxy connection failed: HTTP CONNECT response missing status line" (in a warning), and the turn waited for the network instead of failing.
 
 
 ==============================================================================
@@ -518,7 +518,7 @@ Q153. What does the `error` notification look like with `willRetry:true` and `wi
 A: Signed out: `error` {"error":{"message":"Reconnecting... 2/5","codexErrorInfo":{"responseStreamDisconnected":{"httpStatusCode":401}},"additionalDetails":"unexpected status 401 Unauthorized: ... url: wss://api.openai.com/v1/responses ..."},"willRetry":true,...} and later the failure. Unknown model: `error` with willRetry:false and the 400 message (Q221). Network cut mid-turn: NOT TESTED.
 
 Q154. Does Codex retry on its own after a stream disconnect? How many times and with what delay? What do we see meanwhile?
-A: Yes. With a 401 it showed "Reconnecting... 2/5" (error notifications with willRetry:true), i.e. up to 5 attempts, then failed the turn. Delays not measured.
+A: Yes. Five quick attempts within about 3 s ("Reconnecting... 2/5" to "5/5", error notifications with willRetry true), then a fallback from WebSockets to HTTPS transport (a `warning`), then "Reconnecting... waiting for network" about every 8 s with no limit that we hit (45 s). The turn resumes by itself when the network returns (Q268). With a 401 (signed out) it gives up after the 5 attempts instead.
 
 Q155. Does a turn ever end without `turn/completed` (process crash, hang)? How long did you wait before declaring it hung?
 A: Yes, effectively: an acceptEdits turn ("change the constant from 1 to 3") sent its first commentary message at 4.9 s and then NOTHING for about 186 s (no notification of any kind on that thread). It then carried on and completed normally (edit + answer) at about 201 s, right after another thread on the same app-server started a turn. Cause unknown. Centcom has no no-progress timeout for Codex turns today; a turn can look hung for minutes.
@@ -637,7 +637,7 @@ Q190. Does switching from "plan" to "default" in the middle of a thread work (we
 A: Yes, because turn/start overrides persist (Q189) and Centcom passes the policy on every turn. Do keep passing it on every turn, including after switching back.
 
 Q191. Do trusted-folder settings in config.toml (projects."/path".trust_level) change what the app-server asks? Did you have any set?
-A: This laptop's config.toml has 6 `projects."<path>".trust_level` entries (for other folders). For an untrusted folder, a thread/start without approvalPolicy/sandbox came back on-request + read-only. Trusted-folder behaviour: NOT TESTED.
+A: For an untrusted folder, a thread/start without approvalPolicy/sandbox comes back on-request + read-only. IMPORTANT: thread/start with sandbox "workspace-write" (what Centcom sends in default and acceptEdits mode) PERMANENTLY writes `[projects."<folder>"] trust_level = "trusted"` into ~/.codex/config.toml, for any folder outside the system temp directory (seen with /tmp/centcom-codex-test; temp folders under $TMPDIR were not written). Codex's own TUI does the same when you accept its "Trust this folder?" prompt, even when trust was passed as a one-off `-c projects."<folder>".trust_level="trusted"`. So every project opened in Centcom's Codex mode becomes trusted in the user's Codex config (see Q300 for why that matters). In this answering session the entries were removed again after each test.
 
 
 ==============================================================================
@@ -818,58 +818,65 @@ A: Possible through config: an [mcp_servers.centcom] entry (command = a Centcom 
 ==============================================================================
 
 Q243. With Codex installed and signed in, what does the Centcom desktop app's launcher say for Codex (status line)? Paste a screenshot or the text.
-A: 
+A: NOT TESTED: the desktop app needs clicking in its window, and computer use was not available in the answering session. The same flows were checked in the terminal app (Q260) and over the protocol.
 
 Q244. With Codex installed but signed out, what does the launcher say?
-A: 
+A: NOT TESTED: the desktop app needs clicking in its window, and computer use was not available in the answering session. The same flows were checked in the terminal app (Q260) and over the protocol.
 
 Q245. With Codex not on PATH (rename the binary temporarily), what does the launcher say, and does the demo option appear?
-A: 
+A: NOT TESTED: the desktop app needs clicking in its window, and computer use was not available in the answering session. The same flows were checked in the terminal app (Q260) and over the protocol.
 
 Q246. Does the launcher find Codex when the app is started from the desktop launcher (not a terminal) and PATH is short? Which PATH does the Electron app have? If not found, where is Codex installed (nvm, ~/.npm-global, /opt/homebrew/bin) so we know which folders to add?
-A: 
+A: NOT TESTED in the app (no packaged build to start from the Dock; only `pnpm app` from a terminal). Related fact: the npm-installed `codex` fails with a GUI-style short PATH (`env: node: No such file or directory`), while the standalone binary works (Q315), so a Dock-started app would likely report Codex as broken for npm installs.
 
 Q247. Open a project in Codex mode from the Local agent screen. Does the session start? How long from clicking Open to ready?
-A: 
+A: NOT TESTED: the desktop app needs clicking in its window, and computer use was not available in the answering session. The same flows were checked in the terminal app (Q260) and over the protocol.
 
 Q248. Type "say hi". Does the answer stream into the transcript? Is the text complete and in the right order?
-A: 
+A: NOT TESTED: the desktop app needs clicking in its window, and computer use was not available in the answering session. The same flows were checked in the terminal app (Q260) and over the protocol.
 
 Q249. Ask it to run `ls`. Does the tool line show with the command and status? Does the result appear?
-A: 
+A: NOT TESTED: the desktop app needs clicking in its window, and computer use was not available in the answering session. The same flows were checked in the terminal app (Q260) and over the protocol.
 
 Q250. Ask it to create a file. Is there an approval in default mode? Does the diff show up in the approval and afterwards?
-A: 
+A: NOT TESTED: the desktop app needs clicking in its window, and computer use was not available in the answering session. The same flows were checked in the terminal app (Q260) and over the protocol.
 
 Q251. Click Allow once, Allow for this session and Deny in turn. Does each behave as the label says? What does the agent do after Deny?
-A: 
+A: NOT TESTED: the desktop app needs clicking in its window, and computer use was not available in the answering session. The same flows were checked in the terminal app (Q260) and over the protocol.
 
 Q252. Click Stop during a long command. Does the UI return to ready? How long did it take?
-A: 
+A: NOT TESTED: the desktop app needs clicking in its window, and computer use was not available in the answering session. The same flows were checked in the terminal app (Q260) and over the protocol.
 
 Q253. Close the project and reopen it. Is the old conversation restored (resume)? What do we need to store for that (thread id) and where?
-A: 
+A: NOT TESTED: the desktop app needs clicking in its window, and computer use was not available in the answering session. The same flows were checked in the terminal app (Q260) and over the protocol.
 
 Q254. Does the busy chip text ("Thinking", "working") make sense for Codex turns?
-A: 
+A: NOT TESTED: the desktop app needs clicking in its window, and computer use was not available in the answering session. The same flows were checked in the terminal app (Q260) and over the protocol.
 
 Q255. Does the branch chip show the right git branch?
-A: 
+A: NOT TESTED: the desktop app needs clicking in its window, and computer use was not available in the answering session. The same flows were checked in the terminal app (Q260) and over the protocol.
 
 Q256. Do the usage/limit gauges (five-hour and weekly) show real numbers for Codex? Do they match what `codex` TUI shows in /status?
-A: 
+A: Same numbers, different units. Codex's TUI /status: "5h limit: 94% left (resets 5:12 AM)", "Weekly limit: 98% left (resets 3:41 PM on 14 Oct)". Centcom's terminal app status line at about the same time: "session 11-12% ↻ 4h 29m" and "week 3% ↻ 6d 14h", i.e. percent USED (100 - left), from account/rateLimits/updated. They agree within the usage made between the two readings. Desktop app gauges: NOT TESTED.
 
 Q257. Does the context gauge show a percentage that matches the TUI?
-A: 
+A: NO. Codex's TUI /status after the first "say hi": "Context window: 98% left (16.7K used / 258K)". Centcom's terminal app: "context 6% 16k/258k" after "say hi", then 32% (83k) after one small file edit, 45% (117k) and 52% (134k) after two short answers, in one thread whose real context stayed around 17-20k. Centcom's gauge climbs with every model request because map.ts uses the cumulative tokenUsage.total instead of tokenUsage.last (Q145).
 
 Q258. Are there events in the UI that look wrong or empty (empty assistant bubbles, duplicated text, "thinking…" that never ends)? Describe each.
-A: 
+A: In the terminal app nothing looked broken: no empty bubbles or duplicated text, and the spinner stopped on every turn. Wrong-looking: the context gauge (Q257); every command approval says "low risk" in the app's box (the TUI's own classification) while the engine's events say medium; the shell-wrapped command `/bin/zsh -lc "pwd; rg --files -g AGENTS.md ..."` is shown raw and cut off; and after a crash "codex exited with code null" (Q269). Desktop app: NOT TESTED.
 
 Q259. Which Codex features did you miss in the Centcom app compared with the Codex TUI (images, /review, resume picker, rollback, model/effort picker)? Rank them by how often you use them.
-A: 
+A: From comparing Codex's TUI with Centcom's terminal app: /status-style details (model + reasoning effort, permission preset, Agents.md, thread name), the weekly limit's reset date, a reasoning effort picker, image attachments, /review, a resume picker with thread names, and the commentary/final-answer distinction (Codex greys commentary). Most used first: effort picker, /review, resume picker. Desktop app specifics: NOT TESTED.
 
 Q260. Does the terminal app (`pnpm centcom` TUI) work with Codex too? Same checks: start, send, approve, interrupt.
-A: 
+A: Yes, driven in a pseudo-terminal (`pnpm centcom --engine codex` in a test repo):
+   - start: header "● Codex · gpt-6.1-sol · subscription", "✓ Codex is ready (your subscription)" within about 1 s;
+   - send: "say hi" streamed "Hi!";
+   - approve: "Change the constant in src/a.ts from 1 to 2" asked three times in default mode (rg, cat, then the edit), each box "Allow Cento to run a command? ... [y] yes [a] always (this project) [n] no esc = no"; after y on all three the transcript showed "Edit(.../src/a.ts) Updated 1 file +1 -1" with the diff, and the file changed;
+   - deny: n on `npm test` showed "Not allowed" and the agent answered that the command was rejected; the session carried on;
+   - interrupt: esc while it counted to 300 printed "! Interrupted." at once (stopped at 139) and the next message ("say ok") worked;
+   - exit: one ctrl+c shows "Press ctrl+c again to exit"; two exit. The exit code was 0 when idle (130 was not seen; the guide expects 130, maybe only in print mode or mid-turn, which our run did not capture).
+   Not checked in the app: approval timeout, two quick messages (Q275).
 
 
 ==============================================================================
@@ -877,7 +884,8 @@ A:
 ==============================================================================
 
 Q261. Sign out (`codex logout`) and start a session. What exactly do we show? Is the message helpful? Does `thread/start` succeed while `account.account` is null?
-A: Protocol side (empty CODEX_HOME): account/read gives account null, thread/start SUCCEEDS (model gpt-6.1-sol), and turn/start is accepted but the turn fails after retries: error notes "Reconnecting... 2/5" (willRetry true, codexErrorInfo responseStreamDisconnected 401), then turn/completed failed with "unexpected status 401 Unauthorized: Missing bearer or basic authentication in header, url: https://api.openai.com/v1/responses ..." (codexErrorInfo {httpConnectionFailed:{httpStatusCode:401}}). Centcom catches this earlier: engine.ts emits an engine.warning after session.started and refuses send() with provider_not_signed_in, so the user should never see the 401. What the app shows: NOT TESTED YET (hands-on).
+A: Protocol side (empty CODEX_HOME): account/read gives account null, thread/start SUCCEEDS (model gpt-6.1-sol), and turn/start is accepted but the turn fails after retries: error notes "Reconnecting... 2/5" (willRetry true, codexErrorInfo responseStreamDisconnected 401), then turn/completed failed with "unexpected status 401 Unauthorized: Missing bearer or basic authentication in header, url: https://api.openai.com/v1/responses ..." (codexErrorInfo {httpConnectionFailed:{httpStatusCode:401}}).
+   In the terminal app (CODEX_HOME pointed at an empty folder): the header shows Codex without "subscription", the start screen says "! Codex is not signed in, or the login has expired. Run `codex login`, then send your message again.", and sending "say hi" shows "✗ Not signed in  Codex is not signed in, or the login has expired. Run `codex login` in a terminal, then try again." The 401 never reaches the user. Helpful. Desktop app: NOT TESTED (computer use was not available in the answering session).
 
 Q262. Use an expired/invalid API key. What error do you get and at which step? Paste it.
 A: NOT TESTED: no API key.
@@ -898,10 +906,11 @@ Q267. What is the exact text for a server error (5xx / overloaded)? Does Codex r
 A: NOT TESTED. codexErrorInfo has "serverOverloaded" and "internalServerError"; it retries up to 5 times on stream errors (Q154).
 
 Q268. Unplug the network during a turn. What notifications and errors appear and in what order? Does the turn recover by itself when the network returns?
-A: 
+A: Simulated with a local proxy that was cut for 20 s while the answer streamed (Wi-Fi was not touched). Centcom's engine emitted, in order: four non-fatal errors "Reconnecting... 2/5" to "5/5" within about 3 s, a warning "Falling back from WebSockets to HTTPS transport. stream disconnected before completion: ...", then "Reconnecting... waiting for network" every 8 s. About 17 s after the network came back the turn resumed and completed the whole answer (661 deltas, turn.done ok). So the turn recovers by itself. Two things Centcom gets wrong: each notice is reported as code provider_protocol_error (it is a network problem), and every one says retry attempt 1 of 5 (map.ts hard-codes {attempt:1, max_retries:5}), so a UI cannot show real progress. What the desktop app shows: NOT TESTED.
 
 Q269. Kill the app-server process by hand during a turn (kill -9). What does the UI show? Does the next message restart it and resume the thread, as designed?
-A: Protocol side: killing the app-server mid-turn closes stdout; resuming the thread in a new app-server works and keeps the interrupted turn (Q213). But the command it was running survives as an orphan (Q045). What the Centcom UI shows: NOT TESTED YET (hands-on).
+A: Protocol side: killing the app-server mid-turn closes stdout; resuming the thread in a new app-server works and keeps the interrupted turn (Q213). But the command it was running survives as an orphan (Q045).
+   In the terminal app: `kill -9` of the app-server while an answer streamed showed "✗ Something went wrong  codex exited with code null" (unhelpful: the code is null because it was a signal). The next message ("say hi again") got NO answer at all and the status went straight back to Ready: the session is dead and is not restarted (engine.ts restarts the app-server only after its own interrupt ladder, `killed`, not after a crash). The user has to restart Centcom. Desktop app: NOT TESTED.
 
 Q270. Start Centcom in a folder that is not a git repository. Does Codex refuse (it may require a trusted/git folder)? Paste the message and the exact point of failure.
 A: No. A non-git folder works: thread/start and a turn running `pwd` both succeeded.
@@ -916,7 +925,7 @@ Q273. Start with a path longer than 260 characters (Windows) or with symlinks. A
 A: NOT TESTED (macOS, no long paths or symlinks tried; note macOS /var is a symlink to /private/var and Codex reports /private/var paths in command output, which worked).
 
 Q274. Send an empty prompt. What happens? Send a 100,000 character prompt. What happens (our cap)? Send one with unicode, emoji and null-like characters.
-A: Protocol side: an empty prompt (text "") was accepted and the turn completed. A 100,002-character prompt was accepted and completed (about 33k input tokens). Unicode was fine. Centcom has no prompt-length cap in packages/agent that we found. What the app does: NOT TESTED YET.
+A: Protocol side: an empty prompt (text "") was accepted and the turn completed. A 100,002-character prompt was accepted and completed (about 33k input tokens). Unicode was fine. Centcom has no prompt-length cap in packages/agent that we found. In the terminal app, Enter on an empty prompt does nothing (no message sent). The 100,000-character paste in the app: NOT TESTED.
 
 Q275. Send two messages quickly one after another. Do we correctly refuse the second ("a turn is already running")? What does the user see?
 A: Protocol side: Codex does not refuse; a second turn/start returns the same turn id and merges into the running turn (Q156). Centcom's engine refuses it itself ("a turn is already running"). What the user sees: NOT TESTED YET (hands-on).
@@ -928,7 +937,7 @@ Q277. Does the app-server keep emitting events when nobody is reading stdout (ba
 A: NOT TESTED.
 
 Q278. What happens when the machine sleeps during a turn and wakes again?
-A: 
+A: NOT TESTED: it needs the laptop to sleep during a turn, which was not done in the answering session. Based on Q268, a wake that brings the network back should let the turn resume by itself.
 
 Q279. What happens if the user changes the model with /model-like action while a turn runs?
 A: NOT TESTED in the app. Protocol-wise a model passed on a turn/start applies to that turn and later ones (Q189, Q226).
@@ -996,7 +1005,7 @@ Q293. Confirm that Centcom never reads ~/.codex/auth.json (or equivalent). Does 
 A: Confirmed for the code: nothing in packages/ or apps/ reads ~/.codex/auth.json (the only mentions are a deny-list of credential files in packages/agent/src/permissions/paths.ts and a secret pattern `codex_auth_json`). Centcom only needs account/read (type, planType). Nothing in our flow needed auth.json; this answering session never opened it either.
 
 Q294. Does the app-server send telemetry/analytics? Is there a setting to turn it off that we should pass (e.g. otel, analytics)? Paste the config keys.
-A: `codex app-server --help`: "Analytics are disabled by default for app-server. Users have to explicitly opt in via the analytics section in the config.toml"; the VS Code extension turns them on with --analytics-default-enabled, and users opt out with [analytics] enabled = false. Centcom should not pass --analytics-default-enabled. OTel keys: not checked.
+A: `codex app-server --help`: analytics are disabled by default for the app-server (users opt in with [analytics] in config.toml); the VS Code extension turns them on with --analytics-default-enabled. Centcom starts `codex app-server --listen stdio://` without that flag, so analytics stay off. Note: Codex's own TUI starts a shared background daemon (`codex app-server --listen unix:// --analytics-default-enabled`, from ~/.codex/packages/app-server-daemon), so analytics are on there by default. OTel keys: not checked.
 
 Q295. Does Codex upload your code or environment anywhere besides the model API? Describe what it sends (as far as documented).
 A: Observed only: during turns the native app-server's TCP connections all went to one Cloudflare address on port 443, which is chatgpt.com's (2606:4700:4408::ac40:9bd1). The signed-out case tried https://api.openai.com/v1/responses and wss://api.openai.com/v1/responses. Prompts include file contents and command output the agent reads; plugins (codex_apps) use chatgpt.com too. Beyond that: per OpenAI's documentation, NOT VERIFIED here.
@@ -1014,13 +1023,13 @@ Q299. Are the thread files on disk readable by other users (permissions)? Report
 A: ~/.codex is drwxr-xr-x (readable by every user on the machine). auth.json and config.toml are -rw------- (private), but the session transcripts (sessions/.../rollout-*.jsonl) are -rw-r--r--: other local users can read every conversation, including file contents and command output. Worth telling users, or tightening ~/.codex to 700.
 
 Q300. Can a malicious repo (AGENTS.md, .codex/config.toml in the project) change Codex's behaviour or approval policy? Does the project-level config get ignored until the folder is trusted? Test with a project config that sets approval_policy=never.
-A: Not in an untrusted folder. A project .codex/config.toml with approval_policy = "never", sandbox_mode = "danger-full-access" and an [mcp_servers.evil_probe] entry was ignored: thread/start (without our own policy) came back on-request + read-only, and the MCP server was never started. AGENTS.md, however, is read in any folder (Q204), so a repo can still put instructions in front of the model (prompt-injection risk, not config).
+A: Only until Centcom opens the folder. In an untrusted folder, a project .codex/config.toml with approval_policy = "never", sandbox_mode = "danger-full-access" and [mcp_servers.evil_probe] command = "/usr/bin/true" was ignored (thread/start without params: on-request + read-only, MCP server not started). BUT thread/start with Centcom's own default params (approvalPolicy untrusted, sandbox workspace-write) made Codex trust the folder (Q191) and STARTED the project's MCP server command in that same thread/start, before any prompt. A later thread/start without params then came back never + dangerFullAccess (the project's values). Centcom passes its own policy on every thread/turn, so the policy part is overridden, but the project's MCP command runs. So: opening an untrusted repo in Centcom's Codex mode can run a command the repo chose. AGENTS.md is also read in any folder (Q204).
 
 Q301. Can a project file make Codex run code at start (hooks, MCP server commands in project config)? What protects against it?
-A: Not in an untrusted folder (the project MCP server did not start, Q300). In a trusted folder: NOT TESTED. Hooks need trust too (the CLI has --dangerously-bypass-hook-trust, so hooks require persisted trust).
+A: Yes, effectively: see Q300. Opening a folder with Centcom's default params trusts it, and a project-level [mcp_servers.<name>] command then starts immediately (tested with /usr/bin/true). Hooks need trust too (the CLI has --dangerously-bypass-hook-trust), and Centcom's thread/start grants that trust. What protects against it today: nothing on Centcom's side.
 
 Q302. Should Centcom pass `-c` overrides to force a safe baseline (e.g. disable project-level MCP servers, force sandbox)? Which options do you recommend?
-A: Yes. Recommended overrides on every thread/start (via config) or app-server -c: shell_environment_policy that drops CENTCOM_* and *TOKEN*/*KEY*/*SECRET* (Q200); sandbox_workspace_write with exclude_slash_tmp / exclude_tmpdir_env_var if /tmp writes are unwanted (Q195); never pass --analytics-default-enabled; keep passing approvalPolicy and sandbox explicitly on every turn (they persist, Q189). Project-level config is already ignored for untrusted folders.
+A: Yes, and it is urgent because of Q300/Q301. Recommended: (1) do not let thread/start trust the folder: pass the sandbox as a per-turn sandboxPolicy only, or find the config switch that stops trust being persisted, and test that ~/.codex/config.toml is unchanged after a session; (2) on thread/start pass config overrides that disable project-level MCP servers and hooks unless the user trusted the folder in Centcom itself; (3) a shell_environment_policy that drops CENTCOM_* and *TOKEN*/*KEY*/*SECRET* (Q200); (4) sandbox_workspace_write exclude_slash_tmp / exclude_tmpdir_env_var if /tmp writes are unwanted (Q195); (5) never pass --analytics-default-enabled; (6) keep passing approvalPolicy and sandbox explicitly on every turn (they persist, Q189).
 
 
 ==============================================================================
@@ -1075,12 +1084,14 @@ Q316. Does the licence of Codex (Apache-2.0) allow us to bundle or redistribute 
 A: The npm package says Apache-2.0. Apache-2.0 allows redistribution with the licence text and the NOTICE file kept, and changes marked. Whether OpenAI's terms of use add conditions for the hosted service: not checked.
 
 Q317. What is the single most important thing you noticed about the Codex integration that none of these questions asked? Answer freely.
-A: 
+A: Two things. (1) Opening a folder in Centcom's Codex mode permanently marks it trusted in the user's ~/.codex/config.toml (a side effect of thread/start with sandbox workspace-write), and trusted folders get their own .codex/config.toml applied: a repo's MCP server command started immediately, before any prompt (Q191, Q300, Q301). That is both an unexpected write to the user's config and a way for a cloned repo to run code. (2) The repo's own recorder (tools/codex/record.ts) does not scrub the account e-mail, the ChatGPT account id, the computer name or the Codex installation id from what it writes; these had to be removed by hand before committing (Q285).
 
 Q318. What are the three biggest risks you see in the way Centcom drives Codex today?
-A: 
+A: 1. Stopping is not real: neither turn/interrupt nor the SIGINT/SIGTERM ladder stops a command Codex is running, because commands live in another process group (Q207, Q212). A user who presses Stop on `rm`, a migration or a deploy has not stopped it.
+   2. Trust and secrets leak across the boundary: every opened folder becomes trusted (so repo-defined MCP servers and hooks run, Q300), the full parent environment including Centcom's own tokens reaches every command and the model (Q200), and read-only mode still reads any file such as ~/.ssh (Q198).
+   3. The session dies on ordinary input: one command with about 1 MiB of output produces a line over MAX_RPC_LINE and the session is SIGKILLed (Q032), and after any app-server crash the session is dead until Centcom restarts (Q269).
 
 Q319. What would you change first in the Codex integration, and why?
-A: 
+A: Make Stop actually stop and make sessions survive, because users trust that button and lose work otherwise: (a) on interrupt, after turn/interrupt, kill the commands Codex started for that thread (item/started has no processId yet, but every command's environment carries CODEX_THREAD_ID=<thread id>, so they can be found), or get Codex to terminate them itself; (b) raise MAX_RPC_LINE to 8 MiB or skip oversized lines instead of killing; (c) restart the app-server and thread/resume after any unexpected exit, not only after our ladder. In the same pass, stop the folder-trust side effect and filter the environment (Q302), and fix the context gauge to use tokenUsage.last (Q145), since that one is visibly wrong to every user.
 
 TOTAL QUESTIONS: 319
