@@ -150,3 +150,21 @@ describe('/density', () => {
     const { settingsFromConfig } = await import('../src/clientConfig.js'); expect(typeof settingsFromConfig).toBe('function');
   });
 });
+describe('palette providers', () => {
+  const find = async (c: AppController, id: string, q: string) => { const p = c.paletteProviders().find((x) => x.id === id)!; return p.search(q, new AbortController().signal); };
+  it('commands: a typed command, a quick setting and an animation are found, with the slash command they run', async () => {
+    const c = make(); const cmds = await find(c, 'commands', 'night'); expect(cmds.map((i) => i.label)).toContain('night'); const th = await find(c, 'commands', 'theme hc'); expect(th[0]!.label).toBe('theme hc');
+    const ran: string[] = []; c.submit = (async (x: string) => { ran.push(x); }) as never; await th[0]!.run(); await (await find(c, 'commands', 'cento idle_breathe'))[0]!.run(); expect(ran).toEqual(['/theme hc', '/cento idle_breathe']);
+  });
+  it('files of this project are found by a fuzzy name; picking one mentions it in the prompt', async () => {
+    const c = new AppController({ engine: new DemoEngine({ speed: 100 }), demo: true, cwd: process.cwd(), version: 't', skills: [] }); const hits = await find(c, 'files', 'ptkeys'); expect(hits.some((h) => h.label.endsWith('packages/tui/test/prompt-keys.test.tsx'))).toBe(true);
+    c.patch({ input: 'look at', cursor: 7 }); await hits.find((h) => h.label.endsWith('prompt-keys.test.tsx'))!.run(); expect(c.state.input).toMatch(/^look at @\S*prompt-keys\.test\.tsx $/); c.stop();
+  });
+  it('sessions list the saved conversations (not the current one) and resume the chosen one; skills put a hint in the prompt', async () => {
+    const skills = [{ name: 'review-pr', description: 'Review a pull request carefully', kind: 'skill', source: 'user', path: '/x' }, { name: 'ship', description: 'Ship it', kind: 'command', source: 'user', path: '/y' }] as never[];
+    const c = new AppController({ engine: new DemoEngine({ speed: 100 }), demo: true, cwd: '/tmp', version: 't', skills });
+    (c as any).o.sessions = { list: () => [{ id: c.state.sessionId, title: 'this one', messages: 2 }, { id: 'ses_old', title: 'fix the login bug', messages: 9 }], load: () => undefined, close() {} }; const resumed: string[] = []; (c as any).resumeSession = async (id: string) => { resumed.push(id); };
+    const ses = await find(c, 'sessions', 'login'); expect(ses.map((s) => s.label)).toEqual(['fix the login bug']); await ses[0]!.run(); expect(resumed).toEqual(['ses_old']); expect((await find(c, 'sessions', 'this one'))).toEqual([]);
+    const sk = await find(c, 'skills', 'review'); await sk[0]!.run(); expect(c.state.input).toBe('Use the review-pr skill: '); c.patch({ input: '', cursor: 0 }); await (await find(c, 'skills', 'ship'))[0]!.run(); expect(c.state.input).toBe('/ship '); c.stop();
+  });
+});

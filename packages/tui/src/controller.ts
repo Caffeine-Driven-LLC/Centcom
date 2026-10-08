@@ -12,6 +12,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SessionStore, ago, titleFrom, type SessionMeta } from './sessions.js';
 import { PasteStore } from './prompt/paste.js';
+import { animationEntries, commandEntries, createFileIndex, FIRST_LABELS, listProvider, quickEntries, type FileIndex, type PaletteProvider } from './palette/index.js';
 import { errorGuide } from './errors.js';
 import { copyToClipboard } from './util/clipboard.js';
 import { newPick, pickAll, pickMove, pickResult, pickToggle, type PickOption } from './pick/model.js';
@@ -571,6 +572,25 @@ export class AppController {
       this.set({ mode: 'pick', pick: newPick(o) });
     });
   }
+  /* ------------------------------------------------------------------ command palette */
+  private fileIndex?: FileIndex;
+  /** Put text at the end of the prompt (a file mention, a skill hint). */
+  insertIntoPrompt(t: string) { const input = this.state.input; const sep = input && !/\s$/.test(input) ? ' ' : ''; const next = input + sep + t; this.patch({ input: next, cursor: next.length }); }
+  /** Run a command line from the palette. Commands that cannot do anything without a value are filled in for you to finish. */
+  async runPaletteCommand(cmd: string) { if (cmd === '/trust') { this.patch({ input: '/trust rules', cursor: 12 }); return; } await this.submit(cmd); }
+  /** What ctrl+k searches: commands, the quick settings and animations, files of this project, saved conversations and skills. */
+  paletteProviders(): PaletteProvider[] {
+    const run = (cmd: string) => () => this.runPaletteCommand(cmd); const item = (e: { id: string; label: string; detail: string; cmd: string }) => ({ id: e.id, label: e.label, detail: e.detail, run: run(e.cmd) });
+    this.fileIndex ??= createFileIndex({ cwd: this.o.cwd, onPick: (p) => this.insertIntoPrompt('@' + p + ' ') });
+    const files = this.fileIndex; const cmds = commandEntries(); const quick = quickEntries(); const anims = animationEntries();
+    return [
+      { ...listProvider('commands', 'Commands', () => [...cmds, ...quick, ...anims].map(item), { max: 8, recent: () => FIRST_LABELS }) },
+      { id: 'files', group: 'Files', search: (q, signal) => files.search(q, signal) },
+      listProvider('sessions', 'Sessions', () => (this.o.sessions?.list(this.o.cwd, 30) ?? []).filter((m) => m.id !== this.state.sessionId).map((m) => ({ id: 's:' + m.id, label: m.title, detail: `${m.messages} msg`, run: () => this.resumeSession(m.id) })), { max: 5, recent: () => (this.o.sessions?.list(this.o.cwd, 3) ?? []).filter((m) => m.id !== this.state.sessionId).map((m) => m.title) }),
+      listProvider('skills', 'Skills', () => this.skills().map((k) => ({ id: 'k:' + k.name, label: k.name, detail: k.description.replace(/\s+/g, ' ').slice(0, 80), run: () => this.insertIntoPrompt(k.kind === 'command' ? `/${k.name} ` : `Use the ${k.name} skill: `) })), { max: 5 }),
+    ];
+  }
+
   /** Big pastes sit in the prompt as a short chip and are put back when the message is sent. */
   readonly pastes = new PasteStore();
   /** Watch every event of the main agent (the plain-text mode prints them). */

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, useInput } from 'ink';
-import { Rich } from '../components/ui.js';
+import { Rich, useCol } from '../components/ui.js';
 import { sp, truncate, type Line } from '../util/text.js';
 import { createPaletteEngine, type PaletteProvider, type Section } from './engine.js';
 import { flatten, keepSelection, move, selected, type PaletteState } from './nav.js';
@@ -11,7 +11,7 @@ const GROUP_C = 'text.muted' as const;
 
 /** The overlay itself: grouped results, at most 8 rows with a `▾ N more` row, the typed query and the hints. */
 export function PaletteView({ query, sections, sel, cols, loading }: { query: string; sections: Section[]; sel: number; cols: number; loading?: boolean }) {
-  const w = paletteWidth(cols); const flat = flatten(sections); const start = Math.min(Math.max(0, sel - MAX_ROWS + 1), Math.max(0, flat.length - MAX_ROWS)); const win = flat.slice(start, start + MAX_ROWS); const more = flat.length - start - win.length;
+  const col = useCol(); const w = paletteWidth(cols); const flat = flatten(sections); const start = Math.min(Math.max(0, sel - MAX_ROWS + 1), Math.max(0, flat.length - MAX_ROWS)); const win = flat.slice(start, start + MAX_ROWS); const more = flat.length - start - win.length;
   const rows: Line[] = []; let lastGroup = ''; const groupOf = new Map<string, { g: string; recent?: boolean }>(); for (const s of sections) for (const it of s.items) groupOf.set(it.id, { g: s.group, recent: s.recent });
   win.forEach((it, k) => {
     const g = groupOf.get(it.id)!; const label = g.recent ? 'Recent' : g.g; if (label !== lastGroup && (k === 0 || groupOf.get(win[k - 1]!.id)!.g !== g.g)) { rows.push([sp(label, { c: GROUP_C, b: true })]); lastGroup = label; }
@@ -22,7 +22,7 @@ export function PaletteView({ query, sections, sel, cols, loading }: { query: st
   if (more > 0) rows.push([sp(`  ▾ ${more} more`, { c: 'text.muted' })]);
   if (!flat.length) { if (loading) rows.push([sp('Searching…', { c: 'text.muted' })]); else if (query) { rows.push([sp(`Nothing matches "${truncate(query, w - 24)}".`, { c: 'text.muted' })]); rows.push([sp('Try fewer words or check the spelling.', { c: 'text.muted' })]); } else rows.push([sp('Nothing to show yet.', { c: 'text.muted' })]); }
   return (
-    <Box width={cols} justifyContent="center"><Box flexDirection="column" width={w} borderStyle="round" borderColor="accent.primary" paddingX={1}>
+    <Box width={cols} justifyContent="center"><Box flexDirection="column" width={w} borderStyle="round" borderColor={col('accent.primary')} paddingX={1}>
       <Rich line={[sp('› ', { c: 'accent.hover', b: true }), sp(query || 'type to search…', { c: query ? 'text.primary' : 'text.muted' })]} />
       {rows.map((r, i) => <Rich key={i} line={r} />)}
       <Rich line={[sp('↑↓ move · ⏎ run · esc close', { c: 'text.muted' })]} />

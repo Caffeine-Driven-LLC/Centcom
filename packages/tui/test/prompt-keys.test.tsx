@@ -15,10 +15,11 @@ async function mount() {
   const inst = render(<App ctl={ctl} tier="none" />, { stdout: out, stdin: inp, exitOnCtrlC: false, patchConsole: false, debug: true });
   cleanup = () => { inst.unmount(); ctl.stop(); };
   await wait(50);
-  const send = async (s: string) => { inp.write(s); await wait(); };
+  const send = async (s: string, ms = 25) => { inp.write(s); await wait(ms); };
   /** Click on the first screen cell where `label` is drawn (a real SGR press and release). */
   const click = async (label: string, dx = 0) => { await wait(60); const lines = frame.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').split('\n'); const row = lines.findIndex((l) => l.includes(label)); if (row < 0) throw new Error(`"${label}" is not on the screen:\n${lines.join('\n')}`); const col = lines[row]!.indexOf(label) + 1 + dx; await send(`\x1b[<0;${col};${row + 1}M`); await send(`\x1b[<0;${col};${row + 1}m`); };
-  return { ctl, copied, send, click, text: () => ctl.state.input, cursor: () => ctl.state.cursor };
+  const screen = () => frame.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '');
+  return { ctl, copied, send, click, frame: screen, text: () => ctl.state.input, cursor: () => ctl.state.cursor };
 }
 const SHIFT_LEFT = '\x1b[1;2D', SHIFT_RIGHT = '\x1b[1;2C', CTRL_DELETE = '\x1b[3;5~', DELETE = '\x1b[3~', LEFT = '\x1b[D', SHIFT_HOME = '\x1b[1;2H';
 
@@ -183,5 +184,24 @@ describe('approval: countdown and session scope', () => {
     const c = new AppController({ engine: new DemoEngine({ speed: 100 }), demo: true, cwd: '/tmp', version: 't', skills: [], approvalTimeoutMs: 90_000 });
     const ac = new AbortController(); void c.promptApproval({ approval_id: 'p1', agent_id: c.state.activeAgent, tool: 'Bash', summary: 'x', command: 'ls', risk: 'medium' } as never, ac.signal);
     const e = c.state.approvals[0]!.expiresAt!; expect(e - Date.now()).toBeGreaterThan(88_000); expect(e - Date.now()).toBeLessThanOrEqual(90_000); ac.abort(); c.stop();
+  });
+});
+
+describe('the palette (ctrl+k)', () => {
+  it('opens, searches commands as you type (fuzzy), runs the chosen one and closes', async () => {
+    const t = await mount(); await t.send('\x0b', 120); expect(t.ctl.state.mode).toBe('palette');
+    await t.send('mode pl', 400); await t.send('\r', 200); expect(t.ctl.state.mode).toBe('chat');
+  });
+  it('shows what you usually want before anything is typed, and esc closes it without running anything', async () => {
+    const t = await mount(); await t.send('\x0b', 400); await t.click('Recent'); void 0; expect(t.ctl.state.mode).toBe('palette');
+    await t.send('\x1b', 200); expect(t.ctl.state.mode).toBe('chat');
+  });
+});
+
+describe('palette editing', () => {
+  it('backspace deletes the last letter of the query, and typing again searches again', async () => {
+    const t = await mount(); const q = () => t.frame().split('\n').find((l) => l.includes('›'))!.replace(/[│╭╮╰╯]/g, '').trim();
+    await t.send('\x0b', 200); await t.send('xyz', 200); expect(q()).toBe('› xyz'); await t.send('\x7f', 200); expect(q()).toBe('› xy'); await t.send('\x7f', 150); await t.send('\x7f', 150); await t.send('\x7f', 150); expect(q()).toMatch(/type to search/);
+    await t.send('theme h', 400); expect(t.frame()).toContain('theme hc');
   });
 });

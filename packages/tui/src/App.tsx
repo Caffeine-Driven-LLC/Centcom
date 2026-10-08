@@ -15,7 +15,8 @@ import { Prompt, SlashPopup, promptRows, slashMatches } from './components/Promp
 import { StatusLine } from './components/StatusLine.js';
 import { FleetPanel, FLEET_W } from './components/FleetPanel.js';
 import { Transcript, useTranscriptLayout } from './components/Transcript.js';
-import { Palette, Gallery, ModelPicker, galleryList, paletteItems } from './components/Overlays.js';
+import { CommandPalette } from './palette/index.js';
+import { Gallery, ModelPicker, galleryList, paletteItems } from './components/Overlays.js';
 import { Toasts } from './components/Toasts.js';
 import { MultiSelect } from './pick/MultiSelect.js';
 import { ClickContext, clicksIn, createClickRegistry } from './click.js';
@@ -93,6 +94,7 @@ export function App({ ctl, tier, keys }: AppProps) {
 
   /** Mouse reporting (press, release and wheel, in the SGR form) only while it is on; always switched off again on the way out. */
   const clicks = useMemo(() => createClickRegistry(), []);
+  const paletteProviders = useMemo(() => (s.mode === 'palette' ? ctl.paletteProviders() : []), [ctl, s.mode]); // rebuilt on each open so the sessions are current
   const { write } = useStdout(); const { stdin } = useStdin(); const wheelRef = useRef<(n: number) => void>(() => undefined);
   wheelRef.current = (notches) => { if (s.mode === 'pick') { for (let i = 0; i < Math.abs(notches); i++) ctl.pickKey(notches > 0 ? 'up' : 'down'); } else if (s.mode === 'chat' || s.mode === 'night' || pending) ctl.patch({ scroll: Math.max(0, Math.min(maxScroll, ctl.state.scroll + notches * 3)) }); }; // from the live value: events can arrive faster than renders
   // Ink drops mouse reports before `useInput` sees them, so the wheel is read from the raw bytes (Ink keeps reading them too).
@@ -126,16 +128,7 @@ export function App({ ctl, tier, keys }: AppProps) {
       return;
     }
     if (s.mode === 'help') return; // the help screen reads its own keys (filter, esc)
-    if (s.mode === 'palette') {
-      if (key.escape) { ctl.patch({ mode: 'chat' }); return; }
-      const items = paletteItems(s.palette.query);
-      if (key.upArrow) { ctl.patch({ palette: { ...s.palette, sel: (s.palette.sel + items.length - 1) % Math.max(1, items.length) } }); return; }
-      if (key.downArrow || key.tab) { ctl.patch({ palette: { ...s.palette, sel: (s.palette.sel + 1) % Math.max(1, items.length) } }); return; }
-      if (key.return) { const it = items[s.palette.sel % Math.max(1, items.length)]; ctl.patch({ mode: 'chat' }); if (it) { const needsArg = COMMANDS.find((c) => '/' + c.name === it.run)?.args && !it.run.includes(' '); if (needsArg) ctl.patch({ input: it.run + ' ', cursor: it.run.length + 1 }); else void ctl.submit(it.run); } return; }
-      if (key.backspace || key.delete) { ctl.patch({ palette: { query: s.palette.query.slice(0, -1), sel: 0 } }); return; }
-      if (input && !key.ctrl && !key.meta) ctl.patch({ palette: { query: s.palette.query + input, sel: 0 } });
-      return;
-    }
+    if (s.mode === 'palette') return; // the palette reads its own keys
     if (s.mode === 'models') {
       focusRef.current = ['overlay']; { const st = fromInk(input, key); if (st && dispatcher.handle(st).kind === 'action' && (key.escape || input === 'q')) { ctl.patch({ mode: 'chat' }); return; } }
       if (key.upArrow) ctl.patch({ modelSel: (s.modelSel + CLAUDE_MODELS.length - 1) % CLAUDE_MODELS.length });
@@ -249,7 +242,7 @@ export function App({ ctl, tier, keys }: AppProps) {
               {nightOpen ? <NightPanel n={s.night} width={mainW} height={bodyH} unicode={tier !== 'none'} />
                 : s.mode === 'pick' && s.pick ? <MultiSelect p={s.pick} width={mainW} height={bodyH} unicode={tier !== 'none'} onRow={(i) => ctl.pickClick(i)} onConfirm={() => ctl.pickKey('enter')} onCancel={() => ctl.pickKey('cancel')} />
                 : s.mode === 'models' ? <ModelPicker sel={s.modelSel} current={s.settings.model} width={mainW} />
-                : s.mode === 'palette' ? <Palette query={s.palette.query} sel={s.palette.sel} width={mainW} />
+                : s.mode === 'palette' ? <CommandPalette providers={paletteProviders} cols={mainW} onClose={() => ctl.patch({ mode: 'chat' })} />
                 : s.mode === 'help' ? <HelpScreen actions={allActions()} keymap={keymap} warnings={keys?.warnings ?? []} onClose={() => ctl.patch({ mode: 'chat' })} width={mainW} height={bodyH} />
                   : s.mode === 'gallery' ? <Gallery cat={s.gallery.cat} idx={s.gallery.idx} color={s.gallery.color} width={mainW} height={gallerySize} reduced={s.settings.reducedMotion} />
                     : welcome ? <Welcome s={s} width={mainW} height={bodyH} color={s.settings.color} reduced={s.settings.reducedMotion} />
