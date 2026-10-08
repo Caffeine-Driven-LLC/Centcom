@@ -116,3 +116,14 @@ describe('questions from Codex', () => {
     const r2 = ask(c, [{ id: 'q', text: 'Name?' }]); await tick(); await c.interrupt(); expect(await r2).toBeUndefined();
   });
 });
+describe('high contrast theme', () => {
+  it('has black grounds, white text and borders, and keeps the dark status colours', async () => {
+    const { createTheme } = await import('@centcom/theme'); const hc = createTheme('hc', 'truecolor'); const dark = createTheme('dark', 'truecolor');
+    expect(hc.c('bg.base')).toBe('#000000'); expect(hc.c('text.primary')).toBe('#FFFFFF'); expect(hc.c('border.default')).toBe('#FFFFFF'); expect(hc.c('border.strong')).toBe('#FFFFFF');
+    expect(hc.c('status.danger')).toBe(dark.c('status.danger')); expect(hc.c('accent.primary')).toBe(dark.c('accent.primary')); expect(hc.c('text.muted')).not.toBe(dark.c('text.muted'));
+  });
+  it('/theme hc applies it, and a bare /theme lists three choices with the current one marked', async () => {
+    const c = make(); await c.runCommand('/theme hc'); expect(c.state.settings.theme).toBe('hc');
+    const run = c.runCommand('/theme'); await new Promise((r) => setTimeout(r, 0)); expect(c.state.pick!.options.map((o) => o.id)).toEqual(['dark', 'light', 'hc']); expect(c.state.pick!.checked).toEqual(['hc']); c.pickKey('cancel'); await run;
+  });
+});

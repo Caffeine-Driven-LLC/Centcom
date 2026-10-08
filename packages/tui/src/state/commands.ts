@@ -9,7 +9,7 @@ export const COMMANDS: SlashCommand[] = [
   { name: 'mode', args: '[default|edits|plan|bypass]', desc: 'Set how permissions are asked (bypass = dangerously skip permissions)' },
   { name: 'mascot', args: '[large|small|off|auto]', desc: 'Change how big Cento is' },
   { name: 'color', args: '[violet|red|yellow|green|brown]', desc: 'Change Cento\'s colour' },
-  { name: 'theme', args: '[dark|light]', desc: 'Switch Graphite / Paper' },
+  { name: 'theme', args: '[dark|light|hc]', desc: 'Switch Graphite / Paper / high contrast' },
   { name: 'motion', args: '[full|reduced]', desc: 'Turn mascot animation on or off' },
   { name: 'cento', args: '[animation]', desc: 'Browse all 319 Cento animations' },
   { name: 'demo', args: '[fix|search|delete|compact|ask|error|limit]', desc: 'Run a scripted demo story' },

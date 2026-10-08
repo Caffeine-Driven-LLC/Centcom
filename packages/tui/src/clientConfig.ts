@@ -17,7 +17,7 @@ const REMEMBER: { [K in keyof Settings]?: (v: Settings[K]) => [Key, string | boo
 
 export function settingsFromConfig(c: ResolvedConfig): Partial<Settings> {
   return {
-    theme: c.ui.theme === 'light' ? 'light' : 'dark', // the terminal cannot sense the system, so "auto" is dark there
+    theme: c.ui.theme === 'light' ? 'light' : c.ui.theme === 'hc' ? 'hc' : 'dark', // the terminal cannot sense the system, so "auto" is dark there
     mascot: c.ui.mascot ? c.client.mascot_size : 'off', reducedMotion: c.ui.reduced_motion, color: c.client.cento_color,
     autoSkills: c.client.auto_skills, model: c.client.model, mouse: c.ui.mouse, permissionMode: c.client.permission_mode,
   };

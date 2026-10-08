@@ -12,7 +12,7 @@ export const SCHEMA = {
   'log.level': { kind: 'enum', default: 'info', enum: ['debug', 'info', 'warn', 'error', 'silent'], project: true, doc: 'How much to write to the log file' },
   'log.max_file_bytes': { kind: 'number', default: 5242880, min: 65536, max: 268435456, doc: 'Rotate the log file at this size' },
   'log.max_files': { kind: 'number', default: 3, min: 1, max: 20, doc: 'How many rotated log files to keep' },
-  'ui.theme': { kind: 'enum', default: 'auto', enum: ['auto', 'dark', 'light'], project: true, doc: 'Graphite (dark), Paper (light), or follow the system' },
+  'ui.theme': { kind: 'enum', default: 'auto', enum: ['auto', 'dark', 'light', 'hc'], project: true, doc: 'Graphite (dark), Paper (light), high contrast (hc), or follow the system' },
   'ui.mascot': { kind: 'boolean', default: true, project: true, doc: 'Show Cento' },
   'ui.mouse': { kind: 'boolean', default: true, doc: 'Scroll with the mouse wheel in the terminal app (off gives the terminal its own text selection back)' },
   'ui.reduced_motion': { kind: 'boolean', default: false, project: true, doc: 'Turn animation off' },

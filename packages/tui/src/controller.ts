@@ -641,7 +641,7 @@ export class AppController {
     const st = this.state.settings; const o = (...a: [string, string?][]): PickOption[] => a.map(([id, hint]) => ({ id, label: id, hint }));
     return {
       mode: { title: 'Permissions', current: ({ default: 'ask', acceptEdits: 'edits', plan: 'plan', bypassPermissions: 'bypass' } as Record<string, string>)[st.permissionMode] ?? 'ask', options: o(['ask', 'ask before commands and edits'], ['edits', 'edits go through, commands ask'], ['plan', 'read-only, nothing is changed'], ['bypass', 'dangerously skip all permission prompts']) },
-      theme: { title: 'Theme', current: st.theme, options: o(['dark', 'Graphite'], ['light', 'Paper, for light terminals']) },
+      theme: { title: 'Theme', current: st.theme, options: o(['dark', 'Graphite'], ['light', 'Paper, for light terminals'], ['hc', 'high contrast: black, white, bold borders']) },
       mascot: { title: 'Cento size', current: st.mascot, options: o(['auto', 'by window height'], ['large'], ['small'], ['off']) },
       color: { title: "Cento's colour", current: st.color, options: o(['violet'], ['red'], ['yellow'], ['green'], ['brown']) },
       motion: { title: 'Animation', current: st.reducedMotion ? 'reduced' : 'full', options: o(['full', 'Cento moves'], ['reduced', 'still, quieter']) },
@@ -682,7 +682,7 @@ export class AppController {
       }
       case 'mascot': if (['large', 'small', 'off', 'auto'].includes(arg)) this.setSettings({ mascot: arg as Settings['mascot'] }); else this.toast('info', 'Try /mascot large, small, off or auto'); break;
       case 'color': if (['violet', 'red', 'yellow', 'green', 'brown'].includes(arg)) this.setSettings({ color: arg as CentoColor }); else this.toast('info', 'Colours: violet red yellow green brown'); break;
-      case 'theme': if (arg === 'dark' || arg === 'light') this.setSettings({ theme: arg }); else this.toast('info', 'Try /theme dark or /theme light'); break;
+      case 'theme': if (arg === 'dark' || arg === 'light' || arg === 'hc') this.setSettings({ theme: arg }); else this.toast('info', 'Try /theme dark, /theme light or /theme hc (high contrast)'); break;
       case 'mouse': { const on = arg ? arg === 'on' : !this.state.settings.mouse; this.setSettings({ mouse: on }); this.toast('info', on ? 'Mouse wheel scrolls. /mouse off lets you select text with the mouse.' : 'Mouse off: select text with the mouse as usual.'); break; }
       case 'effort': await this.effortCommand(arg); break;
       case 'model': {

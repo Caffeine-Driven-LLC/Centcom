@@ -42,7 +42,7 @@ When you change them in the app, these are saved to your user file: theme, Cento
 | `log.level` | debug \| info \| warn \| error \| silent | `"info"` | yes | How much to write to the log file |
 | `log.max_file_bytes` | number (65536 to 268435456) | `5242880` | no | Rotate the log file at this size |
 | `log.max_files` | number (1 to 20) | `3` | no | How many rotated log files to keep |
-| `ui.theme` | auto \| dark \| light | `"auto"` | yes | Graphite (dark), Paper (light), or follow the system |
+| `ui.theme` | auto \| dark \| light \| hc | `"auto"` | yes | Graphite (dark), Paper (light), high contrast (hc), or follow the system |
 | `ui.mascot` | boolean | `true` | yes | Show Cento |
 | `ui.mouse` | boolean | `true` | no | Scroll with the mouse wheel in the terminal app (off gives the terminal its own text selection back) |
 | `ui.reduced_motion` | boolean | `false` | yes | Turn animation off |
