@@ -15,6 +15,7 @@ export const COMMANDS: SlashCommand[] = [
   { name: 'demo', args: '[fix|search|delete|compact|ask|error|limit]', desc: 'Run a scripted demo story' },
   { name: 'model', args: '[name]', desc: 'Pick the model (ctrl+o)' },
   { name: 'effort', args: '[low|medium|high|xhigh|max|default]', desc: 'How hard the agent thinks (pick from a list with no argument)' },
+  { name: 'density', args: '[comfortable|compact]', desc: 'Blank rows between messages, or fit more on screen' },
   { name: 'spinner', args: '[fun|plain]', desc: 'The waiting line: rotating verbs, or just "Working…"' },
   { name: 'mouse', args: '[on|off]', desc: 'Scroll with the mouse wheel (off lets you select text with the mouse)' },
   { name: 'config', desc: 'Show the settings in effect and where each came from' },

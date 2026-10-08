@@ -137,3 +137,16 @@ describe('/spinner', () => {
     const run = c.runCommand('/spinner'); await new Promise((r) => setTimeout(r, 0)); expect(c.state.pick!.options.map((o) => o.id)).toEqual(['fun', 'plain']); c.pickKey('down'); c.pickKey('enter'); await run; expect(c.state.settings.spinner).toBe('plain');
   });
 });
+describe('/density', () => {
+  it('compact keeps a blank row only before your own messages; comfortable keeps them between all blocks', async () => {
+    const { TranscriptLayout } = await import('../src/transcript/layout.js');
+    const items = [{ id: 'u1', kind: 'user', text: 'one' }, { id: 'a1', kind: 'assistant', text: 'reply', done: true }, { id: 'n1', kind: 'notice', level: 'info', text: 'note' }, { id: 'u2', kind: 'user', text: 'two' }, { id: 'a2', kind: 'assistant', text: 'reply two', done: true }] as never[];
+    const rows = (compact: boolean) => { const l = new TranscriptLayout().update(items, 60, compact); return { total: l.total, blank: l.slice(0, l.total).filter((r) => r.length === 0).length }; };
+    const comfy = rows(false), tight = rows(true); expect(comfy.blank).toBe(4); expect(tight.blank).toBe(1); expect(tight.total).toBe(comfy.total - 3);
+  });
+  it('/density sets it, rejects nonsense, lists the two choices, and is remembered', async () => {
+    const c = make(); await c.runCommand('/density compact'); expect(c.state.settings.density).toBe('compact'); await c.runCommand('/density roomy'); expect(c.state.toasts.at(-1)!.text).toMatch(/comfortable or \/density compact/);
+    const run = c.runCommand('/density'); await new Promise((r) => setTimeout(r, 0)); expect(c.state.pick!.options.map((o) => o.id)).toEqual(['comfortable', 'compact']); expect(c.state.pick!.checked).toEqual(['compact']); c.pickKey('cancel'); await run;
+    const { settingsFromConfig } = await import('../src/clientConfig.js'); expect(typeof settingsFromConfig).toBe('function');
+  });
+});

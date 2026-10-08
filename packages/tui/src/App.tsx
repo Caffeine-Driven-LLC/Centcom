@@ -58,7 +58,7 @@ export function App({ ctl, tier, keys }: AppProps) {
   const tasksH = showTasks ? Math.min(s.tasks.length, rows >= 34 ? 10 : 5) + 1 + (s.tasks.length > (rows >= 34 ? 10 : 5) ? 1 : 0) : 0;
   const bottomH = pending ? approvalHeight(pending, mainW, maxDiff) : promptH + popupH + tasksH;
   const bodyH = Math.max(3, rows - 2 - stripH - bottomH);
-  const layout = useTranscriptLayout(s.items, mainW - 2);
+  const layout = useTranscriptLayout(s.items, mainW - 2, s.settings.density === 'compact');
   const total = layout.total;
 
   // keep the view anchored while the user is scrolled up and new lines arrive; count the new messages; keep the top block in place on a resize

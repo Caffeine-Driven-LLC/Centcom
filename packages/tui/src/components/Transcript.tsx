@@ -9,9 +9,9 @@ import { TranscriptLayout } from '../transcript/layout.js';
 /** Full line list (kept for print and tests); the app itself uses `useTranscriptLayout`. */
 export function useTranscriptLines(items: Item[], width: number) { return useMemo(() => buildLines(items, width), [items, width]); }
 /** One layout per component, updated when items or width change: unchanged blocks are not measured again. */
-export function useTranscriptLayout(items: Item[], width: number): TranscriptLayout {
+export function useTranscriptLayout(items: Item[], width: number, compact = false): TranscriptLayout {
   const ref = useRef<TranscriptLayout | undefined>(undefined); ref.current ??= new TranscriptLayout(); const l = ref.current;
-  return useMemo(() => l.update(items, width), [items, width, l]);
+  return useMemo(() => l.update(items, width, compact), [items, width, compact, l]);
 }
 /** Only the rows on screen are built. `scroll` counts rows up from the bottom; `unseen` is how many messages arrived while scrolled up. */
 /** `items` is only here so the memo notices new content: the layout object is the same instance after every update. */

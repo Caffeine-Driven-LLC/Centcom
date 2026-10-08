@@ -16,6 +16,7 @@ export const SCHEMA = {
   'ui.mascot': { kind: 'boolean', default: true, project: true, doc: 'Show Cento' },
   'ui.mouse': { kind: 'boolean', default: true, doc: 'Scroll with the mouse wheel in the terminal app (off gives the terminal its own text selection back)' },
   'ui.spinner': { kind: 'enum', default: 'fun', enum: ['fun', 'plain'], doc: 'The waiting line: rotating fun verbs, or a plain "Working…"' },
+  'ui.density': { kind: 'enum', default: 'comfortable', enum: ['comfortable', 'compact'], doc: 'Blank rows between messages: comfortable, or compact to fit more on screen' },
   'ui.reduced_motion': { kind: 'boolean', default: false, project: true, doc: 'Turn animation off' },
   'ui.color': { kind: 'enum', default: 'auto', enum: ['auto', 'truecolor', '256', '16', 'never'], project: true, doc: 'Terminal color depth' },
   'a11y.screen_reader': { kind: 'boolean', default: false, doc: 'Plain text for screen readers: no colour, no boxes, no animation, no redraws; one line per event. Same as --screen-reader or CENTO_SCREEN_READER=1' },
