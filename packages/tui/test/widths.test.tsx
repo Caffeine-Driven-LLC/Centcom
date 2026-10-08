@@ -51,3 +51,12 @@ describe('a list never needs more rows than it was given', () => {
     const out = strip(renderToString(<ThemeCtx.Provider value={createTheme('dark', 'truecolor')}><MultiSelect p={{ ...many, sel: 11 }} width={80} height={13} /></ThemeCtx.Provider>, { columns: 80 })); expect(out).toContain('Setting number 11'); expect(out).toContain('more');
   });
 });
+
+describe('the answers of a permission prompt stay readable on every width', () => {
+  for (const risk of ['medium', 'high'] as const) for (const w of [60, 64, 70, 78, 80, 100, 140]) {
+    it(`${risk} risk at ${w} columns shows whole [y] yes and [n] no${risk === 'medium' ? ' (and the session and always answers)' : ''}`, () => {
+      const out = strip(renderToString(<ThemeCtx.Provider value={createTheme('dark', 'truecolor')}><Approval a={approval(risk)} width={w} confirming={false} /></ThemeCtx.Provider>, { columns: w }));
+      expect(out).toContain('[y] yes'); expect(out).toContain('[n] no'); if (risk === 'medium') { expect(out).toContain('[s] session'); expect(out).toContain('[a] always'); expect(out).not.toMatch(/\[[ysan]\] \S*…/); }
+    });
+  }
+});
