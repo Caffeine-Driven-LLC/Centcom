@@ -525,7 +525,7 @@ export class AppController {
     if (ids?.[0]) this.setModel(ids[0]);
   }
   setModel(id: string) {
-    this.setSettings({ model: id }); void this.models.switchTo(this.me, id, 'user').then((c) => { if (c.note?.startsWith('Already')) this.toast('info', c.note); });
+    this.setSettings({ model: id }); void this.models.switchTo(this.me, id, 'user').then((c) => { if (c.note?.startsWith('Already')) this.toast('info', c.note); }).catch(() => undefined); // the choice is already saved; the agent picks it up with its next message
     this.updateAgent(this.me, () => ({ model: id || 'default' }));
     this.toast('ok', `Model: ${id ? modelLabel(id) : 'Default'}${this.state.busy ? ' (from the next message)' : ''}`);
   }
