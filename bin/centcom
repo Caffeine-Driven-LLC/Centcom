@@ -1,0 +1,14 @@
+#!/bin/sh
+# Starts Centcom in the folder you are in, like `claude`. Install once with `pnpm install:cli` (links this file as ~/.local/bin/centcom).
+# It runs the checkout's sources, so a `git pull` is an update; run `pnpm install` in the checkout after dependencies change.
+self="$0"
+while [ -L "$self" ]; do
+  dir=$(cd "$(dirname "$self")" && pwd); self=$(readlink "$self")
+  case "$self" in /*) ;; *) self="$dir/$self" ;; esac
+done
+root=$(cd "$(dirname "$self")/.." && pwd)
+tsx="$root/node_modules/.bin/tsx"
+if [ ! -x "$tsx" ]; then echo "centcom: dependencies are missing in $root. Run: pnpm install" >&2; exit 1; fi
+export TSX_TSCONFIG_PATH="$root/tsconfig.json"
+export CENTCOM_HOME_REPO="$root"
+exec "$tsx" "$root/apps/cli/src/main.tsx" "$@"

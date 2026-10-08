@@ -36,7 +36,8 @@
     "app:smoke": "pnpm app:build && CENTCOM_SMOKE=1 pnpm --filter @centcom/desktop start",
     "app:mock": "CENTCOM_CODEX_BIN=\"$PWD/tools/codex/bin/codex\" pnpm app",
     "lanes:next": "node tools/dev/lane-tasks.mjs",
-    "dogfood": "node tools/dev/lane-tasks.mjs --seed ; tsx apps/cli/src/main.tsx"
+    "dogfood": "node tools/dev/lane-tasks.mjs --seed ; tsx apps/cli/src/main.tsx",
+    "install:cli": "sh tools/dev/install-cli.sh"
   },
   "devDependencies": {
     "@changesets/cli": "3.0.3",
