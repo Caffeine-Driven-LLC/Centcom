@@ -46,6 +46,11 @@ export function windowName(mins: number | null | undefined, fallback: string): s
 
 export interface ApprovalInfo { tool_id: string; tool: string; summary: string; risk: Risk; command?: string; cwd?: string; path?: string; diff?: string; reason?: string }
 
+/** Notifications seen on codex-cli 0.161.0 that carry nothing Centcom shows. Anything else unknown is drift: the recorded-traffic test fails on it. */
+export const IGNORED_NOTIFICATIONS = new Set(['remoteControl/status/changed', 'account/updated', 'thread/started', 'thread/status/changed', 'thread/closed', 'thread/goal/cleared', 'thread/goal/updated', 'turn/started', 'serverRequest/resolved', 'item/reasoning/summaryPartAdded', 'item/commandExecution/outputDelta', 'turn/diff/updated', 'mcpServer/startupStatus/updated', 'model/rerouted']);
+export const HANDLED_NOTIFICATIONS = new Set(['turn/plan/updated', 'item/started', 'item/completed', 'item/agentMessage/delta', 'item/reasoning/textDelta', 'item/reasoning/summaryTextDelta', 'item/fileChange/patchUpdated', 'thread/tokenUsage/updated', 'account/rateLimits/updated', 'turn/completed', 'error', 'warning', 'configWarning', 'deprecationNotice', 'thread/compacted']);
+export const knownNotification = (m: string): boolean => HANDLED_NOTIFICATIONS.has(m) || IGNORED_NOTIFICATIONS.has(m);
+
 export class CodexMapper {
   private deltaIndex = new Map<string, number>();
   private changes = new Map<string, J[]>();
@@ -82,6 +87,8 @@ export class CodexMapper {
         return [{ type: 'error', code, tool_message: msg, fatal: true }];
       }
       case 'warning': case 'configWarning': case 'deprecationNotice': return [{ type: 'engine.warning', code: method, text: String(p.message ?? p.text ?? p.summary ?? method).slice(0, 300) }];
+      case 'model/rerouted': return p.toModel ? [{ type: 'model.changed', model: String(p.toModel), reason: 'engine' }] : [];
+      case 'mcpServer/startupStatus/updated': { const st = String(p.status ?? ''); return /fail|error/i.test(st) ? [{ type: 'engine.warning', code: 'mcp_server_failed', text: `MCP server ${String(p.name ?? '')} did not start${p.error ? ': ' + String(p.error).slice(0, 200) : ''}.` }] : []; }
       case 'thread/compacted': return [{ type: 'compaction.ended' }];
       default: return [];
     }

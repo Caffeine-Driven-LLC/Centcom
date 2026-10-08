@@ -55,3 +55,24 @@ describe('thread setup', () => {
     expect(out.find((m) => m.id === 77)).toMatchObject({ error: { code: -32601 } });
   });
 });
+
+describe('models, effort and reroutes', () => {
+  const answers = { initialize: () => ({ userAgent: 'centcom/0.161.0' }), 'account/read': () => ({ account: { type: 'chatgpt' } }), 'thread/start': () => ({ thread: { id: 't-9' } }), 'turn/start': () => ({ turn: { id: 'u1' } }), 'thread/compact/start': () => ({}), 'model/list': () => ({ data: [{ model: 'm1', displayName: 'M1', description: 'd', hidden: false, isDefault: true, supportedReasoningEfforts: [{ reasoningEffort: 'low' }, { reasoningEffort: 'high' }], defaultReasoningEffort: 'low' }, { model: 'h', hidden: true }] }) };
+  it('effort is sent on every turn once set; models list their efforts; compaction is a request', async () => {
+    const child = fakeChild(); const sent = server(child, answers); const s: any = await new CodexEngine({ spawn: (() => child) as never, stallMs: 0 }).start({ agentId: 'agt_x', cwd: '/tmp/p' });
+    await s.send('a'); expect(sent.find((m) => m.method === 'turn/start').params).not.toHaveProperty('effort'); s.setEffort('high'); child.stdout.write(JSON.stringify({ method: 'turn/completed', params: { turn: { status: 'completed' } } }) + '\n'); await new Promise((r) => setTimeout(r, 20)); await s.send('b');
+    expect(sent.filter((m) => m.method === 'turn/start')[1].params.effort).toBe('high'); expect(await s.listModels()).toEqual([{ id: 'm1', label: 'M1', note: 'd', provider: 'openai', efforts: ['low', 'high'], defaultEffort: 'low', isDefault: true }]);
+    await s.compact(); expect(sent.some((m) => m.method === 'thread/compact/start' && m.params.threadId === 't-9')).toBe(true);
+  });
+  it('a model Codex rejects is forgotten, because turn overrides persist', async () => {
+    const child = fakeChild(); const sent = server(child, answers); const s: any = await new CodexEngine({ spawn: (() => child) as never, stallMs: 0 }).start({ agentId: 'agt_x', cwd: '/tmp/p', model: 'no-such' });
+    const evs: any[] = []; void (async () => { for await (const e of s.events) evs.push(e); })(); await s.send('a');
+    child.stdout.write(JSON.stringify({ method: 'error', params: { error: { message: "The 'no-such' model is not supported when using Codex with a ChatGPT account.", codexErrorInfo: 'other' }, willRetry: false } }) + '\n'); await new Promise((r) => setTimeout(r, 20));
+    expect(evs.find((e) => e.type === 'model.changed')).toMatchObject({ reason: 'fallback' }); child.stdout.write(JSON.stringify({ method: 'turn/completed', params: { turn: { status: 'failed' } } }) + '\n'); await new Promise((r) => setTimeout(r, 20)); await s.send('b');
+    expect(sent.filter((m) => m.method === 'turn/start')[1].params).not.toHaveProperty('model');
+  });
+  it('reroutes and failed MCP servers are reported', () => {
+    const m = new CodexMapper(); expect(m.notification('model/rerouted', { toModel: 'x' })).toEqual([{ type: 'model.changed', model: 'x', reason: 'engine' }]);
+    expect(m.notification('mcpServer/startupStatus/updated', { name: 'evil', status: 'failed', error: 'spawn ENOENT' })[0]).toMatchObject({ code: 'mcp_server_failed' }); expect(m.notification('mcpServer/startupStatus/updated', { name: 'ok', status: 'ready' })).toEqual([]);
+  });
+});
