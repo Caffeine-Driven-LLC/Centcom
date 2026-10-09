@@ -18,3 +18,5 @@ Before pushing: `./tools/ci/gates.sh`.
 ## Seeing the app
 
 `python3 tools/dev/screenshot.py OUT_DIR [scene ...]` runs the real `centcom --demo` in a pseudo-terminal and writes each scene as a PNG with the real colours (scenes: welcome, chat, approval, settings, palette, help, narrow, busy, error, ask; add `-light` for the light theme). It needs `pip install pyte pillow` and a monospace font (set `CENTCOM_FONT` to choose one). Use it to check how a change looks, next to `tools/dev/pty-smoke.py`, which checks how it behaves.
+
+`node apps/web/scripts/gui-shots.mjs OUT_DIR [scene ...]` does the same for the desktop app's screens (home, session, approval, busy, narrow, and `-light` variants): it runs the web app in headless Chromium with a scripted stand-in for the desktop bridge, so no Electron window is needed. If Playwright's own browser revision is not installed, point `PW_CHROMIUM` at any Chromium.

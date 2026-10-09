@@ -57,3 +57,16 @@ body { margin: 0; background: var(--bg-base); color: var(--text-primary); font-f
 .cc-transcript { overflow-y: auto; height: 480px; border: 1px solid var(--border-subtle); background: var(--bg-surface); padding: 8px; } .cc-msg { margin: 8px 0; } .cc-msg--user { background: var(--bg-raised); padding: 8px; } .cc-msg--system { color: var(--text-secondary); } .cc-md pre { overflow-x: auto; background: var(--bg-sunken); padding: 8px; } .cc-md p { margin: 4px 0; }
 .cc-queue { list-style: none; margin: 0; padding: 8px; border: 1px solid var(--border-subtle); } .cc-queue__item { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 4px 0; } .cc-qdot { display: inline-block; width: 10px; height: 10px; background: var(--presence-violet); } .cc-dot--r { background: var(--presence-red); } .cc-dot--y { background: var(--presence-yellow); } .cc-dot--g { background: var(--presence-green); } .cc-dot--b { background: var(--presence-brown); }
 .cc-approval { border-color: var(--status-warning); } .cc-approval[data-focused] { outline: 2px solid var(--focus-ring); }
+/* ---- brand and frame polish ---- */
+.cc-mark { display: inline-block; flex: 0 0 auto; image-rendering: pixelated; }
+.cc-mk-a { fill: var(--signal); } .cc-mk-b { fill: var(--cento-600); } .cc-mk-c { fill: var(--cento-500); } .cc-mk-d { fill: var(--cento-300); } .cc-mk-e { fill: var(--ink-900); }
+.cc-brand { display: inline-flex; align-items: center; gap: var(--space-2); text-decoration: none; color: var(--text-primary); }
+.cc-brand__word { font-family: var(--font-pixel); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; font-size: 15px; color: var(--accent-hover); }
+.cc-top { box-shadow: var(--shadow-pixel-sm); }
+.cc-rail { display: flex; flex-direction: column; gap: var(--space-1); }
+.cc-rail__link { min-height: 36px; padding: 0 var(--space-3); border-left: 3px solid transparent; }
+.cc-rail__link:hover { background: var(--bg-hover); color: var(--text-primary); }
+.cc-rail__link[aria-current="page"] { border-left-color: var(--accent-fill); font-weight: 600; }
+.cc-main { padding: var(--space-4) var(--space-6); }
+/* no inspector on this page: the content gets the room, instead of an empty 320 px column */
+@media (min-width: 1280px) { .cc-body:not(:has(.cc-inspector)) { grid-template-columns: 240px minmax(0, 1fr); } }
