@@ -58,3 +58,14 @@ describe('man pages', () => {
     expect(manPage({ name: 'x', summary: 'a - b', usage: 'x', description: '.dot at line start', flags: [] }, '1.0.0', '1.2.0')).toContain('\\&.dot');
   });
 });
+
+describe('the releases page', () => {
+  it('is the page that docs/releases.json produces (run pnpm docs:gen)', async () => { const m = await import('./releases-page.js'); expect(m.pageIsCurrent()).toBe(true); });
+  it('lists the newest release first, the latest per channel, and refuses a bad list', async () => {
+    const { renderReleases, releaseProblems } = await import('./releases-page.js');
+    const page = renderReleases([{ version: '1.2.0', channel: 'stable', date: '2026-10-01', notes: ['Faster start.'] }, { version: '1.10.0', channel: 'stable', date: '2026-11-01', notes: ['Undo in the prompt.'], url: 'https://example.com/n' }, { version: '1.3.0-beta.1', channel: 'beta', date: '2026-11-05', notes: ['Try this.'] }]);
+    expect(page.indexOf('### 1.10.0')).toBeLessThan(page.indexOf('### 1.2.0')); expect(page).toContain('| stable | **1.10.0** | 2026-11-01 |'); expect(page).toContain('| beta | **1.3.0-beta.1** | 2026-11-05 |'); expect(page).toContain('| nightly | none yet | – |'); expect(page).toContain('[Release notes](https://example.com/n)'); expect(page).toContain('1.3.0-beta.1 · 2026-11-05 · beta');
+    expect(releaseProblems([{ version: 'x', channel: 'gamma', date: 'soon', notes: [] }, { version: '1.0.0', channel: 'stable', date: '2026-01-01', notes: ['a'] }, { version: '1.0.0', channel: 'stable', date: '2026-01-01', notes: ['a'] }, { version: '1.0.1', channel: 'stable', date: '2026-01-01', notes: ['a'], url: 'http://insecure' }].map((x) => x as never)).length).toBeGreaterThanOrEqual(6);
+    expect(() => renderReleases([{ version: 'x' } as never])).toThrow(/docs\/releases\.json/);
+  });
+});

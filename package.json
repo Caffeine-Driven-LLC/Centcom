@@ -21,7 +21,7 @@
     "dev:mock": "tsx tools/dev/mock.mjs",
     "bench": "tsx tools/bench/run.ts",
     "bench:compare": "tsx tools/bench/compare-cli.ts",
-    "docs:gen": "tsx tools/docs/gen-cli-reference.ts",
+    "docs:gen": "tsx tools/docs/gen-cli-reference.ts && tsx tools/docs/releases-page.ts",
     "docs:check": "tsx tools/docs/check.ts",
     "docs:dev": "vitepress dev docs/site",
     "docs:build": "vitepress build docs/site",

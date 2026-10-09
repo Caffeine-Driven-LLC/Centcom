@@ -181,3 +181,10 @@ describe('prompt history', () => {
     saveHistory(d, '/p', ['ok', 'x'.repeat(30000)]); expect(loadHistory(d, '/p')).toEqual(['ok']);
   });
 });
+
+describe('update settings', () => {
+  it('check and auto default to on, the channel to stable', async () => {
+    const { SCHEMA } = await import('../src/schema.js') as never as { SCHEMA: Record<string, { default: unknown }> };
+    expect([SCHEMA['update.check']?.default, SCHEMA['update.auto']?.default, SCHEMA['update.channel']?.default]).toEqual([true, true, 'stable']);
+  });
+});
