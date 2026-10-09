@@ -138,7 +138,7 @@ class CodexSession implements EngineSession {
   /** A turn once sat silent for 3 minutes on a real Codex; say so instead of looking frozen. */
   private watchStall() {
     const limit = this.deps.stallMs ?? 120_000; if (!limit) return; this.lastActivity = Date.now(); this.stallWarned = false; clearInterval(this.stallTimer);
-    this.stallTimer = setInterval(() => { if (!this.running) { clearInterval(this.stallTimer); return; } if (!this.stallWarned && Date.now() - this.lastActivity >= limit) { this.stallWarned = true; this.emit({ type: 'engine.warning', code: 'codex_stalled', text: `Codex has sent nothing for ${Math.round(limit / 1000)} seconds. It may still be working; press Stop to cancel.` }); } }, Math.max(10, Math.min(5000, limit / 4)));
+    this.stallTimer = setInterval(() => { if (!this.running) { clearInterval(this.stallTimer); return; } if (!this.stallWarned && this.waitingOnPerson === 0 && Date.now() - this.lastActivity >= limit) { this.stallWarned = true; this.emit({ type: 'engine.warning', code: 'codex_stalled', text: `Codex has sent nothing for ${Math.round(limit / 1000)} seconds. It may still be working; press Stop to cancel.` }); } }, Math.max(10, Math.min(5000, limit / 4)));
     this.stallTimer.unref?.();
   }
 
@@ -160,7 +160,12 @@ class CodexSession implements EngineSession {
     }
   }
 
+  /** Approvals and questions in flight: Codex is waiting for the person then, so its silence is not a stall. */
+  private waitingOnPerson = 0;
   private async onServerRequest(id: number | string, method: string, p: any) {
+    this.waitingOnPerson++; try { await this.handleServerRequest(id, method, p); } finally { this.waitingOnPerson--; this.lastActivity = Date.now(); this.stallWarned = false; }
+  }
+  private async handleServerRequest(id: number | string, method: string, p: any) {
     if (method === 'item/tool/requestUserInput' && this.o.questionGate) { await this.onQuestion(id, p ?? {}); return; }
     if (method !== 'item/commandExecution/requestApproval' && method !== 'item/fileChange/requestApproval') {
       // anything else (user-input, MCP elicitation, token refresh, legacy approvals): decline rather than hang the turn

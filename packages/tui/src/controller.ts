@@ -9,7 +9,8 @@ import type { AgentBus, AgentId, FleetManager, FleetNode, Ledger, Checkpoint, Ch
 import type { PendingApproval as PolicyPending } from '@centcom/agent';
 import type { Logger } from '@centcom/net';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join, resolve as resolvePath } from 'node:path';
+import { dirname, join, resolve as resolvePath } from 'node:path';
+import { HANDOFF_PROMPT, readPrompt } from './handoff.js';
 import { SessionStore, ago, titleFrom, type SessionMeta } from './sessions.js';
 import { codeBlocks, lastAnswer, toMarkdown } from './util/export.js';
 import { PasteStore } from './prompt/paste.js';
@@ -126,7 +127,7 @@ export class AppController {
     this.night = this.makeNight();
     const clock = { now: () => Date.now(), setTimeout: (f: () => void, ms: number) => { const t = setTimeout(f, ms); t.unref?.(); return t; }, clearTimeout: (h: never) => clearTimeout(h as NodeJS.Timeout) };
     this.ctxView = createContextView({ bus: this.bus, clock, config: o.context, engines: { capabilities: () => o.engine.capabilities(), status: () => (this.state.busy ? 'running' : this.session ? 'waiting' : 'starting'), send: async (_id, prompt) => { await this.session?.send(prompt); } } });
-    this.bus.on('agent:context_alert', (a) => { if (a.level === 'warn') this.notice('warn', `The context is ${Math.round(a.pct)}% full.`, 'Type /compact to have the agent compact it.'); else if (a.level === 'full') { this.notice('warn', 'The context is almost full.', 'Type /compact now, or start fresh with /new.'); this.driver.setState('context-full'); } });
+    this.bus.on('agent:context_alert', (a) => { if (a.level === 'warn') this.notice('warn', `The context is ${Math.round(a.pct)}% full.`, 'Type /compact to have the agent compact it, or /handoff to write a note for a fresh session.'); else if (a.level === 'full') { this.notice('warn', 'The context is almost full.', 'Choose what to do about it, or type /compact or /handoff.'); this.driver.setState('context-full'); this.offerContext = true; this.maybeOfferContext(); } else if (a.level === 'ok') this.offerContext = false; });
     if (o.fleet) this.watchFleet(o.fleet);
     this.models = createModelRegistry({
       config: () => ({ model: this.state.settings.model || undefined }), bus: { emit: (_k, p) => this.o.logger?.debug('model.changed', { reason: p.reason }) },
@@ -331,6 +332,7 @@ export class AppController {
         this.updateAgent(me, () => ({ busy: false }));
         if (ev.outcome === 'canceled') { this.notice('warn', 'Interrupted.'); this.setAgentState(me, 'idle'); }
         this.night.turnDone(ev.outcome);
+        { const h = this.handoff; if (h) { this.handoff = undefined; if (ev.outcome === 'ok') queueMicrotask(() => { void this.finishHandoff(h); }); else this.toast('warn', ev.outcome === 'canceled' ? 'Handoff cancelled: nothing was changed.' : 'The agent could not write the handoff document, so nothing was changed.', 6000); } else if (this.offerContext) queueMicrotask(() => this.maybeOfferContext()); }
         break;
       default: break;
     }
@@ -825,6 +827,7 @@ export class AppController {
       case 'interrupt': await this.interrupt(); break;
       case 'rewind': await this.rewindCommand(arg); break;
       case 'compact': await this.compactCommand(); break;
+      case 'handoff': await this.handoffCommand(); break;
       case 'fleet': await this.fleetCommand(arg); break;
       case 'usage': this.usageCommand(); break;
       case 'mcp': case 'hooks': case 'memory': case 'doctor': case 'init': {
@@ -1064,6 +1067,44 @@ export class AppController {
   private async trustCommand(arg: string) {
     const p = this.o.policy; if (!p || arg.trim() !== 'rules') { this.toast('info', 'Try /trust rules to use this project\'s permission rules file.'); return; }
     try { await p.engine.rules.trustProject(p.root); this.toast('ok', 'Project rules trusted and loaded.'); } catch (e) { this.toast('warn', String((e as Error).message ?? e)); }
+  }
+  /* ------------------------------------------------------------------ a full context: compact, or hand over to a fresh session */
+  private offerContext = false; private handoff?: { before: number; title: string; sessionId: string };
+  /** When the context is full and nothing else needs you, ask what to do about it (once per time it fills up). */
+  private maybeOfferContext() {
+    if (!this.offerContext || this.state.mode !== 'chat' || this.state.busy || this.night.active() || this.pendingAnswer || this.state.approvals.length || this.handoff) return;
+    this.offerContext = false; void this.contextChoice();
+  }
+  private async contextChoice() {
+    const canCompact = this.o.engine.capabilities().has('compact' as never);
+    const ids = await this.pick({ title: 'The context is almost full', note: 'The agent forgets older messages when it runs out of room', multi: false, confirm: 'do this', cancel: 'not now', options: [
+      ...(canCompact ? [{ id: 'compact', label: 'Compact', hint: 'the agent summarises the conversation and goes on in this session' }] : []),
+      { id: 'handoff', label: 'Write a handoff document', hint: 'the agent writes down everything a new session needs; a fresh session starts and reads it' },
+      { id: 'later', label: 'Not now', hint: 'carry on; ask again the next time it fills up' },
+    ] } as never);
+    const id = ids?.[0]; if (id === 'compact') await this.compactCommand(); else if (id === 'handoff') await this.handoffCommand();
+  }
+  /** `/handoff`: the agent writes a document for a new session (as its answer, so no file-edit approval is needed), the document is saved in the project, a fresh session starts, and its first message tells it to read the document. */
+  async handoffCommand() {
+    if (this.state.busy) { this.toast('warn', 'Wait until the agent is idle, then /handoff.'); return; }
+    if (this.night.active()) { this.toast('warn', 'Not while the night cycle is running.'); return; }
+    if (!this.state.items.some((i) => i.kind === 'user')) { this.toast('info', 'There is nothing to hand over yet.'); return; }
+    this.handoff = { before: this.state.items.length, title: titleFrom(this.state.items), sessionId: this.state.sessionId };
+    this.notice('info', 'Asking the agent to write the handoff document…', 'When it is done, a fresh session starts and reads it.');
+    await this.submit('Write a handoff document for a fresh session', { wire: HANDOFF_PROMPT });
+    if (this.handoff && !this.state.busy) { this.handoff = undefined; } // the message never went out (an error was already shown)
+  }
+  private async finishHandoff(h: { before: number; title: string; sessionId: string }) {
+    let text: string | undefined; for (const i of [...this.state.items.slice(h.before)].reverse()) if (i.kind === 'assistant' && i.text.trim()) { text = i.text.trim(); break; }
+    if (!text || text.length < 200) { this.notice('warn', 'The agent did not write a usable handoff document, so nothing was changed.', 'Try /handoff again, or /compact.'); return; }
+    const iso = new Date().toISOString(); const stamp = iso.slice(0, 10).replace(/-/g, '') + '-' + iso.slice(11, 19).replace(/:/g, '');
+    const rel = join('.centcom', 'handoff', `handoff-${stamp}.md`); const file = resolvePath(this.o.cwd, rel);
+    const doc = `<!-- Handoff written by ${this.o.engine.label} at ${iso} from the session "${h.title.replace(/-->/g, '')}" (${h.sessionId}); resume it with /resume if you need the full conversation. -->\n\n${text}\n`;
+    try { mkdirSync(dirname(file), { recursive: true, mode: 0o755 }); writeFileSync(file, doc, { flag: 'wx', mode: 0o600 }); }
+    catch (e) { this.notice('warn', 'Could not save the handoff document, so the session was kept.', String((e as Error).message ?? e)); return; }
+    await this.newSession(); if (this.state.items.length) return; // still busy: the fresh session did not start
+    this.notice('ok', `Handoff saved to ${rel}`, 'A fresh session has started and is reading it.');
+    await this.submit(`Read the handoff document ${rel}`, { wire: readPrompt(rel) });
   }
   private async compactCommand() {
     const r = await this.ctxView!.requestCompaction(this.me as AgentId);

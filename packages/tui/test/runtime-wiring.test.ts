@@ -144,3 +144,40 @@ describe('agent.approval_timeout_ms reaches the permission engine', () => {
     expect(await p).toMatchObject({ decision: 'deny' }); expect(ctl.state.approvals).toHaveLength(0); ctl.stop();
   }, 15_000);
 });
+
+describe('a full context: compact, or hand over to a fresh session', () => {
+  const doc = '# Handoff\n\n## Goal\n' + 'Make the importer faster without changing its output. '.repeat(6) + '\n\n## Next step\nRun `pnpm test importer` and fix the two failures in src/import/parse.ts.\n';
+  const full = (n: number): EventBody[] => (n === 1 ? [{ type: 'usage.report', input_tokens: 1, output_tokens: 1, cost_is_estimate: true, context_tokens: 196_000, context_window: 200_000 }]
+    : n === 2 ? [{ type: 'text.delta', message_id: 'h1', index: 0, text: doc }, { type: 'text.done', message_id: 'h1', text: doc }] : [{ type: 'text.delta', message_id: `m${n}`, index: 0, text: 'ok' }, { type: 'text.done', message_id: `m${n}`, text: 'ok' }]);
+  const opts = (c: AppController) => c.state.pick!.options.map((o) => o.id);
+
+  it('when the context fills up it asks what to do; the engine has no compact command, so the choices are the handoff and "not now"', async () => {
+    const { ctl } = await app({ script: (n: number) => ({ events: full(n) }) }); await ctl.submit('speed up the importer'); await until(() => ctl.state.mode === 'pick'); expect(ctl.state.pick!.title).toBe('The context is almost full'); expect(opts(ctl)).toEqual(['handoff', 'later']);
+    ctl.pickKey('down'); ctl.pickKey('enter'); await until(() => ctl.state.mode === 'chat'); expect(ctl.state.items.some((i) => i.kind === 'user' && i.text.includes('handoff'))).toBe(false); ctl.stop(); // "not now" sends nothing
+  });
+  it('the handoff: the agent is asked for the document (no tools), it is saved in the project, a fresh session starts and its first message tells it to read the file', async () => {
+    const { ctl, cwd, engine } = await app({ script: (n: number) => ({ events: full(n) }) }); await ctl.submit('speed up the importer'); await until(() => ctl.state.mode === 'pick'); const oldSession = ctl.state.sessionId;
+    ctl.pickKey('enter'); await until(() => engine.sessions.length === 2 && engine.sessions[1]!.prompts.length === 1, 8000);
+    expect(engine.sessions[0]!.prompts[1]).toMatch(/^This session is running out of context[\s\S]*Do not use any tools[\s\S]*## Next step/); // asked for the document as the answer, not as a file edit
+    const m = /handoff document (\.centcom\/handoff\/handoff-\d{8}-\d{6}\.md)/.exec(engine.sessions[1]!.prompts[0]!); expect(m).not.toBeNull(); const saved = readFileSync(join(cwd, m![1]!), 'utf8');
+    expect(saved).toContain('# Handoff'); expect(saved).toContain('Run `pnpm test importer`'); expect(saved).toContain(oldSession); expect(engine.sessions[1]!.prompts[0]).toMatch(/Read it completely first/);
+    expect(ctl.state.sessionId).not.toBe(oldSession); expect(ctl.state.items.filter((i) => i.kind === 'user').map((i) => (i.kind === 'user' ? i.text : ''))).toEqual([`Read the handoff document ${m![1]}`]); // the old conversation is gone from the screen, saved for /resume
+    expect(notices(ctl).some((x) => /Handoff saved to \.centcom\/handoff\//.test(x))).toBe(true); ctl.stop();
+  });
+  it('/handoff works any time; an answer that is not a document keeps the session and says so; an interrupted or failed turn changes nothing', async () => {
+    const short = await app({ script: (n: number) => ({ events: n === 1 ? [{ type: 'text.done', message_id: 'a', text: 'fine' }] : [{ type: 'text.done', message_id: 'b', text: 'I cannot.' }] }) }); await short.ctl.submit('hello'); await until(() => !short.ctl.state.busy);
+    await short.ctl.runCommand('/handoff'); await until(() => notices(short.ctl).some((x) => /did not write a usable handoff/.test(x))); expect(short.engine.sessions).toHaveLength(1); expect(short.ctl.state.items.some((i) => i.kind === 'user' && i.text === 'hello')).toBe(true); short.ctl.stop();
+    const bad = await app({ script: (n: number) => ({ events: [{ type: 'text.done', message_id: `m${n}`, text: 'x' }], outcome: n === 1 ? 'ok' : 'error' }) }); await bad.ctl.submit('hello'); await until(() => !bad.ctl.state.busy);
+    await bad.ctl.runCommand('/handoff'); await until(() => bad.ctl.state.toasts.some((t) => /could not write the handoff/.test(t.text))); expect(bad.engine.sessions).toHaveLength(1); bad.ctl.stop();
+    const empty = await app(); await empty.ctl.runCommand('/handoff'); expect(empty.ctl.state.toasts.at(-1)!.text).toMatch(/nothing to hand over/); empty.ctl.stop();
+  });
+  it('declining is remembered for this fill-up: the next turn at the same level does not ask again', async () => {
+    const { ctl } = await app({ script: (n: number) => ({ events: n === 1 ? full(1) : full(3) }) }); await ctl.submit('one'); await until(() => ctl.state.mode === 'pick'); ctl.pickKey('down'); ctl.pickKey('enter'); await until(() => ctl.state.mode === 'chat');
+    await ctl.submit('two'); await until(() => !ctl.state.busy); await new Promise((r) => setTimeout(r, 100)); expect(ctl.state.mode).toBe('chat'); ctl.stop(); // the same fill-up is not offered twice
+  });
+  it('an engine that can compact gets "Compact" as the first choice, and picking it asks for a compaction instead of a handoff', async () => {
+    const { ctl, engine } = await app({ script: (n: number) => ({ events: full(n) }) }); (engine as unknown as { capabilities: () => Set<string> }).capabilities = () => new Set(['streaming', 'approvals', 'resume', 'interrupt', 'compact']);
+    await ctl.submit('speed up the importer'); await until(() => ctl.state.mode === 'pick'); expect(opts(ctl)).toEqual(['compact', 'handoff', 'later']); ctl.pickKey('enter'); await until(() => ctl.state.mode === 'chat');
+    expect(engine.sessions[0]!.prompts.some((p) => /running out of context/.test(p))).toBe(false); ctl.stop();
+  });
+});

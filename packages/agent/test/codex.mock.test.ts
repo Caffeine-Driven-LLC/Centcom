@@ -87,3 +87,14 @@ describe('Codex asks the person a question (item/tool/requestUserInput)', () => 
     const { s, evs } = await start(); await s.send('ask Which? | x | y'); await until(() => done(evs)); expect(evs).toContainEqual(expect.objectContaining({ type: 'engine.warning', code: 'unhandled_server_request' }));
   });
 });
+
+describe('the "Codex has sent nothing" warning', () => {
+  const startWith = async (stallMs: number, o: Partial<Parameters<CodexEngine['start']>[0]>) => { const s = await new CodexEngine({ bin: BIN, stallMs }).start({ agentId: 'agt_mock', cwd: proj(), ...o } as never); sessions.push(s); const evs: NormalisedEvent[] = []; void (async () => { for await (const e of s.events) evs.push(e); })(); return { s, evs }; };
+  const stalled = (evs: NormalisedEvent[]) => evs.some((e) => e.type === 'engine.warning' && (e as { code?: string }).code === 'codex_stalled');
+  it('is not shown while Codex waits for your approval, however long you take', async () => {
+    let release = () => undefined as void; const held = new Promise<void>((r) => { release = r; });
+    const { s, evs } = await startWith(120, { approvalGate: { decide: async () => { await held; return { decision: 'approve' as const, scope: 'once' as const }; } } as never });
+    await s.send('run: echo slow-approval'); await until(() => evs.some((e) => e.type === 'approval.requested')); await new Promise((r) => setTimeout(r, 700)); expect(stalled(evs)).toBe(false); // five times the limit, still waiting for the person
+    release(); await until(() => done(evs)); expect(stalled(evs)).toBe(false);
+  });
+});

@@ -64,6 +64,16 @@ Everything you change is remembered. `/config` shows where each value comes from
 
 `/copy` puts the last answer on the clipboard, `/copy code` just its last code block. `/export` saves the whole conversation as a Markdown file in this folder (`/export notes.md` to name it; it never overwrites). Secrets are scrubbed from the file.
 
+## When the context is full
+
+Both Claude Code and Codex forget the oldest messages when they run out of room. When the agent reports the context is almost full (97%), Centcom asks once, as soon as the agent is idle and nothing else needs you:
+
+- **Compact**: the agent summarises the conversation and goes on in the same session (only offered when the agent has a compact command).
+- **Write a handoff document**: the agent writes everything a new session needs as its *answer* (no tools, so no file-edit approval), Centcom saves it as `.centcom/handoff/handoff-<date>-<time>.md` in your project, a fresh session starts (the old conversation stays saved for `/resume`), and the first message of the new session tells the agent to read the document and carry on with the next step. In "ask first" mode the new agent asks once to read the file.
+- **Not now**: carry on. It asks again only after the context has dropped and filled up again.
+
+`/compact` and `/handoff` do the same at any time. The document has fixed sections (goal, where things stand, next step, decisions and why, files that matter, how to run and check, gotchas, rules to keep following), so check it before relying on it; the new agent is told to verify anything that looks out of date.
+
 ## Approvals
 
 A new approval ignores keys for a third of a second so a key you were typing cannot approve something you have not read. It shows how long is left before it is declined on its own (`agent.approval_timeout_ms`, ten minutes by default). `s` allows it for this session only.
