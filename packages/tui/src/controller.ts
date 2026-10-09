@@ -121,7 +121,7 @@ export class AppController {
     this.store = new Store<AppState>({
       items: [], agents: [me], activeAgent: this.me, mode: 'chat', input: '', cursor: 0, history: o.history ?? [], histIdx: null, draft: '', scroll: 0, toasts: [], approvals: [], settings,
       busy: false, verb: this.verbs.next(), limits: [], cwd: o.cwd, branch: o.branch ?? '', engineId: o.engine.id, engineLabel: o.engine.label, demo: o.demo, fleet: true, tasks: [], tasksOpen: true,
-      slashSel: 0, palette: { query: '', sel: 0 }, modelSel: 0, gallery: { cat: 0, idx: 0, color: 0, query: '' }, version: o.version, sessionId: newId('ses'), sessions: [], night: initialNight(),
+      slashSel: 0, palette: { query: '', sel: 0 }, gallery: { cat: 0, idx: 0, color: 0, query: '' }, version: o.version, sessionId: newId('ses'), sessions: [], night: initialNight(),
     });
     this.driver = new MascotDriver({ reducedMotion: settings.reducedMotion, color: settings.color });
     this.night = this.makeNight();
@@ -468,7 +468,6 @@ export class AppController {
   private cancelQuestions() { const a = this.pendingAnswer; this.pendingAnswer = undefined; if (this.state.maskInput) this.set({ maskInput: false }); if (a) this.restoreDraft(); a?.(undefined); if (this.questionPick && this.state.mode === 'pick') this.pickKey('cancel'); }
 
   /** A question waiting for y (memory notes, rewinds): the answer never goes to the engine or into history. */
-  private pendingMemory?: { diff: string; apply: () => Promise<string>; no?: string };
   async submit(raw: string, opts: { wire?: string; /** Send as a message to the agent even when the night panel is open (an answer to its question). */ asMessage?: boolean } = {}) {
     const text = raw.trim();
     if (!text) return;
@@ -477,11 +476,6 @@ export class AppController {
     if (this.pendingAnswer) { const a = this.pendingAnswer; this.pendingAnswer = undefined; const full = this.pastes.expand(text); this.set({ input: '', cursor: 0, maskInput: false }); this.restoreDraft(); a(full); return; } // expanded before the emptied prompt forgets its chips
     if (this.state.mode === 'night' && !this.nightSending && !opts.asMessage && !text.startsWith('/')) { if (this.nightAdd(expanded)) this.set({ input: '', cursor: 0 }); return; } // in the night panel, a message is a task (the prompt is cleared only when it was taken, so a refused one stays in it)
     if (this.night.active() && !this.nightSending && !text.startsWith('/')) { this.toast('warn', 'Night cycle is running. Add tasks with /night add …, stop it with /night stop.'); return; }
-    if (this.pendingMemory) { // the answer to "add this to memory?": never goes to the engine or into the prompt history
-      const p = this.pendingMemory; this.pendingMemory = undefined; this.set({ input: '', cursor: 0 });
-      if (/^(y|yes)$/i.test(text)) { try { this.addItem({ kind: 'notice', id: nid('n'), level: 'ok', text: await p.apply() }); } catch (e) { this.addItem({ kind: 'notice', id: nid('n'), level: 'warn', text: String((e as Error).message ?? e) }); } } else this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: p.no ?? 'Nothing was added to memory.' });
-      return;
-    }
     const note = this.o.onMemoryAdd ? /^#[ \t]+(\S[\s\S]*)$/.exec(text) : null;
     if (note) {
       this.set({ input: '', cursor: 0, histIdx: null, draft: '' }); const r = await this.o.onMemoryAdd!(note[1]!.trim());
@@ -530,7 +524,13 @@ export class AppController {
   /** Switch model for the next turn (the running turn keeps its model). */
   /** The model list: Claude Code's own screen, or the models the Codex account reports (they differ per account). */
   async openModels() {
-    if (this.state.engineId !== 'codex') { const i = CLAUDE_MODELS.findIndex((m) => m.id === this.state.settings.model); this.set({ mode: 'models', modelSel: Math.max(0, i) }); return; }
+    if (this.state.engineId !== 'codex') {
+      const OTHER = '\u0000other'; const cur = this.state.settings.model;
+      const ids = await this.pick({ title: 'Model', note: 'Applies from your next message', multi: false, confirm: 'use', checked: [CLAUDE_MODELS.some((m) => m.id === cur) ? cur : ''], options: [...CLAUDE_MODELS.map((m) => ({ id: m.id === '' ? '\u0000default' : m.id, label: m.label, hint: m.note })), { id: OTHER, label: 'Another model…', hint: 'type its id' }] });
+      const id = ids?.[0]; if (id === undefined) return;
+      if (id === OTHER) { const t = await this.askText({ id: 'model', text: 'Which model id? (for example claude-opus-5-5)' }); if (t?.trim()) this.setModel(t.trim()); return; }
+      this.setModel(id === '\u0000default' ? '' : id); return;
+    }
     const list = await this.engineModels(); if (!list.length) { this.toast('warn', 'Codex did not return its model list. Try again, or type /model <name>.'); return; }
     const ids = await this.pick({ title: 'Model', note: 'The models your Codex account offers', multi: false, confirm: 'use', checked: [this.state.settings.model], options: list.map((m) => ({ id: m.id, label: m.label || m.id, hint: m.efforts?.length ? `${m.note ? m.note + ' · ' : ''}effort ${m.efforts.join('/')}` : m.note })) });
     if (ids?.[0]) this.setModel(ids[0]);
@@ -1043,7 +1043,7 @@ export class AppController {
     let out = lines.join('\n'); while (Buffer.byteLength(out) > maxBytes && lines.length) { lines.shift(); out = '…\n' + lines.join('\n'); } return Buffer.byteLength(out) > maxBytes ? out.slice(-Math.floor(maxBytes / 4)) : out;
   }
   private checkpointLine(c: Checkpoint, i: number) { return `${String(c.n).padStart(3)}  ${ago(Date.parse(c.at))}  ${c.label || '(no text)'}${c.commit ? `  +${c.files.added} ~${c.files.changed} -${c.files.removed}` : '  (conversation only)'}${i === 0 ? '  ← latest' : ''}`; }
-  async rewindCommand(arg: string, viaMenu = false) {
+  async rewindCommand(arg: string, _viaMenu = false) {
     if (!this.cp) { this.toast('info', 'Checkpoints are off in this session.'); return; }
     if (this.state.busy) { this.toast('warn', 'Cento is still working. Press Esc to interrupt, then rewind.'); return; }
     await this.cp.ready().catch(() => undefined); const list = [...this.cp.list()].reverse();
@@ -1068,14 +1068,11 @@ export class AppController {
       if (r.failed) return `Stopped part way: ${r.failed.unrestored.length} file(s) not put back. Your state before the rewind is saved: /rewind ${this.cp!.list().at(-1)?.n ?? ''} undoes it.`;
       return `Rewound to before "${target.label}": ${r.restored.length} put back, ${r.deleted.length} removed${r.skipped.length ? `, ${r.skipped.length} left alone` : ''}.${r.undoRef ? ` To undo, /rewind ${this.cp!.list().at(-1)?.n}.` : ''}${r.conversation?.resumeError ? ` (The tool said: ${r.conversation.resumeError})` : ''}`;
     } };
-    if (viaMenu) { // from the guided flow: review, then confirm from a list
+    { // review, then confirm from a list (never by typing "y")
       this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: `Rewind to before "${target.label}"`, detail: parts.join('\n') });
       const ok = await this.pick({ title: `Rewind to before "${target.label}"?`, note: 'The details are above in the conversation.', multi: false, confirm: 'ok', options: [{ id: 'yes', label: 'Yes, rewind' }, { id: 'no', label: 'No, leave everything as it is' }] });
       if (ok?.[0] === 'yes') { try { this.addItem({ kind: 'notice', id: nid('n'), level: 'ok', text: await pending.apply() }); } catch (e) { this.addItem({ kind: 'notice', id: nid('n'), level: 'warn', text: 'Could not rewind: ' + String((e as Error).message ?? e) }); } } else this.notice('info', pending.no);
-      return;
     }
-    this.pendingMemory = pending;
-    this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: `Rewind to before "${target.label}"? Type y to confirm, anything else cancels.`, detail: parts.join('\n') });
   }
   /** Esc twice within 600 ms while idle opens the checkpoint list. */
   escIdle() { if (this.pendingAnswer) { this.cancelQuestions(); return; } const now = Date.now(); if (now - this.lastEsc < 600) { this.lastEsc = 0; void this.rewindCommand(''); } else this.lastEsc = now; }

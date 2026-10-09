@@ -2,7 +2,7 @@ import type { ApprovalDecision, ApprovalRequest, EngineId, LoginKind, Permission
 import type { CentoColor, MiniState } from '@centcom/mascot';
 import type { SessionMeta } from '../sessions.js';
 
-export type Mode = 'chat' | 'palette' | 'help' | 'gallery' | 'fleet' | 'models' | 'night' | 'pick';
+export type Mode = 'chat' | 'palette' | 'help' | 'gallery' | 'fleet' | 'night' | 'pick';
 export type MascotSize = 'large' | 'small' | 'off';
 
 export interface AgentView {
@@ -51,7 +51,6 @@ export interface AppState {
   maskInput?: boolean;
   /** The open multi-select (mode 'pick'). */
   pick?: import('../pick/model.js').PickState;
-  modelSel: number;
   gallery: { cat: number; idx: number; color: number; query: string };
   exitArmedAt?: number;
   /** The saved conversation this one is written to, and recent saved ones in this folder. */

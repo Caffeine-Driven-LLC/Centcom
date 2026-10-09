@@ -46,8 +46,8 @@ export class Workspace {
 
   private snapshot(): { state: WebState; items: Item[] } {
     const s = this.ctl.state;
-    const { items, approvals, history, input, cursor, histIdx, draft, scroll, palette, modelSel, gallery, slashSel, mode, ...rest } = s;
-    void history; void input; void cursor; void histIdx; void draft; void scroll; void palette; void modelSel; void gallery; void slashSel; void mode;
+    const { items, approvals, history, input, cursor, histIdx, draft, scroll, palette, gallery, slashSel, mode, ...rest } = s;
+    void history; void input; void cursor; void histIdx; void draft; void scroll; void palette; void gallery; void slashSel; void mode;
     return { items, state: { ...rest, approvals: approvals.map((a) => ({ id: a.req.approval_id, tool: a.req.tool, summary: a.req.summary, risk: a.req.risk, path: a.req.path, command: a.req.command, diff: a.req.diff, agentName: a.agentName })) } };
   }
 

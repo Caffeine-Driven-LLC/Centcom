@@ -60,7 +60,6 @@ export async function runLinear(ctl: AppController, io: LinearIO = { input: proc
     if (s.mode === 'help') { w('Commands:'); for (const c of COMMANDS) w(`/${c.name}${c.args ? ' ' + c.args : ''}: ${c.desc}`); w('Type a message to the agent, or a / command. Press Ctrl+D to leave.'); ctl.patch({ mode: 'chat' }); }
     else if (s.mode === 'palette') { w('The command palette is not used in screen-reader mode. Type / commands instead; /help lists them.'); ctl.patch({ mode: 'chat' }); }
     else if (s.mode === 'gallery') { w('The animation gallery is not available in screen-reader mode.'); ctl.patch({ mode: 'chat' }); }
-    else if (s.mode === 'models') { w('Choose a model with /model followed by its name.'); ctl.patch({ mode: 'chat' }); }
   };
   const unsubscribe = ctl.store.subscribe(() => { void react(); });
   w('Centcom, in screen-reader mode. Type a message and press Enter. /help lists the commands. Press Ctrl+D to leave.');
