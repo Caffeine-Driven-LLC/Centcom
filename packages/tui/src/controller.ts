@@ -526,9 +526,9 @@ export class AppController {
   async openModels() {
     if (this.state.engineId !== 'codex') {
       const OTHER = '\u0000other'; const cur = this.state.settings.model;
-      const ids = await this.pick({ title: 'Model', note: 'Applies from your next message', multi: false, confirm: 'use', checked: [CLAUDE_MODELS.some((m) => m.id === cur) ? cur : ''], options: [...CLAUDE_MODELS.map((m) => ({ id: m.id === '' ? '\u0000default' : m.id, label: m.label, hint: m.note })), { id: OTHER, label: 'Another model…', hint: 'type its id' }] });
+      const ids = await this.pick({ title: 'Model', note: 'Applies from your next message', multi: false, confirm: 'use', checked: CLAUDE_MODELS.some((m) => m.id === cur) ? [cur === '' ? '\u0000default' : cur] : [], options: [...CLAUDE_MODELS.map((m) => ({ id: m.id === '' ? '\u0000default' : m.id, label: m.label, hint: m.note })), { id: OTHER, label: 'Another model…', hint: 'type its id' }] });
       const id = ids?.[0]; if (id === undefined) return;
-      if (id === OTHER) { const t = await this.askText({ id: 'model', text: 'Which model id? (for example claude-opus-5-5)' }); if (t?.trim()) this.setModel(t.trim()); return; }
+      if (id === OTHER) { const t = await this.askText({ id: 'model', text: 'Which model id? (for example claude-opus-5-5)' }); const v = t?.trim(); if (v) { if (/^[\w.:-]{3,}$/.test(v)) this.setModel(v); else this.toast('warn', `No model called "${v}"`); } return; }
       this.setModel(id === '\u0000default' ? '' : id); return;
     }
     const list = await this.engineModels(); if (!list.length) { this.toast('warn', 'Codex did not return its model list. Try again, or type /model <name>.'); return; }
