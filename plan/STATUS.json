@@ -1,5 +1,5 @@
 {
- "updated": "2026-10-07",
+ "updated": "2026-10-09",
  "lanes": {
   "C001": {
    "pct": 0.5,
@@ -10,8 +10,8 @@
    "note": "error model complete; gap: end-to-end run against a mock errors scenario"
   },
   "C008": {
-   "pct": 0.8,
-   "note": "test toolkit: defineCentcomConfig preset (80% floor proved by a failing fixture), network guard (loopback only) and console guard in the root vitest setup, fakeClock, seededRng (xoshiro128**), fixedIds, tmpDir, memFs, loadContractFixture, PtyHarness on Python pty with xterm headless screen and cells (no native add-on), renderInk with colour tiers, expectScreen snapshots, docs/testing.md; gaps: Windows pty, not every package opted into the preset yet, card says green at truecolor gives 38;2; but named colours stay basic ANSI so hex is used"
+   "pct": 0.9,
+   "note": "test toolkit: defineCentcomConfig preset (80% floor proved by a failing fixture), network guard (loopback only) and console guard in the root vitest setup, fakeClock, seededRng (xoshiro128**), fixedIds, tmpDir, memFs, loadContractFixture, PtyHarness on Python pty with xterm headless screen and cells (no native add-on), renderInk with colour tiers, expectScreen snapshots, docs/testing.md; gaps: Windows pty, not every package opted into the preset yet, card says green at truecolor gives 38;2; but named colours stay basic ANSI so hex is used; tools/dev/pty-smoke.py: 10 real-terminal checks (alternate screen, kill, title, editor, job control, plain-text mode, idle cost)"
   },
   "C009": {
    "pct": 1,
@@ -58,8 +58,8 @@
    "note": "append-only redacted session log with header v2, flush cadence, segments, line cap, lock, index rebuild, retention, engine session map, resumeSession with fresh-with-summary fallback, toSnapshotEvents, app and CLI wired (-c, --resume [id] with picker), old saves migrated; gaps: session.retentionDays/persist config keys, pty-level CLI test"
   },
   "C028": {
-   "pct": 0.75,
-   "note": "model registry (precedence, engine-reported list + aliases, 24 h cache keyed by engine version, turn-boundary switch with one model.changed, rejection keeps previous model), wired into /model and setModel; gaps: /model no-arg still opens the fixed picker, engines do not yet read models.aliases/--model through the registry at spawn"
+   "pct": 0.9,
+   "note": "model registry (precedence, engine-reported list + aliases, 24 h cache keyed by engine version, turn-boundary switch with one model.changed, rejection keeps previous model), wired into /model and setModel; gaps: /model no-arg still opens the fixed picker, engines do not yet read models.aliases/--model through the registry at spawn; /model lists the models the Codex account reports; /effort offers each model's levels (Claude and Codex)"
   },
   "C029": {
    "pct": 0.9,
@@ -70,76 +70,76 @@
    "note": "interrupt controller, 3 s/8 s signal ladder to whole process groups, registered pids only, Codex protocol-then-ladder with restart on the same thread, approvals denied and late ones refused, partial answer kept, ctrl+c semantics with exit 130 in the app and -p; gaps: turn timeout, interrupt receipt, stale index.lock cleanup"
   },
   "C031": {
-   "pct": 0.7,
-   "note": "terminal capability module (tier matrix, unicode, half-block, hyperlink/paste flags, typed CENTO_* env with warnings, OSC 11 background query with 150 ms bound, layout class, mascotAllowed, debounced watchSize) with 32 tests; gap: app start-up and theme still use the older detectColorTier, not yet switched over"
+   "pct": 0.8,
+   "note": "terminal capability module (tier matrix, unicode, half-block, hyperlink/paste flags, typed CENTO_* env with warnings, OSC 11 background query with 150 ms bound, layout class, mascotAllowed, debounced watchSize) with 32 tests; gap: app start-up and theme still use the older detectColorTier, not yet switched over; background-colour query with a 150 ms limit; colour tiers exercised in the conformance tests"
   },
   "C032": {
-   "pct": 0.7,
-   "note": "theme module: dark/light/hc, truecolor/256/16/none tiers with pinned tables and nearest search, ANSI-named status colours, glyph+word statuses without colour, member colours, provider and hooks, setMode single notification, 12 tier x mode snapshots; deviations: graphite greys in the pinned table, memberColor follows the written rule (card examples contradict); gap: components still use the older theme helpers"
+   "pct": 0.85,
+   "note": "theme module: dark/light/hc, truecolor/256/16/none tiers with pinned tables and nearest search, ANSI-named status colours, glyph+word statuses without colour, member colours, provider and hooks, setMode single notification, 12 tier x mode snapshots; deviations: graphite greys in the pinned table, memberColor follows the written rule (card examples contradict); gap: components still use the older theme helpers; hc theme, light/dark detection from the terminal, NO_COLOR conformance"
   },
   "C033": {
    "pct": 0.65,
    "note": "Cento component with per-frame durations, frame cache, hero/mini sizes (8x14 and 2x6), 256-colour and ASCII fallbacks, recolouring, animation budget of 6; gaps: no golden files against play.py, app still draws through PixelView"
   },
   "C034": {
-   "pct": 0.65,
-   "note": "Shell frame (header/scrollback/toast/prompt/footer, 100-col rail, overlay, too-small state), renderApp with debounced resize, alt-screen guard for exit/SIGINT/SIGTERM/uncaught error, action registry with focus stack, grapheme-aware text helpers; gaps: App.tsx not moved onto the Shell, --no-alt-screen/config not wired, no lint rule for raw Text"
+   "pct": 0.9,
+   "note": "Shell frame (header/scrollback/toast/prompt/footer, 100-col rail, overlay, too-small state), renderApp with debounced resize, alt-screen guard for exit/SIGINT/SIGTERM/uncaught error, action registry with focus stack, grapheme-aware text helpers; gaps: App.tsx not moved onto the Shell, --no-alt-screen/config not wired, no lint rule for raw Text; resize repaints the whole frame, small-terminal layouts (pickers, help, overlays), width tests, tab title and terminal restore on every exit path"
   },
   "C035": {
-   "pct": 0.7,
-   "note": "prompt logic: grapheme-aware TextBuffer with word/line keys and wide-character cursor, submit checks (empty, 65,536 limit, backslash continuation), paste chips with 256 KiB cap, history store (jsonl, 1,000 lines, per project, 8 KiB cap, search), slash registry with ranking, aliases, availability and /clear /exit; gap: no new bordered PromptInput drawing yet (components/Prompt.tsx still has its own editor), suggestion list and ctrl+r line drawing"
+   "pct": 0.95,
+   "note": "prompt logic: grapheme-aware TextBuffer with word/line keys and wide-character cursor, submit checks (empty, 65,536 limit, backslash continuation), paste chips with 256 KiB cap, history store (jsonl, 1,000 lines, per project, 8 KiB cap, search), slash registry with ranking, aliases, availability and /clear /exit; gap: no new bordered PromptInput drawing yet (components/Prompt.tsx still has its own editor), suggestion list and ctrl+r line drawing; terminal app (#109-#112): selection with shift+arrows and word keys, clipboard (OSC 52), undo/redo, @file mentions, history search, paste chips, editor round trip, send-on-Enter in one chunk"
   },
   "C036": {
    "pct": 0.95,
    "note": "virtualised layout with per-block cache (10k blocks), follow tail with \"N new\" indicator, ctrl+home/end, resize anchor, 5,000-block cap, terminal sanitising of every string, session-event reducer (seq order, delta reorder/dedupe/gap) and member identity rendering; loadRange for older blocks waits for remote history"
   },
   "C037": {
-   "pct": 0.75,
-   "note": "unified-diff parser with caps (2,000 lines, 200 files, 50k lines in <300 ms), two-string differ, camelCase-aware word highlights as reverse-video spans, row layout with numbered gutter, wrapping, gap folding/expansion, binary/rename rows, DiffView with focusable gaps, diff.share adapter; gap: transcript and approval prompt still use util/diff.ts"
+   "pct": 0.8,
+   "note": "unified-diff parser with caps (2,000 lines, 200 files, 50k lines in <300 ms), two-string differ, camelCase-aware word highlights as reverse-video spans, row layout with numbered gutter, wrapping, gap folding/expansion, binary/rename rows, DiffView with focusable gaps, diff.share adapter; gap: transcript and approval prompt still use util/diff.ts; diff view notes rows"
   },
   "C038": {
-   "pct": 0.7,
-   "note": "ApprovalView from either engine or a shared session, key state machine (scopes, edit only when editable, 300 ms grace, y+Enter for risky, expiry deny), PermissionPrompt box (min(cols-2,78), heavy border for destructive, command cap, visible escapes, waiting-for-host text), queue ordering helper; gap: app still uses components/Approval.tsx, queue host and view-all screen not built"
+   "pct": 0.9,
+   "note": "ApprovalView from either engine or a shared session, key state machine (scopes, edit only when editable, 300 ms grace, y+Enter for risky, expiry deny), PermissionPrompt box (min(cols-2,78), heavy border for destructive, command cap, visible escapes, waiting-for-host text), queue ordering helper; gap: app still uses components/Approval.tsx, queue host and view-all screen not built; approval buttons with clicks, countdown, narrow labels, grace period against stray keys"
   },
   "C039": {
-   "pct": 0.7,
-   "note": "status fields and layout with the drop order constant, branch cut, quota/role/connectivity chips as words, cost format, service banner from a local table, statusText sentence, StatusHeader/Footer/ServiceBanner; gap: the app still draws its own header/status line; status.showCost not read from config"
+   "pct": 0.8,
+   "note": "status fields and layout with the drop order constant, branch cut, quota/role/connectivity chips as words, cost format, service banner from a local table, statusText sentence, StatusHeader/Footer/ServiceBanner; gap: the app still draws its own header/status line; status.showCost not read from config; footer shows context, session and week limits; narrow layouts"
   },
   "C040": {
-   "pct": 0.75,
-   "note": "spinner module: 10-frame glyph at 80 ms, meta (time after 2 s, tokens after 5 s, interrupt hint), verb picker (state pools, shuffle bag, 40/24 char limits, Absurd after 30 s, plain words in serious states, plain mode), loadingPattern, formatters, lines.json generated by tools/spinner/build-lines.mjs with a drift test; gap: the app still draws its older working line"
+   "pct": 0.85,
+   "note": "spinner module: 10-frame glyph at 80 ms, meta (time after 2 s, tokens after 5 s, interrupt hint), verb picker (state pools, shuffle bag, 40/24 char limits, Absurd after 30 s, plain words in serious states, plain mode), loadingPattern, formatters, lines.json generated by tools/spinner/build-lines.mjs with a drift test; gap: the app still draws its older working line; ui.spinner setting (fun or plain)"
   },
   "C041": {
-   "pct": 0.7,
-   "note": "palette core: DP fuzzy matcher with indices, engine (debounce, abort, slow-provider append, fixed group order, recent), list and file providers (git ls-files or walk, 20k cap, sliced scoring), view and live component (60/cols-4 wide, 8 rows + more row, wrap-around keys), palette.* actions; gap: the app still shows its older palette, sessions/skills providers not wired"
+   "pct": 0.9,
+   "note": "palette core: DP fuzzy matcher with indices, engine (debounce, abort, slow-provider append, fixed group order, recent), list and file providers (git ls-files or walk, 20k cap, sliced scoring), view and live component (60/cols-4 wide, 8 rows + more row, wrap-around keys), palette.* actions; gap: the app still shows its older palette, sessions/skills providers not wired; palette with ranking and click, entries from the command list; /settings and pickers on one picker model"
   },
   "C042": {
-   "pct": 0.7,
-   "note": "state labels with tier for all 64 states, sort (tier, needs you, age), event reducer, rail/overlay FleetPanel with needs-you/waiting, exit outcomes, reverse-video active row, key handling and per-second elapsed tick; gaps: app still uses components/FleetPanel.tsx, memberColor from theme, rail slot wiring"
+   "pct": 0.75,
+   "note": "state labels with tier for all 64 states, sort (tier, needs you, age), event reducer, rail/overlay FleetPanel with needs-you/waiting, exit outcomes, reverse-video active row, key handling and per-second elapsed tick; gaps: app still uses components/FleetPanel.tsx, memberColor from theme, rail slot wiring; /fleet as a menu: start, list, preview, stop, remove, clean"
   },
   "C044": {
-   "pct": 0.7,
-   "note": "toast controller (ttl, queue 20, severity preemption, persistence for actions/errors, dedupe (xN), never drops warn/error), sys.notice message table for all 7 codes with local time and cleaned params, ToastLine/ToastView, toast.dismiss action (ctrl+y instead of the card ctrl+x, which is a chord prefix); gap: the app still shows toasts through its older controller.toast path, bus event toast.dismissed not wired"
+   "pct": 0.8,
+   "note": "toast controller (ttl, queue 20, severity preemption, persistence for actions/errors, dedupe (xN), never drops warn/error), sys.notice message table for all 7 codes with local time and cleaned params, ToastLine/ToastView, toast.dismiss action (ctrl+y instead of the card ctrl+x, which is a chord prefix); gap: the app still shows toasts through its older controller.toast path, bus event toast.dismissed not wired; toast de-duplication and longer display for problems"
   },
   "C045": {
    "pct": 1,
    "note": "keymap of named actions with contexts and chords, keybindings.json overrides (validated, unbind, conflicts, protected quit/help, ctrl+c reserved), raw and Ink key decoding, dispatcher wired into the app, live help screen with filter, centcom keys [--json]"
   },
   "C046": {
-   "pct": 0.7,
-   "note": "driver with state map for all 64 states, 8 priority tiers and chips, 600 ms dwell, tool-call burst collapse, prompt beat, idle timeline and night sleep, one-shot error/worried/thumbs_up/celebrate caps, visibility policy and suppression, reduced-motion substitution, MascotSlot; gap: the app does not create or feed this driver yet, tier table duplicated in fleet lane"
+   "pct": 0.85,
+   "note": "driver with state map for all 64 states, 8 priority tiers and chips, 600 ms dwell, tool-call burst collapse, prompt beat, idle timeline and night sleep, one-shot error/worried/thumbs_up/celebrate caps, visibility policy and suppression, reduced-motion substitution, MascotSlot; gap: the app does not create or feed this driver yet, tier table duplicated in fleet lane; driver pauses when nothing shows it and slows down after 20 s and 2 min idle (11% to 2% of a core)"
   },
   "C047": {
-   "pct": 0.7,
-   "note": "settings store with env overrides and sources, /theme /mascot /spinner /motion /density with the card copy (no-arg line, unknown value, env override notice, failed save keeps the value), useSettings/useDensity/blockGap; gap: the app still handles these commands in controller.ts, density not yet fed into the transcript layout, hc theme not in the theme engine"
+   "pct": 0.95,
+   "note": "settings store with env overrides and sources, /theme /mascot /spinner /motion /density with the card copy (no-arg line, unknown value, env override notice, failed save keeps the value), useSettings/useDensity/blockGap; gap: the app still handles these commands in controller.ts, density not yet fed into the transcript layout, hc theme not in the theme engine; /settings menu and ui.mouse, spinner, density, bell, title, a11y.screen_reader, theme hc, all in the schema and docs"
   },
   "C048": {
    "pct": 1,
    "note": "first-run screen (once, interactive only, Cento waving or ASCII, one sentence, one command), state.json, centcom init (config, memory file, exclude, idempotent, dry run, force with .bak, non-TTY rules), empty states in the app and web"
   },
   "C049": {
-   "pct": 0.65,
-   "note": "mode resolution, MotionProvider, sentences for all 64 states, linear renderer with y/n/a permission prompt and Status:/Error: announcements, no-colour/no-escape test helpers, conformance for task list and progress bar; gaps: linear mode not started from main.tsx, a11y.screenReader config key, conformance for the other components"
+   "pct": 0.9,
+   "note": "mode resolution, MotionProvider, sentences for all 64 states, linear renderer with y/n/a permission prompt and Status:/Error: announcements, no-colour/no-escape test helpers, conformance for task list and progress bar; gaps: linear mode not started from main.tsx, a11y.screenReader config key, conformance for the other components; screen-reader mode (plain lines, zero escape codes), NO_COLOR conformance over 14 screens, reduced motion, high-contrast theme"
   },
   "C081": {
    "pct": 0.85,
@@ -158,12 +158,12 @@
    "note": "engine layer; gaps: bounded event buffer with backpressure, validator run on both adapters, denial and rate-limit transcripts"
   },
   "C102": {
-   "pct": 0.8,
-   "note": "claude engine with a secured approval bridge (per-run token, private socket, timeout, fail closed); gaps: prompt over stdin, bypass gate, spawn/first-event timeouts, version check, subagent.done, fake CLI and goldens"
+   "pct": 0.85,
+   "note": "claude engine with a secured approval bridge (per-run token, private socket, timeout, fail closed); gaps: prompt over stdin, bypass gate, spawn/first-event timeouts, version check, subagent.done, fake CLI and goldens; AskUserQuestion becomes a list or typed answer; --effort"
   },
   "C103": {
-   "pct": 0.75,
-   "note": "codex app-server engine tested against a protocol-faithful fake; no real turn yet. Real-Codex checklist: docs/codex-verification.md, recorder: tools/codex/record.ts"
+   "pct": 0.9,
+   "note": "codex app-server engine tested against a protocol-faithful fake; no real turn yet. Real-Codex checklist: docs/codex-verification.md, recorder: tools/codex/record.ts; verified on a real Codex (codex-cli 0.161.0): a real turn, questions (needs the default_mode_request_user_input flag, passed per process), /effort, models, cancel. Not tried live: secret and multi-question requests"
   },
   "C104": {
    "pct": 0.85,
@@ -182,8 +182,8 @@
    "note": "print mode with text/json/stream-json in the card shape, normalised-name allow-list, redaction, exit-code table (0-6, 124, 130), stdin cap with fenced input, --allow rules, --permission-mode, --timeout, --max-turns (counted locally), --cwd, -c/--resume, EPIPE handled, no demo fallback in scripts; gaps: --input-format stream-json, spawned-binary pipe tests"
   },
   "C004": {
-   "pct": 0.85,
-   "note": "layered config used everywhere; gaps vs card: warns instead of throwing on bad files and secrets, sync writer, fewer precedence tests"
+   "pct": 0.9,
+   "note": "layered config used everywhere; gaps vs card: warns instead of throwing on bad files and secrets, sync writer, fewer precedence tests; new keys and CENTO_* env names, generated docs"
   },
   "C003": {
    "pct": 0.95,
@@ -282,16 +282,16 @@
    "note": "centcom doctor (9 checks in parallel with 3 s network limits, one next step per problem, exit codes 0/1/2, JSON schema, --check, --bundle tar.gz) and local crash reports (redaction corpus of 30, retention of 10, no egress, one error.shown code with telemetry on), centcom crash list/show/delete; gap: doctor does not yet check the relay upgrade or /v1/me, and recent log lines are not yet fed from the app logger"
   },
   "C098": {
-   "pct": 0.6,
-   "note": "bench harness (calibration, stats, budgets, baseline compare with normalisation, noise handling, results schema, pnpm bench/bench:compare, baseline-commit check, nightly workflow) with 9 metrics: crypto, envelope, mascot, transcript scroll and layout, version, memory; self-test of the gate passes; gaps: first-prompt, keypress-to-paint, diff, resume and reducer rates, leak check not measured yet; version/memory not gating until the packaged CLI"
+   "pct": 0.8,
+   "note": "bench harness (calibration, stats, budgets, baseline compare with normalisation, noise handling, results schema, pnpm bench/bench:compare, baseline-commit check, nightly workflow) with 9 metrics: crypto, envelope, mascot, transcript scroll and layout, version, memory; self-test of the gate passes; gaps: first-prompt, keypress-to-paint, diff, resume and reducer rates, leak check not measured yet; version/memory not gating until the packaged CLI; keypress and startup budgets (docs/perf/BUDGETS.md), idle-cost check"
   },
   "C096": {
-   "pct": 0.6,
-   "note": "one command list drives centcom --help (80 columns), centcom help [topic], per-command --help, the CLI reference pages and the man pages (docs:gen, docs:check fails on drift); docs site pages written (guide, privacy page from the crypto contract, env and exit codes); link/anchor, flag and env-var checks; gaps: VitePress build/Lighthouse and the link checker for external links are not set up (VitePress is not installed), no spell check, install-page command test, /help text source for the TUI"
+   "pct": 0.7,
+   "note": "one command list drives centcom --help (80 columns), centcom help [topic], per-command --help, the CLI reference pages and the man pages (docs:gen, docs:check fails on drift); docs site pages written (guide, privacy page from the crypto contract, env and exit codes); link/anchor, flag and env-var checks; gaps: VitePress build/Lighthouse and the link checker for external links are not set up (VitePress is not installed), no spell check, install-page command test, /help text source for the TUI; terminal-app guide, releases page, configuration reference generated from the schema"
   },
   "C068": {
-   "pct": 0.8,
-   "note": "update client: check (channel, platform, arch, pre-release and downgrade rules, required flag), resumable size-capped download, hash + Ed25519 verification before apply (two keys), atomic apply with .prev and rollback, managed-install detection, background-check schedule, centcom update with exit 10; reads both manifest spellings (contract mismatch noted); gaps: production keys empty, no run against real signed artifacts, startup background check not wired into the app"
+   "pct": 0.9,
+   "note": "update client: check (channel, platform, arch, pre-release and downgrade rules, required flag), resumable size-capped download, hash + Ed25519 verification before apply (two keys), atomic apply with .prev and rollback, managed-install detection, background-check schedule, centcom update with exit 10; reads both manifest spellings (contract mismatch noted); gaps: production keys empty, no run against real signed artifacts, startup background check not wired into the app; checked on every start from the app (bootUpdate), with update.check/auto/channel"
   },
   "C066": {
    "pct": 0.8,
@@ -408,12 +408,20 @@
   "C092": {
    "pct": 0.8,
    "note": "typed message table, plurals, pseudo-locale, error and state words, focus and shortcut helpers, reduced motion, structural a11y check; gaps: axe-core (licence), eslint rule, forced-colour browser run"
+  },
+  "C093": {
+   "pct": 1,
+   "note": "merged in #108"
+  },
+  "C095": {
+   "pct": 0.5,
+   "note": "update on every start: verified self-replace for standalone installs, package-manager command for npm/Homebrew, generated releases page. Missing: release signing keys, published artifacts, the /v1/releases endpoint, channels in practice"
   }
  },
  "next": [
   {
-   "title": "Verify the Codex adapter on a real Codex",
-   "why": "it is tested against Codex's published protocol and a faithful fake, but no real turn has run (C103). On a computer with Codex: follow docs/codex-verification.md (recorder: tools/codex/record.ts)"
+   "title": "Release signing and hosting",
+   "why": "the app already checks for updates on every start (C095), but no standalone update is accepted until the release signing keys, published artifacts and the /v1/releases endpoint exist"
   },
   {
    "title": "Wire the new runtime pieces into the app",
