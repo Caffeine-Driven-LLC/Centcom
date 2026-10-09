@@ -252,7 +252,10 @@ describe('more commands you choose instead of type', () => {
     await c.runCommand('/mcp list'); expect(seen.at(-1)).toBe('mcp list'); c.stop(); // with the word typed there is no list
   });
   it('/trust asks first (and "Not now" does nothing); /demo lists the stories and runs the chosen one', async () => {
-    const { c } = withViews(); const t = c.runCommand('/trust'); await tick2(); expect(c.state.pick!.title).toBe('Project permission rules'); expect(c.state.pick!.options.map((o) => o.id)).toEqual(['rules', 'no']); c.pickKey('down'); c.pickKey('enter'); await t; expect(c.state.mode).toBe('chat');
+    const { c } = withViews(); await c.runCommand('/trust'); expect(c.state.mode).toBe('chat'); expect(c.state.toasts.at(-1)!.text).toMatch(/\/trust rules/); // no project rules here: no list, just the hint
+    const trusted: string[] = []; (c as unknown as { o: { policy: unknown } }).o.policy = { engine: { rules: { trustProject: async (r: string) => { trusted.push(r); } } }, root: '/proj' };
+    const t = c.runCommand('/trust'); await tick2(); expect(c.state.pick!.title).toBe('Project permission rules'); expect(c.state.pick!.options.map((o) => o.id)).toEqual(['rules', 'no']); c.pickKey('down'); c.pickKey('enter'); await t; expect(c.state.mode).toBe('chat'); expect(trusted).toEqual([]); // "Not now"
+    const yes = c.runCommand('/trust'); await tick2(); c.pickKey('enter'); await yes; expect(trusted).toEqual(['/proj']);
     const d = c.runCommand('/demo'); await tick2(); expect(c.state.pick!.title).toBe('Demo story'); const ids = c.state.pick!.options.map((o) => o.id); expect(ids).toContain('fix'); expect(ids).toContain('search'); c.pickKey('down'); c.pickKey('enter'); await d; await tick2(); expect(c.state.items.some((i) => i.kind === 'user')).toBe(true); c.stop();
   });
   it('/auto is a list like the other switches, and a typed value still works', async () => {
