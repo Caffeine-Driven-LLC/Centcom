@@ -4,7 +4,7 @@ import { AppController, SessionStore, buildRuntime } from '@centcom/tui';
 import { redact } from '@centcom/protocol';
 import type { AgentEngine, NormalisedEvent, PermissionMode } from '@centcom/agent';
 import { EXIT_CODES, exitCodeFor } from './exit-codes.js';
-import { formatResult, streamLine, type PrintResult } from './format.js';
+import { Holdback, formatResult, streamLine, type PrintResult } from './format.js';
 
 export interface PrintOptions {
   /** Where permissions.json lives (tests point it at a temp folder). */ configDir?: string;
@@ -33,14 +33,17 @@ export async function runPrint(o: PrintOptions): Promise<number> {
   const write = (t: string) => { if (!gone) { try { out.write(t); } catch (e) { onOutErr(e as NodeJS.ErrnoException); } } };
   let rt; try { rt = await buildRuntime({ cwd: o.cwd, engineId: o.engine.id, demo: o.demo, dangerous: o.mode === 'bypassPermissions', checkpoints: false, allow: o.allow, ...(o.configDir ? { configDir: o.configDir } : {}) }); }
   catch (e) { say(String((e as Error).message ?? e)); return EXIT_CODES.usage; }
-  let finish: (() => void) | undefined;
+  let finish: (() => void) | undefined; const hold = new Holdback();
   const ctl: AppController = new AppController({ ...rt.options,
     engine: o.engine, demo: o.demo, cwd: o.cwd, branch: o.branch, version: o.version, permissionMode: o.mode, skills: [], dangerous: o.mode === 'bypassPermissions',
     settings: o.model ? { model: o.model } : undefined, sessions: o.save ? new SessionStore(o.dataDir) : undefined, resume: o.resume,
     onEvent: (ev: NormalisedEvent) => {
-      if (o.format === 'stream-json') { const l = streamLine(ev); if (l) write(l); }
-      else if (o.format === 'text' && ev.type === 'text.delta') { write(redact(ev.text)); streamed = true; }
-      if (ev.type === 'text.done' && o.format === 'text' && streamed) { write('\n'); streamed = false; }
+      if (o.format === 'stream-json') {
+        if (ev.type === 'text.delta') { const safe = hold.push(ev.text); if (safe) { const l = streamLine({ ...ev, text: safe }); if (l) write(l); } }
+        else { if (ev.type === 'text.done' || ev.type === 'turn.done') { const rest = hold.flush(); if (rest) { const l = streamLine({ type: 'text.delta', v: ev.v, seq: ev.seq, ts: ev.ts, agent_id: ev.agent_id, message_id: ev.type === 'text.done' ? ev.message_id : 'last', index: 0, text: rest } as NormalisedEvent); if (l) write(l); } } const l = streamLine(ev); if (l) write(l); }
+      }
+      else if (o.format === 'text' && ev.type === 'text.delta') { const safe = hold.push(ev.text); if (safe) write(redact(safe)); streamed = true; }
+      if ((ev.type === 'text.done' || ev.type === 'turn.done') && o.format === 'text' && streamed) { const rest = hold.flush(); if (rest) write(redact(rest)); write('\n'); streamed = false; }
       if (ev.type === 'error' && ev.fatal) failure = { code: ev.code, message: ev.tool_message };
       if (ev.type === 'usage.report') { usage.input_tokens = (usage.input_tokens ?? 0) + (ev.input_tokens ?? 0); usage.output_tokens = (usage.output_tokens ?? 0) + (ev.output_tokens ?? 0); if (ev.cache_read_tokens) usage.cache_read_tokens = (usage.cache_read_tokens ?? 0) + ev.cache_read_tokens; if (typeof ev.cost_usd === 'number') usage.cost_usd_estimate = ev.cost_usd; }
       if (ev.type === 'tool.result' && ++steps >= (o.maxTurns ?? 50)) { failure ??= { code: 'max_turns', message: `Stopped after ${o.maxTurns ?? 50} steps (--max-turns).` }; void ctl.interrupt(); }

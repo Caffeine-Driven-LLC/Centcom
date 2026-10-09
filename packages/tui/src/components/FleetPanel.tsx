@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box } from 'ink';
 import { miniRows } from '@centcom/mascot';
-import { PixelView, Rich, useTheme, useTick, useCol } from './ui.js';
+import { PixelView, Rich, useTheme, useTick, useCol, sameUnlessTyping } from './ui.js';
 import { formatCost, sp, truncate, type Line } from '../util/text.js';
 import type { AppState, AgentView } from '../state/model.js';
 
@@ -15,7 +15,8 @@ export const FLEET_W = 30;
 
 function order(a: AgentView, b: AgentView) { const need = (x: AgentView) => (x.state === 'awaiting-approval' || x.state === 'asking-question' ? 0 : x.busy ? 1 : 2); return need(a) - need(b); }
 
-export function FleetPanel({ s, width, height }: { s: AppState; width: number; height: number }) {
+export const FleetPanel = React.memo(FleetPanelImpl, sameUnlessTyping as never) as typeof FleetPanelImpl;
+function FleetPanelImpl({ s, width, height }: { s: AppState; width: number; height: number }) {
   const theme = useTheme();
   const col = useCol();
   const tick = useTick(500, !s.settings.reducedMotion && s.agents.some((a) => a.busy));

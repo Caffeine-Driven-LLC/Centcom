@@ -113,6 +113,11 @@ const ENV: [string, Key, (v: string) => Value | undefined][] = [
   ['CENTCOM_LOG_LEVEL', 'log.level', (v) => v.toLowerCase()],
   ['CENTCOM_REDUCE_MOTION', 'ui.reduced_motion', (v) => (/^(1|true|on|yes)$/i.test(v) ? true : /^(0|false|off|no)$/i.test(v) ? false : undefined)], // the older spelling still works; CENTCOM_REDUCED_MOTION below wins if both are set
   ['CENTCOM_REDUCED_MOTION', 'ui.reduced_motion', (v) => (/^(1|true|on|yes)$/i.test(v) ? true : /^(0|false|off|no)$/i.test(v) ? false : undefined)],
+  /* the short CENTO_* names listed in `centcom help env` */
+  ['CENTO_THEME', 'ui.theme', (v) => v.toLowerCase()], ['CENTO_SPINNER', 'ui.spinner', (v) => v.toLowerCase()],
+  ['CENTO_MASCOT', 'ui.mascot', (v) => (/^(on|1|true|yes)$/i.test(v) ? true : /^(off|0|false|no)$/i.test(v) ? false : undefined)],
+  ['CENTO_REDUCE_MOTION', 'ui.reduced_motion', (v) => (/^(1|true|on|yes)$/i.test(v) ? true : /^(0|false|off|no)$/i.test(v) ? false : undefined)],
+  ['CENTO_SCREEN_READER', 'a11y.screen_reader', (v) => (/^(1|true|on|yes)$/i.test(v) ? true : /^(0|false|off|no)$/i.test(v) ? false : undefined)],
   ['NO_COLOR', 'ui.color', (v) => (v ? 'never' : undefined)],
 ];
 function fromEnv(d: LoadDeps): Partial<Record<Key, Value>> {
@@ -127,7 +132,7 @@ function fromEnv(d: LoadDeps): Partial<Record<Key, Value>> {
 }
 
 /* ------------------------------------------------------------------ resolve */
-export type ResolvedConfig = Readonly<{ api: { base_url: string }; relay: { url: string }; net: { timeout_ms: number; max_attempts: number }; budget: { session_usd: number }; telemetry: { enabled: boolean }; log: { level: 'debug' | 'info' | 'warn' | 'error' | 'silent'; max_file_bytes: number; max_files: number }; ui: { theme: 'auto' | 'dark' | 'light'; mascot: boolean; reduced_motion: boolean; color: 'auto' | 'truecolor' | '256' | '16' | 'never' }; lan: { enabled: boolean }; agent: { max_parallel: number; approval_timeout_ms: number }; client: { engine: 'claude-code' | 'codex'; model: string; permission_mode: 'default' | 'acceptEdits' | 'plan'; cento_color: 'violet' | 'red' | 'yellow' | 'green' | 'brown'; mascot_size: 'auto' | 'large' | 'small' | 'off'; auto_skills: boolean; side_panel: boolean; fleet_panel: boolean }; [explainSym]?: never }>;
+export type ResolvedConfig = Readonly<{ api: { base_url: string }; relay: { url: string }; net: { timeout_ms: number; max_attempts: number }; budget: { session_usd: number }; telemetry: { enabled: boolean }; log: { level: 'debug' | 'info' | 'warn' | 'error' | 'silent'; max_file_bytes: number; max_files: number }; ui: { theme: 'auto' | 'dark' | 'light' | 'hc'; mascot: boolean; mouse: boolean; spinner: 'fun' | 'plain'; density: 'comfortable' | 'compact'; bell: boolean; title: boolean; reduced_motion: boolean; color: 'auto' | 'truecolor' | '256' | '16' | 'never' }; a11y: { screen_reader: boolean }; lan: { enabled: boolean }; agent: { max_parallel: number; approval_timeout_ms: number }; client: { engine: 'claude-code' | 'codex'; model: string; permission_mode: 'default' | 'acceptEdits' | 'plan'; cento_color: 'violet' | 'red' | 'yellow' | 'green' | 'brown'; mascot_size: 'auto' | 'large' | 'small' | 'off'; auto_skills: boolean; side_panel: boolean; fleet_panel: boolean }; [explainSym]?: never }>;
 const explainSym = Symbol('centcom.config.sources');
 type Sources = Map<Key, { layer: Layer; source?: string }>;
 

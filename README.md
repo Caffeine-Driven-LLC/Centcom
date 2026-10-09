@@ -71,7 +71,9 @@ pnpm centcom             # drives your own Claude Code (must be installed and si
 Approvals work with real Claude Code: Centcom runs `claude` with `--permission-mode manual` and a tiny MCP tool (`--permission-prompt-tool`) that asks the app over a private local socket, so the dialog with the diff appears for every Write/Edit/Bash that needs one. If the app is unreachable the answer is always deny.
 
 Try `/demo fix`, `/demo search` and `/demo delete` in demo mode (add `--demo-team` to preview teammates), `ctrl+k` for the palette, `/cento` for the 319-animation gallery, `?` for keys.
-Flags: `--mode plan|acceptEdits`, `--mascot large|small|off`, `--cento-color red|yellow|green|brown`, `--theme light`, `--colors 256|16|never`, `--no-motion`.
+Flags: `--mode plan|acceptEdits`, `--mascot large|small|off`, `--cento-color red|yellow|green|brown`, `--theme light|hc`, `--colors 256|16|never`, `--no-motion`, `--screen-reader` (plain lines for a screen reader). A mistyped option is a one-line error, not a silent no-op.
+
+The terminal app in short: shift+arrows jump and select words, `ctrl+c` copies, the mouse wheel and clicks work (`/mouse off` for your terminal's own selection), `@` mentions a project file, `ctrl+k` searches commands, files, conversations and skills, `ctrl+r` your earlier messages, `/settings` shows every setting, `/find`, `/copy` and `/export` take things with you, and most commands open a list when you give them no value. Everything is in [docs/site/guide/terminal-app.md](docs/site/guide/terminal-app.md).
 
 ![welcome](docs/screens/welcome.png)
 ![approval](docs/screens/approval.png)

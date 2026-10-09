@@ -15,17 +15,23 @@ centcom [options] | centcom -p "task"
 - `--demo`: scripted demo agent (no login, no model)
 - `--demo-team`: with --demo: also show two pretend teammates
 - `-c, --continue`: continue the most recent conversation in this folder
-- `--resume <id>`: continue a specific saved conversation
+- `--resume [id]`: continue a specific saved conversation (without an id: choose from a list)
 - `--no-save`: do not save this conversation or your prompt history
 - `--no-checkpoints`: do not snapshot the folder before each prompt
 - `--model <name>`: model to use (same ids as /model)
+- `--cwd <folder>`: with -p: run in this folder
+- `--allow <rule>`: with -p: allow what would be declined, e.g. --allow "Bash(npm test)" (repeat for more)
+- `--permission-mode <ask|accept-edits|plan|default|acceptEdits>`: with -p: how approvals are handled (ask declines them and exits 3)
+- `--max-turns <n>`: with -p: stop after this many tool steps (default 50)
+- `--timeout <seconds>`: with -p: stop after this long (exit code 124)
 - `--mode <default|plan|acceptEdits|bypassPermissions>`: start in a permission mode
-- `--dangerously-skip-permissions`: never ask: run commands and edit files freely (alias: --yolo)
-- `--mascot <large|small|off>`: Cento size (default: auto from terminal height)
+- `--dangerously-skip-permissions, --yolo`: never ask: run commands and edit files freely
+- `--mascot <auto|large|small|off>`: Cento size (default: auto from terminal height)
 - `--cento-color <violet|red|yellow|green|brown>`: Cento's color
-- `--theme <dark|light>`: Graphite (default) or Paper (for light terminals)
-- `--colors <truecolor|256|16|never>`: force a colour tier (NO_COLOR is honoured)
+- `--theme <auto|dark|light|hc>`: Graphite (default), Paper (for light terminals) or high contrast; auto asks the terminal
+- `--colors <auto|truecolor|256|16|never>`: force a colour tier (NO_COLOR is honoured)
 - `--debug`: write detailed logs to ~/.centcom/logs/centcom.log
+- `--screen-reader`: plain lines for a screen reader: no colour, boxes, animation or redraws (also CENTO_SCREEN_READER=1)
 - `--no-motion`: turn animation off (also CENTCOM_REDUCED_MOTION=1; the older CENTCOM_REDUCE_MOTION works too)
 - `-v, --version`: print the version
 - `-h, --help`: print this help

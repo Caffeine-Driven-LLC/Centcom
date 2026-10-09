@@ -16,11 +16,12 @@ export interface RuntimeOptions {
   /** Where permissions.json and trust.json live; defaults to the user config folder. */ configDir?: string; home?: string;
   checkpoints?: boolean;
   /** `budget.session_usd` (0 = no budget). */ sessionUsd?: number;
+  /** `agent.approval_timeout_ms`: how long an approval waits before it is declined. */ approvalTimeoutMs?: number;
   /** Extra allow rules for this run only (print mode `--allow`), in the permission rule syntax. A rule that does not parse is an error. */ allow?: string[]; /** Where the usage outbox lives (default ~/.centcom). */ stateDir?: string;
   /** Run parallel agents in their own worktrees (`/fleet`). On unless turned off. */ fleet?: boolean;
   /** At most this many fleet agents at once (the plan's limit once accounts exist). */ maxParallel?: number;
 }
-export interface Runtime { options: Pick<ControllerOptions, 'policy' | 'checkpoints' | 'fleet' | 'observers' | 'ledger' | 'ledgerBus'>; /** Connect the controller once it exists: approvals are shown by it. */ bind(ctl: AppController): void; warnings: string[] }
+export interface Runtime { options: Pick<ControllerOptions, 'approvalTimeoutMs' | 'policy' | 'checkpoints' | 'fleet' | 'observers' | 'ledger' | 'ledgerBus'>; /** Connect the controller once it exists: approvals are shown by it. */ bind(ctl: AppController): void; warnings: string[] }
 
 export async function buildRuntime(o: RuntimeOptions): Promise<Runtime> {
   if (o.demo) return { options: {}, bind: () => undefined, warnings: [] }; // the demo engine keeps its simple built-in rules
@@ -30,7 +31,7 @@ export async function buildRuntime(o: RuntimeOptions): Promise<Runtime> {
   const rc = createRiskClassifier({ root: o.cwd, cwd: o.cwd, home, platform: process.platform === 'win32' ? 'win32' : 'posix' });
   const engine: PermissionEngine = createPermissionEngine({ fs: nodePermFs, clock, rules, classifier: { classify: (r) => rc.classify(r).risk },
     prompter: { prompt: (p, signal) => (ctl ? ctl.promptApproval(p, signal) : Promise.resolve({ decision: 'deny', scope: 'once', reason: 'no_ui' })) },
-    config: { home, userRulesPath: join(dir, 'permissions.json'), bypassEnabled: !!o.dangerous, headless: !!o.headless, os: process.platform === 'win32' ? 'win32' : 'posix' } });
+    config: { approvalTimeoutMs: o.approvalTimeoutMs, home, userRulesPath: join(dir, 'permissions.json'), bypassEnabled: !!o.dangerous, headless: !!o.headless, os: process.platform === 'win32' ? 'win32' : 'posix' } });
   const warnings: string[] = [];
   for (const a of o.allow ?? []) { let r; try { r = parseClaudeRule(a, 'allow'); } catch { throw new Error(`--allow "${a}" is not a rule. Examples: Bash(npm test), Edit(src/**), Read.`); } rules.add({ tool: r.tool, action: 'allow', scope: 'session', ...(r.matcher ? { matcher: r.matcher } : {}) }, o.cwd); }
   await rules.loadUser().catch(() => warnings.push('Your saved permission rules could not be read, so none are used.'));
@@ -62,7 +63,7 @@ export async function buildRuntime(o: RuntimeOptions): Promise<Runtime> {
   const ledgerBus = createAgentBus({ onError: () => undefined }); const ids = newIdGenerator({ now: () => Date.now(), random: (n) => new Uint8Array(randomBytes(n)) });
   const ledger = createLedger({ clock, ids: { next: () => ids.next('use') }, bus: ledgerBus, fs: o.demo ? memoryFs() : { read: async (p) => { try { return (await import('node:fs/promises')).readFile(p, 'utf8'); } catch { return undefined; } }, writeAtomic: async (p, t) => { const fsp = await import('node:fs/promises'); await fsp.mkdir(dirname(p), { recursive: true }); const tmp = `${p}.${randomBytes(4).toString('hex')}.tmp`; await fsp.writeFile(tmp, t, { mode: 0o600 }); await fsp.rename(tmp, p); } }, outboxPath: join(o.stateDir ?? join(home, '.centcom'), 'usage', 'outbox.jsonl'), config: { sessionUsd: o.sessionUsd || undefined } });
   await ledger.ready().catch(() => undefined);
-  return { options: { ledger, ledgerBus, policy: { engine, root: o.cwd }, ...(o.checkpoints === false ? {} : { checkpoints: {} }), ...(fleet ? { fleet, observers } : {}) }, bind: (c) => { ctl = c; }, warnings };
+  return { options: { approvalTimeoutMs: o.approvalTimeoutMs, ledger, ledgerBus, policy: { engine, root: o.cwd }, ...(o.checkpoints === false ? {} : { checkpoints: {} }), ...(fleet ? { fleet, observers } : {}) }, bind: (c) => { ctl = c; }, warnings };
 }
 const MODE_MAP: Record<PermissionMode, PolicyMode> = { default: 'ask', acceptEdits: 'accept-edits', plan: 'plan', bypassPermissions: 'bypass' };
 /** The demo keeps its usage in memory. */

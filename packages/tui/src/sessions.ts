@@ -47,13 +47,16 @@ export class SessionStore {
   /** Every normalised event of the conversation, as it happens. */
   append(id: string, cwd: string, ev: NormalisedEvent) { try { this.handle(id, cwd)?.append(ev); } catch { /* another Centcom has it open: this one goes on without saving */ } }
   /** What the person typed. */
-  noteUser(id: string, cwd: string, text: string) { try { this.handle(id, cwd)?.note('user.message', { text }); } catch { /* as above */ } }
+  noteUser(id: string, cwd: string, text: string) { try { this.handle(id, cwd)?.note('user.message', { text }); const k = this.known.get(id); if (k) k.hasUser = true; } catch { /* as above */ } }
+  /** What the log already holds, read once per conversation: parsing the whole log on every save made long conversations stutter. */
+  private known = new Map<string, { engine?: string; token?: string; hasUser: boolean }>();
 
   save(meta: SessionMeta, items: Item[]) {
     const h = this.handle(meta.id, meta.cwd); if (!h) return; void h.flush(); // flushes at once, so the log exists before it is read
-    const last = this.store.sync.open(meta.id).engineSessions.at(-1);
-    if (meta.resumeToken && (meta.engine === 'claude-code' || meta.engine === 'codex') && (last?.engineSessionId !== meta.resumeToken || last.engine !== meta.engine)) h.recordEngineSession({ engine: meta.engine, engineSessionId: meta.resumeToken, sinceSeq: 0 });
-    if (!this.store.sync.open(meta.id).records.some((r) => r.type === 'user.message')) for (const it of items) if (it.kind === 'user') h.note('user.message', { text: it.text }); // older callers saved only the items
+    let k = this.known.get(meta.id);
+    if (!k) { const open = this.store.sync.open(meta.id); const last = open.engineSessions.at(-1); k = { engine: last?.engine, token: last?.engineSessionId, hasUser: open.records.some((r) => r.type === 'user.message') }; this.known.set(meta.id, k); }
+    if (meta.resumeToken && (meta.engine === 'claude-code' || meta.engine === 'codex') && (k.token !== meta.resumeToken || k.engine !== meta.engine)) { h.recordEngineSession({ engine: meta.engine, engineSessionId: meta.resumeToken, sinceSeq: 0 }); k.engine = meta.engine; k.token = meta.resumeToken; }
+    if (!k.hasUser) { for (const it of items) if (it.kind === 'user') h.note('user.message', { text: it.text }); k.hasUser = items.some((it) => it.kind === 'user'); } // older callers saved only the items
     h.saveView({ v: 1, items: sanitizeItems(items), engine: meta.engine, title: meta.title, model: meta.model, tasks: meta.tasks, tasksOpen: meta.tasksOpen, createdAt: meta.createdAt, updatedAt: meta.updatedAt, messages: meta.messages });
     void h.flush();
   }
@@ -69,7 +72,7 @@ export class SessionStore {
     try { const s = this.store.sync.open(id); const v = this.view(id); return { meta: this.metaOf(s.summary, v), items: sanitizeItems(v?.items ?? itemsFromLog(s.records)) }; } catch { return undefined; }
   }
 
-  delete(id: string) { if (!SESSION_ID.test(id)) return; void this.handles.get(id)?.close(); this.handles.delete(id); try { this.store.sync.remove(id); } catch { /* in use or gone */ } }
+  delete(id: string) { if (!SESSION_ID.test(id)) return; this.known.delete(id); void this.handles.get(id)?.close(); this.handles.delete(id); try { this.store.sync.remove(id); } catch { /* in use or gone */ } }
   /** Saves what is buffered and lets other Centcom windows open the conversation. */
   close(id?: string) { for (const [k, h] of this.handles) if (!id || k === id) { void h.close(); this.handles.delete(k); } }
 

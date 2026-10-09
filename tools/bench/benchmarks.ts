@@ -5,6 +5,11 @@ import { initCrypto, sodium, encryptPayload, decryptPayload, signFrame, verifyFr
 import { parseFrame } from '../../packages/protocol/src/index.js';
 import { renderHalfBlock, getBaked } from '../../packages/mascot/src/index.js';
 import { TranscriptLayout } from '../../packages/tui/src/transcript/index.js';
+import { SessionStore } from '../../packages/tui/src/index.js';
+import { keypressSamples } from '../../packages/tui/src/perf/keypress.js';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 export interface Bench { id: string; unit: 'ms' | 'ops/s' | 'MB'; fast: boolean; budget: number | null; /** false: measured and shown, not yet gating (waiting for something the budget assumes) */ gated: boolean; run(): Promise<number[]> | number[] }
@@ -30,6 +35,17 @@ export const BENCHES: Bench[] = [
   { id: 'crypto.encrypt_sign.4k', unit: 'ms', fast: true, budget: 1, gated: true, run: async () => { const k = await crypto(); const secret = { text: 'x'.repeat(4096) }; return time(() => { const ct = encryptPayload({ key: k.key, kid: 'k1', header, secret }); signFrame(k.sk, { header, ct }); }, 40, 3, 10); } },
   { id: 'crypto.encrypt_sign.192k', unit: 'ms', fast: true, budget: 8, gated: true, run: async () => { const k = await crypto(); const secret = { text: 'x'.repeat(130_000) }; return time(() => { const ct = encryptPayload({ key: k.key, kid: 'k1', header, secret }); signFrame(k.sk, { header, ct }); }, 30, 2, 2); } },
   { id: 'crypto.verify_decrypt.4k', unit: 'ms', fast: true, budget: 1, gated: true, run: async () => { const k = await crypto(); const ct = encryptPayload({ key: k.key, kid: 'k1', header, secret: { text: 'x'.repeat(4096) } }); const sig = signFrame(k.sk, { header, ct }); return time(() => { verifyFrame(k.pk, { header, ct }, sig); decryptPayload({ keyFor: () => k.key, header, ct }); }, 40, 3, 10); } },
+  /** From the key reaching the app to the first byte of the new frame: a real Ink render of the whole app, 60 messages on screen, production React is not assumed (the harness runs under tsx). */
+  { id: 'prompt.keypress.paint', unit: 'ms', fast: false, budget: 50, gated: false /* informational: it depends on the terminal size and on React's build; the launcher runs the production build, which is faster */, run: () => keypressSamples(30) },
+  /** Saving a conversation of 1,000 messages (about 600 ms apart while the agent writes). */
+  { id: 'session.save.1k', unit: 'ms', fast: true, budget: 25, gated: false, run: () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bench-sess-')); try { const st = new SessionStore(dir); const id = 'ses_01M4E2D01F1YX15N2QNNA56NK1'; const items = Array.from({ length: 1000 }, (_, i) => (i % 2 ? { id: 'a' + i, kind: 'assistant', messageId: 'm' + i, agentId: 'x', text: 'Lorem ipsum dolor sit amet '.repeat(80), done: true } : { id: 'u' + i, kind: 'user', text: 'question ' + i, ts: i })) as never[];
+      for (let i = 0; i < 1000; i++) st.append(id, '/tmp', { v: 1, seq: i, ts: new Date().toISOString(), agent_id: 'agt', type: 'text.delta', message_id: 'm' + i, index: 0, text: 'Lorem ipsum dolor sit amet '.repeat(80) } as never);
+      const meta = { id, cwd: '/tmp', engine: 'claude-code', title: 't', createdAt: 1, updatedAt: 2, messages: 1000 }; return time(() => { st.save(meta, items); }, 20, 3); } finally { rmSync(dir, { recursive: true, force: true }); } } },
+  /** `centcom --version` through the bundled launcher path (the compiled bundle and V8's code cache), not through tsx. */
+  { id: 'cli.start.bundle', unit: 'ms', fast: false, budget: 400, gated: false, run: () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bench-bundle-')); try { const out = join(dir, 'cli.mjs'); execFileSync(process.execPath, [join(ROOT, 'tools/dev/bundle-cli.mjs'), out]); const env = { ...process.env, NODE_ENV: 'production', NODE_COMPILE_CACHE: join(dir, 'v8') };
+      return time(() => { execFileSync(process.execPath, [out, '--version'], { env, stdio: 'ignore' }); }, 6, 2); } finally { rmSync(dir, { recursive: true, force: true }); } } },
   { id: 'memory.transcript.10k', unit: 'MB', fast: false, budget: 300, gated: false /* the harness itself (tsx and the loaded packages) uses about 300 MB; this gates once it is measured in the packaged CLI */, run: () => { const items = transcriptItems(10_000); const l = new TranscriptLayout().update(items, 100); l.slice(0, 40); globalThis.gc?.(); return [process.memoryUsage().rss / 1024 / 1024]; } },
 ];
 function join(...p: string[]) { return p.join('/'); }

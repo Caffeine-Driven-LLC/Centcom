@@ -26,8 +26,8 @@ with \-\-demo: also show two pretend teammates
 .B \-c, \-\-continue
 continue the most recent conversation in this folder
 .TP
-.B \-\-resume <id>
-continue a specific saved conversation
+.B \-\-resume [id]
+continue a specific saved conversation (without an id: choose from a list)
 .TP
 .B \-\-no\-save
 do not save this conversation or your prompt history
@@ -38,26 +38,44 @@ do not snapshot the folder before each prompt
 .B \-\-model <name>
 model to use (same ids as /model)
 .TP
+.B \-\-cwd <folder>
+with \-p: run in this folder
+.TP
+.B \-\-allow <rule>
+with \-p: allow what would be declined, e.g. \-\-allow "Bash(npm test)" (repeat for more)
+.TP
+.B \-\-permission\-mode <ask|accept\-edits|plan|default|acceptEdits>
+with \-p: how approvals are handled (ask declines them and exits 3)
+.TP
+.B \-\-max\-turns <n>
+with \-p: stop after this many tool steps (default 50)
+.TP
+.B \-\-timeout <seconds>
+with \-p: stop after this long (exit code 124)
+.TP
 .B \-\-mode <default|plan|acceptEdits|bypassPermissions>
 start in a permission mode
 .TP
-.B \-\-dangerously\-skip\-permissions
-never ask: run commands and edit files freely (alias: \-\-yolo)
+.B \-\-dangerously\-skip\-permissions, \-\-yolo
+never ask: run commands and edit files freely
 .TP
-.B \-\-mascot <large|small|off>
+.B \-\-mascot <auto|large|small|off>
 Cento size (default: auto from terminal height)
 .TP
 .B \-\-cento\-color <violet|red|yellow|green|brown>
 Cento's color
 .TP
-.B \-\-theme <dark|light>
-Graphite (default) or Paper (for light terminals)
+.B \-\-theme <auto|dark|light|hc>
+Graphite (default), Paper (for light terminals) or high contrast; auto asks the terminal
 .TP
-.B \-\-colors <truecolor|256|16|never>
+.B \-\-colors <auto|truecolor|256|16|never>
 force a colour tier (NO_COLOR is honoured)
 .TP
 .B \-\-debug
 write detailed logs to ~/.centcom/logs/centcom.log
+.TP
+.B \-\-screen\-reader
+plain lines for a screen reader: no colour, boxes, animation or redraws (also CENTO_SCREEN_READER=1)
 .TP
 .B \-\-no\-motion
 turn animation off (also CENTCOM_REDUCED_MOTION=1; the older CENTCOM_REDUCE_MOTION works too)

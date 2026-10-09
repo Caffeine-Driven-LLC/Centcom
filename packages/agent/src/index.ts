@@ -5,7 +5,7 @@ export * from './risk.js';
 export * from './detect.js';
 export * from './demo.js';
 export { ClaudeCodeEngine, buildArgv, redact } from './claude/engine.js';
-export { ClaudeStreamParser, loginKindFrom, todosFrom } from './claude/parse.js';
+export { ClaudeStreamParser, loginKindFrom, questionFrom, todosFrom } from './claude/parse.js';
 export { editDiff } from './claude/diff.js';
 export * from './models.js';
 export { ApprovalBridge, describeTool, PERMISSION_TOOL } from './claude/bridge.js';
