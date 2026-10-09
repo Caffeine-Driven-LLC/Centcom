@@ -145,7 +145,8 @@ export class AppController {
   agentName(id: string) { return this.state.agents.find((a) => a.id === id)?.name ?? 'an agent'; }
   private set(p: Partial<AppState> | ((s: AppState) => Partial<AppState>)) { this.store.set((st) => { const q = typeof p === 'function' ? p(st) : p; if (q.input === '') { this.pastes.clear(); /* an empty prompt has no chips left */ this.undoStack = []; this.redoStack = []; } return 'input' in q && !('anchor' in q) ? { ...q, anchor: undefined } : q; }); } // a new prompt text drops any selection
   /** UI-level state changes (input buffer, scroll, mode, overlay selections). */
-  patch(p: Partial<AppState>) { if (p.input === '') this.pastes.clear(); this.store.set('input' in p && !('anchor' in p) ? { ...p, anchor: undefined } : p, 'input' in p || 'cursor' in p); }
+  private undoing = false; // set while the undo machinery itself changes the prompt
+  patch(p: Partial<AppState>) { if (p.input !== undefined && !this.undoing) { this.undoStack = []; this.redoStack = []; } /* any other change to the prompt (history, inserts, night) starts the undo history over */ if (p.input === '') this.pastes.clear(); this.store.set('input' in p && !('anchor' in p) ? { ...p, anchor: undefined } : p, 'input' in p || 'cursor' in p); }
   /** The terminal bell, when it is turned on: for what needs you, or a long task that just finished. */
   private ring() { if (this.state.settings.bell && !this.night.active()) this.o.bell?.(); }
   /** Copy to the clipboard and say so. */
@@ -671,17 +672,18 @@ export class AppController {
   /** Replace the prompt text as an edit that ctrl+_ can take back. Typing (or deleting) a run of single characters is one step. */
   setInputUndoable(text: string, cursor: number, extra: Partial<AppState> = {}) {
     const cur = this.state.input;
-    if (text !== cur) {
+    if (text === '' && /\[Pasted /.test(cur)) { this.undoStack = []; this.redoStack = []; this.lastUndoKind = ''; } // emptying the prompt forgets its pasted text, so there is nothing to bring back
+    else if (text !== cur) {
       const d = text.length - cur.length; const kind = d === 1 ? 'type' : d === -1 ? 'delete' : 'other'; const now = Date.now();
       if (!(kind !== 'other' && kind === this.lastUndoKind && now - this.lastUndoAt < 700)) { this.undoStack.push({ text: cur, cursor: this.state.cursor }); if (this.undoStack.length > 100) this.undoStack.shift(); }
       this.lastUndoKind = kind; this.lastUndoAt = now; this.redoStack = [];
     }
-    this.patch({ input: text, cursor, ...extra });
+    this.undoing = true; try { this.patch({ input: text, cursor, ...extra }); } finally { this.undoing = false; }
   }
   /** ctrl+_: take back the last change to the prompt. */
-  undoInput(): boolean { const prev = this.undoStack.pop(); if (!prev) return false; this.redoStack.push({ text: this.state.input, cursor: this.state.cursor }); this.lastUndoKind = ''; this.patch({ input: prev.text, cursor: prev.cursor, anchor: undefined, slashSel: 0 }); return true; }
+  undoInput(): boolean { const prev = this.undoStack.pop(); if (!prev) return false; this.redoStack.push({ text: this.state.input, cursor: this.state.cursor }); this.lastUndoKind = ''; this.undoing = true; try { this.patch({ input: prev.text, cursor: prev.cursor, anchor: undefined, slashSel: 0 }); } finally { this.undoing = false; } return true; }
   /** alt+y: put back what ctrl+_ took away. */
-  redoInput(): boolean { const next = this.redoStack.pop(); if (!next) return false; this.undoStack.push({ text: this.state.input, cursor: this.state.cursor }); this.lastUndoKind = ''; this.patch({ input: next.text, cursor: next.cursor, anchor: undefined, slashSel: 0 }); return true; }
+  redoInput(): boolean { const next = this.redoStack.pop(); if (!next) return false; this.undoStack.push({ text: this.state.input, cursor: this.state.cursor }); this.lastUndoKind = ''; this.undoing = true; try { this.patch({ input: next.text, cursor: next.cursor, anchor: undefined, slashSel: 0 }); } finally { this.undoing = false; } return true; }
 
   /** ctrl+z: put the app in the background (`fg` brings it back where it was). */
   suspend() { if (!this.o.external) { this.toast('info', 'Suspending is not available here.'); return; } this.o.external({ kind: 'suspend' }); }

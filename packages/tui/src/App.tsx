@@ -87,7 +87,7 @@ export function App({ ctl, tier, keys }: AppProps) {
   const lastActive = useRef(Date.now()); const [calm, setCalm] = useState(1); const calmRef = useRef(1); // 1 = full speed; more = slower
   const wake = () => { lastActive.current = Date.now(); if (calmRef.current !== 1) { calmRef.current = 1; setCalm(1); } };
   useEffect(() => { ctl.driver.setSpeed(calm); }, [ctl, calm]);
-  useEffect(() => { if (s.busy || s.approvals.length) wake(); }, [s.busy, s.approvals.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { wake(); }, [s.busy, s.approvals.length]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { // nothing happening: 3 times slower after 20 s, 8 times slower after 2 minutes (the screen is redrawn per frame, so frames are the cost)
     const h = setInterval(() => { if (ctl.state.busy) return; const idle = Date.now() - lastActive.current; const want = idle > 120_000 ? 8 : idle > 20_000 ? 3 : 1; if (want > calmRef.current) { calmRef.current = want; setCalm(want); } }, 5000); h.unref?.(); return () => clearInterval(h);
   }, [ctl]);

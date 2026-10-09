@@ -345,3 +345,11 @@ describe('undo and redo in the prompt (ctrl+_ and alt+y)', () => {
     const u = await mount(); await u.send('keep me', 30); await u.ctl.submit('keep me'); await u.send(UNDO, 60); expect(u.text()).toBe(''); // a sent message is not brought back by undo
   });
 });
+
+describe('undo history is dropped when the prompt changes any other way', () => {
+  const UNDO = '\x1f', REDO = '\x1by';
+  it('insertIntoPrompt after an undo clears redo; history up-arrow starts over; emptying a prompt with a paste chip cannot be undone into a dead chip', async () => {
+    const t = await mount(); for (const ch of 'ab') await t.send(ch, 12); await t.send(UNDO, 60); expect(t.text()).toBe(''); t.ctl.patch({ input: 'x', cursor: 1 }); await t.send(REDO, 60); expect(t.text()).toBe('x');
+    await t.send('\x15', 40); await t.send('\x1b[200~' + Array.from({ length: 12 }, (_, i) => 'l' + i).join('\n') + '\x1b[201~', 80); await t.until(() => /Pasted/.test(t.text())); await wait(750); await t.send('\x1b', 80); expect(t.text()).toBe(''); await t.send(UNDO, 60); expect(t.text()).toBe('');
+  });
+});

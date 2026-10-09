@@ -22,7 +22,7 @@ export function editInEditor(text: string, o: { env?: NodeJS.ProcessEnv; run?: (
 /** Stop everything started with this job until the shell continues it: the whole process group, as the terminal's own ctrl+z does, so a wrapper (tsx) and the agent stop with the app. Resolves when it runs again. */
 export function stopUntilContinued(proc: Pick<NodeJS.Process, 'kill' | 'once'> = process): Promise<void> {
   // a signal listener alone does not keep node alive: with nothing else running (the mascot's timers pause when it is not shown) the process would exit the moment it is continued
-  return new Promise((resolve) => { const hold = setInterval(() => undefined, 1 << 30); const done = () => { clearInterval(hold); resolve(); }; proc.once('SIGCONT', done); try { proc.kill(0, 'SIGSTOP'); } catch { done(); } });
+  return new Promise((resolve) => { const hold = setInterval(() => undefined, 1 << 30); const done = () => { clearInterval(hold); resolve(); }; proc.once('SIGCONT', done); try { proc.kill(0, 'SIGSTOP'); } catch { (proc as NodeJS.Process).removeListener?.('SIGCONT', done); done(); } });
 }
 /** Is this job the one the terminal is showing? `bg` continues a job without giving it the terminal; drawing then would scribble over the shell. Linux reads /proc; elsewhere (or without a terminal) the answer is yes. */
 export function isForeground(readStat: () => string = () => readFileSync('/proc/self/stat', 'utf8')): boolean {
