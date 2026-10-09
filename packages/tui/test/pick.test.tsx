@@ -239,3 +239,23 @@ describe('an answer to a question that came while the agent was working', () => 
     const c = make(); const sent: string[] = []; c.submit = (async (t: string) => { sent.push(t); }) as never; const a = (c as any).answerQuestion('Which?', ['red', 'blue'], true); await new Promise((r) => setTimeout(r, 0)); c.pickKey('toggle'); c.pickKey('down'); c.pickKey('toggle'); c.pickKey('enter'); await a; expect(sent).toEqual(['red, blue']);
   });
 });
+
+describe('more commands you choose instead of type', () => {
+  const tick2 = () => new Promise((r) => setTimeout(r, 20));
+  const withViews = () => { const seen: string[] = []; const views = Object.fromEntries(['mcp', 'hooks', 'memory'].map((k) => [k, async (a: string[]) => { seen.push(`${k} ${a.join(' ')}`.trim()); return [`${k} ${a.join(' ')}`.trim()]; }])); const c = new AppController({ engine: new DemoEngine({ speed: 100 }), demo: true, cwd: '/tmp', version: 't', skills: [], views: views as never }); return { c, seen }; };
+  it('/mcp, /hooks and /memory with nothing after them offer their views; the chosen one is shown', async () => {
+    const { c, seen } = withViews();
+    for (const [cmd, ids, title, pickIdx] of [['mcp', ['list', 'status'], 'MCP servers', 1], ['hooks', ['list', 'validate', 'templates'], 'Hooks', 2], ['memory', ['show', 'status'], 'Memory', 0]] as const) {
+      const run = c.runCommand(`/${cmd}`); await tick2(); expect(c.state.pick!.title).toBe(title); expect(c.state.pick!.options.map((o) => o.id)).toEqual(ids); for (let i = 0; i < pickIdx; i++) c.pickKey('down'); c.pickKey('enter'); await run; expect(seen.at(-1)).toBe(`${cmd} ${ids[pickIdx]}`);
+    }
+    const n = seen.length; const esc = c.runCommand('/mcp'); await tick2(); c.pickKey('cancel'); await esc; expect(seen).toHaveLength(n); // Esc shows nothing
+    await c.runCommand('/mcp list'); expect(seen.at(-1)).toBe('mcp list'); c.stop(); // with the word typed there is no list
+  });
+  it('/trust asks first (and "Not now" does nothing); /demo lists the stories and runs the chosen one', async () => {
+    const { c } = withViews(); const t = c.runCommand('/trust'); await tick2(); expect(c.state.pick!.title).toBe('Project permission rules'); expect(c.state.pick!.options.map((o) => o.id)).toEqual(['rules', 'no']); c.pickKey('down'); c.pickKey('enter'); await t; expect(c.state.mode).toBe('chat');
+    const d = c.runCommand('/demo'); await tick2(); expect(c.state.pick!.title).toBe('Demo story'); const ids = c.state.pick!.options.map((o) => o.id); expect(ids).toContain('fix'); expect(ids).toContain('search'); c.pickKey('down'); c.pickKey('enter'); await d; await tick2(); expect(c.state.items.some((i) => i.kind === 'user')).toBe(true); c.stop();
+  });
+  it('/auto is a list like the other switches, and a typed value still works', async () => {
+    const { c } = withViews(); const a = c.runCommand('/auto'); await tick2(); expect(c.state.pick!.title).toBe('Auto skills'); const on0 = c.state.settings.autoSkills; c.pickKey(on0 ? 'down' : 'up'); c.pickKey('enter'); await a; expect(c.state.settings.autoSkills).toBe(!on0); await c.runCommand('/auto on'); expect(c.state.settings.autoSkills).toBe(true); c.stop();
+  });
+});

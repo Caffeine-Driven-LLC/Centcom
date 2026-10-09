@@ -29,6 +29,9 @@ export function classifyAuthMethod(m: string | undefined): LoginKind {
   return 'unknown';
 }
 
+/** Is the program there and does it run? Only `--version` is asked (a second run for the login state costs as much again), which is all that choosing an agent at start-up needs. */
+export async function isInstalled(bin: string): Promise<boolean> { const v = await run(bin, ['--version']); return !(v.missing || (v.code !== 0 && !v.out)); }
+
 export async function detectClaude(bin = 'claude'): Promise<ClaudeDetection> {
   const v = await run(bin, ['--version']);
   if (v.missing || (v.code !== 0 && !v.out)) return { engine: 'claude-code', installed: false, signedIn: 'unknown', loginKind: 'unknown' };

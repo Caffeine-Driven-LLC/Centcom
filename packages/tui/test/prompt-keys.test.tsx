@@ -64,7 +64,8 @@ describe('mouse wheel', () => {
   it('wheel moves the highlight in a list, and /mouse off stops the reporting', async () => {
     const t = await mount(); void t.ctl.pick({ title: 't', options: ['a', 'b', 'c'].map((id) => ({ id, label: id })) }); await wait();
     await t.send(DOWN); expect(t.ctl.state.pick!.sel).toBe(1); await t.send(UP); expect(t.ctl.state.pick!.sel).toBe(0); t.ctl.pickKey('cancel');
-    expect(t.ctl.state.settings.mouse).toBe(true); await t.ctl.runCommand('/mouse off'); expect(t.ctl.state.settings.mouse).toBe(false); await t.ctl.runCommand('/mouse'); expect(t.ctl.state.settings.mouse).toBe(true);
+    expect(t.ctl.state.settings.mouse).toBe(true); await t.ctl.runCommand('/mouse off'); expect(t.ctl.state.settings.mouse).toBe(false); const ask = t.ctl.runCommand('/mouse'); await wait(40); expect(t.ctl.state.pick!.title).toBe('Mouse'); expect(t.ctl.state.pick!.options.map((o) => o.id)).toEqual(['on', 'off']); t.ctl.pickKey('up'); t.ctl.pickKey('enter'); await ask; expect(t.ctl.state.settings.mouse).toBe(true); // bare /mouse is a list now
+    await t.ctl.runCommand('/mouse sideways'); expect(t.ctl.state.toasts.at(-1)!.text).toMatch(/\/mouse on or \/mouse off/);
   });
 });
 
@@ -278,7 +279,8 @@ describe('/find', () => {
     t.ctl.pickKey('enter'); await run; await wait(150); expect(t.ctl.state.jumpTo).toBeUndefined(); expect(t.ctl.state.scroll).toBeGreaterThan(0); expect(t.frame()).toContain('the zebra crossing'); expect(t.frame()).toContain('more lines below');
   });
   it('says so when nothing matches or nothing was typed, and Esc changes nothing', async () => {
-    const t = await mount(); t.ctl.patch({ items: many() }); await t.ctl.runCommand('/find'); expect(t.ctl.state.toasts.at(-1)!.text).toMatch(/Type what to look for/);
+    const t = await mount(); t.ctl.patch({ items: many() }); const asking = t.ctl.runCommand('/find'); await wait(60); expect(t.ctl.state.mode).toBe('chat'); expect(t.ctl.state.input).toBe(''); expect(t.ctl.state.items.some((i) => i.kind === 'notice' && /Find what in this conversation/.test(i.text))).toBe(true); await t.ctl.submit('ZEBRA'); await wait(60); expect(t.ctl.state.mode).toBe('pick'); t.ctl.pickKey('cancel'); await asking; // a bare /find asks what to find, then lists the hits
+    const none = t.ctl.runCommand('/find'); await wait(60); (t.ctl as unknown as { cancelQuestions(): void }).cancelQuestions(); await none; expect(t.ctl.state.mode).toBe('chat'); // Esc: nothing happens
     await t.ctl.runCommand('/find giraffe'); expect(t.ctl.state.toasts.at(-1)!.text).toBe('Nothing in this conversation mentions "giraffe".'); const run = t.ctl.runCommand('/find ZEBRA'); await wait(60); t.ctl.pickKey('cancel'); await run; expect(t.ctl.state.scroll).toBe(0);
   });
 });

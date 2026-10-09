@@ -3,7 +3,7 @@ import React from 'react';
 import { execFileSync } from 'node:child_process';
 import { render } from 'ink';
 import { detectColorTier } from '@centcom/theme';
-import { ClaudeCodeEngine, CodexEngine, DemoEngine, detectClaude, detectCodex, type AgentEngine, type PermissionMode } from '@centcom/agent';
+import { ClaudeCodeEngine, CodexEngine, DemoEngine, detectClaude, detectCodex, isInstalled, type AgentEngine, type PermissionMode } from '@centcom/agent';
 import { chooseEngine } from './engine-pick.js';
 import { App, AppController, ClientConfig, FirstRun, SessionStore, TITLE_POP, TITLE_PUSH, resolveA11yMode, runLinear, queryBackground, buildRuntime, initialSettings, isFirstRun, markFirstRunDone, settingsFromConfig } from '@centcom/tui';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -62,7 +62,7 @@ function cliFlags(): FlatFlags {
 
 async function pickEngine(preferred: 'claude-code' | 'codex' = 'claude-code'): Promise<{ engine: AgentEngine; demo: boolean; note: string }> {
   const explicit = arg('--engine') === 'codex' || arg('--engine') === 'claude-code' ? (arg('--engine') as 'codex' | 'claude-code') : undefined;
-  const pick = await chooseEngine({ demo: has('--demo') || arg('--engine') === 'demo', explicit, preferred, installed: async (e) => (e === 'codex' ? await detectCodex() : await detectClaude()).installed });
+  const pick = await chooseEngine({ demo: has('--demo') || arg('--engine') === 'demo', explicit, preferred, installed: (e) => isInstalled(e === 'codex' ? process.env.CENTCOM_CODEX_BIN || 'codex' : 'claude') });
   const engine: AgentEngine = pick.engine === 'demo' ? new DemoEngine({ speed: 1 }) : pick.engine === 'codex' ? new CodexEngine() : new ClaudeCodeEngine();
   return { engine, demo: pick.engine === 'demo', note: pick.note };
 }
@@ -133,14 +133,15 @@ async function main() {
 
   const cc = await ClientConfig.load(process.cwd(), cliFlags());
   const tier = detectColorTier({ env: process.env, isTTY: true, flag: cc.cfg.ui.color === 'auto' ? undefined : cc.cfg.ui.color });
+  const a11y = resolveA11yMode({ env: process.env, flags: { screenReader: has('--screen-reader') }, config: { screenReader: cc.cfg.a11y.screen_reader, reducedMotion: cc.cfg.ui.reduced_motion } });
+  // theme "auto": ask the terminal for its background colour (150 ms at most, nothing is written without a terminal) so a light terminal gets Paper instead of Graphite. The question goes out now and is answered while the agent is looked for.
+  const bgAnswer = cc.cfg.ui.theme === 'auto' && !a11y.screenReader ? queryBackground({ out: process.stdout, inp: process.stdin }) : undefined;
   const { engine, demo, note } = await pickEngine(cc.cfg.client.engine);
   let branch = ''; try { branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { /* not a git repo */ }
   const dangerous = has('--dangerously-skip-permissions') || has('--yolo');
   const mode: PermissionMode = dangerous || arg('--mode') === 'bypassPermissions' ? 'bypassPermissions' : cc.cfg.client.permission_mode;
-  const a11y = resolveA11yMode({ env: process.env, flags: { screenReader: has('--screen-reader') }, config: { screenReader: cc.cfg.a11y.screen_reader, reducedMotion: cc.cfg.ui.reduced_motion } });
   const settings = { ...settingsFromConfig(cc.cfg), permissionMode: mode, reducedMotion: a11y.reducedMotion, ...(a11y.screenReader ? { mascot: 'off' as const } : {}) };
-  // theme "auto": ask the terminal for its background colour (150 ms at most, nothing is written without a terminal) so a light terminal gets Paper instead of Graphite
-  if (cc.cfg.ui.theme === 'auto' && !a11y.screenReader) { const bg = await queryBackground({ out: process.stdout, inp: process.stdin }); if (bg === 'light') settings.theme = 'light'; }
+  if (bgAnswer && (await bgAnswer) === 'light') settings.theme = 'light';
   let pendingExternal: ExternalTask | undefined; // set by ctrl+z and ctrl+g: the screen steps aside, the task runs, the screen comes back
   let quitLinear: () => void = () => undefined; const linearStop = new Promise<void>((r) => { quitLinear = r; });
   if (arg('--engine') === 'codex' || arg('--engine') === 'claude-code') cc.set('client.engine', arg('--engine')!); // the agent you pick is the one you get next time
