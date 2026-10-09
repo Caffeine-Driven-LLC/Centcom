@@ -97,6 +97,14 @@ def screen_reader_mode_is_plain_text():
     return '\x1b' not in txt and 'Allow Cento to' in txt and '[y/n/a]' in txt, 'no escape code at all, also when it exits; approvals asked as [y/n/a]'
 
 @check
+def idle_costs_almost_nothing():
+    def cpu(pid):
+        f = open(f'/proc/{pid}/stat').read().rsplit(')', 1)[1].split(); return (int(f[11]) + int(f[12])) / os.sysconf('SC_CLK_TCK')
+    if not os.path.exists('/proc/self/stat'): return True, 'skipped (needs /proc)'
+    t = start(); t.send('/mascot off\r', 1.0); a = cpu(t.pid); t0 = time.time(); t.pump(8.0); pct = 100 * (cpu(t.pid) - a) / (time.time() - t0); t.close()
+    return pct < 1.5, f'{pct:.1f}% of one core with the mascot off and nothing happening (under 1.5% expected)'
+
+@check
 def bad_command_line_is_one_line():
     r = []
     for args, msg in ((['--bogus'], 'Unknown option'), (['--theme', 'purple'], 'must be one of')):

@@ -28,6 +28,8 @@ export class MascotDriver {
   private idleSince: number;
   private index = 0;
   private timer: unknown;
+  private paused = false;        // nothing shows the mascot: no animation timers
+  private speed = 1;             // 1 = as designed; more = slower (the app slows it when nothing has happened for a while)
   private dwellTimer: unknown;
   private listeners = new Set<(f: MascotFrame) => void>();
 
@@ -81,14 +83,14 @@ export class MascotDriver {
   private restartTimer() {
     if (this.timer) this.clock.clearTimeout(this.timer);
     this.timer = undefined;
-    if (this.reduced) return;
+    if (this.reduced || this.paused) return;
     this.schedule();
   }
 
   private schedule() {
     const name = this.sceneName();
     const r = renderScene(name, this.color);
-    const ms = r.frames[Math.min(this.index, r.frames.length - 1)]!.ms;
+    const ms = r.frames[Math.min(this.index, r.frames.length - 1)]!.ms * this.speed;
     this.timer = this.clock.setTimeout(() => {
       const scene = SCENES[name]!;
       if (this.index + 1 >= r.frames.length) {
@@ -100,5 +102,9 @@ export class MascotDriver {
   }
 
   start() { this.restartTimer(); this.emit(); }
+  /** Stop animating while nothing is showing the mascot (the state still follows the agent, so it is right when it appears again). */
+  setPaused(p: boolean) { if (p === this.paused) return; this.paused = p; if (p) { if (this.timer) this.clock.clearTimeout(this.timer); this.timer = undefined; } else this.restartTimer(); }
+  /** Slow the animation down (3 = three times slower) or restore it (1). */
+  setSpeed(f: number) { const n = Math.max(1, Math.min(10, f)); if (n === this.speed) return; this.speed = n; if (!this.paused && this.timer) this.restartTimer(); }
   stop() { if (this.timer) this.clock.clearTimeout(this.timer); if (this.dwellTimer) this.clock.clearTimeout(this.dwellTimer); this.timer = this.dwellTimer = undefined; }
 }

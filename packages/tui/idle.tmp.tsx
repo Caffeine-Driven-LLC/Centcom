@@ -1,0 +1,13 @@
+import React from 'react';
+import { PassThrough } from 'node:stream';
+import { render } from 'ink';
+import { DemoEngine } from '@centcom/agent';
+import { App, AppController } from './src/index.js';
+const mascot = (process.env.MASCOT ?? 'off') as 'off' | 'auto';
+const ctl = new AppController({ engine: new DemoEngine({ speed: 100 }), demo: true, cwd: '/tmp', version: 't', skills: [], settings: { mascot } as never });
+ctl.patch({ items: [{ id: 'u', kind: 'user', text: 'hi', ts: 1 } as never, { id: 'a', kind: 'assistant', messageId: 'm', agentId: 'x', text: 'hello', done: true } as never] });
+let frames = 0; const out: any = new PassThrough(); out.columns = 100; out.rows = 30; out.isTTY = true; out.on('data', () => { frames++; });
+const inp: any = new PassThrough(); inp.isTTY = true; inp.setRawMode = () => inp; inp.ref = () => inp; inp.unref = () => inp;
+const inst = render(<App ctl={ctl} tier="truecolor" />, { stdout: out, stdin: inp, exitOnCtrlC: false, patchConsole: false, maxFps: 30, incrementalRendering: true });
+await new Promise((r) => setTimeout(r, 1500)); frames = 0; const c0 = process.cpuUsage(); await new Promise((r) => setTimeout(r, 8000)); const c = process.cpuUsage(c0);
+process.stderr.write(JSON.stringify({ mascot, idleCpuPct: +(((c.user + c.system) / 1000 / 8000) * 100).toFixed(1), framesPerSec: +(frames / 8).toFixed(1) }) + '\n'); inst.unmount(); ctl.stop(); process.exit(0);

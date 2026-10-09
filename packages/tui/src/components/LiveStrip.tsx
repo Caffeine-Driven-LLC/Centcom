@@ -38,12 +38,12 @@ function infoLines(s: AppState, spin: string, width: number, now: number): Line[
 }
 
 export const LiveStrip = React.memo(LiveStripImpl, sameUnlessTyping as never) as typeof LiveStripImpl;
-function LiveStripImpl({ s, driver, width, size }: { s: AppState; driver: MascotDriver; width: number; size: 'large' | 'small' | 'off' }) {
+function LiveStripImpl({ s, driver, width, size, calm = 1 }: { s: AppState; driver: MascotDriver; width: number; size: 'large' | 'small' | 'off'; /** 1 = normal; more = the animation runs that many times slower (nothing has happened for a while). */ calm?: number }) {
   const theme = useTheme();
   const f = useMascotFrame(driver);
   const spinning = s.busy && !s.settings.reducedMotion;
   const tick = useTick(120, spinning);
-  const slow = useTick(500, size === 'small' && !s.settings.reducedMotion);
+  const slow = useTick(500 * calm, size === 'small' && !s.settings.reducedMotion);
   const spin = spinning ? SPINNER[tick % SPINNER.length]! : '…';
   const me = s.agents.find((a) => a.mine)!;
   const now = Date.now();

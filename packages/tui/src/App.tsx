@@ -81,6 +81,17 @@ export function App({ ctl, tier, keys }: AppProps) {
     ctl.patch({ scroll: row === undefined ? s.scroll : Math.max(0, Math.min(maxScroll, total - start - bodyH)), jumpTo: undefined });
   }, [s.jumpTo]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /* ---- the mascot costs nothing when nobody sees it, and little when nothing is happening ---- */
+  const strip = stripH > 0 && stripSize !== 'off';
+  useEffect(() => { ctl.driver.setPaused(!strip); }, [ctl, strip]);
+  const lastActive = useRef(Date.now()); const [calm, setCalm] = useState(1); const calmRef = useRef(1); // 1 = full speed; more = slower
+  const wake = () => { lastActive.current = Date.now(); if (calmRef.current !== 1) { calmRef.current = 1; setCalm(1); } };
+  useEffect(() => { ctl.driver.setSpeed(calm); }, [ctl, calm]);
+  useEffect(() => { if (s.busy || s.approvals.length) wake(); }, [s.busy, s.approvals.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { // nothing happening: 3 times slower after 20 s, 8 times slower after 2 minutes (the screen is redrawn per frame, so frames are the cost)
+    const h = setInterval(() => { if (ctl.state.busy) return; const idle = Date.now() - lastActive.current; const want = idle > 120_000 ? 8 : idle > 20_000 ? 3 : 1; if (want > calmRef.current) { calmRef.current = want; setCalm(want); } }, 5000); h.unref?.(); return () => clearInterval(h);
+  }, [ctl]);
+
   /* ---- @file suggestions follow the word at the cursor ---- */
   const mentionQuery = mentionNow?.query;
   useEffect(() => { if (mentionQuery) ctl.searchMentions(mentionQuery); else ctl.clearMentions(); }, [ctl, mentionQuery]);
@@ -115,12 +126,13 @@ export function App({ ctl, tier, keys }: AppProps) {
   // Ink drops mouse reports before `useInput` sees them, so the wheel is read from the raw bytes (Ink keeps reading them too).
   useEffect(() => {
     if (!s.settings.mouse) return;
-    const onData = (d: Buffer | string) => { for (const c of clicksIn(String(d))) clicks.hit(c.col, c.row); let n = 0; for (const m of String(d).matchAll(/\x1b\[<(\d+);\d+;\d+M/g)) { const b = Number(m[1]); if (b & 64) n += b & 1 ? -1 : 1; } if (n) wheelRef.current(n); };
+    const onData = (d: Buffer | string) => { wake(); for (const c of clicksIn(String(d))) clicks.hit(c.col, c.row); let n = 0; for (const m of String(d).matchAll(/\x1b\[<(\d+);\d+;\d+M/g)) { const b = Number(m[1]); if (b & 64) n += b & 1 ? -1 : 1; } if (n) wheelRef.current(n); };
     stdin.on('data', onData); return () => { stdin.off('data', onData); };
   }, [s.settings.mouse, stdin, clicks]);
   useEffect(() => { if (!s.settings.mouse) return; write('\x1b[?1000h\x1b[?1006h'); return () => { write('\x1b[?1000l\x1b[?1006l'); }; }, [s.settings.mouse, write]);
 
   useInput((input, key) => {
+    wake(); // any key brings the animation back to full speed
     if (key.ctrl && input === 'c') { if (sel && !pending && (s.mode === 'chat' || s.mode === 'night')) { ctl.copy(ed.selectedText(s.input, s.cursor, s.anchor)); ctl.patch({ anchor: undefined }); return; } ctl.ctrlC(); return; }
     /* approvals */
     if (pending) {
@@ -274,7 +286,7 @@ export function App({ ctl, tier, keys }: AppProps) {
                     : welcome ? <Welcome s={s} width={mainW} height={bodyH} color={s.settings.color} reduced={s.settings.reducedMotion} />
                       : <Box paddingX={1}><Transcript layout={layout} items={s.items} width={mainW - 2} height={bodyH} scroll={s.scroll} unseen={unseen} /></Box>}
             </Box>
-            {stripH > 0 ? <Box paddingX={1} height={stripH}><LiveStrip s={s} driver={ctl.driver} width={mainW - 2} size={stripSize as 'large' | 'small' | 'off'} /></Box> : null}
+            {stripH > 0 ? <Box paddingX={1} height={stripH}><LiveStrip s={s} driver={ctl.driver} width={mainW - 2} size={stripSize as 'large' | 'small' | 'off'} calm={calm} /></Box> : null}
             {pending ? <Approval a={pending} width={mainW} confirming={confirming} maxDiff={maxDiff} onChoose={(c) => { if (approvalGrace()) return; if (c === 'no') ctl.answerApproval('deny'); else if (c === 'always') { if (pending.req.risk !== 'high') ctl.answerApproval('approve', 'always'); } else if (c === 'session') { if (pending.req.risk !== 'high') ctl.answerApproval('approve', 'session'); } else if (pending.req.risk === 'high' && !confirming) setConfirming(true); else ctl.answerApproval('approve'); }} /> : (
               <>
                 {showTasks ? <Box paddingX={1} height={tasksH}><TaskList items={s.tasks} maxRows={rows >= 34 ? 10 : 5} width={mainW - 2} unicode={tier !== 'none'} /></Box> : null}

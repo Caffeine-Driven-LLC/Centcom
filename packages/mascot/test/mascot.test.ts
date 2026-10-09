@@ -123,3 +123,18 @@ describe('MascotDriver', () => {
     expect(d.frame.scene).toBe('thinking');
   });
 });
+
+describe('MascotDriver: pause and speed (idle cost)', () => {
+  it('paused: no frames and no timers while nothing shows the mascot; resumed: it animates again', () => {
+    const c = new FakeClock(); const d = new MascotDriver({ clock: c }); const seen: number[] = []; d.subscribe((f) => seen.push(f.index)); d.start();
+    c.advance(1700); expect(seen.length).toBeGreaterThan(1); d.setPaused(true); const n = seen.length; c.advance(60_000); expect(seen.length).toBe(n); // a minute of nothing
+    d.setState('thinking'); c.advance(60_000); expect(seen.length).toBeLessThanOrEqual(n + 1); // a change of state is shown once, but nothing runs on a timer
+    d.setPaused(false); c.advance(5000); expect(seen.length).toBeGreaterThan(n + 1); d.setPaused(false);
+  });
+  it('slower: three times the time between frames, and back to normal on restore', () => {
+    const c = new FakeClock(); const d = new MascotDriver({ clock: c }); const seen: number[] = []; d.subscribe((f) => seen.push(f.index)); d.start();
+    c.advance(1700); expect(seen.at(-1)).toBe(1); d.setSpeed(3); const before = seen.length; c.advance(300); expect(seen.length).toBe(before); c.advance(6000); expect(seen.length).toBeGreaterThan(before);
+    const slow = seen.length - before; const base = new MascotDriver({ clock: new FakeClock() }); void base; d.setSpeed(1); const m0 = seen.length; c.advance(6000); expect(seen.length - m0).toBeGreaterThan(slow); // faster again
+    d.setSpeed(99); d.setSpeed(0); d.setSpeed(1); // out-of-range values are clamped, never break it
+  });
+});
