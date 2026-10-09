@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -25,16 +25,29 @@ describe('pieces of the conversation', () => {
     const md = toMarkdown([{ id: 'u', kind: 'user', text: 'my key is sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789ABCDEF ok', ts: 1 }] as never[], { title: 't', engine: 'e', cwd: '/', when: new Date() }); expect(md).not.toContain('abcdefghijklmnopqrstuvwxyz0123456789'); expect(md).toContain('my key is');
   });
 });
+const tick = () => new Promise((r) => setTimeout(r, 10));
+describe('/copy and /export choices', () => {
+  const mk = () => { const copied: string[] = []; const c = new AppController({ engine: new DemoEngine({ speed: 100 }), demo: true, cwd: '/tmp', version: 't', skills: [], clipboard: (t) => copied.push(t) }); return { c, copied }; };
+  it('/copy with code in the answer asks what to copy (the answer, or any one code block) and copies that', async () => {
+    const { c, copied } = mk(); c.patch({ items }); const run = c.runCommand('/copy'); await tick(); expect(c.state.pick!.title).toBe('Copy'); const ids = c.state.pick!.options.map((o) => o.id); expect(ids[0]).toBe('answer'); expect(ids.length).toBeGreaterThanOrEqual(2);
+    c.pickKey('down'); c.pickKey('enter'); await run; expect(copied).toEqual(['const a = 1;']); const second = c.runCommand('/copy'); await tick(); c.pickKey('down'); c.pickKey('down'); c.pickKey('enter'); await second; expect(copied.at(-1)).toBe('npm test'); copied.pop(); copied.pop(); copied.push('const a = 1;'); const again = c.runCommand('/copy'); await tick(); c.pickKey('cancel'); await again; expect(copied).toHaveLength(1); // cancelling copies nothing
+    c.patch({ items: [items[0]!, { ...(items[2] as unknown as object), text: 'no code here' } as never] }); await c.runCommand('/copy'); expect(copied.at(-1)).toBe('no code here'); expect(c.state.mode).toBe('chat'); // no code: no question, it just copies
+    c.stop();
+  });
+  it('/export offers a file or the clipboard; the clipboard gets the same Markdown', async () => {
+    const { c, copied } = mk(); c.patch({ items }); const run = c.runCommand('/export'); await tick(); c.pickKey('down'); c.pickKey('enter'); await run; expect(copied).toHaveLength(1); expect(copied[0]).toContain('## You\n\nfix the bug'); c.stop();
+  });
+});
 describe('/copy and /export', () => {
   const make = (cwd = '/tmp') => { const copied: string[] = []; const c = new AppController({ engine: new DemoEngine({ speed: 100 }), demo: true, cwd, version: 't', skills: [], clipboard: (t) => copied.push(t) }); return { c, copied }; };
   it('/copy takes the last answer, /copy code its last code block; each says when there is nothing', async () => {
     const { c, copied } = make(); await c.runCommand('/copy'); expect(c.state.toasts.at(-1)!.text).toBe('Nothing to copy yet.'); c.patch({ items });
-    await c.runCommand('/copy'); await c.runCommand('/copy code'); expect(copied[0]).toContain('And a second one'); expect(copied[1]).toBe('npm test'); await c.runCommand('/copy everything'); expect(c.state.toasts.at(-1)!.text).toMatch(/\/copy code/);
+    await c.runCommand('/copy answer'); await c.runCommand('/copy code'); expect(copied[0]).toContain('And a second one'); expect(copied[1]).toBe('npm test'); await c.runCommand('/copy everything'); expect(c.state.toasts.at(-1)!.text).toMatch(/\/copy code/);
     c.patch({ items: [items[0]!, { ...(items[2] as unknown as object), text: 'no code' } as never] }); await c.runCommand('/copy code'); expect(c.state.toasts.at(-1)!.text).toBe('The last answer has no code block.');
   });
   it('/export writes a Markdown file in the folder (private to you), never overwrites, and accepts a name', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'cc-export-')); const { c } = make(dir); await c.runCommand('/export'); expect(c.state.toasts.at(-1)!.text).toBe('Nothing to export yet.'); c.patch({ items });
-    await c.runCommand('/export'); const files = readdirSync(dir); expect(files).toHaveLength(1); expect(files[0]).toMatch(/^centcom-\d{8}-\d{4}\.md$/); expect(statSync(join(dir, files[0]!)).mode & 0o777).toBe(0o600); expect(readFileSync(join(dir, files[0]!), 'utf8')).toContain('## You\n\nfix the bug');
+    await c.runCommand('/export notes0.md'); const nf = readdirSync(dir).length; expect(nf).toBe(1); rmSync(join(dir, 'notes0.md')); const run = c.runCommand('/export'); await tick(); expect(c.state.pick!.options.map((o) => o.id)).toEqual(['file', 'clipboard']); c.pickKey('enter'); await run; const files = readdirSync(dir); expect(files).toHaveLength(1); expect(files[0]).toMatch(/^centcom-\d{8}-\d{4}\.md$/); expect(statSync(join(dir, files[0]!)).mode & 0o777).toBe(0o600); expect(readFileSync(join(dir, files[0]!), 'utf8')).toContain('## You\n\nfix the bug');
     await c.runCommand('/export notes.md'); expect(existsSync(join(dir, 'notes.md'))).toBe(true); const before = readFileSync(join(dir, 'notes.md'), 'utf8'); c.patch({ items: [items[0]!] }); await c.runCommand('/export notes.md'); expect(c.state.toasts.at(-1)!.text).toMatch(/already exists/); expect(readFileSync(join(dir, 'notes.md'), 'utf8')).toBe(before);
   });
 });

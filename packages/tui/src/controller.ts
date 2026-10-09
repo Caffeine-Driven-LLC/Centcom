@@ -484,7 +484,7 @@ export class AppController {
     const note = this.o.onMemoryAdd ? /^#[ \t]+(\S[\s\S]*)$/.exec(text) : null;
     if (note) {
       this.set({ input: '', cursor: 0, histIdx: null, draft: '' }); const r = await this.o.onMemoryAdd!(note[1]!.trim());
-      if ('error' in r) this.addItem({ kind: 'notice', id: nid('n'), level: 'warn', text: r.error }); else { this.pendingMemory = r; this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: 'Add this note to memory? Type y to confirm, anything else cancels.', detail: r.diff }); }
+      if ('error' in r) this.addItem({ kind: 'notice', id: nid('n'), level: 'warn', text: r.error }); else { this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: 'Add this note to memory?', detail: r.diff }); const ids = await this.pick({ title: 'Add this note to memory?', note: 'The change is shown above.', multi: false, confirm: 'ok', options: [{ id: 'yes', label: 'Yes, add it' }, { id: 'no', label: 'No, do not add it' }] }); if (ids?.[0] === 'yes') { try { this.addItem({ kind: 'notice', id: nid('n'), level: 'ok', text: await r.apply() }); } catch (e) { this.addItem({ kind: 'notice', id: nid('n'), level: 'warn', text: String((e as Error).message ?? e) }); } } else this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: 'Nothing was added to memory.' }); }
       return;
     }
     this.set((s) => ({ history: [...s.history.filter((h) => h !== text), text].slice(-200), histIdx: null, draft: '', input: '', cursor: 0, scroll: 0, slashSel: 0 }));
@@ -806,7 +806,32 @@ export class AppController {
       density: { title: 'Space between messages', current: st.density, options: o(['comfortable', 'a blank row between messages'], ['compact', 'fits more on screen']) },
       spinner: { title: 'While the agent works', current: st.spinner, options: o(['fun', 'rotating verbs'], ['plain', 'just "Working…"']) },
       motion: { title: 'Animation', current: st.reducedMotion ? 'reduced' : 'full', options: o(['full', 'Cento moves'], ['reduced', 'still, quieter']) },
+      mouse: { title: 'Mouse', current: st.mouse ? 'on' : 'off', options: o(['on', 'the wheel scrolls and clicks work'], ['off', 'select text with the mouse as usual']) },
+      auto: { title: 'Auto skills', current: st.autoSkills ? 'on' : 'off', options: o(['on', 'matching skills and commands are applied to your prompts'], ['off', 'only what you ask for']) },
     };
+  }
+
+  /** Commands whose first word is a choice: with nothing after them, choose it from a list. `null` = the list was cancelled, `undefined` = this command has no such list. */
+  private async subChoice(cmd: string): Promise<string | null | undefined> {
+    const offer = async (title: string, options: PickOption[], note?: string) => { const ids = await this.pick({ title, ...(note ? { note } : {}), options, multi: false, confirm: 'show' }); return ids?.[0] ?? null; };
+    const view = (name: 'mcp' | 'hooks' | 'memory') => (this.o.views?.[name] ? true : false);
+    if (cmd === 'mcp' && view('mcp')) return offer('MCP servers', [{ id: 'list', label: 'list', hint: 'the servers Claude Code and Codex are set up with' }, { id: 'status', label: 'status', hint: 'which of them answer right now' }]);
+    if (cmd === 'hooks' && view('hooks')) return offer('Hooks', [{ id: 'list', label: 'list', hint: 'the hooks Claude Code runs' }, { id: 'validate', label: 'validate', hint: 'check them for mistakes' }, { id: 'templates', label: 'templates', hint: 'ready-made hooks to start from' }]);
+    if (cmd === 'memory' && view('memory')) return offer('Memory', [{ id: 'show', label: 'show', hint: 'the CLAUDE.md and AGENTS.md files in use' }, { id: 'status', label: 'status', hint: 'which files exist and how big they are' }], 'Start a message with # to add a note.');
+    if (cmd === 'trust') return offer('Project permission rules', [{ id: 'rules', label: "Trust this project's rules file", hint: 'its saved permission rules are used from now on' }, { id: 'no', label: 'Not now', hint: 'leave it untrusted' }], 'A project can ship its own permission rules. Only trust one you have read.').then((v) => (v === 'no' ? null : v));
+    if (cmd === 'demo' && this.state.demo) return offer('Demo story', Object.keys(DEMO_PROMPTS).map((k) => ({ id: k, label: k, hint: k === 'fix' ? 'finds a bug and edits a file (asks first)' : k === 'search' ? 'searches the code and answers' : k === 'delete' ? 'tries a dangerous command' : k === 'ask' ? 'asks you which way to fix it' : k === 'compact' ? 'fills the context' : k === 'error' ? 'a login problem' : k === 'limit' ? 'a usage limit' : 'a scripted story' })));
+    if (cmd === 'find') { const t = await this.askText({ id: 'find', text: 'Find what in this conversation?' }); return t?.trim() ? t.trim() : null; }
+    if (cmd === 'copy') {
+      const a = lastAnswer(this.state.items); if (!a) return undefined; const blocks = codeBlocks(a); if (!blocks.length) return undefined;
+      const first = (b: string) => (b.split('\n').find((l) => l.trim()) ?? '').trim().slice(0, 50);
+      const v = await offer('Copy', [{ id: 'answer', label: 'The whole answer', hint: `${a.length.toLocaleString('en-US')} characters` }, ...blocks.map((b, i) => ({ id: `block${i}`, label: blocks.length === 1 ? 'Its code block' : `Code block ${i + 1} of ${blocks.length}`, hint: first(b) }))]);
+      if (v === null) return null; if (v === 'answer') return 'answer'; return `block ${Number(v.slice(5)) + 1}`;
+    }
+    if (cmd === 'export') {
+      if (!this.state.items.length) return undefined;
+      return offer('Export this conversation', [{ id: 'file', label: 'Save as a Markdown file', hint: 'in this folder, named by the date' }, { id: 'clipboard', label: 'Copy as Markdown', hint: 'to paste somewhere else' }]).then((v) => (v === 'file' ? '' : v === 'clipboard' ? '--clipboard' : v));
+    }
+    return undefined;
   }
 
   async runCommand(line: string) {
@@ -817,6 +842,7 @@ export class AppController {
       const c = this.choices()[cmd!]!; const ids = await this.pick({ title: c.title, options: c.options, checked: [c.current], multi: false, confirm: 'use' });
       if (ids?.[0]) await this.runCommand(`/${cmd} ${ids[0]}`); return;
     }
+    if (!arg) { const sub = await this.subChoice(cmd!); if (sub === null) return; if (sub) { await this.runCommand(`/${cmd} ${sub}`); return; } }
     switch (cmd) {
       case 'help': this.set({ mode: 'help' }); break;
       case 'clear': case 'new': await this.newSession(); break;
@@ -849,17 +875,19 @@ export class AppController {
       case 'bell': if (arg === 'on' || arg === 'off') { this.setSettings({ bell: arg === 'on' }); this.toast('info', arg === 'on' ? 'Bell on: you will hear it when an approval or question needs you, or a long task finishes' : 'Bell off'); } else this.toast('info', 'Try /bell on or /bell off'); break;
       case 'density': if (arg === 'comfortable' || arg === 'compact') { this.setSettings({ density: arg }); this.toast('info', arg === 'compact' ? 'Compact: fewer blank rows' : 'Comfortable: a blank row between messages'); } else this.toast('info', 'Try /density comfortable or /density compact'); break;
       case 'spinner': if (arg === 'fun' || arg === 'plain') { this.setSettings({ spinner: arg }); this.toast('info', arg === 'plain' ? 'The waiting line says Working…' : 'The waiting line rotates its verbs'); } else this.toast('info', 'Try /spinner fun or /spinner plain'); break;
-      case 'mouse': { const on = arg ? arg === 'on' : !this.state.settings.mouse; this.setSettings({ mouse: on }); this.toast('info', on ? 'Mouse wheel scrolls. /mouse off lets you select text with the mouse.' : 'Mouse off: select text with the mouse as usual.'); break; }
+      case 'mouse': { const on = arg ? arg === 'on' : !this.state.settings.mouse; if (arg && arg !== 'on' && arg !== 'off') { this.toast('info', 'Try /mouse on or /mouse off.'); break; } this.setSettings({ mouse: on }); this.toast('info', on ? 'Mouse wheel scrolls. /mouse off lets you select text with the mouse.' : 'Mouse off: select text with the mouse as usual.'); break; }
       case 'settings': await this.settingsMenu(); break;
       case 'find': await this.findCommand(arg); break;
       case 'copy': {
         const a = lastAnswer(this.state.items); if (!a) { this.toast('info', 'Nothing to copy yet.'); break; }
         if (arg === 'code') { const blocks = codeBlocks(a); if (!blocks.length) { this.toast('info', 'The last answer has no code block.'); break; } this.copy(blocks.at(-1)!); break; }
+        { const m = /^block (\d+)$/.exec(arg); if (m) { const b = codeBlocks(a)[Number(m[1]) - 1]; if (b === undefined) { this.toast('info', 'The last answer has no such code block.'); break; } this.copy(b); break; } }
         if (arg && arg !== 'answer') { this.toast('info', 'Try /copy (the last answer) or /copy code (its last code block).'); break; }
         this.copy(a); break;
       }
       case 'export': {
         if (!this.state.items.length) { this.toast('info', 'Nothing to export yet.'); break; }
+        if (arg === '--clipboard') { this.copy(toMarkdown(this.state.items, { title: titleFrom(this.state.items), engine: this.o.engine.label, cwd: this.o.cwd, when: new Date() })); break; }
         const when = new Date(); const iso = when.toISOString(); const stamp = iso.slice(0, 10).replace(/-/g, '') + '-' + iso.slice(11, 16).replace(':', ''); const file = resolvePath(this.o.cwd, arg || `centcom-${stamp}.md`);
         try { writeFileSync(file, toMarkdown(this.state.items, { title: titleFrom(this.state.items), engine: this.o.engine.label, cwd: this.o.cwd, when }), { flag: 'wx', mode: 0o600 }); this.toast('ok', `Saved ${this.state.items.filter((i) => i.kind === 'user').length} message${this.state.items.filter((i) => i.kind === 'user').length === 1 ? '' : 's'} to ${file}`, 6000); }
         catch (e) { this.toast('warn', (e as NodeJS.ErrnoException).code === 'EEXIST' ? `${file} already exists. Pick another name: /export <file>` : `Could not save: ${(e as Error).message}`, 6000); }
