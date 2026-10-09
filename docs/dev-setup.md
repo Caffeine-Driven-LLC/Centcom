@@ -13,3 +13,8 @@ Before pushing: `./tools/ci/gates.sh`.
 ## Checking the real terminal behaviour
 
 `python3 tools/dev/pty-smoke.py` (needs `pip install pyte`) runs the real `centcom` in a pseudo-terminal with a throwaway home folder and checks what unit tests cannot: the alternate screen and mouse reporting coming back on quit and on `kill`, the tab title, the editor round trip (ctrl+g), ctrl+z with `bg` and `fg` in a real `bash`, plain-text mode, and bad command lines. `python3 tools/dev/pty-smoke.py editor` runs only the checks with that word in their name. `tools/dev/shot.py` takes a screenshot of any screen.
+
+
+## Seeing the app
+
+`python3 tools/dev/screenshot.py OUT_DIR [scene ...]` runs the real `centcom --demo` in a pseudo-terminal and writes each scene as a PNG with the real colours (scenes: welcome, chat, approval, settings, palette, help, narrow, busy, error, ask; add `-light` for the light theme). It needs `pip install pyte pillow` and a monospace font (set `CENTCOM_FONT` to choose one). Use it to check how a change looks, next to `tools/dev/pty-smoke.py`, which checks how it behaves.

@@ -9,8 +9,10 @@ const tool = (o: Partial<Extract<Item, { kind: 'tool' }>> = {}): Item => ({ kind
 describe('transcript', () => {
   it('renders user messages with a marker and hanging indent', () => {
     const l = itemLines({ kind: 'user', id: 'u', text: 'add retry logic to the relay client and write tests for it please', ts: 0 }, 30);
-    expect(txt(l[0]!).startsWith('● you  ')).toBe(true); expect(txt(l[1]!).startsWith('        ')).toBe(true);
-    expect(l.every((x) => lineWidth(x) <= 30)).toBe(true);
+    expect(txt(l[0]!).startsWith(' ❯ you  ')).toBe(true); expect(txt(l[1]!).startsWith('        ')).toBe(true);
+    expect(l.every((x) => lineWidth(x) === 30)).toBe(true); // a block across the whole width, tinted behind the text
+    expect(l.every((x) => x.every((s) => s.bg === 'bg.hover'))).toBe(true);
+    const a = itemLines({ kind: 'assistant', id: 'a', messageId: 'm', agentId: 'x', text: 'Hello there.\n\nSecond paragraph.', done: true } as never, 40); expect(txt(a[0]!).startsWith('◆ Hello there.')).toBe(true); expect(txt(a.find((x, i) => i > 0 && txt(x).includes('Second'))!).startsWith('  Second')).toBe(true); // only the first line carries the marker
   });
   it('shows a streaming caret until the message is done', () => {
     const streaming = itemLines({ kind: 'assistant', id: 'a', messageId: 'm', agentId: 'x', text: 'hello', done: false }, 40);

@@ -10,7 +10,7 @@ import { Header } from '../../src/components/Header.js';
 import { StatusLine } from '../../src/components/StatusLine.js';
 import { Approval } from '../../src/components/Approval.js';
 import { Prompt, SlashPopup, slashMatches } from '../../src/components/Prompt.js';
-import { Palette, ModelPicker } from '../../src/components/Overlays.js';
+import { Palette } from '../../src/components/Overlays.js';
 import { Toasts } from '../../src/components/Toasts.js';
 import { FleetPanel } from '../../src/components/FleetPanel.js';
 import { Transcript } from '../../src/components/Transcript.js';
@@ -36,7 +36,6 @@ const SCREENS: [string, () => React.ReactElement][] = [
   ['prompt', () => <Prompt text="hello world" cursor={5} anchor={0} busy={false} width={80} active placeholder="Message Cento…" />],
   ['command menu', () => <SlashPopup matches={slashMatches('/')} sel={0} width={80} />],
   ['palette', () => <Palette query="" sel={0} width={80} />],
-  ['model picker', () => <ModelPicker sel={0} current="" width={80} />],
   ['toasts', () => <Toasts toasts={ctl.state.toasts} width={80} />],
   ['fleet panel', () => <FleetPanel s={ctl.state} width={30} height={10} />],
   ['transcript', () => <Transcript layout={layout} items={items} width={70} height={12} scroll={0} />],

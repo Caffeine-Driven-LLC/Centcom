@@ -2,7 +2,7 @@ import type { ApprovalDecision, ApprovalRequest, EngineId, LoginKind, Permission
 import type { CentoColor, MiniState } from '@centcom/mascot';
 import type { SessionMeta } from '../sessions.js';
 
-export type Mode = 'chat' | 'palette' | 'help' | 'gallery' | 'fleet' | 'models' | 'night' | 'pick';
+export type Mode = 'chat' | 'palette' | 'help' | 'gallery' | 'fleet' | 'night' | 'pick';
 export type MascotSize = 'large' | 'small' | 'off';
 
 export interface AgentView {
@@ -37,7 +37,7 @@ export interface AppState {
   busy: boolean; turnStartedAt?: number; verb: string;
   limits: { name: string; utilization: number; resets_at: number }[];
   cwd: string; branch: string;
-  engineId: EngineId; engineLabel: string; demo: boolean;
+  engineId: EngineId; engineLabel: string; demo: boolean; /** The newest saved conversation of this folder, offered on the welcome screen. */ lastSession?: { title: string; when: number };
   fleet: boolean;
   /** The agent's plan (TodoWrite / Codex plan) and whether the panel above the prompt is open (ctrl+t). */
   tasks: import('../tasks/model.js').TaskItem[]; tasksOpen: boolean;
@@ -51,7 +51,6 @@ export interface AppState {
   maskInput?: boolean;
   /** The open multi-select (mode 'pick'). */
   pick?: import('../pick/model.js').PickState;
-  modelSel: number;
   gallery: { cat: number; idx: number; color: number; query: string };
   exitArmedAt?: number;
   /** The saved conversation this one is written to, and recent saved ones in this folder. */

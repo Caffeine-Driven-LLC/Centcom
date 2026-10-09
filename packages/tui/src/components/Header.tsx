@@ -15,5 +15,5 @@ function HeaderImpl({ s, width }: { s: AppState; width: number }) {
   const leftMax = Math.max(8, width - rw - 4);
   const left: Line = [sp('◆ ', { c: 'accent.primary', b: true }), sp('centcom', { c: 'accent.hover', b: true }), sp(' ' + truncateMiddle(homeShort(s.cwd), Math.max(8, leftMax - 24)), { c: 'text.secondary' }), ...(s.branch ? [sp('  @ ' + truncate(s.branch, 22), { c: 'text.muted' })] : [])];
   const lw = left.reduce((n, x) => n + textWidth(x.t), 0);
-  return <Box height={1} width={width}><Rich line={fit([...left, sp(' '.repeat(Math.max(1, width - lw - rw - 1))), ...right], width)} /></Box>;
+  return <Box height={1} width={width}><Rich line={fit([...left, sp(' '.repeat(Math.max(1, width - lw - rw - 2))), ...right, sp(' ')], width)} /></Box>;
 }

@@ -100,16 +100,3 @@ export function Gallery({ cat, idx, color, width, height, reduced }: { cat: numb
 }
 
 /* --------------------------------------------------------------- model picker */
-export function ModelPicker({ sel, current, width }: { sel: number; current: string; width: number }) {
-  const col = useCol(); const w = Math.min(70, width - 4);
-  return (
-    <Box width={width} justifyContent="center"><Box flexDirection="column" width={w} borderStyle="round" borderColor={col('accent.primary')} paddingX={2}>
-      <Rich line={[sp('Model', { c: 'accent.hover', b: true }), sp('   applies from your next message', { c: 'text.muted' })]} /><Box height={1} />
-      {CLAUDE_MODELS.map((m, i) => {
-        const on = i === sel; const cur = m.id === current;
-        return <Rich key={m.id || 'default'} line={[sp(on ? '▸ ' : '  ', { c: 'accent.hover', b: true }), sp(m.label.padEnd(18), { c: on ? 'text.primary' : 'text.secondary', b: on, bg: on ? 'bg.selected' : undefined }), sp(cur ? '✓ ' : '  ', { c: 'status.success', b: true }), sp(m.note, { c: 'text.muted' })]} />;
-      })}
-      <Box height={1} /><Rich line={[sp('↑↓ move · enter choose · esc close · or type /model <any model id>', { c: 'text.muted' })]} />
-    </Box></Box>
-  );
-}

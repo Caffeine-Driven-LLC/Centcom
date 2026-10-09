@@ -38,6 +38,6 @@ function StatusLineImpl({ s, width }: { s: AppState; width: number }) {
   let n = fields.length;
   while (n > 2 && lineWidth(build(n)) + lineWidth(hints) + 3 > width) n--;
   const left = build(n);
-  const gap = Math.max(1, width - lineWidth(left) - lineWidth(hints) - 1);
-  return <Box height={1} width={width}><Rich line={fit([sp(' '), ...left, sp(' '.repeat(gap)), ...hints], width)} /></Box>;
+  const gap = Math.max(1, width - lineWidth(left) - lineWidth(hints) - 2);
+  return <Box height={1} width={width}><Rich line={fit([sp(' '), ...left, sp(' '.repeat(gap)), ...hints, sp(' ')], width)} /></Box>;
 }

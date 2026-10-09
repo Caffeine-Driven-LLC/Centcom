@@ -16,7 +16,7 @@ import { StatusLine } from './components/StatusLine.js';
 import { FleetPanel, FLEET_W } from './components/FleetPanel.js';
 import { Transcript, useTranscriptLayout } from './components/Transcript.js';
 import { CommandPalette } from './palette/index.js';
-import { Gallery, ModelPicker, galleryList, paletteItems } from './components/Overlays.js';
+import { Gallery, galleryList, paletteItems } from './components/Overlays.js';
 import { Toasts } from './components/Toasts.js';
 import { MultiSelect } from './pick/MultiSelect.js';
 import { MentionPopup } from './components/MentionPopup.js';
@@ -49,7 +49,7 @@ export function App({ ctl, tier, keys }: AppProps) {
   const welcome = s.items.length === 0 && !s.busy && s.mode === 'chat' && !pending;
   const nightOpen = s.mode === 'night';
   const tight = !!pending && rows < 30;
-  const overlay = s.mode === 'help' || s.mode === 'palette' || s.mode === 'pick' || s.mode === 'models' || s.mode === 'gallery'; // a full-screen list or page: Cento steps aside so it has the rows
+  const overlay = s.mode === 'help' || s.mode === 'palette' || s.mode === 'pick' || s.mode === 'gallery'; // a full-screen list or page: Cento steps aside so it has the rows
   const stripH = welcome || overlay ? 0 : tight ? 1 : mascot === 'large' ? LARGE_H : mascot === 'small' ? 4 : 1;
   const stripSize = tight && mascot !== 'off' ? 'off' : mascot;
   const matches = (s.mode === 'chat' || s.mode === 'night') && !pending ? slashMatches(s.input) : [];
@@ -156,13 +156,6 @@ export function App({ ctl, tier, keys }: AppProps) {
     }
     if (s.mode === 'help') return; // the help screen reads its own keys (filter, esc)
     if (s.mode === 'palette') return; // the palette reads its own keys
-    if (s.mode === 'models') {
-      focusRef.current = ['overlay']; { const st = fromInk(input, key); if (st && dispatcher.handle(st).kind === 'action' && (key.escape || input === 'q')) { ctl.patch({ mode: 'chat' }); return; } }
-      if (key.upArrow) ctl.patch({ modelSel: (s.modelSel + CLAUDE_MODELS.length - 1) % CLAUDE_MODELS.length });
-      else if (key.downArrow) ctl.patch({ modelSel: (s.modelSel + 1) % CLAUDE_MODELS.length });
-      else if (key.return) { ctl.patch({ mode: 'chat' }); ctl.setModel(CLAUDE_MODELS[s.modelSel]!.id); }
-      return;
-    }
     if (s.mode === 'gallery') {
       const g = s.gallery; const list = galleryList(g.cat); const cats = bakedCategories();
       if (key.escape || input === 'q') { ctl.patch({ mode: 'chat' }); return; }
@@ -279,7 +272,6 @@ export function App({ ctl, tier, keys }: AppProps) {
             <Box height={bodyH} width={mainW} flexDirection="column">
               {nightOpen ? <NightPanel n={s.night} width={mainW} height={bodyH} unicode={tier !== 'none'} />
                 : s.mode === 'pick' && s.pick ? <MultiSelect p={s.pick} width={mainW} height={bodyH} unicode={tier !== 'none'} onRow={(i) => ctl.pickClick(i)} onConfirm={() => ctl.pickKey('enter')} onCancel={() => ctl.pickKey('cancel')} />
-                : s.mode === 'models' ? <ModelPicker sel={s.modelSel} current={s.settings.model} width={mainW} />
                 : s.mode === 'palette' ? <CommandPalette providers={paletteProviders} cols={mainW} onClose={() => ctl.patch({ mode: 'chat' })} />
                 : s.mode === 'help' ? <HelpScreen actions={allActions()} keymap={keymap} warnings={keys?.warnings ?? []} onClose={() => ctl.patch({ mode: 'chat' })} width={mainW} height={bodyH} />
                   : s.mode === 'gallery' ? <Gallery cat={s.gallery.cat} idx={s.gallery.idx} color={s.gallery.color} width={mainW} height={gallerySize} reduced={s.settings.reducedMotion} />

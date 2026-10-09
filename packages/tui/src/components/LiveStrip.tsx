@@ -14,7 +14,7 @@ function infoLines(s: AppState, spin: string, width: number, now: number): Line[
   const lastNotice = [...s.items].reverse().find((i) => i.kind === 'notice');
   if (s.approvals.length) {
     const a = s.approvals[0]!;
-    return [[sp('? ', { c: 'status.warning', b: true }), sp('Waiting for you', { c: 'status.warning', b: true })], [sp(truncate(a.req.summary, width), { c: 'text.secondary' })], [sp(a.req.risk === 'high' ? 'y yes · n no' : 'y yes · s session · a always · n no', { c: 'text.muted' })]];
+    return [[sp('? ', { c: 'status.warning', b: true }), sp('Waiting for you', { c: 'status.warning', b: true }), ...(s.approvals.length > 1 ? [sp(`  +${s.approvals.length - 1} more`, { c: 'text.muted' })] : [])], [sp(truncate(a.req.summary, width), { c: 'text.secondary' })]]; // the keys are in the dialog below
   }
   if (s.busy) {
     const elapsed = s.turnStartedAt ? formatElapsed(now - s.turnStartedAt) : '';
@@ -28,7 +28,7 @@ function infoLines(s: AppState, spin: string, width: number, now: number): Line[
     ];
   }
   if (lastNotice && lastNotice.kind === 'notice' && lastNotice.level === 'error' && s.items[s.items.length - 1] === lastNotice) {
-    return [[sp('✗ ', { c: 'status.danger', b: true }), sp(lastNotice.text, { c: 'status.danger', b: true })], ...(lastNotice.detail ? [[sp(truncate(lastNotice.detail.split('\n')[0]!, width), { c: 'text.secondary' })] as Line] : [])];
+    return [[sp('✗ ', { c: 'status.danger', b: true }), sp(truncate(lastNotice.text, width - 3), { c: 'status.danger', b: true })], [sp('details above · type to try again', { c: 'text.muted' })]];
   }
   const done = s.items.length > 0;
   return [

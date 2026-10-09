@@ -206,7 +206,14 @@ describe('/model for Codex', () => {
   });
   it('says so when Codex returns no list, and Claude Code still gets its own screen', async () => {
     const c = make(); c.patch({ engineId: 'codex' }); const { AsyncQueue } = await import('@centcom/agent'); (c as any).adopt({ events: new AsyncQueue(), stop: async () => undefined, listModels: async () => [], resumeToken: () => undefined }); await c.runCommand('/model'); expect(c.state.toasts.at(-1)!.text).toMatch(/did not return its model list/); expect(c.state.mode).toBe('chat');
-    const d = make(); await d.runCommand('/model'); expect(d.state.mode).toBe('models'); d.stop(); c.stop();
+    c.stop();
+  });
+  it('/model for Claude Code is the same list as everything else: the models, "Another model…", the current one ticked; a typed id still works', async () => {
+    const d = make(); const run = d.runCommand('/model'); await tick(); expect(d.state.mode).toBe('pick'); expect(d.state.pick!.title).toBe('Model'); const ids = d.state.pick!.options.map((o) => o.label); expect(ids[0]).toBe('Default'); expect(ids).toContain('Opus 5.5'); expect(ids.at(-1)).toBe('Another model…');
+    d.pickKey('down'); d.pickKey('down'); d.pickKey('enter'); await run; expect(d.state.settings.model).toBe('claude-opus-5-5');
+    const again = d.runCommand('/model'); await tick(); expect(d.state.pick!.options.find((o) => o.label === 'Opus 5.5')).toBeDefined(); expect(d.state.pick!.sel).toBe(2); d.pickKey('cancel'); await again; expect(d.state.settings.model).toBe('claude-opus-5-5'); // cancelling changes nothing
+    const other = d.runCommand('/model'); await tick(); for (let i = d.state.pick!.sel; i < d.state.pick!.options.length - 1; i++) d.pickKey('down'); d.pickKey('enter'); await tick(); await tick(); await d.submit('claude-sonnet-5-5'); await other; expect(d.state.settings.model).toBe('claude-sonnet-5-5');
+    await d.runCommand('/model haiku'); expect(d.state.settings.model).toBe('haiku'); d.stop();
   });
 });
 describe('/bell', () => {
