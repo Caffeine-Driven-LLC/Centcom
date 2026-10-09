@@ -37,7 +37,7 @@ export interface AppState {
   busy: boolean; turnStartedAt?: number; verb: string;
   limits: { name: string; utilization: number; resets_at: number }[];
   cwd: string; branch: string;
-  engineId: EngineId; engineLabel: string; demo: boolean;
+  engineId: EngineId; engineLabel: string; demo: boolean; /** The newest saved conversation of this folder, offered on the welcome screen. */ lastSession?: { title: string; when: number };
   fleet: boolean;
   /** The agent's plan (TodoWrite / Codex plan) and whether the panel above the prompt is open (ctrl+t). */
   tasks: import('../tasks/model.js').TaskItem[]; tasksOpen: boolean;

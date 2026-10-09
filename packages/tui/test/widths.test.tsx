@@ -62,12 +62,12 @@ describe('the answers of a permission prompt stay readable on every width', () =
 });
 
 describe('the mascot strip offers the same answers as the permission dialog', () => {
-  it('a destructive one offers only yes and no; others also offer this session and always', async () => {
+  it('the strip only says that something waits (the dialog below carries the keys); a second request is counted', async () => {
     const { LiveStrip } = await import('../src/components/LiveStrip.js'); const { MascotDriver } = await import('@centcom/mascot');
     const c = new AppController({ engine: new DemoEngine({ speed: 100 }), demo: true, cwd: '/tmp', version: 't', skills: [] }); c.patch({ items: [{ id: 'u', kind: 'user', text: 'x' } as never] });
     const strip = (risk: 'medium' | 'high') => { c.patch({ approvals: [approval(risk)] }); return strip_(renderToString(<ThemeCtx.Provider value={createTheme('dark', 'truecolor')}><LiveStrip s={c.state} driver={new MascotDriver({}) as never} width={70} size="small" /></ThemeCtx.Provider>, { columns: 80 })); };
     const strip_ = (x: string) => x.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '');
-    expect(strip('high')).toContain('y yes · n no'); expect(strip('high')).not.toContain('always'); expect(strip('medium')).toContain('y yes · s session · a always · n no'); c.stop();
+    for (const r of ['high', 'medium'] as const) { const x = strip(r); expect(x).toContain('Waiting for you'); expect(x).not.toContain('y yes'); } c.patch({ approvals: [approval('medium'), approval('medium')] }); expect(strip_(renderToString(<ThemeCtx.Provider value={createTheme('dark', 'truecolor')}><LiveStrip s={c.state} driver={new MascotDriver({}) as never} width={70} size="small" /></ThemeCtx.Provider>, { columns: 80 }))).toContain('+1 more'); c.stop();
   });
 });
 
@@ -76,5 +76,29 @@ describe('the welcome screen respects "mascot off" and the idle slowdown', () =>
     const { Welcome } = await import('../src/components/Welcome.js'); const c = new AppController({ engine: new DemoEngine({ speed: 100 }), demo: true, cwd: '/tmp', version: 't', skills: [] });
     const draw = (mascot: boolean) => renderToString(<ThemeCtx.Provider value={createTheme('dark', 'truecolor')}><Welcome s={c.state} width={100} height={24} color="violet" reduced={false} mascot={mascot} /></ThemeCtx.Provider>, { columns: 100 }).replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '');
     const on = draw(true); const off = draw(false); expect(off).toContain('Command many hands.'); expect(off).toContain('Type a task and press Enter'); expect(on.split('\n').filter((l) => /[▀▄█]/.test(l)).length).toBeGreaterThan(off.split('\n').filter((l) => /[▀▄█]/.test(l) && !/█▀|▀█|▄▀▀|▀▀/.test('')).length - 10); c.stop();
+  });
+});
+
+describe('the permission dialog carries the answers (the strip above it no longer repeats them)', () => {
+  it('a destructive request offers only yes and no; others also offer this session and always', () => {
+    const show = (risk: 'medium' | 'high') => renderToString(<ThemeCtx.Provider value={createTheme('dark', 'truecolor')}><Approval a={approval(risk)} width={80} confirming={false} /></ThemeCtx.Provider>, { columns: 80 }).replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '');
+    const high = show('high'); expect(high).toContain('[y] yes'); expect(high).toContain('[n] no'); expect(high).not.toContain('always'); expect(high).not.toContain('[s]');
+    const mid = show('medium'); expect(mid).toContain('[s] session'); expect(mid).toContain('[a] always');
+  });
+});
+
+describe('welcome and tool status, by shape as well as colour', () => {
+  it('the welcome screen offers to continue the newest conversation of this folder (not in the demo), with a short title and when it was', async () => {
+    const { Welcome } = await import('../src/components/Welcome.js'); const { FakeEngine } = await import('@centcom/testkit');
+    const { SessionStore } = await import('../src/sessions.js'); const { mkdtempSync } = await import('node:fs'); const { tmpdir } = await import('node:os'); const { join } = await import('node:path');
+    const sessions = new SessionStore(mkdtempSync(join(tmpdir(), 'cc-welcome-'))); sessions.save({ id: 'ses_01JTEST000000000000000000W', cwd: '/tmp', title: 'Fix the flaky importer test and tidy the fixtures folder afterwards', engine: 'claude-code', createdAt: Date.now() - 3 * 3600_000, updatedAt: Date.now() - 2 * 3600_000, messages: 2 } as never, [{ kind: 'user', id: 'u1', text: 'Fix the flaky importer test and tidy the fixtures folder afterwards', ts: 1 }]);
+    const c = new AppController({ engine: new FakeEngine({ id: 'claude-code' }) as never, demo: false, cwd: '/tmp', version: 't', skills: [], sessions: sessions as never }); await c.start();
+    const draw = (width: number) => renderToString(<ThemeCtx.Provider value={createTheme('dark', 'truecolor')}><Welcome s={c.state} width={width} height={24} color="violet" reduced={false} mascot={false} /></ThemeCtx.Provider>, { columns: width }).replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '');
+    for (const w of [100, 60]) { const out = draw(w); expect(out).toContain('/resume'); expect(out).toContain('Fix the flaky importer'); expect(out).toMatch(/just now|ago/); expect(out.split('\n').every((l) => [...l].length <= w)).toBe(true); }
+    const demo = new AppController({ engine: new DemoEngine({ speed: 100 }), demo: true, cwd: '/tmp', version: 't', skills: [], sessions: sessions as never }); await demo.start(); expect(renderToString(<ThemeCtx.Provider value={createTheme('dark', 'truecolor')}><Welcome s={demo.state} width={100} height={24} color="violet" reduced={false} mascot={false} /></ThemeCtx.Provider>, { columns: 100 })).not.toContain('/resume'); c.stop(); demo.stop(); sessions.close();
+  });
+  it('a failed tool call starts with ✗ and a declined one with ⊘; the rest keep ●', async () => {
+    const { itemLines } = await import('../src/util/transcript.js'); const first = (status: string) => (itemLines({ kind: 'tool', id: 't', toolId: 't', agentId: 'a', name: 'Bash', summary: 'ls', risk: 'low', status } as never, 60)[0] ?? []).map((s) => s.t).join('');
+    expect(first('error')).toMatch(/^✗ Bash/); expect(first('denied')).toMatch(/^⊘ Bash/); expect(first('ok')).toMatch(/^● Bash/); expect(first('running')).toMatch(/^● Bash/);
   });
 });

@@ -158,6 +158,7 @@ export class AppController {
 
   /* ------------------------------------------------------------------ lifecycle */
   async start() {
+    { const m = this.o.sessions?.list(this.o.cwd, 1)[0]; if (m) this.patch({ lastSession: { title: m.title, when: m.updatedAt } }); }
     this.driver.start();
     this.driver.setState('ready');
     let resumeToken: string | undefined; let carry: string | undefined;

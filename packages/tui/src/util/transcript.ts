@@ -2,7 +2,7 @@
 import type { Item } from '../state/model.js';
 import { renderMarkdown } from './markdown.js';
 import { renderDiff, parseDiff, diffStats } from './diff.js';
-import { formatElapsed, sp, truncate, truncateMiddle, wrapLine, type Line, type Colour } from './text.js';
+import { formatElapsed, lineWidth, sp, truncate, truncateMiddle, wrapLine, type Line, type Colour } from './text.js';
 import { sanitizeForTerminal as clean } from '../transcript/sanitize.js';
 
 /** Member colours by slot (0 is you). Identity is always initial and name too, never colour alone. */
@@ -12,14 +12,18 @@ const IND = '  ';
 
 function userLines(text: string, width: number, member?: { name: string; slot: number }): Line[] {
   if (member) { const c = SLOT[member.slot % SLOT.length]!; const name = clean(member.name).slice(0, 40) || 'member'; const tag = `${name[0]!.toUpperCase()} · ${name}`; const body = wrapLine([sp(text, { c: 'text.primary' })], width - 4); return [[sp('▎ ', { c }), sp(tag, { c, b: true })], ...body.map((l) => [sp('▎ ', { c }), ...l])]; }
-  const head: Line = [sp('● ', { c: 'signal' }), sp('you  ', { c: 'accent.hover', b: true })];
-  const body = wrapLine([sp(text, { c: 'text.primary' })], width - 8);
-  return body.map((l, i) => (i === 0 ? [...head, ...l] : [sp('        '), ...l]));
+  // your message is a tinted block across the whole width, so each turn starts where the eye expects it
+  const bg = 'bg.hover' as const; const tint = (l: Line): Line => l.map((s) => ({ ...s, bg: s.bg ?? bg }));
+  const head: Line = [sp(' ❯ ', { c: 'accent.hover', b: true, bg }), sp('you  ', { c: 'accent.hover', b: true, bg })];
+  const body = wrapLine([sp(text, { c: 'text.primary' })], width - 9);
+  const pad = (l: Line): Line => [...l, sp(' '.repeat(Math.max(0, width - lineWidth(l))), { bg })];
+  return body.map((l, i) => pad(i === 0 ? [...head, ...tint(l)] : [sp(' '.repeat(8), { bg }), ...tint(l)]));
 }
 
 function assistantLines(text: string, width: number, done: boolean): Line[] {
   const md = renderMarkdown(text, { width: width - 2 });
   const out = md.map((l) => (l.length ? [sp(IND), ...l] : l));
+  const first = out.findIndex((l) => l.length); if (first >= 0 && out[first]![0]?.t === IND) out[first] = [sp('◆ ', { c: 'accent.primary' }), ...out[first]!.slice(1)]; // who is speaking, at a glance
   if (!done) { const last = out[out.length - 1]; if (last) last.push(sp('▍', { c: 'signal' })); else out.push([sp(IND), sp('▍', { c: 'signal' })]); }
   return out;
 }
@@ -27,7 +31,7 @@ function assistantLines(text: string, width: number, done: boolean): Line[] {
 function toolLines(it: Extract<Item, { kind: 'tool' }>, width: number): Line[] {
   const out: Line[] = [];
   const arg = it.path ? truncateMiddle(it.path.replace(/^\/work\//, ''), width - it.name.length - 12) : truncate(it.command ?? it.summary, width - it.name.length - 12);
-  const head: Line = [sp(it.status === 'running' && !it.approval ? '● ' : '● ', { c: it.status === 'error' || it.status === 'denied' ? 'status.danger' : 'signal' }), sp(it.name, { b: true, c: 'text.primary' }), sp('(', { c: 'text.muted' }), sp(arg, { c: it.path ? 'text.link' : 'text.secondary' }), sp(')', { c: 'text.muted' })];
+  const head: Line = [sp(it.status === 'error' ? '✗ ' : it.status === 'denied' ? '⊘ ' : '● ', { c: it.status === 'error' || it.status === 'denied' ? 'status.danger' : 'signal' }), sp(it.name, { b: true, c: 'text.primary' }), sp('(', { c: 'text.muted' }), sp(arg, { c: it.path ? 'text.link' : 'text.secondary' }), sp(')', { c: 'text.muted' })];
   if (it.risk === 'high') head.push(sp('  ⚠ high risk', { c: 'status.danger', b: true }));
   out.push(head);
   if (it.approval === 'pending') out.push([sp(IND + '? ', { c: 'status.warning', b: true }), sp('waiting for your approval', { c: 'status.warning' })]);
