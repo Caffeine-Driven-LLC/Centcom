@@ -4,7 +4,7 @@ import { signalLadder, type LadderClock } from '../interrupt/ladder.js';
 import { sharedProcessRegistry, type Killed, type ProcessRegistry } from '../interrupt/procs.js';
 import { newId } from '../ids.js';
 import { AsyncQueue } from '../queue.js';
-import type { AgentEngine, ApprovalDecision, Capability, EngineSession, EngineStartOptions, EventBody, LoginKind, NormalisedEvent, PermissionMode } from '../types.js';
+import type { AgentEngine, ApprovalDecision, Capability, EngineQuestion, EngineSession, EngineStartOptions, EventBody, LoginKind, NormalisedEvent, PermissionMode } from '../types.js';
 import { ProviderError } from '../types.js';
 import { redact } from '../claude/engine.js';
 import { CodexMapper } from './map.js';
@@ -161,6 +161,7 @@ class CodexSession implements EngineSession {
   }
 
   private async onServerRequest(id: number | string, method: string, p: any) {
+    if (method === 'item/tool/requestUserInput' && this.o.questionGate) { await this.onQuestion(id, p ?? {}); return; }
     if (method !== 'item/commandExecution/requestApproval' && method !== 'item/fileChange/requestApproval') {
       // anything else (user-input, MCP elicitation, token refresh, legacy approvals): decline rather than hang the turn
       this.rpc?.respondError(id, -32601, `Centcom does not handle ${method}`);
@@ -176,6 +177,19 @@ class CodexSession implements EngineSession {
     this.emit({ type: 'approval.resolved', approval_id: approval.approval_id, decision: d.decision, scope: d.scope, by: d.reason === 'interrupt' ? 'interrupt' : 'user' });
     const decision = d.decision === 'approve' ? (d.scope === 'once' ? 'accept' : 'acceptForSession') : d.reason === 'interrupt' ? 'cancel' : 'decline';
     this.rpc?.respond(id, { decision });
+  }
+
+  /** Codex asks the person something mid-turn (`item/tool/requestUserInput`): the gate shows it, the answers go back as `{ answers: { <question id>: { answers: [...] } } }`. */
+  private async onQuestion(id: number | string, p: any) {
+    const raw: any[] = Array.isArray(p.questions) ? p.questions.slice(0, 8) : [];
+    const questions = raw.filter((q) => q && typeof q.id === 'string' && typeof q.question === 'string').map((q): EngineQuestion => ({ id: q.id, ...(q.header ? { header: String(q.header) } : {}), text: String(q.question).slice(0, 500), ...(Array.isArray(q.options) && q.options.length ? { options: q.options.slice(0, 20).map((o: any) => ({ label: String(o?.label ?? o), ...(o?.description ? { description: String(o.description) } : {}) })) } : {}), ...(q.isOther ? { allowOther: true } : {}), ...(q.isSecret ? { secret: true } : {}) }));
+    if (!questions.length) { this.rpc?.respond(id, { answers: {} }); return; }
+    for (const q of questions) this.emit({ type: 'question.asked', question_id: q.id, text: q.text, direct: true, ...(q.options ? { options: q.options.map((o) => o.label) } : {}) });
+    this.emit({ type: 'status', state: 'asking-question' });
+    let got: Record<string, string[]> | undefined;
+    try { got = await this.o.questionGate!.ask(questions); } catch { got = undefined; }
+    const answers: Record<string, { answers: string[] }> = {}; for (const q of questions) answers[q.id] = { answers: got?.[q.id] ?? [] };
+    this.rpc?.respond(id, { answers });
   }
 
   private versionWarning?: string; private lastActivity = 0; private stallTimer?: ReturnType<typeof setInterval>; private stallWarned = false;

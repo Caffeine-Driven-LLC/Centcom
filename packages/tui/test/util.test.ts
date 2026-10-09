@@ -91,3 +91,21 @@ describe('formatReset', () => {
     expect(formatReset(now / 1000 + 12 * 60, now)).toBe('12m'); expect(formatReset(now / 1000 - 5, now)).toBe('now'); expect(formatReset(0, now)).toBe('1m');
   });
 });
+
+describe('diff: "\\ No newline at end of file"', () => {
+  const D = ['--- a/f.txt', '+++ b/f.txt', '@@ -1,2 +1,2 @@', ' keep', '-old last', '\\ No newline at end of file', '+new last', '\\ No newline at end of file', ''].join('\n');
+  it('is a note about the line above, not a line: no line number, no count, and the numbers after it stay right', async () => {
+    const { parseDiff, diffStats, renderDiff } = await import('../src/util/diff.js'); const rows = parseDiff(D);
+    expect(rows.filter((r) => r.kind === 'note').map((r) => r.text)).toEqual(['No newline at end of file', 'No newline at end of file']);
+    expect(diffStats(rows)).toEqual({ add: 1, del: 1 }); expect(rows.find((r) => r.kind === 'add')).toMatchObject({ text: 'new last', newNo: 2 }); expect(rows.find((r) => r.kind === 'del')).toMatchObject({ text: 'old last', oldNo: 2 });
+    const text = renderDiff(D, 60).map((l) => l.map((s) => s.t).join('')).join('\n'); expect(text).toContain('\\ No newline at end of file'); expect(text.split('\n').filter((l) => l.includes('No newline')).every((l) => !/^\s*\d/.test(l))).toBe(true);
+  });
+});
+
+describe('window title', () => {
+  it('folder, state, demo marker; control characters and over-long names are cleaned', async () => {
+    const { windowTitle, cleanTitle } = await import('../src/util/title.js'); const base = { cwd: '/a/b/shop', busy: false, approvals: 0, mode: 'chat', engineLabel: 'Claude Code', demo: false };
+    expect(windowTitle(base)).toBe('shop · Centcom'); expect(windowTitle({ ...base, busy: true })).toBe('◐ working · shop · Centcom'); expect(windowTitle({ ...base, busy: true, approvals: 1 })).toBe('● needs you · shop · Centcom'); expect(windowTitle({ ...base, demo: true })).toBe('shop · Centcom (demo)'); expect(windowTitle({ ...base, cwd: '/' })).toContain('Centcom');
+    expect(cleanTitle('a\x07b\x1bc\nd')).toBe('a b c d'); expect(cleanTitle('x'.repeat(200)).length).toBe(80);
+  });
+});

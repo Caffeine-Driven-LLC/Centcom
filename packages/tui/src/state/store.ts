@@ -6,9 +6,11 @@ export class Store<S> {
   private last = 0; private timer?: NodeJS.Timeout; private dirty = false;
   constructor(private state: S, private minGapMs = 24) {}
   get = (): S => this.state;
-  set(patch: Partial<S> | ((s: S) => Partial<S>)) {
+  /** `urgent` (typing) tells listeners at once instead of waiting for the gap, so a key never queues behind streamed text. */
+  set(patch: Partial<S> | ((s: S) => Partial<S>), urgent = false) {
     const p = typeof patch === 'function' ? patch(this.state) : patch;
     this.state = { ...this.state, ...p };
+    if (urgent) { if (this.timer) { clearTimeout(this.timer); this.timer = undefined; } this.flush(); return; }
     this.schedule();
   }
   private schedule() {

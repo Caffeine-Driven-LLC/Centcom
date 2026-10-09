@@ -91,6 +91,13 @@ describe('a bad config file never stops Centcom', () => {
     const w: [string, string?][] = []; await loadConfig(deps(f, {}, REPO, w), { 'client.model': 'haiku' }); expect(w.map(([c]) => c)).not.toContain('project_sets_model');
     expect((await run({ [USER]: json({ client: { model: 'opus' } }) })).w.map(([c]) => c)).not.toContain('project_sets_model');
   });
+  it('reads the short CENTO_* variables that `centcom help env` lists, ignores bad values, and lets the flag and the files order as usual', async () => {
+    const c = await loadConfig(deps({}, { CENTO_THEME: 'HC', CENTO_SPINNER: 'plain', CENTO_MASCOT: 'off', CENTO_REDUCE_MOTION: '1', CENTO_SCREEN_READER: 'yes' }));
+    expect(c.ui).toMatchObject({ theme: 'hc', spinner: 'plain', mascot: false, reduced_motion: true }); expect(c.a11y.screen_reader).toBe(true);
+    const bad = deps({}, { CENTO_THEME: 'purple', CENTO_SPINNER: 'loud', CENTO_MASCOT: 'maybe' }); const b = await loadConfig(bad); expect(b.ui).toMatchObject({ theme: 'auto', spinner: 'fun', mascot: true });
+    expect((await loadConfig(deps({ [USER]: json({ ui: { theme: 'light' } }) }, { CENTO_THEME: 'dark' }))).ui.theme).toBe('dark'); // the environment beats the settings file
+    expect((await loadConfig(deps({}, { CENTO_THEME: 'dark' }), { 'ui.theme': 'light' })).ui.theme).toBe('light'); // a flag beats the environment
+  });
   it('accepts both spellings of the reduced-motion variable', async () => {
     for (const name of ['CENTCOM_REDUCE_MOTION', 'CENTCOM_REDUCED_MOTION']) expect((await loadConfig(deps({}, { [name]: '1' }))).ui.reduced_motion).toBe(true);
     expect((await loadConfig(deps({ [USER]: json({ ui: { reduced_motion: true } }) }, { CENTCOM_REDUCE_MOTION: '0' }))).ui.reduced_motion).toBe(false);

@@ -30,12 +30,13 @@ export class ClaudeCodeEngine implements AgentEngine {
   async start(o: EngineStartOptions): Promise<EngineSession> { return new ClaudeSession(o, this.deps); }
 }
 
-export function buildArgv(prompt: string, o: { resume?: string; permissionMode?: PermissionMode; model?: string; allowedTools?: string[]; systemPromptAppend?: string; addDirs?: string[]; extra?: string[] }): string[] {
+export function buildArgv(prompt: string, o: { resume?: string; permissionMode?: PermissionMode; model?: string; effort?: string; allowedTools?: string[]; systemPromptAppend?: string; addDirs?: string[]; extra?: string[] }): string[] {
   const a = ['-p', prompt, '--output-format', 'stream-json', '--verbose', '--include-partial-messages'];
   if (o.resume) a.push('--resume', o.resume);
   // 'default' is Centcom's "ask first"; say so explicitly, otherwise the user's own claude settings (e.g. defaultMode: auto) decide silently
   a.push('--permission-mode', !o.permissionMode || o.permissionMode === 'default' ? 'manual' : o.permissionMode);
   if (o.model) a.push('--model', o.model);
+  if (o.effort) a.push('--effort', o.effort);
   if (o.allowedTools?.length) a.push('--allowedTools', ...o.allowedTools);
   if (o.systemPromptAppend) a.push('--append-system-prompt', o.systemPromptAppend);
   a.push(...(o.extra ?? []));
@@ -54,7 +55,7 @@ class ClaudeSession implements EngineSession {
   private child?: ChildProcess;
   private turn?: string;
   private mode: PermissionMode;
-  private model?: string;
+  private model?: string; private effort?: string;
   private closed = false;
   private sawResult = false;
   private bridge?: ApprovalBridge;
@@ -65,6 +66,7 @@ class ClaudeSession implements EngineSession {
 
   resumeToken() { return this.sessionId; }
   setModel(m: string) { this.model = m; }
+  setEffort(e: string) { this.effort = e || undefined; }
   setPermissionMode(m: PermissionMode) { this.mode = m; }
 
   private emit(b: EventBody) {
@@ -79,7 +81,7 @@ class ClaudeSession implements EngineSession {
     const turn = newId('trn'); this.turn = turn; this.sawResult = false;
     this.emit({ type: 'turn.started', turn_id: turn });
     this.emit({ type: 'status', state: 'prompt-received' });
-    const argv = buildArgv(prompt, { resume: this.sessionId, permissionMode: this.mode, model: this.model, allowedTools: this.o.allowedTools, systemPromptAppend: this.o.systemPromptAppend, addDirs: this.o.addDirs, extra: this.bridge?.argv() });
+    const argv = buildArgv(prompt, { resume: this.sessionId, permissionMode: this.mode, model: this.model, effort: this.effort, allowedTools: this.o.allowedTools, systemPromptAppend: this.o.systemPromptAppend, addDirs: this.o.addDirs, extra: this.bridge?.argv() });
     const parser = new ClaudeStreamParser();
     const spawnFn = this.deps.spawn ?? nodeSpawn;
     let child: ChildProcess;

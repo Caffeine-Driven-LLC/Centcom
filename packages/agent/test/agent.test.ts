@@ -71,6 +71,7 @@ describe('tool flow', () => {
 
 describe('argv, ids, risk, redaction', () => {
   it('builds documented flags only', () => {
+    expect(buildArgv('hi', { effort: 'xhigh' })).toContain('--effort'); expect(buildArgv('hi', {})).not.toContain('--effort');
     expect(buildArgv('hi', {})).toEqual(['-p', 'hi', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--permission-mode', 'manual']);
     const a = buildArgv('x', { resume: 'sid', permissionMode: 'plan', model: 'sonnet', allowedTools: ['Read', 'Bash(git diff *)'] });
     expect(a).toEqual(expect.arrayContaining(['--resume', 'sid', '--permission-mode', 'plan', '--model', 'sonnet', '--allowedTools', 'Read']));
@@ -199,5 +200,19 @@ describe('Claude approvals fail closed', () => {
   it('when the approval bridge cannot start, the turn ends with an error and claude is never run', async () => {
     const { ClaudeCodeEngine, ApprovalBridge } = await import('../src/index.js'); const orig = ApprovalBridge.prototype.start; ApprovalBridge.prototype.start = async () => { throw new Error('no socket'); };
     let spawned = 0; try { const e = new ClaudeCodeEngine({ spawn: (() => { spawned++; throw new Error('should not spawn'); }) as never }); const s = await e.start({ agentId: 'a', cwd: '/tmp', approvalGate: { decide: async () => ({ decision: 'approve', scope: 'once' }) } }); const evs: string[] = []; const it = s.events[Symbol.asyncIterator](); await s.send('hi'); for (let i = 0; i < 5; i++) { const r = await it.next(); if (r.done) break; evs.push(r.value.type + (r.value.type === 'turn.done' ? `:${(r.value as { outcome: string }).outcome}` : '')); if (r.value.type === 'turn.done') break; } expect(evs).toContain('error'); expect(evs.at(-1)).toBe('turn.done:error'); expect(spawned).toBe(0); } finally { ApprovalBridge.prototype.start = orig; }
+  });
+});
+
+describe('AskUserQuestion becomes question.asked', () => {
+  const ask = (q: unknown) => JSON.stringify({ type: 'assistant', message: { id: 'm1', role: 'assistant', content: [{ type: 'tool_use', id: 'tu1', name: 'AskUserQuestion', input: { questions: q } }] } });
+  it('carries the question, the option labels and whether several may be ticked', () => {
+    const evs = new ClaudeStreamParser().push(ask([{ question: 'Where should I fix it?', header: 'Fix', options: [{ label: 'In isExpired', description: 'x' }, { label: 'In the caller' }], multiSelect: false }]));
+    expect(evs).toContainEqual({ type: 'question.asked', question_id: 'tu1', text: 'Where should I fix it?', options: ['In isExpired', 'In the caller'] });
+    const multi = new ClaudeStreamParser().push(ask([{ question: 'Which?', options: [{ label: 'a' }, { label: 'b' }], multiSelect: true }]));
+    expect(multi).toContainEqual(expect.objectContaining({ type: 'question.asked', multi: true }));
+  });
+  it('ignores a malformed question instead of throwing', () => {
+    const evs = new ClaudeStreamParser().push(ask('nope')); expect(evs.some((e) => e.type === 'question.asked')).toBe(false);
+    expect(new ClaudeStreamParser().push(ask([{ options: [] }])).some((e) => e.type === 'question.asked')).toBe(false);
   });
 });

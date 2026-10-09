@@ -57,3 +57,12 @@ export function useTick(ms: number, active = true): number {
 export function useStore<S>(store: { get: () => S; subscribe: (l: () => void) => () => void }): S { return useSyncExternalStore(store.subscribe, store.get); }
 
 export const PAL = PAL_HEX;
+
+/** Props equality for components that take the whole state: typing and scrolling change `input`, `cursor`, `scroll` and friends on every key, and these components read none of them. */
+const TYPING: ReadonlySet<string> = new Set(['input', 'cursor', 'scroll', 'histIdx', 'draft', 'slashSel']);
+export function sameUnlessTyping<P extends { s: Record<string, unknown> }>(a: P, b: P): boolean {
+  for (const k of Object.keys(b) as (keyof P)[]) { if (k === 's') continue; if (a[k] !== b[k]) return false; }
+  if (a.s === b.s) return true;
+  for (const k of Object.keys(b.s)) { if (!TYPING.has(k) && a.s[k] !== b.s[k]) return false; }
+  return true;
+}

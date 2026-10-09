@@ -1,8 +1,9 @@
 export { App } from './App.js';
-export { AppController, type ControllerOptions } from './controller.js';
+export { AppController, type ControllerOptions, type ExternalTask } from './controller.js';
 export * from './state/model.js';
 export { Store } from './state/store.js';
 export { COMMANDS } from './state/commands.js';
+export { TITLE_POP, TITLE_PUSH } from './util/title.js';
 export { buildLines } from './util/transcript.js';
 export { SessionStore, ago, type SessionMeta } from './sessions.js';
 export { ClientConfig, settingsFromConfig } from './clientConfig.js';
@@ -29,3 +30,4 @@ export * from './cursors/index.js';
 export * from './conflicts/index.js';
 export * from './reactions/index.js';
 export * from './night/index.js';
+export { runLinear, type LinearIO } from './a11y/run.js';

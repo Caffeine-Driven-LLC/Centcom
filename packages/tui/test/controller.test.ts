@@ -57,3 +57,18 @@ describe('interrupt (lane C030)', () => {
     c.patch({ busy: true }); c.ctrlC(); expect(exits).toEqual([0]); c.ctrlC(); expect(exits).toEqual([0, 130]);
   });
 });
+
+describe('toasts', () => {
+  it('the same message said again stays as one, and its timer starts over', async () => {
+    const { vi } = await import('vitest'); vi.useFakeTimers(); try {
+      const c = make(); c.toast('warn', 'Same thing', 4000); vi.advanceTimersByTime(3000); c.toast('warn', 'Same thing', 4000); c.toast('warn', 'Same thing', 4000);
+      expect(c.state.toasts.filter((t) => t.text === 'Same thing')).toHaveLength(1); vi.advanceTimersByTime(3500); expect(c.state.toasts.some((t) => t.text === 'Same thing')).toBe(true); vi.advanceTimersByTime(1000); expect(c.state.toasts.some((t) => t.text === 'Same thing')).toBe(false); c.stop();
+    } finally { vi.useRealTimers(); }
+  });
+  it('different messages stack up to three; problems stay longer than good news', async () => {
+    const { vi } = await import('vitest'); vi.useFakeTimers(); try {
+      const c = make(); for (const t of ['a', 'b', 'c', 'd']) c.toast('info', t); expect(c.state.toasts.map((t) => t.text)).toEqual(['b', 'c', 'd']);
+      c.toast('ok', 'fine'); c.toast('error', 'broken'); vi.advanceTimersByTime(4000); expect(c.state.toasts.map((t) => t.text)).toEqual(['broken']); vi.advanceTimersByTime(3500); expect(c.state.toasts).toEqual([]); c.stop();
+    } finally { vi.useRealTimers(); }
+  });
+});

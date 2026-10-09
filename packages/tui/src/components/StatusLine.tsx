@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box } from 'ink';
 import type { AppState } from '../state/model.js';
-import { Rich } from './ui.js';
+import { Rich, sameUnlessTyping } from './ui.js';
 import { counts as nightCounts } from '../night/model.js';
 import { formatCost, formatReset, formatTokens, fit, lineWidth, sp, type Line } from '../util/text.js';
 
@@ -13,7 +13,8 @@ const MODE: Record<string, [string, 'accent.hover' | 'status.warning' | 'status.
   default: ['ask first', 'accent.hover'], acceptEdits: ['accept edits', 'status.warning'], plan: ['plan · read-only', 'status.info'], bypassPermissions: ['⚠ NO APPROVALS', 'status.danger'],
 };
 
-export function StatusLine({ s, width }: { s: AppState; width: number }) {
+export const StatusLine = React.memo(StatusLineImpl, sameUnlessTyping as never) as typeof StatusLineImpl;
+function StatusLineImpl({ s, width }: { s: AppState; width: number }) {
   const me = s.agents.find((a) => a.mine)!;
   const [mode, mc] = MODE[s.settings.permissionMode]!;
   const others = s.agents.filter((a) => !a.mine);

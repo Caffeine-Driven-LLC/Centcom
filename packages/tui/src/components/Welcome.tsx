@@ -5,11 +5,13 @@ import { useTheme, PixelView, Rich } from './ui.js';
 import { sp, type Line } from '../util/text.js';
 import type { AppState } from '../state/model.js';
 
-export function Welcome({ s, width, height, color, reduced }: { s: AppState; width: number; height: number; color: CentoColor; reduced: boolean }) {
+export function Welcome({ s, width, height, color, reduced, calm = 1, mascot = true }: { s: AppState; width: number; height: number; color: CentoColor; reduced: boolean; /** 1 = normal; more = the animation runs that many times slower (nothing has happened for a while). */ calm?: number; /** false when you turned the mascot off: no picture, nothing animating. */ mascot?: boolean }) {
   const theme = useTheme();
   const driver = useMemo(() => new MascotDriver({ color, reducedMotion: reduced, dwellMs: 0 }), [color, reduced]);
   const [f, setF] = useState<MascotFrame>(() => { driver.setState('first-run'); return driver.frame; });
   useEffect(() => { driver.setState('first-run'); driver.start(); const u = driver.subscribe(setF); return () => { u(); driver.stop(); }; }, [driver]);
+  useEffect(() => { driver.setSpeed(calm); }, [driver, calm]);
+  useEffect(() => { driver.setPaused(!mascot); }, [driver, mascot]);
   const logo = renderHalfBlock(logoRows('CENTCOM', 'B'), theme.tier);
   const me = s.agents.find((a) => a.mine);
   const status: Line = s.demo
@@ -33,7 +35,7 @@ export function Welcome({ s, width, height, color, reduced }: { s: AppState; wid
   );
   return (
     <Box width={width} height={height} alignItems="center" justifyContent="center" flexDirection={wide ? 'row' : 'column'}>
-      <PixelView rows={f.rows} tier={theme.tier} width={f.width} height={Math.ceil(f.height / 2)} />
+      {mascot ? <PixelView rows={f.rows} tier={theme.tier} width={f.width} height={Math.ceil(f.height / 2)} /> : null}
       {text}
     </Box>
   );

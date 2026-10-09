@@ -2,7 +2,7 @@ import type { ApprovalDecision, ApprovalRequest, EngineId, LoginKind, Permission
 import type { CentoColor, MiniState } from '@centcom/mascot';
 import type { SessionMeta } from '../sessions.js';
 
-export type Mode = 'chat' | 'palette' | 'help' | 'gallery' | 'fleet' | 'models' | 'night';
+export type Mode = 'chat' | 'palette' | 'help' | 'gallery' | 'fleet' | 'models' | 'night' | 'pick';
 export type MascotSize = 'large' | 'small' | 'off';
 
 export interface AgentView {
@@ -19,16 +19,16 @@ export type Item =
 
 export interface Toast { id: string; level: 'info' | 'ok' | 'warn' | 'error'; text: string; until: number }
 
-export interface PendingApproval { req: ApprovalRequest; agentName: string; color: CentoColor; resolve: (d: ApprovalDecision) => void; confirmHigh: boolean }
+export interface PendingApproval { req: ApprovalRequest; agentName: string; color: CentoColor; resolve: (d: ApprovalDecision) => void; confirmHigh: boolean; /** When the engine declines it by itself (ms since the epoch). */ expiresAt?: number }
 
-export interface Settings { theme: 'dark' | 'light'; mascot: MascotSize | 'auto'; permissionMode: PermissionMode; reducedMotion: boolean; color: CentoColor; autoSkills: boolean; model: string }
+export interface Settings { theme: 'dark' | 'light' | 'hc'; mascot: MascotSize | 'auto'; permissionMode: PermissionMode; reducedMotion: boolean; color: CentoColor; autoSkills: boolean; model: string; /** Mouse wheel scrolls the transcript; off gives the terminal's own text selection back. */ mouse: boolean; /** Rotating fun verbs while the agent works, or a plain "Working…". */ spinner: 'fun' | 'plain'; /** Blank rows between messages: `comfortable`, or `compact` (only before your own messages). */ density: 'comfortable' | 'compact'; /** Ring the terminal bell when an approval or question needs you, or a long task finishes. */ bell: boolean; /** Show the folder and state in the terminal's tab title. */ title: boolean }
 
 export interface AppState {
   items: Item[];
   agents: AgentView[];
   activeAgent: string;
   mode: Mode;
-  input: string; cursor: number;
+  input: string; cursor: number; /** The other end of the selection in the prompt (the cursor is one end). */ anchor?: number;
   history: string[]; histIdx: number | null; draft: string;
   scroll: number;
   toasts: Toast[];
@@ -43,6 +43,14 @@ export interface AppState {
   tasks: import('../tasks/model.js').TaskItem[]; tasksOpen: boolean;
   slashSel: number;
   palette: { query: string; sel: number };
+  /** Scroll this transcript item into view (set by /find, cleared by the app once it has scrolled). */
+  jumpTo?: string;
+  /** Files suggested for the `@word` at the cursor. */
+  mention?: { q: string; items: string[]; sel: number };
+  /** The prompt shows dots instead of letters (a typed answer that is a secret). */
+  maskInput?: boolean;
+  /** The open multi-select (mode 'pick'). */
+  pick?: import('../pick/model.js').PickState;
   modelSel: number;
   gallery: { cat: number; idx: number; color: number; query: string };
   exitArmedAt?: number;
@@ -53,7 +61,7 @@ export interface AppState {
   night: import('../night/model.js').NightState;
 }
 
-export const initialSettings = (): Settings => ({ theme: 'dark', mascot: 'auto', permissionMode: 'default', reducedMotion: false, color: 'violet', autoSkills: true, model: '' });
+export const initialSettings = (): Settings => ({ theme: 'dark', mascot: 'auto', permissionMode: 'default', reducedMotion: false, color: 'violet', autoSkills: true, model: '', mouse: true, spinner: 'fun', density: 'comfortable', bell: false, title: true });
 
 export function stateToMini(state: string): MiniState {
   switch (state) {

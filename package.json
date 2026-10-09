@@ -45,6 +45,7 @@
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "ajv": "8.20.0",
+    "esbuild": "0.28.2",
     "fast-check": "^3.23.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",

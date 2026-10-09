@@ -9,20 +9,43 @@ import type { AgentBus, AgentId, FleetManager, FleetNode, Ledger, Checkpoint, Ch
 import type { PendingApproval as PolicyPending } from '@centcom/agent';
 import type { Logger } from '@centcom/net';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve as resolvePath } from 'node:path';
 import { SessionStore, ago, titleFrom, type SessionMeta } from './sessions.js';
+import { codeBlocks, lastAnswer, toMarkdown } from './util/export.js';
+import { PasteStore } from './prompt/paste.js';
+import { animationEntries, commandEntries, createFileIndex, FIRST_LABELS, listProvider, quickEntries, type FileIndex, type PaletteProvider } from './palette/index.js';
+import { errorGuide } from './errors.js';
+import { copyToClipboard } from './util/clipboard.js';
+import { newPick, pickAll, pickMove, pickResult, pickToggle, type PickOption } from './pick/model.js';
+import { NIGHT_MAX_TASKS, parseTasks } from './night/model.js';
 import { NightCycle, initialNight, counts as nightCounts, type NightState, type NightTask } from './night/index.js';
-import { LIBRARY_DIR, MASTER_DIR, discover, injection, librarySkills, masterSkills, match, mergeLibrary, setEnabled, type Skill } from '@centcom/skills';
+import { LIBRARY_DIR, MASTER_DIR, discover, injection, librarySkills, masterSkills, match, mergeLibrary, setEnabled, loadEntries, type Skill } from '@centcom/skills';
 import { MascotDriver, bakedByCategory, bakedCategories, getBaked, type CentoColor } from '@centcom/mascot';
-import type { AgentEngine, ApprovalDecision, ApprovalRequest, EngineSession, NormalisedEvent, PermissionGate, PermissionMode } from '@centcom/agent';
+import type { AgentEngine, ApprovalDecision, ApprovalRequest, EngineQuestion, EngineSession, QuestionGate, NormalisedEvent, PermissionGate, PermissionMode } from '@centcom/agent';
 import { Store } from './state/store.js';
-import { initialSettings, isBusyState, stateToMini, type AgentView, type AppState, type Item, type PendingApproval, type Settings } from './state/model.js';
+import { initialSettings, isBusyState, stateToMini, type AgentView, type AppState, type Item, type Mode, type PendingApproval, type Settings } from './state/model.js';
 import { COMMANDS } from './state/commands.js';
 import { emptyText } from './onboarding/copy.js';
 import { reduceTasks } from './tasks/model.js';
 import { VerbRotator } from './util/verbs.js';
 
+/** Something that needs the real terminal while the screen steps aside: your editor, or being put in the background. */
+export type ExternalTask = { kind: 'suspend' } | { kind: 'editor'; text: string; done(text: string | undefined): void };
+/** A turn this long rings the bell when it ends (if the bell is on). */
+const LONG_TURN_MS = 15_000;
+/** The longest message Centcom sends in one go. */
+export const MAX_MESSAGE = 65_536;
 export interface ControllerOptions {
+  /** How long an approval waits before the engine declines it (shown as a countdown). */
+  approvalTimeoutMs?: number;
+  /** Ask the launcher to step the screen aside and run `task` with the real terminal. Without it these keys say they are not available. */
+  external?: (task: ExternalTask) => void;
+  /** Ring the terminal bell (a sound or a flash in most terminals). */
+  bell?: () => void;
+  /** Where copied text goes (tests pass a recorder). Default: the system clipboard. */
+  clipboard?: (text: string) => void;
+  /** Mouse wheel on at start (default: when stdout is a terminal). */
+  mouse?: boolean;
   engine: AgentEngine; demo: boolean; cwd: string; branch?: string; version: string; permissionMode?: PermissionMode;
   /** `code` is the process exit code to use (130 after a forced interrupt). */ onExit?: (code?: number) => void; ghosts?: boolean; settings?: Partial<Settings>; verbs?: VerbRotator;
   skills?: Skill[]; // pass [] to disable discovery (tests)
@@ -53,7 +76,7 @@ export interface ControllerOptions {
   /** Parallel agents in their own worktrees (`/fleet`). Their events, branch-ready news and approvals come over `bus`. */
   fleet?: { manager: FleetManager; bus: AgentBus; ownerSlug: string };
   /** Read-only views for `/mcp`, `/hooks` and `/memory` (the CLI's own list and status output). */
-  views?: Partial<Record<'mcp' | 'hooks' | 'memory', (args: string[]) => Promise<string[]>>>;
+  views?: Partial<Record<'mcp' | 'hooks' | 'memory' | 'doctor' | 'init', (args: string[]) => Promise<string[]>>>;
   /** Called with the main agent's events too (file locks between agents use it). */
   observers?: ((agentId: string, ev: NormalisedEvent) => void)[];
   /** Usage as the engines reported it (lane C029): `/usage`, budget warnings, the informational outbox. Its cost alerts arrive on `ledgerBus`. */
@@ -92,7 +115,7 @@ export class AppController {
 
   constructor(private o: ControllerOptions) {
     this.verbs = o.verbs ?? new VerbRotator();
-    const settings = { ...initialSettings(), permissionMode: o.permissionMode ?? 'default', ...o.settings };
+    const settings = { ...initialSettings(), permissionMode: o.permissionMode ?? 'default', ...o.settings }; settings.mouse = o.mouse ?? (settings.mouse && !!process.stdout.isTTY); // the wheel only makes sense in a terminal
     const me: AgentView = { id: this.me, name: 'you', color: settings.color, mine: true, engine: o.engine.label, provider: o.engine.provider, model: '', loginKind: 'unknown', state: 'idle', mini: 'idle', busy: false, branch: o.branch ?? '', runsOn: 'you', cost: 0, inTok: 0, outTok: 0 };
     this.store = new Store<AppState>({
       items: [], agents: [me], activeAgent: this.me, mode: 'chat', input: '', cursor: 0, history: o.history ?? [], histIdx: null, draft: '', scroll: 0, toasts: [], approvals: [], settings,
@@ -120,9 +143,14 @@ export class AppController {
   get state() { return this.store.get(); }
   /** The display name of an agent ("you" for the main one). */
   agentName(id: string) { return this.state.agents.find((a) => a.id === id)?.name ?? 'an agent'; }
-  private set(p: Partial<AppState> | ((s: AppState) => Partial<AppState>)) { this.store.set(p); }
+  private set(p: Partial<AppState> | ((s: AppState) => Partial<AppState>)) { this.store.set((st) => { const q = typeof p === 'function' ? p(st) : p; if (q.input === '') { this.pastes.clear(); /* an empty prompt has no chips left */ this.undoStack = []; this.redoStack = []; } return 'input' in q && !('anchor' in q) ? { ...q, anchor: undefined } : q; }); } // a new prompt text drops any selection
   /** UI-level state changes (input buffer, scroll, mode, overlay selections). */
-  patch(p: Partial<AppState>) { this.store.set(p); }
+  private undoing = false; // set while the undo machinery itself changes the prompt
+  patch(p: Partial<AppState>) { if (p.input !== undefined && !this.undoing) { this.undoStack = []; this.redoStack = []; } /* any other change to the prompt (history, inserts, night) starts the undo history over */ if (p.input === '') this.pastes.clear(); this.store.set('input' in p && !('anchor' in p) ? { ...p, anchor: undefined } : p, 'input' in p || 'cursor' in p); }
+  /** The terminal bell, when it is turned on: for what needs you, or a long task that just finished. */
+  private ring() { if (this.state.settings.bell && !this.night.active()) this.o.bell?.(); }
+  /** Copy to the clipboard and say so. */
+  copy(text: string) { if (!text) return; (this.o.clipboard ?? ((t) => copyToClipboard(t)))(text); this.toast('ok', `Copied ${text.length} character${text.length === 1 ? '' : 's'}`, 1400); }
   private updateAgent(id: string, fn: (a: AgentView) => Partial<AgentView>) { this.set((s) => ({ agents: s.agents.map((a) => (a.id === id ? { ...a, ...fn(a) } : a)) })); }
   private addItem(it: Item) { this.set((s) => ({ items: [...s.items, it] })); }
   private patchItem(pred: (i: Item) => boolean, fn: (i: Item) => Item) { this.set((s) => ({ items: s.items.map((i) => (pred(i) ? fn(i) : i)) })); }
@@ -151,14 +179,15 @@ export class AppController {
 
   private startOptions(resumeToken?: string, carry?: string): EngineStartOptions {
     const gate: PermissionGate = { decide: (r) => this.decide(r) };
-    return { agentId: this.me, cwd: this.o.cwd, permissionMode: this.state.settings.permissionMode, model: this.state.settings.model || undefined, addDirs: this.o.demo ? undefined : [MASTER_DIR, LIBRARY_DIR], approvalGate: gate, ...(resumeToken ? { resume: { engine_session_id: resumeToken } } : {}), ...(carry ? { systemPromptAppend: carry } : {}) };
+    const questionGate: QuestionGate = { ask: (qs) => this.askEngine(qs) };
+    return { agentId: this.me, cwd: this.o.cwd, permissionMode: this.state.settings.permissionMode, model: this.state.settings.model || undefined, addDirs: this.o.demo ? undefined : [MASTER_DIR, LIBRARY_DIR], approvalGate: gate, questionGate, ...(resumeToken ? { resume: { engine_session_id: resumeToken } } : {}), ...(carry ? { systemPromptAppend: carry } : {}) };
   }
   private async startEngine(resumeToken?: string, carry?: string) { this.adopt(await this.o.engine.start(this.startOptions(resumeToken, carry))); }
   /** A conversation saved with the other engine cannot be resumed by this one (its session id means nothing here): this one starts fresh with a summary of what was said. */
   private carryOver(meta: SessionMeta): string { const other = meta.engine === 'codex' ? 'Codex' : meta.engine === 'claude-code' ? 'Claude Code' : meta.engine; this.notice('info', `This conversation was with ${other}. ${this.o.engine.label} continues it from a summary of what was said.`); const n = this.state.items.filter((i) => i.kind === 'user').length; return `This conversation started with another coding agent. Summary of it so far:\n\n${this.summaryUpTo(n + 1, 8 * 1024)}`; }
   /** Make `s` the running engine session (after a start, or a conversation rewind). */
   private adopt(s: EngineSession) {
-    this.session = s;
+    this.session = s; if (this.effort) s.setEffort?.(this.effort);
     this.models.attach({ agentId: this.me, engine: this.o.engine.id, setModel: (m) => s.setModel?.(m) });
     const m = this.state.settings.model; if (m) s.setModel?.(m);
     void this.consume(s);
@@ -170,7 +199,7 @@ export class AppController {
   private persistTimer?: NodeJS.Timeout; private lastItems?: Item[]; private lastToken?: string; private lastSid = '';
   private schedulePersist() {
     if (!this.o.sessions || this.persistTimer) return;
-    this.persistTimer = setTimeout(() => { this.persistTimer = undefined; this.persist(); }, 600); this.persistTimer.unref?.();
+    this.persistTimer = setTimeout(() => { this.persistTimer = undefined; this.persist(); }, this.state.busy ? 1500 : 600); this.persistTimer.unref?.(); // while text streams, less often: a save rewrites the whole view
   }
   persist() {
     const st = this.o.sessions; const s = this.state; if (!st || !s.items.length) return;
@@ -180,7 +209,7 @@ export class AppController {
     // items are replaced (never mutated) on every change, so identity tells us whether anything new needs saving
     if (s.items === this.lastItems && meta.resumeToken === this.lastToken && s.sessionId === this.lastSid && s.tasks === this.lastTasks && s.tasksOpen === this.lastTasksOpen) return;
     this.lastItems = s.items; this.lastTasks = s.tasks; this.lastTasksOpen = s.tasksOpen; this.lastToken = meta.resumeToken; this.lastSid = s.sessionId;
-    try { st.save(meta, s.items); this.refreshSessions(); } catch (e) { this.toast('warn', 'Could not save this conversation: ' + String((e as Error).message ?? e)); }
+    try { st.save(meta, s.items); } catch (e) { this.toast('warn', 'Could not save this conversation: ' + String((e as Error).message ?? e)); }
   }
   private createdAt?: number; private lastTasks?: unknown; private lastTasksOpen?: boolean;
   private refreshSessions() { if (this.o.sessions) this.set({ sessions: this.o.sessions.list(this.o.cwd, 10) }); }
@@ -192,7 +221,7 @@ export class AppController {
   /** Start over with an empty context. The old conversation stays saved and can be resumed. */
   async newSession() {
     if (this.state.busy) { this.toast('warn', 'Cento is still working. Press Esc to interrupt, then try again.'); return; }
-    this.persist(); this.o.sessions?.close(this.state.sessionId); await this.session?.stop();
+    this.persist(); this.o.sessions?.close(this.state.sessionId); await this.dropSession();
     this.createdAt = undefined; this.lastItems = undefined;
     this.set({ items: [], scroll: 0, sessionId: newId('ses'), approvals: [], tasks: [] });
     await this.startEngine();
@@ -205,18 +234,20 @@ export class AppController {
     const id = /^\d+$/.test(which) ? list[Number(which) - 1]?.id : which;
     const saved = id ? this.o.sessions.load(id) : undefined;
     if (!saved) { this.toast('warn', `No saved conversation "${which}". Type /resume to see the list.`); return; }
-    this.persist(); this.o.sessions?.close(this.state.sessionId); await this.session?.stop();
+    this.persist(); this.o.sessions?.close(this.state.sessionId); await this.dropSession();
     this.lastItems = undefined; this.set({ items: [], approvals: [] }); this.loadSaved(saved.meta, saved.items);
     if (saved.meta.engine === this.o.engine.id) await this.startEngine(saved.meta.resumeToken); else await this.startEngine(undefined, this.carryOver(saved.meta));
   }
-  private listSessions() {
+  private async listSessions() {
     const list = this.o.sessions?.list(this.o.cwd, 10) ?? [];
     if (!list.length) { this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: emptyText('no-sessions') }); return; }
-    this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: 'Saved conversations in this folder. Type /resume 1 (or another number) to continue one.', detail: list.map((m, i) => `${i + 1}${m.id === this.state.sessionId ? '*' : ' '} ${m.title}  ·  ${m.messages} msg  ·  ${ago(m.updatedAt)}`).join('\n') });
+    const ago = (t: number) => { const m = Math.max(0, Math.round((Date.now() - t) / 60000)); return m < 60 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`; };
+    const ids = await this.pick({ title: 'Continue a saved conversation', options: list.map((m) => ({ id: m.id, label: (m.id === this.state.sessionId ? '● ' : '') + m.title, hint: `${m.messages} msg · ${ago(m.updatedAt)}` })), checked: [this.state.sessionId], multi: false, confirm: 'resume' });
+    if (ids?.[0] && ids[0] !== this.state.sessionId) await this.resumeSession(ids[0]);
   }
 
   stop() {
-    this.persist(); this.o.sessions?.close(); void this.o.ledger?.flush().catch(() => undefined);
+    this.stopped = true; this.persist(); this.o.sessions?.close(); void this.o.ledger?.flush().catch(() => undefined);
     this.driver.stop(); this.ghostTimers.forEach(clearTimeout); if (this.verbTimer) clearInterval(this.verbTimer);
     this.toastTimers.forEach(clearTimeout);
     for (const a of this.state.approvals) a.resolve({ decision: 'deny', scope: 'once', reason: 'exit' });
@@ -226,7 +257,21 @@ export class AppController {
   /** Fleet agents are this app's own processes: stop them before exiting (at most about 8 s). */
   stopFleet(): Promise<void> { return this.o.fleet ? this.o.fleet.manager.stopAll().catch(() => undefined) : Promise.resolve(); }
 
-  private async consume(s: EngineSession) { for await (const ev of s.events) { if (s !== this.session) break; this.apply(ev); } } // a replaced session's leftovers are not shown
+  private async consume(s: EngineSession) {
+    for await (const ev of s.events) { if (s !== this.session) break; this.apply(ev); } // a replaced session's leftovers are not shown
+    if (s === this.session && !this.stopped) this.sessionLost(s);
+  }
+  private stopped = false; private deadToken?: string; private starting?: Promise<void>;
+  /** Stop the agent on purpose (a new conversation, a resume): it is detached first, so its closing stream is not mistaken for a crash. */
+  private async dropSession() { const s = this.session; this.session = undefined; this.dropQueued('You started another conversation'); await s?.stop(); }
+  /** The agent's event stream ended on its own (the process died without a word). Stop waiting, say so, and start it again on the next message. */
+  private sessionLost(s: EngineSession) {
+    this.deadToken = s.resumeToken?.() ?? this.deadToken; this.session = undefined; this.cancelQuestions(); this.dropQueued('The agent stopped');
+    const mine = this.state.approvals.filter((a) => a.req.agent_id === this.me); for (const a of mine) a.resolve({ decision: 'deny', scope: 'once', reason: 'cancelled' }); this.set((st) => ({ approvals: st.approvals.filter((a) => !mine.includes(a)) })); // this agent is gone, nobody is left to answer for it (other agents' approvals stay)
+    this.set((st) => ({ busy: false, turnStartedAt: undefined, items: st.items.map((i) => (i.kind === 'thinking' && !i.done ? { ...i, done: true, ms: Date.now() - i.ms } : i.kind === 'tool' && i.status === 'running' ? { ...i, status: 'error' as const } : i)) }));
+    this.updateAgent(this.me, () => ({ busy: false })); this.setAgentState(this.me, 'error');
+    this.addItem({ kind: 'notice', id: nid('n'), level: 'error', text: `${this.o.engine.label} stopped unexpectedly`, detail: 'Your conversation is safe. Send your next message and it starts again where it left off. If this keeps happening, run `centcom doctor`.' });
+  }
 
   /* ------------------------------------------------------------------ events -> state */
   apply(ev: NormalisedEvent) {
@@ -271,14 +316,17 @@ export class AppController {
       case 'limits.report': this.set({ limits: ev.windows }); break;
       case 'tasks.updated': this.set((st) => ({ tasks: reduceTasks({ items: st.tasks }, { tasks: ev.tasks }).items })); break;
       case 'compaction.ended': this.notice('info', `Compacted the context${ev.tokens_before ? ` (${Math.round(ev.tokens_before / 1000)}k → ${Math.round((ev.tokens_after ?? 0) / 1000)}k tokens)` : ''}.`); break;
-      case 'question.asked': this.notice('info', ev.text, ev.options?.join('  ·  ')); break;
+      case 'question.asked': this.notice('info', ev.text, ev.options?.join('  ·  ')); if (ev.options?.length && !ev.direct) void this.answerQuestion(ev.text, ev.options, ev.multi === true); break; // (a question the engine puts to the question gate itself is not opened a second time)
       case 'engine.warning': this.notice('warn', ev.text); break;
       case 'error':
         if (ev.retry) { this.toast('warn', `Retrying (${ev.retry.attempt}/${ev.retry.max_retries})…`); break; }
-        this.addItem({ kind: 'notice', id: nid('n'), level: 'error', text: errorTitle(ev.code), detail: ev.tool_message });
+        { const g = errorGuide(ev.code, this.state.engineLabel); this.addItem({ kind: 'notice', id: nid('n'), level: 'error', text: g.title, detail: [g.help, ev.tool_message ? `Details: ${ev.tool_message}` : ''].filter(Boolean).join('\n') }); }
         this.night.noteError(ev.code, !!ev.fatal);
         break;
       case 'turn.done':
+        this.cancelQuestions(); // a question of a finished turn is stale
+        { const q = this.queuedAnswer; if (q && ev.outcome !== 'canceled') { this.queuedAnswer = undefined; queueMicrotask(() => { void this.submit(q, { asMessage: true }); }); } else if (q) this.dropQueued('You stopped the turn first'); }
+        if (ev.outcome !== 'canceled' && this.state.turnStartedAt && Date.now() - this.state.turnStartedAt >= LONG_TURN_MS) this.ring(); // you may have stepped away
         this.set((s) => ({ busy: false, turnStartedAt: undefined, items: s.items.map((i) => (i.kind === 'thinking' && !i.done ? { ...i, done: true, ms: Date.now() - i.ms } : i.kind === 'tool' && i.status === 'running' && ev.outcome === 'canceled' ? { ...i, status: 'canceled' as const } : i)) }));
         this.updateAgent(me, () => ({ busy: false }));
         if (ev.outcome === 'canceled') { this.notice('warn', 'Interrupted.'); this.setAgentState(me, 'idle'); }
@@ -330,7 +378,7 @@ export class AppController {
     return new Promise((resolve) => {
       const me = this.state.agents.find((a) => a.id === r.agent_id);
       const pending: PendingApproval = { req: r, agentName: me?.name ?? 'agent', color: me?.color ?? 'violet', resolve, confirmHigh: r.risk === 'high' };
-      this.set((s) => ({ approvals: [...s.approvals, pending] }));
+      this.set((s) => ({ approvals: [...s.approvals, pending] })); this.ring();
     });
   }
 
@@ -349,9 +397,9 @@ export class AppController {
     if (this.night.active()) return Promise.resolve(this.nightAnswer(req));
     return new Promise((resolve) => {
       const me = this.state.agents.find((a) => a.id === req.agent_id);
-      const pending: PendingApproval = { req, agentName: me?.name ?? 'agent', color: me?.color ?? 'violet', resolve, confirmHigh: req.risk === 'high' };
+      const pending: PendingApproval = { req, agentName: me?.name ?? 'agent', color: me?.color ?? 'violet', resolve, confirmHigh: req.risk === 'high', expiresAt: Date.now() + (this.o.approvalTimeoutMs ?? 600_000) };
       signal.addEventListener('abort', () => { this.set((s) => ({ approvals: s.approvals.filter((a) => a !== pending) })); resolve({ decision: 'deny', scope: 'once', reason: 'cancelled' }); }, { once: true });
-      this.set((s) => ({ approvals: [...s.approvals, pending] }));
+      this.set((s) => ({ approvals: [...s.approvals, pending] })); this.ring();
     });
   }
 
@@ -382,12 +430,49 @@ export class AppController {
     this.patch({ histIdx: idx, draft, input: t, cursor: t.length });
   }
 
+  /** A typed answer to an engine's question: the next line you send is the answer, never a message to the agent and never kept in the transcript. */
+  private pendingAnswer?: (text: string | undefined) => void; private draftBeforeAnswer?: string;
+  /** After a typed question (answered or cancelled) the prompt holds what you were writing before it, or nothing: never the half-typed answer. */
+  private restoreDraft() { const d = this.draftBeforeAnswer ?? ''; this.draftBeforeAnswer = undefined; this.set({ input: d, cursor: d.length }); }
+  private askText(q: EngineQuestion): Promise<string | undefined> {
+    this.pendingAnswer?.(undefined); // a newer question replaces an older one
+    if (this.draftBeforeAnswer === undefined && this.state.input) { this.draftBeforeAnswer = this.state.input; this.set({ input: '', cursor: 0 }); } // what you were writing is put back afterwards, and cannot be sent as the answer
+    const answer = new Promise<string | undefined>((resolve) => { this.pendingAnswer = resolve; }); // registered before anything is announced: listeners may react at once
+    this.set({ maskInput: !!q.secret }); // an answer that is a secret is shown as dots
+    this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: q.text, detail: q.secret ? 'Type your answer and press Enter. It is not kept in this conversation. Esc cancels.' : 'Type your answer and press Enter. Esc cancels.' });
+    return answer;
+  }
+  /** Codex asks mid-turn and waits for the reply: a list for choices (with a way to type your own), text otherwise. Undefined when you cancel. */
+  private async askEngine(qs: EngineQuestion[]): Promise<Record<string, string[]> | undefined> {
+    const out: Record<string, string[]> = {};
+    if (this.night.active()) { for (const q of qs) out[q.id] = ['Decide for yourself: nobody is here to answer. Pick the most reasonable option and say what you assumed.']; return out; } // the night cycle never waits for a person
+    this.ring();
+    for (const q of qs) {
+      if (q.options?.length) {
+        const OTHER = '\u0000other';
+        const ids = await this.pickForQuestion({ title: q.header ? `${q.header}: ${q.text}` : q.text, note: 'Esc cancels the question.', options: [...q.options.map((o, i) => ({ id: String(i), label: o.label, hint: o.description })), ...(q.allowOther ? [{ id: OTHER, label: 'Something else…' }] : [])], multi: false, confirm: 'answer' });
+        if (!ids?.length) return undefined;
+        if (ids[0] === OTHER) { const t = await this.askText(q); if (t === undefined) return undefined; out[q.id] = [t]; } else out[q.id] = [q.options[Number(ids[0])]!.label];
+      } else { const t = await this.askText(q); if (t === undefined) return undefined; out[q.id] = [t]; }
+    }
+    return out;
+  }
+  /** Stop waiting on any open question (an interrupt, a new session). */
+  /** True while the agent waits for a line you type. */
+  get awaitingAnswer() { return !!this.pendingAnswer; }
+  /** Give up on the typed answer being waited for. */
+  cancelAnswer() { this.cancelQuestions(); }
+  private cancelQuestions() { const a = this.pendingAnswer; this.pendingAnswer = undefined; if (this.state.maskInput) this.set({ maskInput: false }); if (a) this.restoreDraft(); a?.(undefined); if (this.questionPick && this.state.mode === 'pick') this.pickKey('cancel'); }
+
   /** A question waiting for y (memory notes, rewinds): the answer never goes to the engine or into history. */
   private pendingMemory?: { diff: string; apply: () => Promise<string>; no?: string };
-  async submit(raw: string, opts: { wire?: string } = {}) {
+  async submit(raw: string, opts: { wire?: string; /** Send as a message to the agent even when the night panel is open (an answer to its question). */ asMessage?: boolean } = {}) {
     const text = raw.trim();
     if (!text) return;
-    if (this.state.mode === 'night' && !this.nightSending && !text.startsWith('/')) { this.nightAdd(text); return; } // in the night panel, a message is a task
+    const expanded = this.pastes.expand(text);
+    if (expanded.length > MAX_MESSAGE) { this.toast('warn', `That message is ${expanded.length.toLocaleString('en-US')} characters; the limit is ${MAX_MESSAGE.toLocaleString('en-US')}. Shorten it, or put the long part in a file and mention the path.`, 7000); return; } // your text stays in the prompt
+    if (this.pendingAnswer) { const a = this.pendingAnswer; this.pendingAnswer = undefined; const full = this.pastes.expand(text); this.set({ input: '', cursor: 0, maskInput: false }); this.restoreDraft(); a(full); return; } // expanded before the emptied prompt forgets its chips
+    if (this.state.mode === 'night' && !this.nightSending && !opts.asMessage && !text.startsWith('/')) { if (this.nightAdd(expanded)) this.set({ input: '', cursor: 0 }); return; } // in the night panel, a message is a task (the prompt is cleared only when it was taken, so a refused one stays in it)
     if (this.night.active() && !this.nightSending && !text.startsWith('/')) { this.toast('warn', 'Night cycle is running. Add tasks with /night add …, stop it with /night stop.'); return; }
     if (this.pendingMemory) { // the answer to "add this to memory?": never goes to the engine or into the prompt history
       const p = this.pendingMemory; this.pendingMemory = undefined; this.set({ input: '', cursor: 0 });
@@ -406,25 +491,48 @@ export class AppController {
     if (this.state.busy) { this.toast('warn', 'Cento is still working. Press Esc to interrupt, then send again.'); return; }
     this.addItem({ kind: 'user', id: nid('u'), text, ts: Date.now() }); this.o.sessions?.noteUser(this.state.sessionId, this.o.cwd, text);
     this.setAgentState(this.me, 'prompt-received');
-    let outgoing = opts.wire ?? text; // the transcript keeps what the person typed; night tasks carry their rules on the wire only
+    let outgoing = opts.wire ?? expanded; // the transcript keeps what the person typed; night tasks carry their rules on the wire only
     if (this.state.settings.autoSkills) {
       const picks = match(opts.wire ? text.replace(/^\[night \d+\/\d+\]\s*/, '') : text, this.skills());
       if (picks.length) {
         this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: 'auto skills: ' + picks.map((p) => (p.skill.kind === 'command' ? '/' : '') + p.skill.name).join(' · '), detail: picks.map((p) => `${p.skill.name}: matched ${p.why.join(', ')}`).join('\n') });
-        if (!this.o.demo) outgoing = injection(picks) + (opts.wire ?? text);
+        if (!this.o.demo) outgoing = injection(picks) + (opts.wire ?? expanded);
       }
     }
     await this.checkpointBefore(text);
+    this.pastes.clear(); // the chips are spent
+    if (!this.session && !this.stopped) { try { this.starting ??= this.startEngine(this.deadToken).then(() => { this.deadToken = undefined; }).finally(() => { this.starting = undefined; }); await this.starting; } catch (e) { this.addItem({ kind: 'notice', id: nid('n'), level: 'error', text: `Could not start ${this.o.engine.label} again`, detail: String((e as Error).message ?? e) }); this.set({ busy: false }); return; } }
     try { await this.session?.send(outgoing); } catch (e) { this.addItem({ kind: 'notice', id: nid('n'), level: 'error', text: 'Could not send the prompt', detail: String(e) }); }
   }
 
   /** Reasoning effort for the next turns, if the engine has the setting (Codex). Returns false when it does not. */
-  setEffort(effort: string): boolean { if (!this.session?.setEffort) return false; this.session.setEffort(effort); this.toast('ok', `Reasoning effort: ${effort || 'default'}`); return true; }
+  setEffort(effort: string): boolean { if (!this.session?.setEffort) return false; this.session.setEffort(effort); this.effort = effort; this.toast('ok', `Reasoning effort: ${effort || 'default'}`); return true; }
+  private effort = '';
+  /** The levels the running engine accepts: Claude Code's fixed list, or the current Codex model's own. */
+  private async effortLevels(): Promise<string[]> {
+    if (this.state.engineId === 'claude-code') return ['low', 'medium', 'high', 'xhigh', 'max'];
+    return (await this.engineModels()).find((m) => m.id === this.state.settings.model)?.efforts ?? ['low', 'medium', 'high'];
+  }
+  private async effortCommand(arg: string) {
+    if (!this.session?.setEffort) { this.toast('warn', 'This engine has no effort setting.'); return; }
+    const levels = await this.effortLevels(); const want = arg.trim().toLowerCase();
+    if (want === 'default' || want === 'off' || want === 'auto') { this.setEffort(''); return; }
+    if (want) { if (levels.includes(want)) this.setEffort(want); else this.toast('warn', `Effort is one of: ${levels.join(', ')} (or default).`); return; }
+    const ids = await this.pick({ title: 'Reasoning effort', note: 'Higher thinks longer and costs more', options: [{ id: '', label: 'default', hint: "the engine's own choice" }, ...levels.map((l) => ({ id: l, label: l }))], checked: [this.effort], multi: false, confirm: 'use' });
+    if (ids) this.setEffort(ids[0] ?? '');
+  }
   /** The models this engine's account offers, when the engine can list them (Codex). Empty otherwise. */
   async engineModels(): Promise<import('@centcom/agent').ModelChoice[]> { const l = (this.session as { listModels?: () => Promise<import('@centcom/agent').ModelChoice[]> } | undefined)?.listModels; try { return l ? await l.call(this.session) : []; } catch { return []; } }
   /** Switch model for the next turn (the running turn keeps its model). */
+  /** The model list: Claude Code's own screen, or the models the Codex account reports (they differ per account). */
+  async openModels() {
+    if (this.state.engineId !== 'codex') { const i = CLAUDE_MODELS.findIndex((m) => m.id === this.state.settings.model); this.set({ mode: 'models', modelSel: Math.max(0, i) }); return; }
+    const list = await this.engineModels(); if (!list.length) { this.toast('warn', 'Codex did not return its model list. Try again, or type /model <name>.'); return; }
+    const ids = await this.pick({ title: 'Model', note: 'The models your Codex account offers', multi: false, confirm: 'use', checked: [this.state.settings.model], options: list.map((m) => ({ id: m.id, label: m.label || m.id, hint: m.efforts?.length ? `${m.note ? m.note + ' · ' : ''}effort ${m.efforts.join('/')}` : m.note })) });
+    if (ids?.[0]) this.setModel(ids[0]);
+  }
   setModel(id: string) {
-    this.setSettings({ model: id }); void this.models.switchTo(this.me, id, 'user').then((c) => { if (c.note?.startsWith('Already')) this.toast('info', c.note); });
+    this.setSettings({ model: id }); void this.models.switchTo(this.me, id, 'user').then((c) => { if (c.note?.startsWith('Already')) this.toast('info', c.note); }).catch(() => undefined); // the choice is already saved; the agent picks it up with its next message
     this.updateAgent(this.me, () => ({ model: id || 'default' }));
     this.toast('ok', `Model: ${id ? modelLabel(id) : 'Default'}${this.state.busy ? ' (from the next message)' : ''}`);
   }
@@ -448,12 +556,13 @@ export class AppController {
   });
   /** True when the latest turn was stopped by an interrupt. */
   turnInterrupted(): boolean { return this.interrupts.cancelledTurn(this.currentTurn); }
-  async interrupt(hard = false) { if (!this.state.busy) return; await this.interrupts.interrupt(this.me, { mode: hard ? 'hard' : 'soft', reason: 'user' }); }
+  async interrupt(hard = false) { if (this.pendingAnswer) { this.cancelQuestions(); return; } /* Esc on a question only declines the question; the next Esc stops the turn */ this.cancelQuestions(); if (!this.state.busy) return; await this.interrupts.interrupt(this.me, { mode: hard ? 'hard' : 'soft', reason: 'user' }); }
 
   /** Leave the app (the `app.quit` action). */
   quit(code = 0) { void this.o.ledger?.flush().catch(() => undefined); this.o.onExit?.(code); }
   /** ctrl+c: during a turn, the first stops it and a second within 1 s stops it hard and exits 130; idle, press twice within 2 s to quit. */
   ctrlC() {
+    if (this.pendingAnswer) { this.cancelQuestions(); return; } // the first ctrl+c declines a question that waits for typing; the next one stops the turn
     const r = this.interrupts.ctrlC();
     if (r === 'interrupted') this.toast('info', 'Stopping. Press ctrl+c again to force it and quit.');
     else if (r === 'hard') this.quit(130);
@@ -500,10 +609,169 @@ export class AppController {
     return cycle;
   }
   /** Tasks from the panel's prompt or `/night add`. */
-  nightAdd(text: string) { const n = this.night.add(text); if (!n) { this.toast('warn', 'Nothing to add.'); return; } this.toast('ok', `Queued: ${this.state.night.tasks.length} in all`, 1600); }
+  /** Add tasks to the night queue. False when none were taken (a full queue says so; nothing is lost). */
+  nightAdd(text: string): boolean {
+    if (NIGHT_MAX_TASKS - this.state.night.tasks.length <= 0) { this.toast('warn', `The night queue is full (${NIGHT_MAX_TASKS} tasks). Remove some with /night remove.`); return false; }
+    const wanted = parseTasks(text).length; const n = this.night.add(text); if (!n) { this.toast('warn', 'Nothing to add.'); return false; }
+    this.toast(n < wanted ? 'warn' : 'ok', n < wanted ? `Queued ${n} of ${wanted}: the night queue holds ${NIGHT_MAX_TASKS} tasks` : `Queued: ${this.state.night.tasks.length} in all`, n < wanted ? 5000 : 1600); return true;
+  }
   openNight() { this.night.arm(true); this.patch({ mode: 'night', input: '', cursor: 0, scroll: 0 }); }
   closeNight() { this.patch({ mode: 'chat' }); }
   nightStart() { const r = this.night.start(); if (!r.ok) this.toast('warn', r.why!); }
+  /* ------------------------------------------------------------------ multi-select */
+  private pickDone?: (ids: string[] | undefined) => void; private pickBack: Mode = 'chat';
+  /** Open the picker and wait: the ticked ids, or undefined when cancelled. */
+  pick(o: { title: string; note?: string; options: PickOption[]; checked?: string[]; multi?: boolean; confirm?: string }): Promise<string[] | undefined> {
+    this.pickDone?.(undefined);
+    return new Promise((resolve) => {
+      this.pickBack = this.state.mode === 'night' ? 'night' : 'chat'; this.pickDone = resolve;
+      this.set({ mode: 'pick', pick: newPick(o) });
+    });
+  }
+  /* ------------------------------------------------------------------ settings screen */
+  /** `/settings`: every setting and what it is now; choose one to change it, then you are back here. Esc leaves. */
+  private async settingsMenu() {
+    for (;;) {
+      const st = this.state.settings; const ch = this.choices(); const val = (k: string) => ch[k]?.options.find((o) => o.id === ch[k]!.current)?.id ?? ch[k]?.current ?? '';
+      const rows: { id: string; label: string; value: string; hint?: string }[] = [
+        { id: 'mode', label: 'Permissions', value: val('mode'), hint: 'when the agent asks' }, { id: 'model', label: 'Model', value: st.model || 'default' }, { id: 'effort', label: 'Effort', value: this.effort || 'default', hint: 'how hard it thinks' },
+        { id: 'theme', label: 'Theme', value: st.theme }, { id: 'mascot', label: 'Cento size', value: st.mascot }, { id: 'color', label: "Cento's colour", value: st.color }, { id: 'motion', label: 'Animation', value: st.reducedMotion ? 'reduced' : 'full' },
+        { id: 'spinner', label: 'Waiting line', value: st.spinner }, { id: 'density', label: 'Spacing', value: st.density }, { id: 'title', label: 'Tab title', value: st.title ? 'on' : 'off', hint: 'folder and state' }, { id: 'bell', label: 'Bell', value: st.bell ? 'on' : 'off', hint: 'when you are needed' }, { id: 'mouse', label: 'Mouse', value: st.mouse ? 'on' : 'off', hint: 'wheel and clicks' }, { id: 'auto', label: 'Auto skills', value: st.autoSkills ? 'on' : 'off' },
+      ];
+      const ids = await this.pick({ title: 'Settings', note: 'Choose one to change it. Esc closes.', options: rows.map((r) => ({ id: r.id, label: `${r.label}: ${r.value}`, hint: r.hint })), multi: false, confirm: 'change' });
+      const id = ids?.[0]; if (!id) return;
+      if (id === 'mouse') { await this.runCommand(`/mouse ${st.mouse ? 'off' : 'on'}`); continue; }
+      if (id === 'auto') { await this.runCommand(`/auto ${st.autoSkills ? 'off' : 'on'}`); continue; }
+      await this.runCommand('/' + id); if (this.state.mode !== 'chat') return; // /model opens its own screen
+    }
+  }
+
+  /* ------------------------------------------------------------------ command palette */
+  private fileIndex?: FileIndex; private mentionSearch?: AbortController;
+  private files(): FileIndex { return (this.fileIndex ??= createFileIndex({ cwd: this.o.cwd, onPick: (p) => this.insertIntoPrompt('@' + p + ' ') })); }
+  /** Suggest project files for the `@word` being typed. Results from an older word are dropped. */
+  searchMentions(query: string) {
+    this.mentionSearch?.abort(); if (!query) { if (this.state.mention) this.set({ mention: undefined }); return; }
+    const mine = new AbortController(); this.mentionSearch = mine;
+    void this.files().search(query, mine.signal).then((hits) => { if (mine.signal.aborted) return; const items = hits.map((h) => h.label).filter((p) => !/\s/.test(p)).slice(0, 6); this.set({ mention: items.length ? { q: query, items, sel: 0 } : undefined }); }).catch(() => undefined);
+  }
+  /** Stop suggesting (the word was finished or deleted). */
+  clearMentions() { this.mentionSearch?.abort(); if (this.state.mention) this.set({ mention: undefined }); }
+  /** `/find words`: the messages of this conversation that contain them; the one you pick is scrolled into view. */
+  private async findCommand(arg: string) {
+    const q = arg.trim().toLowerCase().replace(/\s+/g, ' '); if (!q) { this.toast('info', 'Type what to look for: /find <words>'); return; }
+    const who = (i: Item) => (i.kind === 'user' ? 'You' : i.kind === 'assistant' ? 'Cento' : i.kind === 'tool' ? i.name : i.kind === 'notice' ? 'Note' : '');
+    const text = (i: Item) => (i.kind === 'user' || i.kind === 'assistant' ? i.text : i.kind === 'tool' ? `${i.summary} ${i.result ?? ''}` : i.kind === 'notice' ? `${i.text} ${i.detail ?? ''}` : '');
+    const hits = this.state.items.filter((i) => i.kind !== 'thinking' && text(i).replace(/\s+/g, ' ').toLowerCase().includes(q)); if (!hits.length) { this.toast('info', `Nothing in this conversation mentions "${arg.trim()}".`); return; }
+    const snippet = (t: string) => { const flat = t.replace(/\s+/g, ' '); const at = flat.toLowerCase().indexOf(q); const from = Math.max(0, at - 30); return (from > 0 ? '…' : '') + flat.slice(from, from + 90) + (flat.length > from + 90 ? '…' : ''); };
+    const ids = await this.pick({ title: `${hits.length} message${hits.length === 1 ? '' : 's'} mention "${arg.trim()}"`, note: hits.length > 40 ? 'The last 40, newest last. The one you choose is scrolled into view.' : 'Newest last. The one you choose is scrolled into view.', multi: false, confirm: 'go there', options: hits.slice(-40).map((i) => ({ id: i.id, label: snippet(text(i)), hint: who(i) })) });
+    if (ids?.[0]) this.patch({ jumpTo: ids[0] });
+  }
+  /* ------------------------------------------------------------------ undo for the prompt */
+  private undoStack: { text: string; cursor: number }[] = []; private redoStack: { text: string; cursor: number }[] = []; private lastUndoAt = 0; private lastUndoKind = '';
+  /** Replace the prompt text as an edit that ctrl+_ can take back. Typing (or deleting) a run of single characters is one step. */
+  setInputUndoable(text: string, cursor: number, extra: Partial<AppState> = {}) {
+    const cur = this.state.input;
+    if (text === '' && /\[Pasted /.test(cur)) { this.undoStack = []; this.redoStack = []; this.lastUndoKind = ''; } // emptying the prompt forgets its pasted text, so there is nothing to bring back
+    else if (text !== cur) {
+      const d = text.length - cur.length; const kind = d === 1 ? 'type' : d === -1 ? 'delete' : 'other'; const now = Date.now();
+      if (!(kind !== 'other' && kind === this.lastUndoKind && now - this.lastUndoAt < 700)) { this.undoStack.push({ text: cur, cursor: this.state.cursor }); if (this.undoStack.length > 100) this.undoStack.shift(); }
+      this.lastUndoKind = kind; this.lastUndoAt = now; this.redoStack = [];
+    }
+    this.undoing = true; try { this.patch({ input: text, cursor, ...extra }); } finally { this.undoing = false; }
+  }
+  /** ctrl+_: take back the last change to the prompt. */
+  undoInput(): boolean { const prev = this.undoStack.pop(); if (!prev) return false; this.redoStack.push({ text: this.state.input, cursor: this.state.cursor }); this.lastUndoKind = ''; this.undoing = true; try { this.patch({ input: prev.text, cursor: prev.cursor, anchor: undefined, slashSel: 0 }); } finally { this.undoing = false; } return true; }
+  /** alt+y: put back what ctrl+_ took away. */
+  redoInput(): boolean { const next = this.redoStack.pop(); if (!next) return false; this.undoStack.push({ text: this.state.input, cursor: this.state.cursor }); this.lastUndoKind = ''; this.undoing = true; try { this.patch({ input: next.text, cursor: next.cursor, anchor: undefined, slashSel: 0 }); } finally { this.undoing = false; } return true; }
+
+  /** ctrl+z: put the app in the background (`fg` brings it back where it was). */
+  suspend() { if (!this.o.external) { this.toast('info', 'Suspending is not available here.'); return; } this.o.external({ kind: 'suspend' }); }
+  /** ctrl+g: write the message in your editor ($VISUAL or $EDITOR); what you save comes back into the prompt. */
+  editPrompt() {
+    if (!this.o.external) { this.toast('info', 'Editing in your editor is not available here.'); return; }
+    this.o.external({ kind: 'editor', text: this.state.input, done: (t) => { if (t === undefined) this.toast('warn', 'Your editor did not save anything, so the prompt is unchanged.'); else this.setInputUndoable(t, t.length); } });
+  }
+  /** ctrl+r: pick one of your earlier messages in this project; it goes in the prompt for you to change or send. */
+  async historyPick() {
+    const seen = new Set<string>(); const items = [...this.state.history].reverse().filter((h) => !h.startsWith('/') && !seen.has(h) && !!seen.add(h)).slice(0, 40);
+    if (!items.length) { this.toast('info', 'No earlier messages in this project yet.'); return; }
+    const ids = await this.pick({ title: 'Earlier messages', note: 'Newest first. The one you choose goes in the prompt.', multi: false, confirm: 'use', options: items.map((h, i) => ({ id: String(i), label: h.replace(/\s+/g, ' ') })) });
+    if (ids?.[0] !== undefined) { const t = items[Number(ids[0])]!; const was = this.state.input; this.setInputUndoable(t, t.length, was ? { draft: was, histIdx: Math.max(0, this.state.history.lastIndexOf(t)) } : {}); } // a draft you had is one step down (the arrows), as with the up arrow
+  }
+  /** Put text at the end of the prompt (a file mention, a skill hint). */
+  insertIntoPrompt(t: string) { const input = this.state.input; const sep = input && !/\s$/.test(input) ? ' ' : ''; const next = input + sep + t; this.patch({ input: next, cursor: next.length }); }
+  /** Run a command line from the palette. Commands that cannot do anything without a value are filled in for you to finish. */
+  async runPaletteCommand(cmd: string) { if (cmd === '/trust') { this.patch({ input: '/trust rules', cursor: 12 }); return; } await this.submit(cmd); }
+  /** What ctrl+k searches: commands, the quick settings and animations, files of this project, saved conversations and skills. */
+  paletteProviders(): PaletteProvider[] {
+    const run = (cmd: string) => () => this.runPaletteCommand(cmd); const item = (e: { id: string; label: string; detail: string; cmd: string }) => ({ id: e.id, label: e.label, detail: e.detail, run: run(e.cmd) });
+    const files = this.files(); const cmds = commandEntries(); const quick = quickEntries(); const anims = animationEntries();
+    return [
+      { ...listProvider('commands', 'Commands', () => [...cmds, ...quick, ...anims].map(item), { max: 8, recent: () => FIRST_LABELS }) },
+      { id: 'files', group: 'Files', search: (q, signal) => files.search(q, signal) },
+      listProvider('sessions', 'Sessions', () => (this.o.sessions?.list(this.o.cwd, 30) ?? []).filter((m) => m.id !== this.state.sessionId).map((m) => ({ id: 's:' + m.id, label: m.title, detail: `${m.messages} msg`, run: () => this.resumeSession(m.id) })), { max: 5, recent: () => (this.o.sessions?.list(this.o.cwd, 3) ?? []).filter((m) => m.id !== this.state.sessionId).map((m) => m.title) }),
+      listProvider('skills', 'Skills', () => this.skills().map((k) => ({ id: 'k:' + k.name, label: k.name, detail: k.description.replace(/\s+/g, ' ').slice(0, 80), run: () => this.insertIntoPrompt(k.kind === 'command' ? `/${k.name} ` : `Use the ${k.name} skill: `) })), { max: 5 }),
+    ];
+  }
+
+  /** Big pastes sit in the prompt as a short chip and are put back when the message is sent. */
+  readonly pastes = new PasteStore();
+  /** Watch every event of the main agent (the plain-text mode prints them). */
+  addObserver(fn: (agentId: string, ev: NormalisedEvent) => void) { (this.o.observers ??= []).push(fn); }
+  /** Answer the open list without keys: the ticked option numbers (1-based), or undefined to cancel. A one-of list takes the first. */
+  pickAnswer(numbers: number[] | undefined) {
+    const p = this.state.pick; if (!p) return;
+    if (!numbers) { this.pickKey('cancel'); return; }
+    const ids = numbers.filter((n) => n >= 1 && n <= p.options.length).map((n) => p.options[n - 1]!.id);
+    this.set({ pick: { ...p, checked: p.multi ? ids : ids.slice(0, 1), sel: Math.max(0, p.options.findIndex((o) => o.id === ids[0])) } }); this.pickKey('enter');
+  }
+  /** A click on option `i`: a list of several toggles it; a one-of list picks it. */
+  pickClick(i: number) {
+    const p = this.state.pick; if (!p || i < 0 || i >= p.options.length) return;
+    this.set({ pick: { ...p, sel: i } }); this.pickKey(p.multi ? 'toggle' : 'enter');
+  }
+  pickKey(k: 'up' | 'down' | 'toggle' | 'all' | 'enter' | 'cancel') {
+    const p = this.state.pick; if (!p) return;
+    if (k === 'up' || k === 'down') this.set({ pick: pickMove(p, k === 'up' ? -1 : 1) });
+    else if (k === 'toggle') this.set({ pick: pickToggle(p) });
+    else if (k === 'all') this.set({ pick: pickAll(p) });
+    else { const done = this.pickDone; this.pickDone = undefined; this.set({ mode: this.pickBack, pick: undefined }); done?.(k === 'enter' ? pickResult(p) : undefined); }
+  }
+  /** The agent asked with options: tick one or more and your choice goes back as your next message (Esc to type your own). */
+  /** A list opened for the agent's question (so that only these are closed when the question goes stale). */
+  private questionPick = false;
+  private async pickForQuestion(o: Parameters<AppController['pick']>[0]) { this.questionPick = true; try { return await this.pick(o); } finally { this.questionPick = false; } }
+  private async answerQuestion(text: string, options: string[], multi = true) {
+    if (this.night.active() || this.state.approvals.length) return;
+    this.ring(); const ids = await this.pickForQuestion({ title: text, note: multi ? 'Pick one or more. Esc to type your own answer.' : 'Esc to type your own answer.', options: options.map((o, i) => ({ id: String(i), label: o })), multi, confirm: 'send' });
+    if (!ids?.length) return; const answer = ids.map((i) => options[Number(i)]).join(', ');
+    if (this.state.busy) { this.queuedAnswer = answer; this.toast('info', 'Your answer goes to the agent as soon as it finishes this turn.', 5000); return; } // an agent that is still working cannot take a message
+    await this.submit(answer);
+  }
+  /** An answer to a question that came while the agent was still working: sent when the turn ends. */
+  private queuedAnswer?: string;
+  private dropQueued(why: string) { if (this.queuedAnswer === undefined) return; this.queuedAnswer = undefined; this.toast('warn', `${why}, so your answer to the agent's question was not sent. Send it again if you still want to.`, 7000); }
+  /** `/night remove` with no number: tick the queued tasks to take out. */
+  private async nightPickRemove() {
+    const tasks = this.state.night.tasks.filter((t) => t.status !== 'running');
+    if (!tasks.length) { this.toast('info', 'The queue is empty.'); return; }
+    const ids = await this.pick({ title: 'Remove tasks from the night queue', options: tasks.map((t) => ({ id: t.id, label: t.text.split('\n')[0]!, hint: t.status })), confirm: 'remove' });
+    if (!ids?.length) return;
+    let n = 0; for (const id of ids) { const i = this.state.night.tasks.findIndex((t) => t.id === id); if (i >= 0 && this.night.remove(i + 1)) n++; }
+    this.toast('ok', `Removed ${n} task${n === 1 ? '' : 's'}.`);
+  }
+  /** `/skills` with no argument: tick the bundled skills Centcom may auto-apply. */
+  private async skillsPick() {
+    const entries = loadEntries().filter((e) => e.status === 'ok' || e.status === 'quarantined');
+    if (!entries.length) { this.toast('info', 'No bundled skills are installed. Run the skills sync first.'); return; }
+    const was = entries.filter((e) => e.enabled).map((e) => e.id);
+    const ids = await this.pick({ title: 'Skills Centcom may apply automatically', note: 'Tick the ones to keep on', options: entries.map((e) => ({ id: e.id, label: e.skill, hint: e.description })), checked: was, confirm: 'save' });
+    if (!ids) return;
+    let changed = 0; for (const e of entries) { const on = ids.includes(e.id); if (on !== was.includes(e.id)) { setEnabled(e.id, on); changed++; } }
+    this.skillCache = undefined; this.toast('ok', changed ? `Updated ${changed} skill${changed === 1 ? '' : 's'}.` : 'No changes.');
+  }
+
   private async nightCommand(arg: string) {
     const m = /^(\S*)[ \t]*([\s\S]*)$/.exec(arg.trim())!; const sub = m[1]!; const tail = m[2]!.trim(); const n = this.state.night; // the text after the word keeps its line breaks: one task per line
     switch (sub.toLowerCase()) {
@@ -512,9 +780,9 @@ export class AppController {
       case 'start': case 'go': this.nightStart(); break;
       case 'stop': await this.night.stop(); this.toast('info', 'Night cycle stopped.'); break;
       case 'add': if (!tail) { this.openNight(); break; } this.nightAdd(tail); break;
-      case 'remove': case 'rm': if (!this.night.remove(Number(tail))) this.toast('warn', `No removable task ${tail || ''}.`); break;
+      case 'remove': case 'rm': if (!tail) { await this.nightPickRemove(); break; } if (!this.night.remove(Number(tail))) this.toast('warn', `No removable task ${tail || ''}.`); break;
       case 'clear': this.night.clear(); this.toast('info', 'Queue cleared.'); break;
-      case 'allow': { const w = tail.toLowerCase(); if (w === 'push') { this.night.setAllowPush(true); this.toast('ok', 'Night cycle may push work branches and open pull requests (never main, never force, never merge).', 5000); } else if (w === 'none' || w === 'nothing') { this.night.setAllowPush(false); this.toast('ok', 'Night cycle pushes nothing.'); } else this.toast('info', n.allowPush ? 'Allowed: pushing work branches and opening pull requests.' : 'Allowed: nothing leaves the machine. /night allow push to let it push work branches and open PRs.', 5000); break; }
+      case 'allow': { if (!tail) { const ids = await this.pick({ title: 'What may the night cycle do?', options: [{ id: 'none', label: 'Nothing leaves this machine', hint: 'no pushes' }, { id: 'push', label: 'Push work branches and open pull requests', hint: 'never main, never force, never merge' }], checked: [n.allowPush ? 'push' : 'none'], multi: false, confirm: 'use' }); if (ids?.[0]) await this.nightCommand('allow ' + ids[0]); break; } const w = tail.toLowerCase(); if (w === 'push') { this.night.setAllowPush(true); this.toast('ok', 'Night cycle may push work branches and open pull requests (never main, never force, never merge).', 5000); } else if (w === 'none' || w === 'nothing') { this.night.setAllowPush(false); this.toast('ok', 'Night cycle pushes nothing.'); } else this.toast('info', n.allowPush ? 'Allowed: pushing work branches and opening pull requests.' : 'Allowed: nothing leaves the machine. /night allow push to let it push work branches and open PRs.', 5000); break; }
       case 'timeout': { const m = Number(tail); if (!Number.isFinite(m) || m < 1) { this.toast('warn', `Per-task limit is ${n.taskTimeoutMin} minutes. Use /night timeout <minutes>.`); break; } this.night.setTimeoutMin(m); this.toast('ok', `Per-task limit: ${this.state.night.taskTimeoutMin} minutes.`); break; }
       case 'list': { const c = nightCounts(n); this.notice('info', `Night cycle: ${c.total} tasks (${c.done} done, ${c.failed} failed, ${c.queued} queued)`, n.tasks.map((t, i) => `${i + 1}. [${t.status}] ${t.text.split('\n')[0]!.slice(0, 90)}`).join('\n') || 'The queue is empty.'); break; }
       case 'report': this.notice('info', n.reportPath ? `Last report: ${n.reportPath}` : 'No report yet. One is written when a night cycle ends.'); break;
@@ -522,14 +790,34 @@ export class AppController {
     }
   }
 
+  /** The settings that are a pick from a short list: shown as a list when the command has no value. */
+  private choices(): Record<string, { title: string; current: string; options: PickOption[] }> {
+    const st = this.state.settings; const o = (...a: [string, string?][]): PickOption[] => a.map(([id, hint]) => ({ id, label: id, hint }));
+    return {
+      mode: { title: 'Permissions', current: ({ default: 'ask', acceptEdits: 'edits', plan: 'plan', bypassPermissions: 'bypass' } as Record<string, string>)[st.permissionMode] ?? 'ask', options: o(['ask', 'ask before commands and edits'], ['edits', 'edits go through, commands ask'], ['plan', 'read-only, nothing is changed'], ['bypass', 'dangerously skip all permission prompts']) },
+      theme: { title: 'Theme', current: st.theme, options: o(['dark', 'Graphite'], ['light', 'Paper, for light terminals'], ['hc', 'high contrast: black, white, bold borders']) },
+      mascot: { title: 'Cento size', current: st.mascot, options: o(['auto', 'by window height'], ['large'], ['small'], ['off']) },
+      color: { title: "Cento's colour", current: st.color, options: o(['violet'], ['red'], ['yellow'], ['green'], ['brown']) },
+      title: { title: 'Terminal tab title', current: st.title ? 'on' : 'off', options: o(['on', 'the folder and what the agent is doing'], ['off', 'leave the title alone']) },
+      bell: { title: 'Terminal bell', current: st.bell ? 'on' : 'off', options: o(['off', 'silent'], ['on', 'a sound or flash when you are needed or a long task is done']) },
+      density: { title: 'Space between messages', current: st.density, options: o(['comfortable', 'a blank row between messages'], ['compact', 'fits more on screen']) },
+      spinner: { title: 'While the agent works', current: st.spinner, options: o(['fun', 'rotating verbs'], ['plain', 'just "Working…"']) },
+      motion: { title: 'Animation', current: st.reducedMotion ? 'reduced' : 'full', options: o(['full', 'Cento moves'], ['reduced', 'still, quieter']) },
+    };
+  }
+
   async runCommand(line: string) {
     const [cmd, ...rest] = line.slice(1).trim().split(/\s+/); const arg = rest.join(' ');
     const known = COMMANDS.find((c) => c.name === cmd);
     if (!known) { this.toast('warn', `Unknown command /${cmd}. Type / to see the list.`); return; }
+    if (!arg && cmd! in this.choices()) { // a setting with no value: choose from a list instead of remembering the words
+      const c = this.choices()[cmd!]!; const ids = await this.pick({ title: c.title, options: c.options, checked: [c.current], multi: false, confirm: 'use' });
+      if (ids?.[0]) await this.runCommand(`/${cmd} ${ids[0]}`); return;
+    }
     switch (cmd) {
       case 'help': this.set({ mode: 'help' }); break;
       case 'clear': case 'new': await this.newSession(); break;
-      case 'resume': if (arg) await this.resumeSession(arg); else this.listSessions(); break;
+      case 'resume': if (arg) await this.resumeSession(arg); else await this.listSessions(); break;
       case 'agents': this.set((s) => ({ fleet: !s.fleet })); break;
       case 'quit': this.o.onExit?.(); break;
       case 'night': await this.nightCommand(line.replace(/^\/night\b[ \t]*/, '')); break;
@@ -538,7 +826,7 @@ export class AppController {
       case 'compact': await this.compactCommand(); break;
       case 'fleet': await this.fleetCommand(arg); break;
       case 'usage': this.usageCommand(); break;
-      case 'mcp': case 'hooks': case 'memory': {
+      case 'mcp': case 'hooks': case 'memory': case 'doctor': case 'init': {
         const view = this.o.views?.[cmd]; if (!view) { this.toast('info', `/${cmd} is not available here. Use \`centcom ${cmd}\` in a terminal.`); break; }
         const lines = await view(arg.split(/\s+/).filter(Boolean)).catch((e: unknown) => [String((e as Error)?.message ?? e)]); this.notice('info', lines[0] ?? `(nothing to show)`, lines.slice(1).join('\n') || undefined); break;
       }
@@ -552,9 +840,30 @@ export class AppController {
       }
       case 'mascot': if (['large', 'small', 'off', 'auto'].includes(arg)) this.setSettings({ mascot: arg as Settings['mascot'] }); else this.toast('info', 'Try /mascot large, small, off or auto'); break;
       case 'color': if (['violet', 'red', 'yellow', 'green', 'brown'].includes(arg)) this.setSettings({ color: arg as CentoColor }); else this.toast('info', 'Colours: violet red yellow green brown'); break;
-      case 'theme': if (arg === 'dark' || arg === 'light') this.setSettings({ theme: arg }); else this.toast('info', 'Try /theme dark or /theme light'); break;
+      case 'theme': if (arg === 'dark' || arg === 'light' || arg === 'hc') this.setSettings({ theme: arg }); else this.toast('info', 'Try /theme dark, /theme light or /theme hc (high contrast)'); break;
+      case 'title': if (arg === 'on' || arg === 'off') { this.setSettings({ title: arg === 'on' }); this.toast('info', arg === 'on' ? 'The tab title shows the folder and what the agent is doing' : 'The tab title is left alone'); } else this.toast('info', 'Try /title on or /title off'); break;
+      case 'bell': if (arg === 'on' || arg === 'off') { this.setSettings({ bell: arg === 'on' }); this.toast('info', arg === 'on' ? 'Bell on: you will hear it when an approval or question needs you, or a long task finishes' : 'Bell off'); } else this.toast('info', 'Try /bell on or /bell off'); break;
+      case 'density': if (arg === 'comfortable' || arg === 'compact') { this.setSettings({ density: arg }); this.toast('info', arg === 'compact' ? 'Compact: fewer blank rows' : 'Comfortable: a blank row between messages'); } else this.toast('info', 'Try /density comfortable or /density compact'); break;
+      case 'spinner': if (arg === 'fun' || arg === 'plain') { this.setSettings({ spinner: arg }); this.toast('info', arg === 'plain' ? 'The waiting line says Working…' : 'The waiting line rotates its verbs'); } else this.toast('info', 'Try /spinner fun or /spinner plain'); break;
+      case 'mouse': { const on = arg ? arg === 'on' : !this.state.settings.mouse; this.setSettings({ mouse: on }); this.toast('info', on ? 'Mouse wheel scrolls. /mouse off lets you select text with the mouse.' : 'Mouse off: select text with the mouse as usual.'); break; }
+      case 'settings': await this.settingsMenu(); break;
+      case 'find': await this.findCommand(arg); break;
+      case 'copy': {
+        const a = lastAnswer(this.state.items); if (!a) { this.toast('info', 'Nothing to copy yet.'); break; }
+        if (arg === 'code') { const blocks = codeBlocks(a); if (!blocks.length) { this.toast('info', 'The last answer has no code block.'); break; } this.copy(blocks.at(-1)!); break; }
+        if (arg && arg !== 'answer') { this.toast('info', 'Try /copy (the last answer) or /copy code (its last code block).'); break; }
+        this.copy(a); break;
+      }
+      case 'export': {
+        if (!this.state.items.length) { this.toast('info', 'Nothing to export yet.'); break; }
+        const when = new Date(); const iso = when.toISOString(); const stamp = iso.slice(0, 10).replace(/-/g, '') + '-' + iso.slice(11, 16).replace(':', ''); const file = resolvePath(this.o.cwd, arg || `centcom-${stamp}.md`);
+        try { writeFileSync(file, toMarkdown(this.state.items, { title: titleFrom(this.state.items), engine: this.o.engine.label, cwd: this.o.cwd, when }), { flag: 'wx', mode: 0o600 }); this.toast('ok', `Saved ${this.state.items.filter((i) => i.kind === 'user').length} message${this.state.items.filter((i) => i.kind === 'user').length === 1 ? '' : 's'} to ${file}`, 6000); }
+        catch (e) { this.toast('warn', (e as NodeJS.ErrnoException).code === 'EEXIST' ? `${file} already exists. Pick another name: /export <file>` : `Could not save: ${(e as Error).message}`, 6000); }
+        break;
+      }
+      case 'effort': await this.effortCommand(arg); break;
       case 'model': {
-        if (!arg) { const i = CLAUDE_MODELS.findIndex((m) => m.id === this.state.settings.model); this.set({ mode: 'models', modelSel: Math.max(0, i) }); break; }
+        if (!arg) { await this.openModels(); break; }
         const q = arg.toLowerCase(); const m = CLAUDE_MODELS.find((x) => x.id.toLowerCase() === q || x.label.toLowerCase() === q) ?? CLAUDE_MODELS.find((x) => (x.id + ' ' + x.label).toLowerCase().includes(q));
         if (m) this.setModel(m.id); else if (/^[\w.:-]{3,}$/.test(arg)) this.setModel(arg); else this.toast('warn', `No model called "${arg}"`);
         break;
@@ -565,6 +874,7 @@ export class AppController {
         this.toast('info', on ? `Auto skills on (${this.skills().length} found)` : 'Auto skills off'); break;
       }
       case 'skills': {
+        if (!arg) { await this.skillsPick(); break; }
         const sub = /^(enable|disable)\s+(.+)$/i.exec(arg);
         if (sub) { this.toast('info', setEnabled(sub[2]!.trim(), sub[1]!.toLowerCase() === 'enable')); this.skillCache = undefined; break; }
         const f = arg.toLowerCase(); const all = this.skills().filter((k) => !f || (k.name + ' ' + k.description).toLowerCase().includes(f));
@@ -624,9 +934,43 @@ export class AppController {
     else this.updateAgent(n.id, () => view);
     if (n.state === 'failed') this.notice('warn', `Agent ${this.fleetIds.indexOf(n.id) + 1} (${n.label}) stopped with an error${n.error_code ? `: ${n.error_code}` : ''}.`);
   }
+  /** Bare `/fleet`: what you can do with parallel agents, as a list. Starting asks how many and what for. */
+  private async fleetMenu() {
+    const f = this.o.fleet!; const nodes = f.manager.list().filter((n) => n.kind === 'agent'); const has = nodes.length > 0;
+    const ids = await this.pick({ title: 'Parallel agents', note: has ? `${nodes.length} agent${nodes.length === 1 ? '' : 's'} so far. Each works in its own folder and branch.` : 'None yet. Each one works in its own folder and branch.', multi: false, confirm: 'choose', options: [
+      { id: 'start', label: 'Start agents…', hint: 'the same task, in parallel' },
+      ...(has ? [{ id: 'list', label: 'Show them', hint: 'branch and state of each' }, { id: 'preview', label: 'What would merging one change?', hint: 'checks for conflicts' }, { id: 'stop', label: 'Stop agents…' }, { id: 'remove', label: 'Remove agents and their branches…' }] : []),
+      { id: 'clean', label: 'Clean up leftovers', hint: 'folders of agents that were interrupted' }] });
+    switch (ids?.[0]) {
+      case 'start': {
+        const n = await this.pick({ title: 'How many agents?', options: [1, 2, 3, 4, 6, 8].map((k) => ({ id: String(k), label: String(k), hint: k === 1 ? 'one on its own branch' : undefined })), multi: false, confirm: 'next' }); if (!n?.[0]) return;
+        const task = await this.askText({ id: 'task', text: `What should ${n[0] === '1' ? 'it' : 'they'} work on?${n[0] === '1' ? '' : ' Every agent gets the same task.'}` }); if (!task?.trim()) return;
+        await this.fleetCommand(`start ${n[0]} ${task.trim()}`); break;
+      }
+      case 'preview': {
+        const pickedAgent = await this.pick({ title: 'Which agent?', options: nodes.map((x) => ({ id: x.id, label: `${this.fleetIds.indexOf(x.id) + 1}. ${x.branch ?? x.id}` })), multi: false, confirm: 'check' }); if (!pickedAgent?.[0]) return;
+        await this.fleetCommand(`preview ${this.fleetIds.indexOf(pickedAgent[0]) + 1}`); break;
+      }
+      case 'stop': await this.fleetPick('stop'); break;
+      case 'remove': await this.fleetPick('remove'); break;
+      case 'list': await this.fleetCommand('list'); break;
+      case 'clean': await this.fleetCommand('clean'); break;
+      default: break;
+    }
+  }
+  /** `/fleet stop` or `/fleet remove` with no number: tick the agents. */
+  private async fleetPick(verb: 'stop' | 'remove') {
+    const f = this.o.fleet!; const nodes = f.manager.list().filter((n) => n.kind === 'agent');
+    if (!nodes.length) { this.toast('info', 'No fleet agents yet.'); return; }
+    const ids = await this.pick({ title: `${verb === 'stop' ? 'Stop' : 'Remove'} fleet agents`, options: nodes.map((n) => ({ id: n.id, label: `${this.fleetIds.indexOf(n.id) + 1}. ${n.branch ?? n.id}`, hint: String((n as { state?: string }).state ?? '') })), confirm: verb });
+    if (!ids?.length) return;
+    for (const id of ids) { if (verb === 'stop') await f.manager.stop(id as AgentId); else { await f.manager.remove(id as AgentId, {}); this.fleetIds = this.fleetIds.map((x) => (x === id ? '' : x)); this.set((s) => ({ agents: s.agents.filter((a) => a.id !== id) })); } }
+    this.toast('ok', `${verb === 'stop' ? 'Stopped' : 'Removed'} ${ids.length} agent${ids.length === 1 ? '' : 's'}.`);
+  }
   private fleetAgent(nArg: string | undefined): FleetNode | undefined { const n = Number(nArg); const id = Number.isInteger(n) ? this.fleetIds[n - 1] : undefined; return id ? this.o.fleet!.manager.list().find((x) => x.id === id) : undefined; }
   private async fleetCommand(arg: string) {
     const f = this.o.fleet; if (!f) { this.toast('info', this.o.demo ? 'The fleet needs a real engine (not the demo).' : 'Parallel agents are off in this session.'); return; }
+    if (!arg.trim()) { await this.fleetMenu(); return; }
     const [sub = 'list', ...rest] = arg.split(/\s+/).filter(Boolean);
     try {
       switch (sub) {
@@ -637,9 +981,9 @@ export class AppController {
           for (let i = 1; i <= count; i++) { const h = await f.manager.spawn({ repoRoot: this.o.cwd, engine: this.o.engine.id, prompt: task, ownerSlug: f.ownerSlug, label: count > 1 ? `${label} ${i}` : label, ...(this.state.settings.model ? { model: this.state.settings.model } : {}) }); void h.done().then((r) => { if (r.outcome !== 'ok' && r.error_code === 'fleet_timeout') this.notice('warn', `Agent ${this.fleetIds.indexOf(h.id) + 1} was stopped after its time limit.`); }); }
           this.toast('ok', `Started ${count} agent${count === 1 ? '' : 's'} on their own branches.`); break;
         }
-        case 'stop': { if (rest[0] === 'all') { await f.manager.stopAll(); this.toast('ok', 'All fleet agents stopped.'); break; } const n = this.fleetAgent(rest[0]); if (!n) { this.toast('warn', 'Which agent? /fleet stop <number> or /fleet stop all'); return; } await f.manager.stop(n.id as AgentId); this.toast('ok', `Agent ${rest[0]} stopped.`); break; }
+        case 'stop': { if (!rest.length) { await this.fleetPick('stop'); break; } if (rest[0] === 'all') { await f.manager.stopAll(); this.toast('ok', 'All fleet agents stopped.'); break; } const n = this.fleetAgent(rest[0]); if (!n) { this.toast('warn', 'Which agent? /fleet stop <number> or /fleet stop all'); return; } await f.manager.stop(n.id as AgentId); this.toast('ok', `Agent ${rest[0]} stopped.`); break; }
         case 'preview': { const n = this.fleetAgent(rest[0]); if (!n) { this.toast('warn', 'Which agent? /fleet preview <number>'); return; } const r = await f.manager.mergePreview(n.id as AgentId); this.notice(r.conflicts.length ? 'warn' : 'ok', r.conflicts.length ? `Merging ${n.branch} would conflict in ${r.conflicts.length} file${r.conflicts.length === 1 ? '' : 's'}.` : `${n.branch} merges cleanly into its base.`, r.conflicts.join('\n') || undefined); break; }
-        case 'remove': { const n = this.fleetAgent(rest[0]); if (!n) { this.toast('warn', 'Which agent? /fleet remove <number> [force]'); return; } await f.manager.remove(n.id as AgentId, { force: rest[1] === 'force' }); this.fleetIds = this.fleetIds.map((x) => (x === n.id ? '' : x)); this.set((s) => ({ agents: s.agents.filter((a) => a.id !== n.id) })); this.toast('ok', `Agent ${rest[0]} and its worktree were removed.`); break; }
+        case 'remove': { if (!rest.length) { await this.fleetPick('remove'); break; } const n = this.fleetAgent(rest[0]); if (!n) { this.toast('warn', 'Which agent? /fleet remove <number> [force]'); return; } await f.manager.remove(n.id as AgentId, { force: rest[1] === 'force' }); this.fleetIds = this.fleetIds.map((x) => (x === n.id ? '' : x)); this.set((s) => ({ agents: s.agents.filter((a) => a.id !== n.id) })); this.toast('ok', `Agent ${rest[0]} and its worktree were removed.`); break; }
         case 'clean': { const o = await f.manager.recoverOrphans(this.o.cwd); this.notice('info', o.length ? `${o.length} worktree${o.length === 1 ? '' : 's'} left from an earlier run. Nothing was removed.` : 'Nothing left over from earlier runs.', o.map((w) => `${w.branch}  ${w.path}`).join('\n') || undefined); break; }
         case 'resume': { const engine = rest[0] === 'codex' ? 'codex' : 'claude-code'; f.manager.resume(engine); this.toast('ok', `New ${engine} agents may start again.`); break; }
         default: this.toast('info', 'Try /fleet, /fleet start [count] <task>, /fleet stop <n|all>, /fleet preview <n>, /fleet remove <n>, /fleet clean');
@@ -666,12 +1010,17 @@ export class AppController {
     let out = lines.join('\n'); while (Buffer.byteLength(out) > maxBytes && lines.length) { lines.shift(); out = '…\n' + lines.join('\n'); } return Buffer.byteLength(out) > maxBytes ? out.slice(-Math.floor(maxBytes / 4)) : out;
   }
   private checkpointLine(c: Checkpoint, i: number) { return `${String(c.n).padStart(3)}  ${ago(Date.parse(c.at))}  ${c.label || '(no text)'}${c.commit ? `  +${c.files.added} ~${c.files.changed} -${c.files.removed}` : '  (conversation only)'}${i === 0 ? '  ← latest' : ''}`; }
-  async rewindCommand(arg: string) {
+  async rewindCommand(arg: string, viaMenu = false) {
     if (!this.cp) { this.toast('info', 'Checkpoints are off in this session.'); return; }
     if (this.state.busy) { this.toast('warn', 'Cento is still working. Press Esc to interrupt, then rewind.'); return; }
     await this.cp.ready().catch(() => undefined); const list = [...this.cp.list()].reverse();
     const [nArg, modeArg] = arg.split(/\s+/).filter(Boolean);
-    if (!nArg) { if (!list.length) { this.notice('info', 'No checkpoints yet. One is saved before every prompt.'); return; } this.notice('info', 'Checkpoints (newest first). Type /rewind <number> to go back to before that prompt; add "conversation" or "both" to also rewind the conversation.', list.slice(0, 15).map((c, i) => this.checkpointLine(c, i)).join('\n')); return; }
+    if (!nArg) {
+      if (!list.length) { this.notice('info', 'No checkpoints yet. One is saved before every prompt.'); return; }
+      const pickedCp = await this.pick({ title: 'Go back to before which prompt?', note: 'Newest first. One is saved before every prompt.', multi: false, confirm: 'next', options: list.slice(0, 30).map((c) => ({ id: String(c.n), label: c.label, hint: `#${c.n}` })) }); if (!pickedCp?.[0]) return;
+      const what = await this.pick({ title: 'Put back what?', multi: false, confirm: 'review', options: [{ id: 'files', label: 'The files', hint: 'the folder as it was then' }, { id: 'conversation', label: 'The conversation', hint: 'forget what was said after' }, { id: 'both', label: 'Both' }] }); if (!what?.[0]) return;
+      await this.rewindCommand(`${pickedCp[0]} ${what[0]}`, true); return;
+    }
     const mode = (modeArg ?? 'files') as RewindMode; if (!['files', 'conversation', 'both'].includes(mode)) { this.toast('warn', 'Rewind what: files, conversation or both?'); return; }
     const target = list.find((c) => String(c.n) === nArg); if (!target) { this.toast('warn', `No checkpoint ${nArg}. Type /rewind to see the list.`); return; }
     let plan; try { plan = await this.cp.preview(target.id, mode); } catch (e) { this.notice('warn', 'Cannot rewind files here.', String((e as Error).message ?? e)); return; }
@@ -680,16 +1029,23 @@ export class AppController {
     if (plan.conversation !== 'none') parts.push(plan.conversation === 'engine-resume' ? 'The conversation goes back to that point.' : 'The conversation starts again from a short summary of what came before.');
     if (mode !== 'conversation') parts.push('Only files in this folder are put back. What commands did elsewhere (installs, network, databases) is not undone.');
     if (!plan.restore.length && !plan.delete.length && plan.conversation === 'none') { this.notice('info', 'Nothing to put back: the files are already as they were then.', plan.skippedModifiedOutside.length ? parts.join('\n') : undefined); return; }
-    this.pendingMemory = { diff: parts.join('\n'), no: 'Nothing was rewound.', apply: async () => {
+    const pending = { diff: parts.join('\n'), no: 'Nothing was rewound.', apply: async () => {
       const r = await this.cp!.rewind(target.id, mode);
-      if (r.conversation) { void this.session?.stop(); this.adopt(r.conversation.session); }
+      if (r.conversation) { this.dropQueued('You rewound the conversation'); void this.session?.stop(); this.adopt(r.conversation.session); }
       if (r.failed) return `Stopped part way: ${r.failed.unrestored.length} file(s) not put back. Your state before the rewind is saved: /rewind ${this.cp!.list().at(-1)?.n ?? ''} undoes it.`;
       return `Rewound to before "${target.label}": ${r.restored.length} put back, ${r.deleted.length} removed${r.skipped.length ? `, ${r.skipped.length} left alone` : ''}.${r.undoRef ? ` To undo, /rewind ${this.cp!.list().at(-1)?.n}.` : ''}${r.conversation?.resumeError ? ` (The tool said: ${r.conversation.resumeError})` : ''}`;
     } };
+    if (viaMenu) { // from the guided flow: review, then confirm from a list
+      this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: `Rewind to before "${target.label}"`, detail: parts.join('\n') });
+      const ok = await this.pick({ title: `Rewind to before "${target.label}"?`, note: 'The details are above in the conversation.', multi: false, confirm: 'ok', options: [{ id: 'yes', label: 'Yes, rewind' }, { id: 'no', label: 'No, leave everything as it is' }] });
+      if (ok?.[0] === 'yes') { try { this.addItem({ kind: 'notice', id: nid('n'), level: 'ok', text: await pending.apply() }); } catch (e) { this.addItem({ kind: 'notice', id: nid('n'), level: 'warn', text: 'Could not rewind: ' + String((e as Error).message ?? e) }); } } else this.notice('info', pending.no);
+      return;
+    }
+    this.pendingMemory = pending;
     this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: `Rewind to before "${target.label}"? Type y to confirm, anything else cancels.`, detail: parts.join('\n') });
   }
   /** Esc twice within 600 ms while idle opens the checkpoint list. */
-  escIdle() { const now = Date.now(); if (now - this.lastEsc < 600) { this.lastEsc = 0; void this.rewindCommand(''); } else this.lastEsc = now; }
+  escIdle() { if (this.pendingAnswer) { this.cancelQuestions(); return; } const now = Date.now(); if (now - this.lastEsc < 600) { this.lastEsc = 0; void this.rewindCommand(''); } else this.lastEsc = now; }
 
   /* ------------------------------------------------------------------ permissions */
   private async permissionsCommand(arg: string) {
@@ -697,6 +1053,11 @@ export class AppController {
     const [sub, id] = arg.split(/\s+/).filter(Boolean);
     if (sub === 'remove' && id) { const ok = await p.engine.rules.remove(id); this.toast(ok ? 'ok' : 'warn', ok ? `Rule ${id} removed.` : `There is no rule ${id}.`); return; }
     const rules = p.engine.rules.list(p.root); const warn = p.engine.rules.warnings(); const trust = p.engine.rules.needsTrust();
+    if (!sub && rules.length) { // a list to tick: the rules to take away
+      const ids = await this.pick({ title: 'Saved permission rules', note: 'Tick the ones to remove. They are checked before the permission mode.', options: rules.map((r) => ({ id: r.id, label: `${r.tool}${r.matcher?.command ? ' ' + r.matcher.command : ''}`, hint: r.action })), confirm: 'remove' });
+      if (ids?.length) { let n = 0; for (const id of ids) if (await p.engine.rules.remove(id)) n++; this.toast('ok', `Removed ${n} rule${n === 1 ? '' : 's'}.`); }
+      return;
+    }
     this.notice('info', rules.length ? `${rules.length} permission rule${rules.length === 1 ? '' : 's'} (checked before the mode)` : 'No permission rules yet. Answering "always" to an approval saves one for this project.', [...rules.map((r) => `${r.id}  ${r.action.padEnd(5)} ${r.tool}${r.matcher?.command ? ` ${r.matcher.command}` : ''}${r.matcher?.path_glob ? ` ${r.matcher.path_glob}` : ''}  (${r.scope})`), ...warn.map((w) => `! ${w}`), ...(trust.length ? ['! This project has its own rules file that you have not trusted yet: /trust rules to use it.'] : []), ...(rules.length ? ['Remove one with /permissions remove <id>.'] : [])].join('\n') || undefined);
   }
   private async trustCommand(arg: string) {
@@ -708,9 +1069,11 @@ export class AppController {
     if (r.ok) this.notice('info', 'Asked the agent to compact its context.'); else this.toast('warn', r.reason === 'unsupported' ? `${this.o.engine.label} has no compact command Centcom can use.` : r.reason === 'busy' ? 'Wait until the agent is idle, then /compact.' : r.reason === 'failed' ? 'The compact request did not go through. Try again in a minute.' : 'The agent is not running.');
   }
 
-  toast(level: 'info' | 'ok' | 'warn' | 'error', text: string, ms = 3800) {
-    const id = nid('toast');
-    this.set((s) => ({ toasts: [...s.toasts.slice(-2), { id, level, text, until: Date.now() + ms }] }));
+  /** A short message over the corner of the screen. Said again while still showing, it stays instead of stacking; problems stay longer than good news. */
+  toast(level: 'info' | 'ok' | 'warn' | 'error', text: string, ms = level === 'error' ? 7000 : level === 'warn' ? 5000 : 3800) {
+    const same = this.state.toasts.find((t) => t.level === level && t.text === text); const id = same?.id ?? nid('toast');
+    if (same) { const old = this.toastTimers.get(id); if (old) clearTimeout(old); this.set((s) => ({ toasts: s.toasts.map((t) => (t.id === id ? { ...t, until: Date.now() + ms } : t)) })); }
+    else this.set((s) => ({ toasts: [...s.toasts.slice(-2), { id, level, text, until: Date.now() + ms }] }));
     this.toastTimers.set(id, setTimeout(() => { this.set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })); this.toastTimers.delete(id); }, ms));
   }
   notice(level: 'info' | 'warn' | 'error' | 'ok', text: string, detail?: string) { this.addItem({ kind: 'notice', id: nid('n'), level, text, ...(detail ? { detail } : {}) }); }
@@ -735,16 +1098,6 @@ export class AppController {
   }
 }
 
-export function errorTitle(code: string): string {
-  switch (code) {
-    case 'provider_not_installed': return 'Claude Code is not installed';
-    case 'provider_not_signed_in': return 'Not signed in';
-    case 'provider_cap_reached': return 'Usage limit reached';
-    case 'provider_rate_limited': return 'The service is busy';
-    case 'provider_version_unsupported': return 'This version is not supported';
-    default: return 'Something went wrong';
-  }
-}
 export function modeLabel(m: PermissionMode): string {
   return m === 'plan' ? 'Plan mode: read-only, nothing is changed' : m === 'acceptEdits' ? 'Accept edits: file edits go through, commands still ask' : m === 'bypassPermissions' ? 'Bypass: everything but dangerous commands is allowed' : 'Default: ask before edits and commands';
 }
