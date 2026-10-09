@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
-import { editInEditor, isForeground, stopUntilContinued } from '../src/external.js';
+import { becomesForeground, editInEditor, isForeground, stopUntilContinued } from '../src/external.js';
 
 const tmpEdits = () => readdirSync(tmpdir()).filter((n) => n.startsWith('centcom-edit-'));
 describe('editing the prompt in your editor', () => {
@@ -32,5 +32,21 @@ describe('is this job the one the terminal is showing', () => {
   it('foreground: the process group is the terminal\'s; background (after bg): it is not; no terminal or no /proc: yes', () => {
     expect(isForeground(() => stat(555, 555))).toBe(true); expect(isForeground(() => stat(555, 777))).toBe(false); expect(isForeground(() => stat(555, -1))).toBe(true); expect(isForeground(() => { throw new Error('no /proc'); })).toBe(true);
     expect(isForeground(() => '1 (a) b) S 1 9 1 1 9 0')).toBe(true); // a ")" in the program name does not confuse it
+  });
+});
+
+describe('waiting for the terminal after being continued', () => {
+  it('yes at once; yes a moment later (the shell hands the terminal over just after the signal); no when it never does (bg)', async () => {
+    let t = 0; const o = (fg: () => boolean) => ({ isFg: fg, sleep: async (ms: number) => { t += ms; }, now: () => t });
+    expect(await becomesForeground(1000, o(() => true))).toBe(true); t = 0; expect(await becomesForeground(1000, o(() => t >= 200))).toBe(true); t = 0; expect(await becomesForeground(1000, o(() => false))).toBe(false); expect(t).toBeGreaterThanOrEqual(1000);
+  });
+});
+
+describe('stopUntilContinued keeps the process alive while it waits', () => {
+  it('an event-loop handle is held until the continue signal (a signal listener alone would let node exit), then released', async () => {
+    const before = (process as never as { getActiveResourcesInfo(): string[] }).getActiveResourcesInfo().filter((x) => x === 'Timeout').length; let cont = () => undefined as void;
+    const p = stopUntilContinued({ kill: () => true, once: (_e: string, f: () => void) => { cont = f as never; return process; } } as never);
+    const during = (process as never as { getActiveResourcesInfo(): string[] }).getActiveResourcesInfo().filter((x) => x === 'Timeout').length; expect(during).toBe(before + 1);
+    cont(); await p; expect((process as never as { getActiveResourcesInfo(): string[] }).getActiveResourcesInfo().filter((x) => x === 'Timeout').length).toBe(before);
   });
 });

@@ -70,3 +70,11 @@ describe('the mascot strip offers the same answers as the permission dialog', ()
     expect(strip('high')).toContain('y yes · n no'); expect(strip('high')).not.toContain('always'); expect(strip('medium')).toContain('y yes · s session · a always · n no'); c.stop();
   });
 });
+
+describe('the welcome screen respects "mascot off" and the idle slowdown', () => {
+  it('no picture (and so nothing to animate) when the mascot is off; the text stays', async () => {
+    const { Welcome } = await import('../src/components/Welcome.js'); const c = new AppController({ engine: new DemoEngine({ speed: 100 }), demo: true, cwd: '/tmp', version: 't', skills: [] });
+    const draw = (mascot: boolean) => renderToString(<ThemeCtx.Provider value={createTheme('dark', 'truecolor')}><Welcome s={c.state} width={100} height={24} color="violet" reduced={false} mascot={mascot} /></ThemeCtx.Provider>, { columns: 100 }).replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '');
+    const on = draw(true); const off = draw(false); expect(off).toContain('Command many hands.'); expect(off).toContain('Type a task and press Enter'); expect(on.split('\n').filter((l) => /[▀▄█]/.test(l)).length).toBeGreaterThan(off.split('\n').filter((l) => /[▀▄█]/.test(l) && !/█▀|▀█|▄▀▀|▀▀/.test('')).length - 10); c.stop();
+  });
+});

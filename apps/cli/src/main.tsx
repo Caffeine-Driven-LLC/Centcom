@@ -28,7 +28,7 @@ import { CONTRACT_VERSION } from '@centcom/protocol';
 import { find as findCommand, helpFor, renderHelp, topHelp } from './help/index.js';
 import { COMMANDS } from './help/commands.js';
 import { checkArgs, normalizeArgs } from './flags.js';
-import { editInEditor, isForeground, stopUntilContinued, type ExternalTask } from './external.js';
+import { becomesForeground, editInEditor, stopUntilContinued, type ExternalTask } from './external.js';
 import { runUpdate } from './commands/update/index.js';
 import { createInterface } from 'node:readline';
 import { dirname as pathDirname } from 'node:path';
@@ -196,7 +196,7 @@ async function main() {
       instance = render(<App ctl={ctl} tier={tier} keys={keys} />, { exitOnCtrlC: false, patchConsole: false, maxFps: 30, incrementalRendering: !process.env.CENTCOM_FULL_RENDER });
       await instance.waitUntilExit(); const task = pendingExternal; pendingExternal = undefined; if (!task) break;
       process.stdout.write('\x1b[?1000l\x1b[?1006l\x1b[?25h\x1b[?1049l'); // the screen is the shell's again
-      if (task.kind === 'editor') task.done(editInEditor(task.text)); else { do { await stopUntilContinued(); } while (!isForeground()); } // `bg` wakes the job without the terminal: it goes back to sleep until `fg`
+      if (task.kind === 'editor') task.done(editInEditor(task.text)); else { for (;;) { await stopUntilContinued(); if (await becomesForeground()) break; } } // `bg` wakes the job without the terminal: it goes back to sleep until `fg` (a moment is allowed for the shell to hand the terminal over)
       process.stdout.write('\x1b[?1049h\x1b[2J\x1b[H');
     }
   }
