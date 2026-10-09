@@ -25,6 +25,9 @@ describe('session store', () => {
     for (const f of readdirSync(join(st.dir, A))) expect(statSync(join(st.dir, A, f)).mode & 0o777).toBe(0o600); expect(readdirSync(join(st.dir, A)).some((f) => f.endsWith('.tmp'))).toBe(false);
     expect(st.load('../../etc/passwd')).toBeUndefined(); st.delete('../x'); expect(st.list('/p')).toHaveLength(1);
   });
+  it('a stored title with control codes is shown clean, on one line', () => {
+    const st = tmp(); st.save({ ...meta(A), title: 'Fix \x1b[31mred\x1b[0m\x07 bug\nand more\u009b2J' } as never, [user('hi')]); const l = st.list('/p'); expect(l[0]!.title).toBe('Fix red bug and more'); expect(/[\u0000-\u001f\u007f-\u009f]/.test(l[0]!.title)).toBe(false); st.close();
+  });
   it('survives a damaged file', () => { const st = tmp(); st.save(meta(A), [user('hi')]); st.close(); require('node:fs').writeFileSync(join(st.dir, 'index.json'), '{oops'); expect(st.list('/p')).toHaveLength(1); });
   it('moves conversations saved by older versions into the log, once', () => {
     const dir = mkdtempSync(join(tmpdir(), 'cc-sessions-')); const fs = require('node:fs'); fs.mkdirSync(join(dir, 'sessions')); fs.writeFileSync(join(dir, 'sessions', 'old1.meta.json'), JSON.stringify({ ...meta('old1'), engine: 'claude-code', resumeToken: 'claude-sess-1' })); fs.writeFileSync(join(dir, 'sessions', 'old1.items.json'), JSON.stringify([user('from before')]));
