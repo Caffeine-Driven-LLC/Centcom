@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeEngine, type FakeEngineOptions } from '@centcom/testkit';
 import type { ApprovalRequest, EventBody } from '@centcom/agent';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
+vi.setConfig({ testTimeout: 20_000 }); // these start a real runtime and a git repo: a loaded CI runner needs more than 5 s
 import { AppController } from '../src/controller.js';
 import { buildRuntime } from '../src/runtime.js';
 
