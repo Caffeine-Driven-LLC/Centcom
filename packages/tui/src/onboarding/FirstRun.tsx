@@ -9,7 +9,7 @@ import { FIRST_RUN } from './copy.js';
 
 /** Rows the half-block Cento needs; below that the ASCII one is used. */
 export const LARGE_MASCOT_ROWS = 30;
-export interface FirstRunProps { onDone: () => void; width: number; height: number; tier: ColorTier; mascotAllowed: boolean; reducedMotion?: boolean; color?: CentoColor; /** Plain text only (screen readers). */ plain?: boolean; theme?: 'dark' | 'light' }
+export interface FirstRunProps { onDone: () => void; width: number; height: number; tier: ColorTier; mascotAllowed: boolean; reducedMotion?: boolean; color?: CentoColor; /** Plain text only (screen readers). */ plain?: boolean; theme?: 'dark' | 'light' | 'hc' }
 
 /** The one-time welcome: Cento waving, one sentence, one command to try, where to read more. Any key closes it. */
 export function FirstRun(p: FirstRunProps) { return <ThemeCtx.Provider value={createTheme(p.theme ?? 'dark', p.tier)}><FirstRunBody {...p} /></ThemeCtx.Provider>; }

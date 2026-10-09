@@ -14,13 +14,13 @@ function infoLines(s: AppState, spin: string, width: number, now: number): Line[
   const lastNotice = [...s.items].reverse().find((i) => i.kind === 'notice');
   if (s.approvals.length) {
     const a = s.approvals[0]!;
-    return [[sp('? ', { c: 'status.warning', b: true }), sp('Waiting for you', { c: 'status.warning', b: true })], [sp(truncate(a.req.summary, width), { c: 'text.secondary' })], [sp('y yes · a always · n no', { c: 'text.muted' })]];
+    return [[sp('? ', { c: 'status.warning', b: true }), sp('Waiting for you', { c: 'status.warning', b: true })], [sp(truncate(a.req.summary, width), { c: 'text.secondary' })], [sp(a.req.risk === 'high' ? 'y yes · n no' : 'y yes · s session · a always · n no', { c: 'text.muted' })]];
   }
   if (s.busy) {
     const elapsed = s.turnStartedAt ? formatElapsed(now - s.turnStartedAt) : '';
     const tok = me.inTok + me.outTok;
     const act = running && running.kind === 'tool' ? `${running.name} ${running.path ?? running.command ?? running.summary}` : '';
-    const verb = s.settings.reducedMotion ? 'Working…' : s.verb;
+    const verb = s.settings.reducedMotion || s.settings.spinner === 'plain' ? 'Working…' : s.verb;
     return [
       [sp(spin + ' ', { c: 'signal', b: true }), sp(truncate(verb, width - 3), { c: 'text.secondary' })],
       [sp([elapsed, tok ? `↑ ${formatTokens(tok)} tokens` : '', 'esc to interrupt'].filter(Boolean).join('  ·  '), { c: 'text.muted' })],
@@ -38,12 +38,12 @@ function infoLines(s: AppState, spin: string, width: number, now: number): Line[
 }
 
 export const LiveStrip = React.memo(LiveStripImpl, sameUnlessTyping as never) as typeof LiveStripImpl;
-function LiveStripImpl({ s, driver, width, size }: { s: AppState; driver: MascotDriver; width: number; size: 'large' | 'small' | 'off' }) {
+function LiveStripImpl({ s, driver, width, size, calm = 1 }: { s: AppState; driver: MascotDriver; width: number; size: 'large' | 'small' | 'off'; /** 1 = normal; more = the animation runs that many times slower (nothing has happened for a while). */ calm?: number }) {
   const theme = useTheme();
   const f = useMascotFrame(driver);
   const spinning = s.busy && !s.settings.reducedMotion;
   const tick = useTick(120, spinning);
-  const slow = useTick(500, size === 'small' && !s.settings.reducedMotion);
+  const slow = useTick(500 * calm, size === 'small' && !s.settings.reducedMotion);
   const spin = spinning ? SPINNER[tick % SPINNER.length]! : '…';
   const me = s.agents.find((a) => a.mine)!;
   const now = Date.now();

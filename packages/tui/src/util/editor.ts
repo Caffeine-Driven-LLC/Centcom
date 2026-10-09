@@ -1,3 +1,4 @@
+import { fuzzyScore } from '../palette/fuzzy.js';
 /** Prompt editing as pure functions on (text, cursor). The cursor is an index into the string between characters. */
 export interface Ed { text: string; cursor: number }
 
@@ -24,6 +25,17 @@ export const selRange = (text: string, cursor: number, anchor: number | undefine
 };
 export const selectedText = (text: string, cursor: number, anchor: number | undefined): string => { const r = selRange(text, cursor, anchor); return r ? text.slice(r[0], r[1]) : ''; };
 export const removeRange = (e: Ed, lo: number, hi: number): Ed => ({ text: e.text.slice(0, lo) + e.text.slice(hi), cursor: lo });
+/** The `@file` word being typed at the cursor: from an `@` that starts a word, up to the cursor. */
+export interface Mention { start: number; end: number; query: string }
+export function mentionAt(text: string, cursor: number): Mention | undefined {
+  const before = text.slice(0, cursor); const m = /(^|\s)@([^\s@]*)$/.exec(before); if (!m) return undefined;
+  const start = before.length - m[2]!.length - 1; let end = cursor; while (end < text.length && !/\s/.test(text[end]!)) end++; // the rest of the word after the cursor is replaced too
+  return { start, end, query: m[2]! };
+}
+/** The suggestions to show while the next search runs: the last list cut to what still matches what was typed since (never entries that would be wrong to complete). */
+export const visibleMentions = (query: string, items: string[], fresh: boolean): string[] => (fresh ? items : items.filter((p) => !!fuzzyScore(query, p)));
+/** Put the chosen path in place of the word being typed, with a space after it, and the cursor after that. */
+export function completeMention(e: Ed, m: Mention, path: string): Ed { const ins = `@${path} `; return { text: e.text.slice(0, m.start) + ins + e.text.slice(m.end).replace(/^ /, ''), cursor: m.start + ins.length }; }
 export const isSingleLine = (e: Ed) => !e.text.includes('\n');
 
 /** Move the cursor one visual line up/down in a multi-line buffer, keeping the column when possible. Returns null at the edges. */

@@ -42,6 +42,15 @@ describe('a bad config file does not stop the client', () => {
   });
 });
 
+describe('the mouse setting', () => {
+  it('is on by default, read from ui.mouse, and remembered when you turn it off', async () => {
+    expect(settingsFromConfig((await load()).cc.cfg).mouse).toBe(true);
+    expect(settingsFromConfig((await load({ [USER]: JSON.stringify({ ui: { mouse: false } }) })).cc.cfg).mouse).toBe(false);
+    const { cc, fs } = await load(); const base = { ...initialSettings(), ...settingsFromConfig(cc.cfg) }; cc.options(base);
+    cc.remember({ ...base, mouse: false }); cc.flush(); expect(saved(fs)).toEqual({ ui: { mouse: false } });
+  });
+});
+
 describe('what the client remembers', () => {
   it('saves only what you changed, not the defaults or your flags', async () => {
     const { cc, fs } = await load({}, { 'client.model': 'haiku' }); const base = { ...initialSettings(), ...settingsFromConfig(cc.cfg) }; cc.options(base);

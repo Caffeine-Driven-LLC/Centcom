@@ -5,7 +5,7 @@ import { render } from 'ink';
 import { detectColorTier } from '@centcom/theme';
 import { ClaudeCodeEngine, CodexEngine, DemoEngine, detectClaude, detectCodex, type AgentEngine, type PermissionMode } from '@centcom/agent';
 import { chooseEngine } from './engine-pick.js';
-import { App, AppController, ClientConfig, FirstRun, SessionStore, buildRuntime, initialSettings, isFirstRun, markFirstRunDone, settingsFromConfig } from '@centcom/tui';
+import { App, AppController, ClientConfig, FirstRun, SessionStore, TITLE_POP, TITLE_PUSH, resolveA11yMode, runLinear, queryBackground, buildRuntime, initialSettings, isFirstRun, markFirstRunDone, settingsFromConfig } from '@centcom/tui';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename as pathBase, join as pathJoin, resolve as pathResolve } from 'node:path';
 import { homedir } from 'node:os';
@@ -26,6 +26,9 @@ import { CrashStore, installCrashHandlers, runCrash } from './crash/index.js';
 import { realDoctorContext, runDoctor } from './doctor/index.js';
 import { CONTRACT_VERSION } from '@centcom/protocol';
 import { find as findCommand, helpFor, renderHelp, topHelp } from './help/index.js';
+import { COMMANDS } from './help/commands.js';
+import { checkArgs, normalizeArgs } from './flags.js';
+import { becomesForeground, editInEditor, stopUntilContinued, type ExternalTask } from './external.js';
 import { runUpdate } from './commands/update/index.js';
 import { createInterface } from 'node:readline';
 import { dirname as pathDirname } from 'node:path';
@@ -40,7 +43,8 @@ import { ACCOUNT_COMMANDS } from './commands/account/index.js';
 const VERSION = '0.1.0';
 const HELP = topHelp(VERSION);
 
-function arg(name: string): string | undefined { const i = process.argv.indexOf(name); return i >= 0 ? process.argv[i + 1] : undefined; }
+/** The word after an option, unless that is another option (`--resume --demo` has no id). */
+function arg(name: string): string | undefined { const i = process.argv.indexOf(name); const v = i >= 0 ? process.argv[i + 1] : undefined; return v !== undefined && v.startsWith('-') && !/^-\d/.test(v) ? undefined : v; }
 const has = (n: string) => process.argv.includes(n);
 
 /** Explicit command-line choices, as the top config layer. They are used for this run and never written back. */
@@ -62,6 +66,7 @@ async function pickEngine(preferred: 'claude-code' | 'codex' = 'claude-code'): P
   return { engine, demo: pick.engine === 'demo', note: pick.note };
 }
 
+const screenReaderRequested = () => process.argv.includes('--screen-reader') || /^(1|true|on|yes)$/i.test(process.env.CENTO_SCREEN_READER ?? '');
 async function main() {
   // `centcom help [topic]` and `centcom <command> --help` come from the same list as the docs and the man pages
   const helpOpts = { width: Math.min(80, process.stdout.columns ?? 80), colour: !!process.stdout.isTTY && !process.env.NO_COLOR };
@@ -93,6 +98,11 @@ async function main() {
   if (process.argv[2] === 'hooks') await done(await runHooksCli(process.argv.slice(3)));
   if (isAccount) await done(await runAccountCli(process.argv[2]!, process.argv.slice(3).filter((a) => a !== '--debug'), { version: VERSION }));
   if (process.argv[2] === 'lan') { await done(await runLanCli(process.argv.slice(3), { out: (l) => console.log(l), err: (l) => console.error(l) })); }
+  { // the terminal app and print mode take only the options in the help: a typo is a clear message, not a silent no-op
+    const top = findCommand('centcom')!; process.argv.splice(2, process.argv.length - 2, ...normalizeArgs(process.argv.slice(2), top.flags));
+    const bad = checkArgs(process.argv.slice(2), top.flags, { print: has('-p') || has('--print'), commands: [...COMMANDS.map((c) => c.name).filter((n) => n !== 'centcom'), 'help'] });
+    if (bad) { process.stderr.write(bad + '\n'); process.exit(2); }
+  }
   if (has('-p') || has('--print')) {
     const i = Math.max(process.argv.indexOf('-p'), process.argv.indexOf('--print'));
     const next = process.argv[i + 1]; const text = next && !next.startsWith('-') ? next : undefined;
@@ -126,13 +136,18 @@ async function main() {
   let branch = ''; try { branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { /* not a git repo */ }
   const dangerous = has('--dangerously-skip-permissions') || has('--yolo');
   const mode: PermissionMode = dangerous || arg('--mode') === 'bypassPermissions' ? 'bypassPermissions' : cc.cfg.client.permission_mode;
-  const settings = { ...settingsFromConfig(cc.cfg), permissionMode: mode };
+  const a11y = resolveA11yMode({ env: process.env, flags: { screenReader: has('--screen-reader') }, config: { screenReader: cc.cfg.a11y.screen_reader, reducedMotion: cc.cfg.ui.reduced_motion } });
+  const settings = { ...settingsFromConfig(cc.cfg), permissionMode: mode, reducedMotion: a11y.reducedMotion, ...(a11y.screenReader ? { mascot: 'off' as const } : {}) };
+  // theme "auto": ask the terminal for its background colour (150 ms at most, nothing is written without a terminal) so a light terminal gets Paper instead of Graphite
+  if (cc.cfg.ui.theme === 'auto' && !a11y.screenReader) { const bg = await queryBackground({ out: process.stdout, inp: process.stdin }); if (bg === 'light') settings.theme = 'light'; }
+  let pendingExternal: ExternalTask | undefined; // set by ctrl+z and ctrl+g: the screen steps aside, the task runs, the screen comes back
+  let quitLinear: () => void = () => undefined; const linearStop = new Promise<void>((r) => { quitLinear = r; });
   if (arg('--engine') === 'codex' || arg('--engine') === 'claude-code') cc.set('client.engine', arg('--engine')!); // the agent you pick is the one you get next time
 
   const { logger } = createAppLogger({ level: cc.cfg.log.level, maxBytes: cc.cfg.log.max_file_bytes, maxFiles: cc.cfg.log.max_files });
   logger.info('app.start', { version: VERSION, engine: engine.id, demo, mode });
   let instance: ReturnType<typeof render> | undefined;
-  const rt = await buildRuntime({ cwd: process.cwd(), engineId: engine.id, demo, dangerous: dangerous || mode === 'bypassPermissions', checkpoints: !has('--no-checkpoints'), sessionUsd: cfg0?.budget?.session_usd || undefined, stateDir: stateDir(defaultDeps()) });
+  const rt = await buildRuntime({ cwd: process.cwd(), engineId: engine.id, demo, dangerous: dangerous || mode === 'bypassPermissions', checkpoints: !has('--no-checkpoints'), approvalTimeoutMs: cc.cfg.agent.approval_timeout_ms, sessionUsd: cfg0?.budget?.session_usd || undefined, stateDir: stateDir(defaultDeps()) });
   // --continue / --resume [id]: decided before the screen starts, so a wrong id is one line and exit 1
   const sessionStore = has('--no-save') ? undefined : new SessionStore(); let resumeId: string | undefined;
   if (sessionStore && (has('-c') || has('--continue') || has('--resume'))) {
@@ -141,27 +156,31 @@ async function main() {
     else if ('pick' in c) { resumeId = await pickSession(c.pick, { input: process.stdin, output: process.stdout }); if (!resumeId) process.exit(0); }
     else resumeId = c.id;
   }
-  const ctl = new AppController({ ...rt.options, views: appViews(process.cwd()),
+  const ctl = new AppController({ ...rt.options, views: appViews(process.cwd(), { doctor: () => realDoctorContext({ version: VERSION, contract: CONTRACT_VERSION, apiBase: cc.cfg.api.base_url, stateDir: stateDir(defaultDeps()) }) }),
     engine, demo, cwd: process.cwd(), branch, version: VERSION, permissionMode: mode, dangerous: dangerous || mode === 'bypassPermissions', ghosts: has('--demo-team'),
-    logger, settings, ...cc.options({ ...initialSettings(), ...settings }, { saveHistory: !has('--no-save') }),
+    logger, settings, external: (task) => { pendingExternal = task; instance?.unmount(); }, bell: () => { try { process.stdout.write('\x07'); } catch { /* no terminal */ } }, ...cc.options({ ...initialSettings(), ...settings }, { saveHistory: !has('--no-save') }),
     sessions: sessionStore, night: demo ? undefined : { dir: pathJoin(homedir(), '.centcom', 'night') },
     modelCache: { read: async (f) => { try { return await readFile(pathJoin(stateDir(defaultDeps()), f), 'utf8'); } catch { return undefined; } }, write: async (f, t) => { const d = stateDir(defaultDeps()); await mkdir(d, { recursive: true, mode: 0o700 }); await writeFile(pathJoin(d, f), t, { mode: 0o600 }); } },
     resume: resumeId,
-    onExit: (code) => { if (code) process.exitCode = code; instance?.unmount(); },
+    onExit: (code) => { if (code) process.exitCode = code; instance?.unmount(); quitLinear(); },
     onMemoryAdd: async (text) => { // a line starting with "# " is a note for this tool's memory file (CLAUDE.md or AGENTS.md), shown as a diff and confirmed
       try { const mf = makeMemoryFiles(process.cwd()); const plan = await mf.plan({ engine: engine.id === 'codex' ? 'codex' : 'claude-code', scope: 'project', quickAdd: text, root: process.cwd() });
         return { diff: plan.diff || '(already there)', apply: async () => { await mf.apply(plan, { accepted: true, planHash: plan.planHash }); return 'Added to memory.'; } }; } catch (e) { return { error: String((e as Error).message ?? e) }; }
     },
   });
-  process.stdout.write('\x1b[?1049h\x1b[2J\x1b[H'); // alternate screen: the transcript never pollutes scrollback
+  let titlePushed = false; // the tab title is saved once, when the app first sets it, and put back when the terminal is given back
+  if (!a11y.screenReader) { process.stdout.write(TITLE_PUSH); titlePushed = true; } // the old title is saved always (the title can be switched on later) and comes back on exit
+  if (!a11y.screenReader) process.stdout.write('\x1b[?1049h\x1b[2J\x1b[H'); // alternate screen: the transcript never pollutes scrollback (a screen reader gets plain appended lines instead)
   // the one-time welcome, before anything else (never in print mode or without a terminal)
   const firstRunFile = pathJoin(stateDir({ env: process.env, homedir: homedir() }), 'state.json'); let firstRunNote: string | undefined;
-  if (!has('--demo') && await isFirstRun({ stateFile: firstRunFile })) {
+  if (!a11y.screenReader && !has('--demo') && await isFirstRun({ stateFile: firstRunFile })) {
     await new Promise<void>((done) => { const fr = render(<FirstRun onDone={() => { fr.unmount(); done(); }} width={process.stdout.columns ?? 80} height={process.stdout.rows ?? 24} tier={tier} mascotAllowed={settings.mascot !== 'off'} reducedMotion={settings.reducedMotion} color={settings.color} theme={settings.theme} />, { exitOnCtrlC: true, patchConsole: false }); });
     const r = await markFirstRunDone({ stateFile: firstRunFile }); if (!r.ok) firstRunNote = r.message; process.stdout.write('\x1b[2J\x1b[H');
   }
-  const leave = () => process.stdout.write('\x1b[?1049l');
+  /** Put the terminal back as it was: out of the alternate screen, mouse reporting off, cursor shown. Safe to call twice. */
+  const leave = () => { if (a11y.screenReader) return; /* plain-text mode never wrote a control code, so it takes none back */ try { process.stdout.write('\x1b[?1000l\x1b[?1006l\x1b[?25h\x1b[?1049l' + (titlePushed ? TITLE_POP : '')); titlePushed = false; } catch { /* the terminal is gone */ } };
   process.on('exit', leave);
+  for (const [sig, code] of [['SIGTERM', 143], ['SIGHUP', 129]] as const) process.on(sig, () => { leave(); process.exit(code); }); // `kill` and a closing window must not leave your shell in the alternate screen with the mouse captured
   rt.bind(ctl);
   await ctl.start();
   if (note) ctl.notice('warn', note);
@@ -171,11 +190,19 @@ async function main() {
   cc.onWarn = (w) => ctl.notice('warn', 'Settings: ' + w);
   if (mode === 'bypassPermissions') ctl.notice('warn', 'Dangerously skip permissions is ON', 'Cento will run commands and edit files without asking. Use /mode default to turn approvals back on.');
   const keys = resolvedKeys(); if (keys.warnings.length) ctl.notice('warn', `Some of your key bindings were skipped (${keys.warnings.length}). Press ? to see why.`);
-  instance = render(<App ctl={ctl} tier={tier} keys={keys} />, { exitOnCtrlC: false, patchConsole: false, maxFps: 30, incrementalRendering: true });
-  await instance.waitUntilExit();
+  if (a11y.screenReader) await runLinear(ctl, { input: process.stdin, output: process.stdout }, linearStop);
+  else {
+    for (;;) { // each pass draws the app; a task (your editor, being put in the background) unmounts it, runs on the real terminal, and the loop draws it again from the same state
+      instance = render(<App ctl={ctl} tier={tier} keys={keys} />, { exitOnCtrlC: false, patchConsole: false, maxFps: 30, incrementalRendering: !process.env.CENTCOM_FULL_RENDER });
+      await instance.waitUntilExit(); const task = pendingExternal; pendingExternal = undefined; if (!task) break;
+      process.stdout.write('\x1b[?1000l\x1b[?1006l\x1b[?25h\x1b[?1049l'); // the screen is the shell's again
+      if (task.kind === 'editor') task.done(editInEditor(task.text)); else { for (;;) { await stopUntilContinued(); if (await becomesForeground()) break; } } // `bg` wakes the job without the terminal: it goes back to sleep until `fg` (a moment is allowed for the shell to hand the terminal over)
+      process.stdout.write('\x1b[?1049h\x1b[2J\x1b[H');
+    }
+  }
   ctl.stop(); await ctl.stopFleet(); cc.flush();
   leave();
   await done(0);
 }
 
-main().catch((e) => { process.stdout.write('\x1b[?1049l'); console.error(e instanceof Error ? e.message : e); process.exit(1); });
+main().catch((e) => { if (!screenReaderRequested()) process.stdout.write('\x1b[?1049l'); console.error(e instanceof Error ? e.message : e); process.exit(1); });

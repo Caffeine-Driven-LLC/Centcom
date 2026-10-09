@@ -52,9 +52,19 @@ describe('permission policy in the app', () => {
 describe('checkpoints and /rewind in the app', () => {
   it('a checkpoint is taken before the prompt; /rewind lists it; /rewind 1 asks, then puts the file back', async () => {
     const { ctl, cwd, engine } = await app(); await ctl.submit('change a.txt please'); await until(() => engine.sessions[0]!.prompts.length === 1); writeFileSync(join(cwd, 'a.txt'), 'changed by the agent\n'); await until(() => !ctl.state.busy);
-    await ctl.runCommand('/rewind'); expect(notices(ctl).at(-1)).toMatch(/change a\.txt please/);
+    const list = ctl.runCommand('/rewind'); await until(() => ctl.state.mode === 'pick'); expect(ctl.state.pick!.options.map((o) => o.label)).toEqual(['change a.txt please']); ctl.pickKey('cancel'); await list; expect(readFileSync(join(cwd, 'a.txt'), 'utf8')).toBe('changed by the agent\n'); // listing and cancelling changes nothing
     await ctl.runCommand('/rewind 1'); expect(notices(ctl).at(-1)).toMatch(/Type y to confirm[\s\S]*Put back 1 file: a\.txt[\s\S]*not undone/); expect(readFileSync(join(cwd, 'a.txt'), 'utf8')).toBe('changed by the agent\n');
     await ctl.submit('y'); await until(() => readFileSync(join(cwd, 'a.txt'), 'utf8') === 'original\n'); expect(notices(ctl).at(-1)).toMatch(/Rewound to before "change a\.txt please": 1 put back/); expect(engine.sessions[0]!.prompts).toEqual(['change a.txt please']); ctl.stop();
+  });
+  it('bare /rewind guides you: pick the prompt, pick what to put back, review, confirm from a list; no, or Esc anywhere, changes nothing', async () => {
+    const { ctl, cwd, engine } = await app(); await ctl.submit('change a.txt please'); await until(() => engine.sessions[0]!.prompts.length === 1); writeFileSync(join(cwd, 'a.txt'), 'changed by the agent\n'); await until(() => !ctl.state.busy);
+    const title = () => ctl.state.pick?.title; const readA = () => readFileSync(join(cwd, 'a.txt'), 'utf8');
+    let run = ctl.runCommand('/rewind'); await until(() => title() === 'Go back to before which prompt?'); ctl.pickKey('enter'); await until(() => title() === 'Put back what?'); expect(ctl.state.pick!.options.map((o) => o.id)).toEqual(['files', 'conversation', 'both']); ctl.pickKey('enter');
+    await until(() => title() === 'Rewind to before "change a.txt please"?'); expect(notices(ctl).at(-1)).toMatch(/Put back 1 file: a\.txt[\s\S]*not undone/); expect(readA()).toBe('changed by the agent\n'); // reviewed, not done yet
+    ctl.pickKey('down'); ctl.pickKey('enter'); await run; expect(readA()).toBe('changed by the agent\n'); expect(notices(ctl).at(-1)).toMatch(/Nothing was rewound/);
+    run = ctl.runCommand('/rewind'); await until(() => title() === 'Go back to before which prompt?'); ctl.pickKey('enter'); await until(() => title() === 'Put back what?'); ctl.pickKey('cancel'); await run; expect(readA()).toBe('changed by the agent\n');
+    run = ctl.runCommand('/rewind'); await until(() => title() === 'Go back to before which prompt?'); ctl.pickKey('enter'); await until(() => title() === 'Put back what?'); ctl.pickKey('enter'); await until(() => title()?.startsWith('Rewind to before') === true); ctl.pickKey('enter'); await run;
+    await until(() => readA() === 'original\n'); expect(notices(ctl).at(-1)).toMatch(/Rewound to before "change a\.txt please": 1 put back/); ctl.stop();
   });
   it('anything but y cancels; a missing number or a busy agent is explained', async () => { const { ctl, cwd, engine } = await app(); await ctl.submit('one'); await until(() => engine.sessions[0]!.prompts.length === 1); writeFileSync(join(cwd, 'a.txt'), 'x\n'); await until(() => !ctl.state.busy); await ctl.runCommand('/rewind 1'); await ctl.submit('no'); expect(notices(ctl).at(-1)).toMatch(/Nothing was rewound/); expect(readFileSync(join(cwd, 'a.txt'), 'utf8')).toBe('x\n'); await ctl.runCommand('/rewind 9'); expect(ctl.state.toasts.at(-1)!.text).toMatch(/No checkpoint 9/); ctl.stop(); });
   it('conversation rewind drops the later messages and resumes the engine at that point', async () => {
@@ -85,7 +95,16 @@ describe('the fleet in the app', () => {
   it('/fleet start 2 runs two agents on their own branches; they show in the fleet panel; /fleet lists them; stop all ends them', async () => {
     const { ctl, fake } = await fleetApp(); await ctl.runCommand('/fleet start 2 fix the flaky test'); await until(() => fake.sessions.length === 2, 10_000);
     const rows = ctl.state.agents.filter((a) => !a.mine); expect(rows.map((a) => a.name)).toEqual(['1 fix the flaky test 1', '2 fix the flaky test 2']); expect(rows.every((a) => /^centcom\/alex\//.test(a.branch))).toBe(true); expect(new Set(fake.sessions.map((s) => s.o.cwd)).size).toBe(2); expect(ctl.state.fleet).toBe(true);
-    await ctl.runCommand('/fleet'); expect(notices(ctl).at(-1)).toMatch(/2 fleet agents[\s\S]*1\. fix the flaky test 1/); await ctl.runCommand('/fleet stop all'); await until(() => ctl.state.agents.filter((a) => !a.mine).every((a) => a.state === 'idle' || a.state === 'success'), 10_000); ctl.stop();
+    await ctl.runCommand('/fleet list'); expect(notices(ctl).at(-1)).toMatch(/2 fleet agents[\s\S]*1\. fix the flaky test 1/); await ctl.runCommand('/fleet stop all'); await until(() => ctl.state.agents.filter((a) => !a.mine).every((a) => a.state === 'idle' || a.state === 'success'), 10_000); ctl.stop();
+  }, 30_000);
+  it('bare /fleet is a menu: start asks how many and what for (nothing is sent to an agent), then runs; stop lists the agents', async () => {
+    const { ctl, fake } = await fleetApp(); const tick = () => new Promise((r) => setTimeout(r, 10)); const opts = () => ctl.state.pick!.options.map((o) => o.id);
+    const run = ctl.runCommand('/fleet'); await until(() => ctl.state.mode === 'pick'); expect(opts()).toEqual(['start', 'clean']); // nothing to show or stop yet
+    ctl.pickKey('enter'); await until(() => ctl.state.pick?.title === 'How many agents?'); ctl.pickKey('down'); ctl.pickKey('enter'); await tick(); // 2 agents
+    expect(ctl.state.items.some((i) => i.kind === 'notice' && /What should they work on/.test(i.text))).toBe(true); await ctl.submit('tidy the docs'); await run; await until(() => fake.sessions.length === 2, 10_000);
+    expect(ctl.state.items.some((i) => i.kind === 'user' && /tidy the docs/.test(i.text))).toBe(false); // the task went to the agents, not into your chat
+    const again = ctl.runCommand('/fleet'); await until(() => ctl.state.mode === 'pick'); expect(opts()).toEqual(['start', 'list', 'preview', 'stop', 'remove', 'clean']);
+    ctl.pickKey('down'); ctl.pickKey('down'); ctl.pickKey('down'); ctl.pickKey('enter'); await until(() => ctl.state.pick?.title === 'Stop fleet agents'); expect(ctl.state.pick!.options).toHaveLength(2); ctl.pickAnswer([1, 2]); await again; await until(() => ctl.state.toasts.some((t) => /Stopped 2 agents/.test(t.text))); ctl.stop();
   }, 30_000);
   it('an agent that commits announces its branch is ready, and preview checks it for conflicts', async () => {
     const { ctl, fake, manager, runner } = await fleetApp(); await ctl.runCommand('/fleet start add a file'); await until(() => fake.sessions.length === 1, 10_000); const wt = fake.sessions[0]!.o.cwd; writeFileSync(join(wt, 'new.txt'), 'x'); git(wt, 'add', '-A'); git(wt, 'commit', '-q', '-m', 'agent work');
@@ -114,4 +133,14 @@ describe('resuming across engines', () => {
     expect(engine.starts[0]!.resume).toBeUndefined(); expect(engine.sessions[0]!.o.systemPromptAppend).toMatch(/make the tests pass[\s\S]*I fixed two tests/); expect(notices(ctl).some((n) => /was with Codex/.test(n))).toBe(true); ctl.stop();
     const store2 = new SessionStore(tmp('centcom-sess-')); store2.save({ id: 'ses_01JTEST0000000000000000002', cwd, engine: 'codex', title: 'old', resumeToken: 'thread_codex_123', createdAt: 1, updatedAt: 2, messages: 1 }, [{ kind: 'user', id: 'u1', text: 'hi', ts: 1 }]); const same = new FakeEngine({ id: 'codex' }); const c2 = new AppController({ engine: same as never, demo: false, cwd, version: 't', skills: [], sessions: store2, resume: 'last' }); await c2.start(); expect(same.starts[0]!.resume).toBe('thread_codex_123'); c2.stop(); // the same engine resumes its own session
   });
+});
+
+describe('agent.approval_timeout_ms reaches the permission engine', () => {
+  it('an approval nobody answers is declined after the configured time, and the controller knows the deadline', async () => {
+    const cwd = repo(); const rt = await buildRuntime({ cwd, engineId: 'claude-code', demo: false, configDir: tmp('centcom-cfg-'), home: tmp('centcom-home-'), checkpoints: false, approvalTimeoutMs: 1500 });
+    expect(rt.options.approvalTimeoutMs).toBe(1500);
+    const ctl = new AppController({ ...rt.options, engine: new FakeEngine({ id: 'claude-code' }) as never, demo: false, cwd, version: 't', skills: [] }); rt.bind(ctl);
+    const p = ctl.decide(req({ tool: 'Bash', command: 'npm test' })); await until(() => ctl.state.approvals.length === 1); const left = ctl.state.approvals[0]!.expiresAt! - Date.now(); expect(left).toBeGreaterThan(1000); expect(left).toBeLessThanOrEqual(1500);
+    expect(await p).toMatchObject({ decision: 'deny' }); expect(ctl.state.approvals).toHaveLength(0); ctl.stop();
+  }, 15_000);
 });

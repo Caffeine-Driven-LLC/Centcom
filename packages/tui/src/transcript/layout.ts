@@ -11,9 +11,9 @@ export class TranscriptLayout {
   private cache = new WeakMap<Item, Measured>(); measures = 0; hits = 0; private blocks: Block[] = []; private width = 0; private hidden = 0; total = 0;
   private linesOf(it: Item, width: number): Line[] { const c = this.cache.get(it); if (c && c.width === width) { this.hits++; return c.lines; } this.measures++; const lines = itemLines(it, width); this.cache.set(it, { width, lines }); return lines; }
   /** Lay out `items` at `width`. Only items not seen at this width are measured. */
-  update(items: Item[], width: number): this {
+  update(items: Item[], width: number, compact = false): this {
     this.width = width; this.hidden = Math.max(0, items.length - MAX_BLOCKS); const shown = this.hidden ? items.slice(this.hidden) : items; const out: Block[] = []; let row = this.hidden ? 2 : 0; let prev: Item['kind'] | undefined;
-    for (const it of shown) { const grouped = (prev === 'tool' && (it.kind === 'tool' || it.kind === 'thinking')) || (prev === 'thinking' && (it.kind === 'tool' || it.kind === 'assistant')); const gap = !!prev && !grouped; if (gap) row++; const h = this.linesOf(it, width).length; out.push({ item: it, start: row, height: h, gap }); row += h; prev = it.kind; }
+    for (const it of shown) { const grouped = (prev === 'tool' && (it.kind === 'tool' || it.kind === 'thinking')) || (prev === 'thinking' && (it.kind === 'tool' || it.kind === 'assistant')); const gap = !!prev && !grouped && (!compact || it.kind === 'user'); /* compact: a blank row only before your own messages */ if (gap) row++; const h = this.linesOf(it, width).length; out.push({ item: it, start: row, height: h, gap }); row += h; prev = it.kind; }
     this.blocks = out; this.total = row; return this;
   }
   /** Rows [start, end), built only for the blocks that overlap. */

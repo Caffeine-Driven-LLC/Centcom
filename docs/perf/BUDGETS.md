@@ -22,9 +22,12 @@ Run `pnpm bench` (all) or `pnpm bench --fast` (the pull request subset). `--filt
 | `crypto.encrypt_sign.4k` | 1 ms | yes | XChaCha20-Poly1305 and Ed25519 |
 | `crypto.encrypt_sign.192k` | 8 ms | yes | near the largest frame |
 | `crypto.verify_decrypt.4k` | 1 ms | yes | |
+| `prompt.keypress.paint` | 50 ms | no | a key to the first byte of the new frame, in a real Ink render of the whole app with 60 messages (full set only) |
+| `session.save.1k` | 25 ms | no | saving a conversation of 1,000 messages; it runs about every 600 ms while the agent writes |
+| `cli.start.bundle` | 400 ms | no | `centcom --version` through the compiled bundle with V8's code cache, as `bin/centcom` runs it (full set only) |
 | `memory.transcript.10k` | 300 MB RSS | no | the harness alone is about 300 MB; gates when measured in the packaged CLI |
 
-Not measured here yet (they need lanes that are not in `main` yet): time to first prompt, keypress-to-paint, the 5,000-line diff view, resume replay of 5,000 frames, the guest reducer rate and the 10,000-delta leak check. The web budgets come from the web build report.
+Not measured here yet (they need lanes that are not in `main` yet): the 5,000-line diff view, resume replay of 5,000 frames, the guest reducer rate and the 10,000-delta leak check. The web budgets come from the web build report.
 
 ## CI
 

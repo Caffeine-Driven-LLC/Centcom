@@ -38,7 +38,20 @@ describe('help screen (acceptance 7)', () => {
     for (const k of ['shift+left/right', 'ctrl+x', 'alt+a', 'ctrl+delete', 'mouse wheel']) expect(p2).toContain(k); expect(p2).not.toContain('Approvals');
     expect(help(100, 24)).toContain('…'); expect(help(100, 24)).toContain('Tab');
   });
+  it('page three lists the slash commands and filters them by what you type', () => {
+    const page = (filter: string) => strip(renderToString(<HelpBody actions={actions()} keymap={km()} warnings={[]} width={100} height={30} filter={filter} page={2} />, { columns: 100 }));
+    const all = page(''); for (const c of ['/help', '/effort', '/theme', '/density', '/night', '/permissions']) expect(all).toContain(c); expect(all).toContain('Commands'); expect(all).not.toContain('Approvals');
+    const some = page('theme'); expect(some).toContain('/theme'); expect(some).not.toContain('/density'); expect(page('zzzz')).toContain('No command matches that.');
+  });
   it('fits 80x24, groups and key names shown; two columns from 100 wide', () => { const out = help(80, 22).split('\n'); expect(out.length).toBeLessThanOrEqual(24); expect(out.join('\n')).toContain('ctrl+k'); expect(out.join('\n')).toContain('Approvals'); const wide = help(120, 40); expect(wide.split('\n').some((l) => /General.*\S+\s{2,}\S/.test(l) || l.match(/│.*│/))).toBe(true); });
   it('typing pal filters to the palette action', () => { const rows = helpRows(actions(), km(), 'pal'); expect(rows.map((r) => r.id)).toEqual(expect.arrayContaining(['palette.open'])); expect(rows.every((r) => r.id.startsWith('palette.'))).toBe(true); expect(help(80, 22, 'pal')).toContain('Open the command palette'); expect(help(80, 22, 'pal')).not.toContain('Approve this once'); });
   it('30 actions still fit at 80x24', () => { const many = [...actions(), ...Array.from({ length: 30 - actions().length }, (_, i) => ({ id: `x.a${i}`, group: 'Extra', description: `extra action ${i}`, defaults: [] }))]; const out = strip(renderToString(<HelpBody actions={many} keymap={km()} warnings={[]} width={80} height={22} filter="" />, { columns: 80 })).split('\n'); expect(out.length).toBeLessThanOrEqual(24); });
+});
+
+describe('help on a small screen', () => {
+  const draw = (h: number, page: 0 | 1 | 2, filter = '', w = 80) => strip(renderToString(<HelpBody actions={actions()} keymap={km()} warnings={[]} width={w} height={h} filter={filter} page={page} />, { columns: w })).split('\n').filter((l, i, a) => !(i === a.length - 1 && l === ''));
+  it.each([[10, 0], [12, 0], [12, 1], [12, 2], [14, 0], [20, 2], [24, 0]] as [number, 0 | 1 | 2][])('at %i rows (page %i) it is never taller than it was given, and says what it left out', (h, page) => {
+    const out = draw(h, page); expect(out.length, out.join('\n')).toBeLessThanOrEqual(h); const hidden = out.some((l) => /more not shown/.test(l)); const all = draw(60, page).join('\n'); if (hidden) expect(all).not.toContain('more not shown'); // with room for everything the note is gone
+  });
+  it('a filter finds what was left out', () => { const out = draw(12, 0, 'palette').join('\n'); expect(out).toContain('ctrl+k'); expect(draw(12, 2, 'effort').join('\n')).toContain('/effort'); });
 });

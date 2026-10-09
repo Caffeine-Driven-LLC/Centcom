@@ -15,9 +15,13 @@ import { Prompt, SlashPopup, promptRows, slashMatches } from './components/Promp
 import { StatusLine } from './components/StatusLine.js';
 import { FleetPanel, FLEET_W } from './components/FleetPanel.js';
 import { Transcript, useTranscriptLayout } from './components/Transcript.js';
-import { Palette, Gallery, ModelPicker, galleryList, paletteItems } from './components/Overlays.js';
+import { CommandPalette } from './palette/index.js';
+import { Gallery, ModelPicker, galleryList, paletteItems } from './components/Overlays.js';
 import { Toasts } from './components/Toasts.js';
 import { MultiSelect } from './pick/MultiSelect.js';
+import { MentionPopup } from './components/MentionPopup.js';
+import { setTitle, windowTitle } from './util/title.js';
+import { ClickContext, clicksIn, createClickRegistry } from './click.js';
 import { NightPanel } from './night/NightPanel.js';
 import { COMMANDS } from './state/commands.js';
 import * as ed from './util/editor.js';
@@ -34,6 +38,9 @@ export function App({ ctl, tier, keys }: AppProps) {
   const [confirming, setConfirming] = useState(false);
   const pending = s.approvals[0];
   useEffect(() => { setConfirming(false); }, [pending?.req.approval_id]);
+  /** A new approval ignores answers for 300 ms: a key you were typing for something else must not approve a command you have not seen. */
+  const shown = useRef<{ id?: string; at: number }>({ at: 0 }); if (pending?.req.approval_id !== shown.current.id) shown.current = { id: pending?.req.approval_id, at: Date.now() };
+  const approvalGrace = () => !!pending && Date.now() - shown.current.at < 300;
 
   /* ---- layout ---- */
   const showFleet = s.fleet && s.agents.length > 1 && cols >= 110 && s.mode === 'chat'; // a solo session has no fleet panel; it appears when others join
@@ -42,18 +49,21 @@ export function App({ ctl, tier, keys }: AppProps) {
   const welcome = s.items.length === 0 && !s.busy && s.mode === 'chat' && !pending;
   const nightOpen = s.mode === 'night';
   const tight = !!pending && rows < 30;
-  const stripH = welcome ? 0 : tight ? 1 : mascot === 'large' ? LARGE_H : mascot === 'small' ? 4 : 1;
+  const overlay = s.mode === 'help' || s.mode === 'palette' || s.mode === 'pick' || s.mode === 'models' || s.mode === 'gallery'; // a full-screen list or page: Cento steps aside so it has the rows
+  const stripH = welcome || overlay ? 0 : tight ? 1 : mascot === 'large' ? LARGE_H : mascot === 'small' ? 4 : 1;
   const stripSize = tight && mascot !== 'off' ? 'off' : mascot;
   const matches = (s.mode === 'chat' || s.mode === 'night') && !pending ? slashMatches(s.input) : [];
-  const popupH = Math.min(6, matches.length);
-  const inputRows = promptRows(s.input, s.cursor, mainW);
+  const mentionNow = (s.mode === 'chat' || s.mode === 'night') && !pending && !matches.length ? ed.mentionAt(s.input, s.cursor) : undefined; const mentionFresh = !!mentionNow && !!s.mention && s.mention.q === mentionNow.query; const related = !!mentionNow && !!s.mention && (mentionNow.query.startsWith(s.mention.q) || s.mention.q.startsWith(mentionNow.query)); const mentions = mentionNow && s.mention && (mentionFresh || related) ? ed.visibleMentions(mentionNow.query, s.mention.items, mentionFresh) : []; // while the next search runs the last list stays (cut to what still matches), so the layout does not jump and every entry shown works
+  const popupH = Math.min(6, matches.length) || Math.min(6, mentions.length);
+  const maxInput = Math.max(3, Math.min(12, Math.floor(rows / 3))); // the box grows with the window, up to 12 lines
+  const inputRows = promptRows(s.input, s.cursor, mainW, maxInput);
   const promptH = inputRows + 2;
   const maxDiff = Math.max(3, Math.min(10, rows - 20));
   const showTasks = s.tasksOpen && s.tasks.length > 0 && !pending && s.mode === 'chat';
   const tasksH = showTasks ? Math.min(s.tasks.length, rows >= 34 ? 10 : 5) + 1 + (s.tasks.length > (rows >= 34 ? 10 : 5) ? 1 : 0) : 0;
   const bottomH = pending ? approvalHeight(pending, mainW, maxDiff) : promptH + popupH + tasksH;
   const bodyH = Math.max(3, rows - 2 - stripH - bottomH);
-  const layout = useTranscriptLayout(s.items, mainW - 2);
+  const layout = useTranscriptLayout(s.items, mainW - 2, s.settings.density === 'compact');
   const total = layout.total;
 
   // keep the view anchored while the user is scrolled up and new lines arrive; count the new messages; keep the top block in place on a resize
@@ -66,15 +76,34 @@ export function App({ ctl, tier, keys }: AppProps) {
   useEffect(() => { if (s.scroll > 0) anchor.current = layout.anchorAt(Math.max(0, total - s.scroll - bodyH)); else anchor.current = undefined; });
   const maxScroll = Math.max(0, total - bodyH);
   const setScroll = (n: number) => ctl.patch({ scroll: Math.max(0, Math.min(maxScroll, n)) });
+  useEffect(() => { // /find: bring the chosen message into view, a third of the way down
+    if (!s.jumpTo) return; const row = layout.rowOf({ id: s.jumpTo, offset: 0 }); const start = Math.max(0, (row ?? 0) - Math.floor(bodyH / 3));
+    ctl.patch({ scroll: row === undefined ? s.scroll : Math.max(0, Math.min(maxScroll, total - start - bodyH)), jumpTo: undefined });
+  }, [s.jumpTo]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ---- the mascot costs nothing when nobody sees it, and little when nothing is happening ---- */
+  const strip = stripH > 0 && stripSize !== 'off';
+  useEffect(() => { ctl.driver.setPaused(!strip); }, [ctl, strip]);
+  const lastActive = useRef(Date.now()); const [calm, setCalm] = useState(1); const calmRef = useRef(1); // 1 = full speed; more = slower
+  const wake = () => { lastActive.current = Date.now(); if (calmRef.current !== 1) { calmRef.current = 1; setCalm(1); } };
+  useEffect(() => { ctl.driver.setSpeed(calm); }, [ctl, calm]);
+  useEffect(() => { wake(); }, [s.busy, s.approvals.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { // nothing happening: 3 times slower after 20 s, 8 times slower after 2 minutes (the screen is redrawn per frame, so frames are the cost)
+    const h = setInterval(() => { if (ctl.state.busy) return; const idle = Date.now() - lastActive.current; const want = idle > 120_000 ? 8 : idle > 20_000 ? 3 : 1; if (want > calmRef.current) { calmRef.current = want; setCalm(want); } }, 5000); h.unref?.(); return () => clearInterval(h);
+  }, [ctl]);
+
+  /* ---- @file suggestions follow the word at the cursor ---- */
+  const mentionQuery = mentionNow?.query;
+  useEffect(() => { if (mentionQuery) ctl.searchMentions(mentionQuery); else ctl.clearMentions(); }, [ctl, mentionQuery]);
 
   /* ---- keys ---- */
   const sel = ed.selRange(s.input, s.cursor, s.anchor);
   /** An edit that changes the text replaces the selection first; `extend` moves the cursor and keeps (or starts) a selection; any other move drops it. */
   const edit = (fn: (e: ed.Ed) => ed.Ed, how: 'text' | 'move' | 'extend' = 'text') => {
     let e: ed.Ed = { text: s.input, cursor: s.cursor };
-    if (how === 'text' && sel) { e = ed.removeRange(e, sel[0], sel[1]); if (fn === ed.backspace || fn === ed.del || fn === ed.killWordLeft || fn === ed.killWordRight) { ctl.patch({ input: e.text, cursor: e.cursor, anchor: undefined, slashSel: 0, histIdx: null }); return; } }
+    if (how === 'text' && sel) { e = ed.removeRange(e, sel[0], sel[1]); if (fn === ed.backspace || fn === ed.del || fn === ed.killWordLeft || fn === ed.killWordRight) { ctl.setInputUndoable(e.text, e.cursor, { anchor: undefined, slashSel: 0, histIdx: null }); return; } }
     e = fn(e);
-    ctl.patch({ input: e.text, cursor: e.cursor, anchor: how === 'extend' ? (s.anchor !== undefined && s.anchor !== s.cursor ? s.anchor : s.cursor) : undefined, slashSel: 0, histIdx: how === 'text' ? null : s.histIdx });
+    ctl.setInputUndoable(e.text, e.cursor, { anchor: how === 'extend' ? (s.anchor !== undefined && s.anchor !== s.cursor ? s.anchor : s.cursor) : undefined, slashSel: 0, histIdx: how === 'text' ? null : s.histIdx });
   };
   const complete = () => {
     const m = matches[s.slashSel % Math.max(1, matches.length)]; if (!m) return false;
@@ -83,31 +112,39 @@ export function App({ ctl, tier, keys }: AppProps) {
 
   usePaste((text) => {
     if (s.mode === 'palette') { ctl.patch({ palette: { query: s.palette.query + text.replace(/\s+/g, ' '), sel: 0 } }); return; }
-    if (s.mode === 'chat' && !pending) edit((e) => ed.insert(e, text.replace(/\r\n?/g, '\n')));
+    if (s.mode === 'chat' && !pending) { const r = ctl.pastes.add(text.replace(/\r\n?/g, '\n')); if (r.warning) ctl.toast('warn', r.warning, 6000); edit((e) => ed.insert(e, r.insert)); }
   });
 
   /** Mouse reporting (press, release and wheel, in the SGR form) only while it is on; always switched off again on the way out. */
+  const clicks = useMemo(() => createClickRegistry(), []);
+  const { write: writeTerm } = useStdout();
+  const title = windowTitle({ cwd: s.cwd, busy: s.busy, approvals: s.approvals.length, mode: s.mode, engineLabel: s.engineLabel, demo: s.demo });
+  useEffect(() => { if (s.settings.title) writeTerm(setTitle(title)); }, [s.settings.title, title, writeTerm]); // the tab says what is going on
+  const paletteProviders = useMemo(() => (s.mode === 'palette' ? ctl.paletteProviders() : []), [ctl, s.mode]); // rebuilt on each open so the sessions are current
   const { write } = useStdout(); const { stdin } = useStdin(); const wheelRef = useRef<(n: number) => void>(() => undefined);
   wheelRef.current = (notches) => { if (s.mode === 'pick') { for (let i = 0; i < Math.abs(notches); i++) ctl.pickKey(notches > 0 ? 'up' : 'down'); } else if (s.mode === 'chat' || s.mode === 'night' || pending) ctl.patch({ scroll: Math.max(0, Math.min(maxScroll, ctl.state.scroll + notches * 3)) }); }; // from the live value: events can arrive faster than renders
   // Ink drops mouse reports before `useInput` sees them, so the wheel is read from the raw bytes (Ink keeps reading them too).
   useEffect(() => {
-    if (!s.mouse) return;
-    const onData = (d: Buffer | string) => { let n = 0; for (const m of String(d).matchAll(/\x1b\[<(\d+);\d+;\d+M/g)) { const b = Number(m[1]); if (b & 64) n += b & 1 ? -1 : 1; } if (n) wheelRef.current(n); };
+    if (!s.settings.mouse) return;
+    const onData = (d: Buffer | string) => { wake(); for (const c of clicksIn(String(d))) clicks.hit(c.col, c.row); let n = 0; for (const m of String(d).matchAll(/\x1b\[<(\d+);\d+;\d+M/g)) { const b = Number(m[1]); if (b & 64) n += b & 1 ? -1 : 1; } if (n) wheelRef.current(n); };
     stdin.on('data', onData); return () => { stdin.off('data', onData); };
-  }, [s.mouse, stdin]);
-  useEffect(() => { if (!s.mouse) return; write('\x1b[?1000h\x1b[?1006h'); return () => { write('\x1b[?1000l\x1b[?1006l'); }; }, [s.mouse, write]);
+  }, [s.settings.mouse, stdin, clicks]);
+  useEffect(() => { if (!s.settings.mouse) return; write('\x1b[?1000h\x1b[?1006h'); return () => { write('\x1b[?1000l\x1b[?1006l'); }; }, [s.settings.mouse, write]);
 
   useInput((input, key) => {
+    wake(); // any key brings the animation back to full speed
     if (key.ctrl && input === 'c') { if (sel && !pending && (s.mode === 'chat' || s.mode === 'night')) { ctl.copy(ed.selectedText(s.input, s.cursor, s.anchor)); ctl.patch({ anchor: undefined }); return; } ctl.ctrlC(); return; }
     /* approvals */
     if (pending) {
       focusRef.current = ['permission']; const high = pending.req.risk === 'high'; const step = fromInk(input, key);
+      if (approvalGrace()) return;
       if (confirming) { if (key.return) ctl.answerApproval('approve'); else if (step && dispatcher.handle(step).kind === 'action' && key.escape) ctl.answerApproval('deny'); return; }
       const d = step ? dispatcher.handle(step) : { kind: 'none' as const };
       if (d.kind === 'action') {
         if (d.action === 'approval.deny') { ctl.answerApproval('deny'); return; }
         if (d.action === 'approval.approve') { if (high) setConfirming(true); else ctl.answerApproval('approve'); return; }
         if (d.action === 'approval.always' && !high) { ctl.answerApproval('approve', 'always'); return; }
+        if (d.action === 'approval.session' && !high) { ctl.answerApproval('approve', 'session'); return; }
         if (d.action === 'transcript.page_up') { setScroll(s.scroll + Math.floor(bodyH / 2)); return; } if (d.action === 'transcript.page_down') { setScroll(s.scroll - Math.floor(bodyH / 2)); return; }
       }
       return;
@@ -118,16 +155,7 @@ export function App({ ctl, tier, keys }: AppProps) {
       return;
     }
     if (s.mode === 'help') return; // the help screen reads its own keys (filter, esc)
-    if (s.mode === 'palette') {
-      if (key.escape) { ctl.patch({ mode: 'chat' }); return; }
-      const items = paletteItems(s.palette.query);
-      if (key.upArrow) { ctl.patch({ palette: { ...s.palette, sel: (s.palette.sel + items.length - 1) % Math.max(1, items.length) } }); return; }
-      if (key.downArrow || key.tab) { ctl.patch({ palette: { ...s.palette, sel: (s.palette.sel + 1) % Math.max(1, items.length) } }); return; }
-      if (key.return) { const it = items[s.palette.sel % Math.max(1, items.length)]; ctl.patch({ mode: 'chat' }); if (it) { const needsArg = COMMANDS.find((c) => '/' + c.name === it.run)?.args && !it.run.includes(' '); if (needsArg) ctl.patch({ input: it.run + ' ', cursor: it.run.length + 1 }); else void ctl.submit(it.run); } return; }
-      if (key.backspace || key.delete) { ctl.patch({ palette: { query: s.palette.query.slice(0, -1), sel: 0 } }); return; }
-      if (input && !key.ctrl && !key.meta) ctl.patch({ palette: { query: s.palette.query + input, sel: 0 } });
-      return;
-    }
+    if (s.mode === 'palette') return; // the palette reads its own keys
     if (s.mode === 'models') {
       focusRef.current = ['overlay']; { const st = fromInk(input, key); if (st && dispatcher.handle(st).kind === 'action' && (key.escape || input === 'q')) { ctl.patch({ mode: 'chat' }); return; } }
       if (key.upArrow) ctl.patch({ modelSel: (s.modelSel + CLAUDE_MODELS.length - 1) % CLAUDE_MODELS.length });
@@ -149,7 +177,7 @@ export function App({ ctl, tier, keys }: AppProps) {
     }
     if (s.mode === 'night') { // the prompt below stays live: Enter adds a task (an empty Enter starts the night), Esc hides the panel
       if (key.escape) { ctl.closeNight(); return; }
-      if (key.return && !s.input.endsWith('\\')) { if (s.input.trim()) { void ctl.submit(s.input); ctl.patch({ input: '', cursor: 0 }); } else ctl.nightStart(); return; }
+      if (key.return && !s.input.endsWith('\\') && !(mentions.length && mentionNow)) { if (s.input.trim()) void ctl.submit(s.input); else ctl.nightStart(); return; } // (a file being suggested is completed first, as in the chat)
     }
     /* chat: shortcuts are actions in the keymap; anything else is editing */
     focusRef.current = ['prompt', 'transcript']; const step = fromInk(input, key);
@@ -162,11 +190,16 @@ export function App({ ctl, tier, keys }: AppProps) {
         case 'help.open': ctl.patch({ mode: 'help' }); return;
         case 'app.quit': if (!s.input) { ctl.quit(); return; } break;
         case 'palette.open': ctl.patch({ mode: 'palette', palette: { query: '', sel: 0 } }); return;
-        case 'models.open': { const i = CLAUDE_MODELS.findIndex((m) => m.id === s.settings.model); ctl.patch({ mode: 'models', modelSel: Math.max(0, i) }); return; }
+        case 'models.open': void ctl.openModels(); return;
         case 'mode.cycle': ctl.cycleMode(); return;
-        case 'agent.interrupt': if (s.busy) void ctl.interrupt(); else if (s.input) ctl.patch({ input: '', cursor: 0 }); else ctl.escIdle(); return;
+        case 'agent.interrupt': if (s.busy) void ctl.interrupt(); else if (s.input) ctl.setInputUndoable('', 0); else ctl.escIdle(); return;
         case 'tasks.toggle': ctl.patch({ tasksOpen: !s.tasksOpen }); return;
         case 'night.toggle': ctl.openNight(); return;
+        case 'history.search': void ctl.historyPick(); return;
+        case 'prompt.undo': ctl.undoInput(); return;
+        case 'prompt.redo': ctl.redoInput(); return;
+        case 'app.suspend': ctl.suspend(); return;
+        case 'prompt.edit': ctl.editPrompt(); return;
         case 'fleet.toggle': ctl.patch({ fleet: !s.fleet }); return;
         case 'transcript.bottom': setScroll(0); return;
         case 'transcript.top': setScroll(maxScroll); return;
@@ -176,6 +209,12 @@ export function App({ ctl, tier, keys }: AppProps) {
         case 'transcript.line_down': setScroll(s.scroll - 3); return;
         default: break;
       }
+    }
+    if (mentions.length && mentionNow) { // a file is being suggested: arrows choose, Tab or Enter completes
+      const pickAt = (path: string) => { const e = ed.completeMention({ text: s.input, cursor: s.cursor }, mentionNow, path); ctl.setInputUndoable(e.text, e.cursor, { slashSel: 0 }); ctl.clearMentions(); };
+      if (key.tab || (key.return && !s.input.endsWith('\\'))) { pickAt(mentions[s.mention!.sel % mentions.length]!); return; }
+      if (key.upArrow) { ctl.patch({ mention: { ...s.mention!, sel: (s.mention!.sel + mentions.length - 1) % mentions.length } }); return; }
+      if (key.downArrow) { ctl.patch({ mention: { ...s.mention!, sel: (s.mention!.sel + 1) % mentions.length } }); return; }
     }
     if (key.end && !s.input) { setScroll(0); return; }
     if (key.return) {
@@ -190,11 +229,11 @@ export function App({ ctl, tier, keys }: AppProps) {
     if (key.tab) { complete(); return; }
     if (key.upArrow) {
       if (matches.length) { ctl.patch({ slashSel: (s.slashSel + matches.length - 1) % matches.length }); return; }
-      const m = ed.moveVertical({ text: s.input, cursor: s.cursor }, -1); if (m) ctl.patch({ cursor: m.cursor, anchor: undefined }); else ctl.historyStep(-1); return;
+      const m = ed.moveVertical({ text: s.input, cursor: s.cursor }, -1); if (m) ctl.patch({ cursor: m.cursor, anchor: undefined }); else if (!s.maskInput) ctl.historyStep(-1); return;
     }
     if (key.downArrow) {
       if (matches.length) { ctl.patch({ slashSel: (s.slashSel + 1) % matches.length }); return; }
-      const m = ed.moveVertical({ text: s.input, cursor: s.cursor }, 1); if (m) ctl.patch({ cursor: m.cursor, anchor: undefined }); else ctl.historyStep(1); return;
+      const m = ed.moveVertical({ text: s.input, cursor: s.cursor }, 1); if (m) ctl.patch({ cursor: m.cursor, anchor: undefined }); else if (!s.maskInput) ctl.historyStep(1); return;
     }
     const how = key.shift ? 'extend' : 'move';
     if (key.leftArrow) { if (sel && how === 'move' && !key.ctrl && !key.meta) { ctl.patch({ cursor: sel[0], anchor: undefined }); return; } edit(key.ctrl || key.meta || key.shift ? ed.wordLeft : ed.left, how); return; }
@@ -232,26 +271,28 @@ export function App({ ctl, tier, keys }: AppProps) {
   const gallerySize = bodyH;
   return (
     <ThemeCtx.Provider value={theme}>
+      <ClickContext.Provider value={clicks}>
       <Box flexDirection="column" width={cols} height={rows}>
         <Header s={s} width={cols} />
         <Box height={bodyH + stripH + bottomH} width={cols}>
           <Box flexDirection="column" width={mainW} height={bodyH + stripH + bottomH}>
             <Box height={bodyH} width={mainW} flexDirection="column">
               {nightOpen ? <NightPanel n={s.night} width={mainW} height={bodyH} unicode={tier !== 'none'} />
-                : s.mode === 'pick' && s.pick ? <MultiSelect p={s.pick} width={mainW} height={bodyH} unicode={tier !== 'none'} />
+                : s.mode === 'pick' && s.pick ? <MultiSelect p={s.pick} width={mainW} height={bodyH} unicode={tier !== 'none'} onRow={(i) => ctl.pickClick(i)} onConfirm={() => ctl.pickKey('enter')} onCancel={() => ctl.pickKey('cancel')} />
                 : s.mode === 'models' ? <ModelPicker sel={s.modelSel} current={s.settings.model} width={mainW} />
-                : s.mode === 'palette' ? <Palette query={s.palette.query} sel={s.palette.sel} width={mainW} />
+                : s.mode === 'palette' ? <CommandPalette providers={paletteProviders} cols={mainW} onClose={() => ctl.patch({ mode: 'chat' })} />
                 : s.mode === 'help' ? <HelpScreen actions={allActions()} keymap={keymap} warnings={keys?.warnings ?? []} onClose={() => ctl.patch({ mode: 'chat' })} width={mainW} height={bodyH} />
                   : s.mode === 'gallery' ? <Gallery cat={s.gallery.cat} idx={s.gallery.idx} color={s.gallery.color} width={mainW} height={gallerySize} reduced={s.settings.reducedMotion} />
-                    : welcome ? <Welcome s={s} width={mainW} height={bodyH} color={s.settings.color} reduced={s.settings.reducedMotion} />
+                    : welcome ? <Welcome s={s} width={mainW} height={bodyH} color={s.settings.color} reduced={s.settings.reducedMotion} calm={calm} mascot={s.settings.mascot !== 'off'} />
                       : <Box paddingX={1}><Transcript layout={layout} items={s.items} width={mainW - 2} height={bodyH} scroll={s.scroll} unseen={unseen} /></Box>}
             </Box>
-            {stripH > 0 ? <Box paddingX={1} height={stripH}><LiveStrip s={s} driver={ctl.driver} width={mainW - 2} size={stripSize as 'large' | 'small' | 'off'} /></Box> : null}
-            {pending ? <Approval a={pending} width={mainW} confirming={confirming} maxDiff={maxDiff} /> : (
+            {stripH > 0 ? <Box paddingX={1} height={stripH}><LiveStrip s={s} driver={ctl.driver} width={mainW - 2} size={stripSize as 'large' | 'small' | 'off'} calm={calm} /></Box> : null}
+            {pending ? <Approval a={pending} width={mainW} confirming={confirming} maxDiff={maxDiff} onChoose={(c) => { if (approvalGrace()) return; if (c === 'no') ctl.answerApproval('deny'); else if (c === 'always') { if (pending.req.risk !== 'high') ctl.answerApproval('approve', 'always'); } else if (c === 'session') { if (pending.req.risk !== 'high') ctl.answerApproval('approve', 'session'); } else if (pending.req.risk === 'high' && !confirming) setConfirming(true); else ctl.answerApproval('approve'); }} /> : (
               <>
                 {showTasks ? <Box paddingX={1} height={tasksH}><TaskList items={s.tasks} maxRows={rows >= 34 ? 10 : 5} width={mainW - 2} unicode={tier !== 'none'} /></Box> : null}
-                {popupH ? <SlashPopup matches={matches} sel={s.slashSel} width={mainW} /> : null}
-                <Prompt text={s.input} cursor={s.cursor} anchor={s.anchor} busy={s.busy} width={mainW} active={s.mode === 'chat' || s.mode === 'night'} placeholder={nightOpen ? 'Add a task for tonight…' : placeholder} />
+                {mentions.length && !matches.length ? <MentionPopup items={mentions.slice(0, 6)} sel={s.mention!.sel} width={mainW} onPick={(p) => { const e = ed.completeMention({ text: s.input, cursor: s.cursor }, mentionNow!, p); ctl.setInputUndoable(e.text, e.cursor); ctl.clearMentions(); }} /> : null}
+                {popupH && matches.length ? <SlashPopup matches={matches} sel={s.slashSel} width={mainW} onPick={(c) => { const t = '/' + c.name + (c.args ? ' ' : ''); ctl.patch({ input: t, cursor: t.length, anchor: undefined, slashSel: 0 }); if (!c.args) void ctl.submit('/' + c.name); }} /> : null}
+                <Prompt text={s.maskInput ? s.input.replace(/[^\n]/g, '•') : s.input} cursor={s.cursor} anchor={s.anchor} maxRows={maxInput} busy={s.busy} width={mainW} active={s.mode === 'chat' || s.mode === 'night'} placeholder={nightOpen ? 'Add a task for tonight…' : placeholder} />
               </>
             )}
           </Box>
@@ -260,6 +301,7 @@ export function App({ ctl, tier, keys }: AppProps) {
         <StatusLine s={s} width={cols} />
         <Box position="absolute" marginTop={1} width={cols}><Toasts toasts={s.toasts} width={cols - 1} /></Box>
       </Box>
+      </ClickContext.Provider>
     </ThemeCtx.Provider>
   );
 }

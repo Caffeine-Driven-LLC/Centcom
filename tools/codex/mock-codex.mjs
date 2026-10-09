@@ -11,6 +11,7 @@
  *   create <file> with <text>       writes a new file (asks first)
  *   sleep <seconds>                 a long command, to try Stop
  *   think <text>                    reasoning, then an answer
+ *   ask <question> | <a> | <b>      asks the person (item/tool/requestUserInput); with no options it wants free text
  *   fail usage | fail auth | fail   the turn fails with the matching error
  * Environment: MOCK_CODEX_SIGNED_IN=0 (signed out), MOCK_CODEX_DELAY_MS (pause between deltas, default 8), MOCK_CODEX_HOME (thread store).
  */
@@ -78,6 +79,11 @@ async function turn(threadId, turnId, prompt, t) {
   else if ((m = /^\s*sleep\s+(\d+)/i.exec(prompt))) { await say( `Sleeping for ${m[1]} seconds.`); const r = await runCommand(t, threadId, turnId, `sleep ${m[1]} && echo done`); await say( r === 'declined' ? 'Skipped.' : 'Done sleeping.'); }
   else if ((m = /^\s*edit\s+(\S+)\s+from\s+(\S+)\s+to\s+(\S+)/i.exec(prompt))) { const r = await fileChange(t, threadId, turnId, m[1], (b) => (b ?? '').split(m[2]).join(m[3])); await say( r === 'ok' ? `Changed ${m[2]} to ${m[3]} in ${m[1]}.` : `I could not change ${m[1]} (${r}).`); }
   else if ((m = /^\s*create\s+(\S+)\s+with\s+([\s\S]+)$/i.exec(prompt))) { const r = await fileChange(t, threadId, turnId, m[1], () => m[2].trim() + '\n'); await say( r === 'ok' ? `Created ${m[1]}.` : `I could not create ${m[1]} (${r}).`); }
+  else if ((m = /^\s*ask\s+([\s\S]+)$/i.exec(prompt))) {
+    const [q, ...opts] = m[1].split('|').map((x) => x.trim()); const itemId = 'ui_' + randomUUID();
+    const r = await ask('item/tool/requestUserInput', { threadId, turnId, itemId, questions: [{ id: 'q1', header: 'Question', question: q, isOther: false, isSecret: false, options: opts.length ? opts.map((label) => ({ label, description: '' })) : null }] });
+    const picked = r?.answers?.q1?.answers ?? []; await say(picked.length ? `You chose: ${picked.join(', ')}.` : 'No answer given.');
+  }
   else if ((m = /^\s*think\s+([\s\S]+)$/i.exec(prompt))) { const id = 'rs_' + randomUUID(); note('item/started', { item: { type: 'reasoning', id, summary: [], content: [] }, threadId, turnId }); note('item/reasoning/summaryTextDelta', { threadId, turnId, itemId: id, delta: `Considering: ${m[1]}` }); note('item/completed', { item: { type: 'reasoning', id, summary: [`Considering: ${m[1]}`], content: [] }, threadId, turnId }); await say( `After thinking: ${m[1]}`); }
   else if ((m = /^\s*fail(?:\s+(usage|auth))?/i.exec(prompt))) { ended = 'failed'; const info = m[1] === 'usage' ? 'usageLimitExceeded' : m[1] === 'auth' ? { httpConnectionFailed: { httpStatusCode: 401 } } : 'other'; const message = m[1] === 'usage' ? 'You have reached your usage limit.' : m[1] === 'auth' ? 'unexpected status 401 Unauthorized: Missing bearer or basic authentication' : 'The mock turn failed.'; error = { message, codexErrorInfo: info, additionalDetails: null }; note('error', { error, willRetry: false, threadId, turnId }); }
   else await say( `Hello from mock Codex. You said: ${prompt.slice(0, 200)}`);
