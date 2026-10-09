@@ -31,6 +31,7 @@ export const COMMANDS: SlashCommand[] = [
   { name: 'interrupt', desc: 'Stop the running agent' },
   { name: 'rewind', args: '[number] [files|conversation|both]', desc: 'Go back to before an earlier prompt (Esc Esc when idle)' },
   { name: 'compact', desc: 'Ask the agent to compact its context' },
+  { name: 'handoff', desc: 'The agent writes a document for a fresh session, which starts and reads it' },
   { name: 'usage', desc: 'Tokens, agent time and the cost the tools reported, by conversation, agent and day' },
   { name: 'doctor', args: '[--check <id>]', desc: 'Check that everything Centcom needs is set up' },
   { name: 'init', desc: 'Preview setting up this project (run `centcom init` in a terminal to do it)' },
