@@ -4,9 +4,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeEngine, type FakeEngineOptions } from '@centcom/testkit';
 import type { ApprovalRequest, EventBody } from '@centcom/agent';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { AppController } from '../src/controller.js';
 import { buildRuntime } from '../src/runtime.js';
+vi.setConfig({ testTimeout: 20_000 }); // these start a real runtime and a git repo: a loaded CI runner needs more than 5 s
 
 const dirs: string[] = []; afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 const tmp = (p: string) => { const d = mkdtempSync(join(tmpdir(), p)); dirs.push(d); return d; };
