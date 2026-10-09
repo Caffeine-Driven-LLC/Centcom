@@ -190,6 +190,12 @@ async function main() {
   cc.onWarn = (w) => ctl.notice('warn', 'Settings: ' + w);
   if (mode === 'bypassPermissions') ctl.notice('warn', 'Dangerously skip permissions is ON', 'Cento will run commands and edit files without asking. Use /mode default to turn approvals back on.');
   const keys = resolvedKeys(); if (keys.warnings.length) ctl.notice('warn', `Some of your key bindings were skipped (${keys.warnings.length}). Press ? to see why.`);
+  // A resize: once it settles, forget what Ink thinks is on screen, clear it and draw the whole frame again. Ink only wipes on a narrower window (by moving the cursor up), which leaves stale rows or borders when the window grows or its height changes.
+  let resizeTimer: NodeJS.Timeout | undefined;
+  if (!a11y.screenReader && process.stdout.isTTY) process.stdout.on('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => { if (!instance || pendingExternal) return; instance.clear(); process.stdout.write('\x1b[2J\x1b[H'); instance.rerender(<App ctl={ctl} tier={tier} keys={keys} />); }, 90); resizeTimer.unref();
+  });
   if (a11y.screenReader) await runLinear(ctl, { input: process.stdin, output: process.stdout }, linearStop);
   else {
     for (;;) { // each pass draws the app; a task (your editor, being put in the background) unmounts it, runs on the real terminal, and the loop draws it again from the same state
