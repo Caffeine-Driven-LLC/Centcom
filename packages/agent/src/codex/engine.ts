@@ -75,7 +75,7 @@ class CodexSession implements EngineSession {
   async init() {
     const spawnFn = this.deps.spawn ?? nodeSpawn;
     let child: ChildProcess;
-    try { child = spawnFn(this.deps.bin ?? process.env.CENTCOM_CODEX_BIN ?? 'codex', ['app-server', '--listen', 'stdio://'], { cwd: this.o.cwd, env: this.o.envExact ? { ...this.o.env } : { ...process.env, ...this.deps.env, ...this.o.env }, stdio: ['pipe', 'pipe', 'pipe'], detached: GROUPS }); }
+    try { child = spawnFn(this.deps.bin ?? process.env.CENTCOM_CODEX_BIN ?? 'codex', [...(this.o.questionGate ? ['-c', 'features.default_mode_request_user_input=true', '-c', 'suppress_unstable_features_warning=true'] : []), 'app-server', '--listen', 'stdio://'], { cwd: this.o.cwd, env: this.o.envExact ? { ...this.o.env } : { ...process.env, ...this.deps.env, ...this.o.env }, stdio: ['pipe', 'pipe', 'pipe'], detached: GROUPS }); }
     catch (e) { return this.fail(e); }
     this.child = child; const unreg = child.pid ? this.procs().register(this.agentId, child.pid, { group: GROUPS }) : () => undefined;
     this.childExit = new Promise<void>((res) => { child.once('close', () => { unreg(); res(); }); child.once('error', () => { unreg(); res(); }); });

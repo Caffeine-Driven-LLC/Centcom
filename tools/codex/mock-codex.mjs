@@ -22,7 +22,7 @@ import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 
-const VERSION = '0.161.0'; const args = process.argv.slice(2); const signedIn = process.env.MOCK_CODEX_SIGNED_IN !== '0';
+const VERSION = '0.161.0'; const args = process.argv.slice(2); while (args[0] === '-c' || args[0] === '--config') args.splice(0, 2); /* like the real codex: global -c key=value options come before the subcommand */ const signedIn = process.env.MOCK_CODEX_SIGNED_IN !== '0';
 if (args[0] === '--version' || args[0] === '-V') { console.log(`codex-cli ${VERSION}`); process.exit(0); }
 if (args[0] === 'login' && args[1] === 'status') { if (signedIn) { console.log('Logged in using ChatGPT'); process.exit(0); } console.error('Not logged in'); process.exit(1); }
 if (args[0] !== 'app-server') { console.error('mock codex: only --version, login status and app-server exist'); process.exit(2); }

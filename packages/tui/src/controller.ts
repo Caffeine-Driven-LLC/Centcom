@@ -511,7 +511,8 @@ export class AppController {
   /** The levels the running engine accepts: Claude Code's fixed list, or the current Codex model's own. */
   private async effortLevels(): Promise<string[]> {
     if (this.state.engineId === 'claude-code') return ['low', 'medium', 'high', 'xhigh', 'max'];
-    return (await this.engineModels()).find((m) => m.id === this.state.settings.model)?.efforts ?? ['low', 'medium', 'high'];
+    const list = await this.engineModels(); const want = this.state.settings.model; // with no model chosen, the account's default model is the one in use
+    return (list.find((m) => m.id === want) ?? (want ? undefined : list.find((m) => m.isDefault)))?.efforts ?? ['low', 'medium', 'high'];
   }
   private async effortCommand(arg: string) {
     if (!this.session?.setEffort) { this.toast('warn', 'This engine has no effort setting.'); return; }

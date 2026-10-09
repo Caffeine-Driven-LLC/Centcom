@@ -15,4 +15,6 @@ centcom --version
 centcom doctor
 ```
 
+Centcom keeps itself up to date: each time it starts it looks for a newer release in the background and brings it in for the next start. See [Releases](releases.md) for how, what is in each version, and how to turn it off (`update.auto`).
+
 `centcom doctor` checks Node, the terminal, the keychain, git, the network and your clock, and says what to do about each problem.

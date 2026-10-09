@@ -52,6 +52,9 @@ When you change them in the app, these are saved to your user file: theme, Cento
 | `ui.reduced_motion` | boolean | `false` | yes | Turn animation off |
 | `ui.color` | auto \| truecolor \| 256 \| 16 \| never | `"auto"` | yes | Terminal color depth |
 | `a11y.screen_reader` | boolean | `false` | no | Plain text for screen readers: no colour, no boxes, no animation, no redraws; one line per event. Same as --screen-reader or CENTO_SCREEN_READER=1 |
+| `update.check` | boolean | `true` | no | Look for a newer Centcom each time it starts (in the background, never delaying the start; CENTCOM_NO_UPDATE_CHECK=1 turns it off for one run) |
+| `update.auto` | boolean | `true` | no | Bring a newer Centcom in by itself each time it starts, so the next start is the latest (off: only say that one exists) |
+| `update.channel` | stable \| beta \| nightly | `"stable"` | no | Which releases to follow: stable, beta or nightly |
 | `lan.enabled` | boolean | `true` | no | Allow LAN sessions |
 | `agent.max_parallel` | number (1 to 16) | `4` | yes | Most agents running at once |
 | `agent.approval_timeout_ms` | number (1000 to 86400000) | `600000` | yes | How long an approval waits before it is declined |

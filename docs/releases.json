@@ -1,0 +1,4 @@
+{
+  "_comment": "The source of docs/site/guide/releases.md. Add an entry (newest first or any order: the page sorts them) when a release is published, then run `pnpm docs:gen`. Notes are short plain sentences, one per line.",
+  "releases": []
+}
