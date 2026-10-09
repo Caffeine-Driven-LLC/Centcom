@@ -45,11 +45,14 @@ Check in the schema that every method name and field name in that table still ex
 
 ### 2b. Questions that Codex asks you (`item/tool/requestUserInput`)
 
-This was added later and has **only been tried against the mock** (`tools/codex/mock-codex.mjs`, prompt `ask <question> | <a> | <b>`). Check it against the real schema before trusting it:
+**Verified against a real Codex (codex-cli 0.161.0, ChatGPT login, 2026-10-09).**
 
-1. In `/tmp/codex-schema` look for `requestUserInput` (the params and the response types). The adapter (`engine.ts`, `onQuestion`) assumes the request has `questions: [{ id, header?, question, isOther?, isSecret?, options: [{ label, description? }] | null }]` and that the answer is `{ answers: { "<question id>": { answers: ["<label or typed text>"] } } }`. If a field name differs, change `onQuestion` and the mock together and keep the test in `packages/agent/test/codex.mock.test.ts` ("Codex asks the person a question").
-2. By hand (section 5), ask Codex something that makes it ask you: for example "Before you start, ask me whether I want red or blue, using your question tool." In Centcom you should get a list (one-of, with "Something else…" when `isOther` is set); your pick must come back to Codex as its answer, and Esc must let the turn go on with an empty answer. A question with no options must ask for a typed line that is not kept in the conversation.
-3. Record what Codex really sent (section 3) and replace the mock's `ask` prompt with the recorded request if it differs.
+- The schema from `codex app-server generate-ts` matches the adapter: the request is `{ threadId, turnId, itemId, questions: [{ id, header, question, isOther, isSecret, options: [{ label, description }] | null }], isBlocking }`, the answer is `{ answers: { <question id>: { answers: string[] } } }`.
+- **Codex only offers the question tool when a feature flag is on.** In its default mode it replies that `request_user_input` is unavailable. The flag `default_mode_request_user_input` is "under development" and off by default, so Centcom starts `codex app-server` with `-c features.default_mode_request_user_input=true -c suppress_unstable_features_warning=true` whenever it can show questions. This is a per-process override: your `~/.codex/config.toml` is not touched. If a later Codex release removes or renames the flag, questions stop appearing (the agent says the tool is unavailable) and this is where to look.
+- Live run in the terminal app: asking "use your request_user_input tool to ask me red or blue" opened the list (Red, Blue, Something else…), answering Blue made Codex reply "You chose blue."
+- `/effort low` is sent as `effort` on `turn/start` (a field of `TurnStartParams`), and a real turn ran with it.
+
+Still not tried live: a secret question (`isSecret`), several questions in one request, and cancelling a question with Esc against the real Codex.
 
 ## 3. Record real sessions
 

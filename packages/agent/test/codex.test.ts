@@ -84,3 +84,14 @@ describe('codex engine against a protocol-faithful fake app-server', () => {
     expect(events.find((e) => e.type === 'error')).toMatchObject({ code: 'provider_not_installed' }); await s.stop();
   });
 });
+
+describe('how the Codex app-server is started', () => {
+  const argsFor = async (questionGate?: { ask(): Promise<undefined> }) => {
+    let seen: string[] = []; const spy = ((_b: string, args: string[], o: any) => { seen = args; return spawn(process.execPath, [FAKE], { ...o }); }) as any;
+    const engine = new CodexEngine({ spawn: spy, env: { FAKE_CODEX_SIGNED_IN: '1' } }); const s = await engine.start({ agentId: 'a1', cwd: '/tmp', ...(questionGate ? { questionGate: questionGate as never } : {}) }); await s.send('hi'); await new Promise((r) => setTimeout(r, 200)); await s.stop?.(); return seen;
+  };
+  it('with a way to show questions, Codex gets the per-process flag that lets it ask them (and no unstable-feature warning); without one, it does not', async () => {
+    const withGate = await argsFor({ ask: async () => undefined }); expect(withGate).toEqual(['-c', 'features.default_mode_request_user_input=true', '-c', 'suppress_unstable_features_warning=true', 'app-server', '--listen', 'stdio://']);
+    expect(await argsFor()).toEqual(['app-server', '--listen', 'stdio://']);
+  });
+});

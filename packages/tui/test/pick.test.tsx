@@ -198,6 +198,12 @@ describe('/model for Codex', () => {
     const run = c.runCommand('/model'); await tick(); await tick(); expect(c.state.mode).toBe('pick'); expect(c.state.pick!.options.map((o) => o.label)).toEqual(['GPT X', 'GPT Y']); expect(c.state.pick!.options[0]!.hint).toContain('effort low/high');
     c.pickKey('down'); c.pickKey('enter'); await run; expect(c.state.settings.model).toBe('gpt-y'); c.stop();
   });
+  it('/effort with no model chosen offers the levels of the account\'s default model (Codex has more than low, medium and high)', async () => {
+    const c = make(); c.patch({ engineId: 'codex' }); const { AsyncQueue } = await import('@centcom/agent'); const set: string[] = [];
+    (c as any).adopt({ events: new AsyncQueue(), stop: async () => undefined, setEffort: (e: string) => set.push(e), listModels: async () => [{ id: 'a', label: 'A', note: '', efforts: ['low', 'high'] }, { id: 'b', label: 'B', note: '', isDefault: true, efforts: ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'] }], resumeToken: () => undefined });
+    const run = c.runCommand('/effort'); await tick(); await tick(); expect(c.state.pick!.options.map((o) => o.label)).toEqual(['default', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']);
+    c.pickKey('cancel'); await run; await c.runCommand('/effort ultra'); expect(set).toEqual(['ultra']); c.stop();
+  });
   it('says so when Codex returns no list, and Claude Code still gets its own screen', async () => {
     const c = make(); c.patch({ engineId: 'codex' }); const { AsyncQueue } = await import('@centcom/agent'); (c as any).adopt({ events: new AsyncQueue(), stop: async () => undefined, listModels: async () => [], resumeToken: () => undefined }); await c.runCommand('/model'); expect(c.state.toasts.at(-1)!.text).toMatch(/did not return its model list/); expect(c.state.mode).toBe('chat');
     const d = make(); await d.runCommand('/model'); expect(d.state.mode).toBe('models'); d.stop(); c.stop();
