@@ -4,6 +4,7 @@ import { stateDir } from '@centcom/config';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { Item } from './state/model.js';
+import { sanitizeForTerminal } from './transcript/sanitize.js';
 
 export interface SessionMeta {
   id: string; cwd: string; engine: string; title: string; model?: string;
@@ -79,7 +80,7 @@ export class SessionStore {
   private view(id: string): View | undefined { const v = this.store.sync.loadView(id) as View | undefined; return v && Array.isArray(v.items) ? v : undefined; }
   private metaOf(r: SessionSummary, v?: View): SessionMeta {
     const last = r.engine_sessions.at(-1);
-    return { id: r.id, cwd: r.cwd, engine: last?.engine ?? v?.engine ?? '', title: v?.title ?? r.title, ...(v?.model !== undefined ? { model: v.model } : {}), ...(last ? { resumeToken: last.engineSessionId } : {}), createdAt: v?.createdAt ?? Date.parse(r.created_at), updatedAt: Math.max(Date.parse(r.updated_at) || 0, v?.updatedAt ?? 0), messages: v?.messages ?? r.message_count, ...(v?.tasks ? { tasks: v.tasks } : {}), ...(v?.tasksOpen !== undefined ? { tasksOpen: v.tasksOpen } : {}) };
+    return { id: r.id, cwd: r.cwd, engine: last?.engine ?? v?.engine ?? '', title: sanitizeForTerminal(v?.title ?? r.title).replace(/\s+/g, ' ').trim(), /* a stored title is shown as it is everywhere: no control codes */ ...(v?.model !== undefined ? { model: v.model } : {}), ...(last ? { resumeToken: last.engineSessionId } : {}), createdAt: v?.createdAt ?? Date.parse(r.created_at), updatedAt: Math.max(Date.parse(r.updated_at) || 0, v?.updatedAt ?? 0), messages: v?.messages ?? r.message_count, ...(v?.tasks ? { tasks: v.tasks } : {}), ...(v?.tasksOpen !== undefined ? { tasksOpen: v.tasksOpen } : {}) };
   }
   /** Moves conversations saved by older versions into the log format, once. */
   private migrate() {
