@@ -1,5 +1,5 @@
 /** `@centcom/testkit/vitest`: one Vitest preset for every package. */
-import { defineConfig, mergeConfig, type UserConfig } from 'vitest/config';
+import { defineConfig, mergeConfig, type ViteUserConfig as UserConfig } from 'vitest/config'; // vitest 4 names it ViteUserConfig
 import { fileURLToPath } from 'node:url';
 
 export const COVERAGE_FLOOR = 80; export const COVERAGE_TARGET = 90;
