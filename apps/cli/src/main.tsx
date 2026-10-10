@@ -31,6 +31,8 @@ import { checkArgs, normalizeArgs } from './flags.js';
 import { becomesForeground, editInEditor, stopUntilContinued, type ExternalTask } from './external.js';
 import { runUpdate } from './commands/update/index.js';
 import { bootUpdate } from './bootUpdate.js';
+import { isYes, openerFor, runLink } from './protocol-handler/link.js';
+import { runDetached, runInstallHandler, startCommand } from './protocol-handler/handler.js';
 import { createInterface } from 'node:readline';
 import { dirname as pathDirname } from 'node:path';
 import { PRODUCTION_KEYS, UpdateClient, createHttpClient, defaultUserAgent } from '@centcom/net';
@@ -74,16 +76,21 @@ async function main() {
   if (process.argv[2] === 'help') { const r = helpFor(process.argv[3], helpOpts); (r.code ? console.error : console.log)(r.text); process.exit(r.code); }
   if ((has('--help') || has('-h')) && process.argv[2] && findCommand(process.argv[2]) && process.argv[2] !== 'centcom') { console.log(renderHelp(findCommand(process.argv[2])!, helpOpts)); process.exit(0); }
   if (has('-h') || has('--help')) { console.log(HELP); return; }
-  if (has('-v') || has('--version')) { console.log(VERSION); return; }
+  if (has('-v') || has('--version')) {
+    if (!has('--json')) { console.log(VERSION); return; }
+    const c = await loadConfig(defaultDeps()).catch(() => undefined); console.log(JSON.stringify({ version: VERSION, contract: CONTRACT_VERSION, platform: process.platform, arch: process.arch, node: process.version, channel: c?.update?.channel ?? 'stable' })); return;
+  }
   if (process.argv[2] === 'telemetry') process.exit(await runTelemetry(process.argv.slice(3), { out: (l) => console.log(l), err: (l) => console.error(l), version: VERSION }));
   // anonymous counts of which command ran, only when you turned telemetry on (docs/telemetry.md)
   const cfg0 = await loadConfig(defaultDeps()).catch(() => undefined); const tm = makeTelemetry({ enabled: !!cfg0?.telemetry.enabled, baseUrl: cfg0?.api.base_url ?? 'https://api.centcom.dev', version: VERSION });
   const isAccount = (ACCOUNT_COMMANDS as readonly string[]).includes(process.argv[2] ?? '');
-  const sub = ['provider', 'memory', 'mcp', 'hooks', 'init', 'keys', 'skills', 'lan', 'doctor', 'crash', 'update'].includes(process.argv[2] ?? '') || isAccount ? process.argv[2]! : has('-p') || has('--print') ? 'print' : 'tui'; tm.appStart(); tm.commandRun(sub);
+  const sub = ['provider', 'memory', 'mcp', 'hooks', 'init', 'keys', 'skills', 'lan', 'doctor', 'crash', 'update', 'link', 'install-handler'].includes(process.argv[2] ?? '') || isAccount ? process.argv[2]! : has('-p') || has('--print') ? 'print' : 'tui'; tm.appStart(); tm.commandRun(sub);
   const done = async (code: number) => { tm.appExit(); await tm.flush(2000); process.exit(code); };
   // anything nobody caught is written (redacted) to ~/.centcom/crashes and never sent anywhere
   const crashes = new CrashStore(stateDir(defaultDeps()));
   installCrashHandlers({ store: crashes, proc: process as never, info: { version: VERSION, contract: CONTRACT_VERSION, platform: `${process.platform}-${process.arch}`, node: process.version, now: () => Date.now(), scrub: { home: homedir(), deny: [pathBase(process.cwd())] } }, recentLog: () => [], err: (l) => console.error(l), onCode: (code) => tm.errorShown(code as never) });
+  if (process.argv[2] === 'link') await done(await runLink(process.argv.slice(3), { out: (l) => console.log(l), err: (l) => console.error(l), confirm: async (q) => { if (!process.stdin.isTTY || !process.stdout.isTTY) return false; return isYes(await ttyAsk(q)); }, open: async (url) => { const o = openerFor(process.platform); return (await runDetached(o.cmd, o.args(url))) === 0; } }));
+  if (process.argv[2] === 'install-handler') await done(await runInstallHandler(process.argv.slice(3), { platform: process.platform, home: homedir(), exe: await startCommand() }, { out: (l) => console.log(l), err: (l) => console.error(l) }));
   if (process.argv[2] === 'crash') await done(runCrash(process.argv.slice(3), crashes, { out: (l) => console.log(l), err: (l) => console.error(l) }));
   if (process.argv[2] === 'doctor') await done(await runDoctor(process.argv.slice(3), realDoctorContext({ version: VERSION, contract: CONTRACT_VERSION, apiBase: cfg0?.api.base_url ?? 'https://api.centcom.dev', stateDir: stateDir(defaultDeps()) }), { out: (l) => console.log(l), err: (l) => console.error(l) }, { crashes }));
   if (process.argv[2] === 'provider') await done(await runProviderCli(process.argv.slice(3)));
