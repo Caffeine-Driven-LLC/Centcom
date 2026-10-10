@@ -27,7 +27,7 @@ export function MultiSelect({ p, width, height, unicode = true, onRow, onConfirm
       {start > 0 ? <Rich line={[sp(`  ↑ ${start} more`, { c: 'text.muted' })]} /> : null}
       {shown.map((o, i) => {
         const idx = start + i; const on = idx === p.sel; const ticked = p.checked.includes(o.id);
-        return <Clickable key={o.id} onClick={() => onRow?.(idx)}><Rich line={[sp(on ? '▸ ' : '  ', { c: 'accent.hover', b: true }), sp(box(ticked), { c: ticked ? 'status.success' : 'text.muted' }), sp(truncate(o.label, Math.floor(inner * 0.55)), { c: on ? 'text.primary' : 'text.secondary', b: on, bg: on ? 'bg.selected' : undefined }), ...(o.hint ? [sp('  ' + truncate(o.hint, Math.floor(inner * 0.4)), { c: 'text.muted' })] : [])]} /></Clickable>;
+        return <Clickable key={o.id} onClick={() => onRow?.(idx)}><Rich line={[sp(on ? '▸ ' : '  ', { c: 'accent.hover', b: true }), sp(box(ticked), { c: ticked ? 'status.success' : 'text.muted' }), sp((o.key ? `${o.key} ` : '') + truncate(o.label, Math.floor(inner * 0.55)), { c: on ? 'text.primary' : 'text.secondary', b: on, bg: on ? 'bg.selected' : undefined }), ...(o.hint ? [sp('  ' + truncate(o.hint, Math.floor(inner * 0.4)), { c: 'text.muted' })] : [])]} /></Clickable>;
       })}
       {start + shown.length < p.options.length ? <Rich line={[sp(`  ↓ ${p.options.length - start - shown.length} more`, { c: 'text.muted' })]} /> : null}
       {compact ? null : <Box height={1} />}

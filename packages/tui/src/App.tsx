@@ -151,6 +151,7 @@ export function App({ ctl, tier, keys }: AppProps) {
     }
     /* overlays */
     if (s.mode === 'pick') {
+      if (!key.ctrl && !key.meta && ctl.pickHotkey(input)) return;
       if (key.escape) ctl.pickKey('cancel'); else if (key.return) ctl.pickKey('enter'); else if (key.upArrow || input === 'k') ctl.pickKey('up'); else if (key.downArrow || key.tab || input === 'j') ctl.pickKey('down'); else if (input === ' ') ctl.pickKey('toggle'); else if (input === 'a') ctl.pickKey('all');
       return;
     }

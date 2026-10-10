@@ -203,9 +203,11 @@ async function main() {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => { if (!instance || pendingExternal) return; instance.clear(); process.stdout.write('\x1b[2J\x1b[H'); instance.rerender(<App ctl={ctl} tier={tier} keys={keys} />); }, 90); resizeTimer.unref();
   });
-  if (a11y.screenReader) await runLinear(ctl, { input: process.stdin, output: process.stdout }, linearStop);
+  let firstPass = true;
+  if (a11y.screenReader) { if (cc.cfg.ui.restore_prompt) setTimeout(() => { void ctl.offerRestore(); }, 200); await runLinear(ctl, { input: process.stdin, output: process.stdout }, linearStop); }
   else {
     for (;;) { // each pass draws the app; a task (your editor, being put in the background) unmounts it, runs on the real terminal, and the loop draws it again from the same state
+      if (firstPass) { firstPass = false; if (cc.cfg.ui.restore_prompt) setTimeout(() => { void ctl.offerRestore(); }, 200); } // a small yes/no popup once the first screen is up
       instance = render(<App ctl={ctl} tier={tier} keys={keys} />, { exitOnCtrlC: false, patchConsole: false, maxFps: 30, incrementalRendering: !process.env.CENTCOM_FULL_RENDER });
       await instance.waitUntilExit(); const task = pendingExternal; pendingExternal = undefined; if (!task) break;
       process.stdout.write('\x1b[?1000l\x1b[?1006l\x1b[?25h\x1b[?1049l'); // the screen is the shell's again

@@ -1,5 +1,5 @@
 /** A list you tick several things in: pure state so it is testable without a terminal. */
-export interface PickOption { id: string; label: string; hint?: string }
+export interface PickOption { id: string; label: string; hint?: string; /** One letter that chooses this option at once (shown as `y` before the label). */ key?: string }
 export interface PickState { title: string; note?: string; options: PickOption[]; checked: string[]; sel: number; multi: boolean; confirm: string }
 
 export const newPick = (o: { title: string; note?: string; options: PickOption[]; checked?: string[]; multi?: boolean; confirm?: string }): PickState =>
