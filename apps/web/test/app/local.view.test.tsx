@@ -66,3 +66,31 @@ describe('the session view', () => {
     expect([...log.querySelectorAll('.lc-tool .cc-vh')].map((g) => g.textContent?.trim())).toEqual(['· ok', '· error', '· denied']); expect(log.textContent).toContain('∴ thought for 2s'); expect(log.textContent).toContain('exit 1');
   });
 });
+
+describe('the home screen and the empty session', () => {
+  const st = (installed: boolean, signedIn: 'yes' | 'no' = 'yes') => ({ installed, version: '1.0', signedIn, kind: 'subscription' });
+  async function mount(o: { recent?: { dir: string; at: number }[]; claude?: ReturnType<typeof st>; opened?: boolean } = {}) {
+    const sent: { t: string; [k: string]: unknown }[] = []; let push: (m: unknown) => void = () => undefined;
+    (window as { centcom?: unknown }).centcom = { desktop: true, local: { send: (m: { t: string }) => sent.push(m), onMessage: (cb: (m: unknown) => void) => { push = cb; return () => undefined; } } };
+    render(<LocalPage />);
+    await act(async () => push({ t: 'launcher', home: '/h', cwd: '/h/p', recent: o.recent ?? [{ dir: '/h/shop', at: Date.now() - 3600_000 }, { dir: '/h/api', at: Date.now() - 86400_000 }], claude: o.claude ?? st(true), codex: st(false), prefs: { theme: 'auto', side: true, engine: 'claude-code' } }));
+    await act(async () => push({ t: 'dir', path: '/h/p/src', parent: '/h/p', git: true, entries: [{ name: 'auth', git: true }] }));
+    if (o.opened) { await act(async () => push({ t: 'opened', dir: '/h/shop', history: [] })); await act(async () => push({ t: 'state', state: { busy: false, branch: 'main', engineLabel: 'Claude Code', approvals: [] }, changed: [], order: [] })); }
+    return sent;
+  }
+  it('recent projects are cards with the folder name, the path and when; a click opens it with the chosen agent', async () => {
+    const sent = await mount(); const cards = [...document.querySelectorAll('.lc-card')]; expect(cards.map((c) => c.querySelector('.lc-card__name')?.textContent)).toEqual(['shop', 'api']); expect(cards[0]!.textContent).toContain('~/shop'); expect(cards[0]!.textContent).toContain('1 h ago');
+    fireEvent.click(cards[1]!); expect(sent.at(-1)).toEqual({ t: 'open', dir: '/h/api', demo: false, engine: 'claude-code' });
+  });
+  it('the agent cards say what is installed and signed in; a missing agent shows a warning, and the demo can be switched on', async () => {
+    await mount({ claude: st(false) }); const demo = screen.getByLabelText('Demo agent') as HTMLInputElement; expect(demo.checked).toBe(true); expect(screen.getByText('Demo agent: nothing real runs.')).toBeTruthy(); // nothing is installed: it starts in the demo
+    fireEvent.click(demo); expect(screen.getByText(/Claude Code was not found/)).toBeTruthy(); expect(document.querySelector('.lc-engine .lc-engine__state')?.textContent).toBe('not installed');
+  });
+  it('browsing: the path is clickable parts, each going up to that folder', async () => {
+    const sent = await mount({ recent: [] }); const crumbs = [...document.querySelectorAll('.lc-crumb')].map((c) => c.textContent); expect(crumbs).toEqual(['~', 'p', 'src']);
+    fireEvent.click(screen.getByRole('button', { name: 'p' })); expect(sent.at(-1)).toEqual({ t: 'browse', path: '/h/p' });
+  });
+  it('an empty session offers things to try; one click puts it in the message box', async () => {
+    await mount({ opened: true }); expect(screen.getByText('What should we work on in shop?')).toBeTruthy(); fireEvent.click(screen.getByText('Find and fix a failing test')); expect((screen.getByLabelText('Message') as HTMLTextAreaElement).value).toBe('Find and fix a failing test');
+  });
+});

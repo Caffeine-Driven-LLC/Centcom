@@ -70,3 +70,11 @@ body { margin: 0; background: var(--bg-base); color: var(--text-primary); font-f
 .cc-main { padding: var(--space-4) var(--space-6); }
 /* no inspector on this page: the content gets the room, instead of an empty 320 px column */
 @media (min-width: 1280px) { .cc-body:not(:has(.cc-inspector)) { grid-template-columns: 240px minmax(0, 1fr); } }
+/* ---- buttons with a little weight: a hard offset on the primary, a press that moves it ---- */
+.cc-btn { font-weight: 500; transition: background var(--dur-fast) steps(2, end), border-color var(--dur-fast) steps(2, end); }
+.cc-btn--primary { font-weight: 700; box-shadow: 2px 2px 0 0 var(--accent-active); } .cc-btn--primary:active { box-shadow: none; transform: translate(2px, 2px); }
+.cc-btn--secondary:hover, .cc-btn:not(.cc-btn--primary):not(.cc-btn--ghost):not(.cc-btn--danger):hover { border-color: var(--border-strong); }
+body { background-image: radial-gradient(ellipse 80% 40% at 50% -10%, color-mix(in srgb, var(--accent-fill) 10%, transparent), transparent); background-repeat: no-repeat; }
+/* selects: the same quiet look everywhere, with a pixel arrow made of two gradients (no image) */
+select.cc-input, .lc-sel select { appearance: none; -webkit-appearance: none; padding-right: 26px; background-image: linear-gradient(45deg, transparent 50%, var(--text-secondary) 50%), linear-gradient(135deg, var(--text-secondary) 50%, transparent 50%); background-position: calc(100% - 14px) 50%, calc(100% - 9px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; cursor: pointer; }
+select.cc-input:hover, .lc-sel select:hover { background-color: var(--bg-hover); }
