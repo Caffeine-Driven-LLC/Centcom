@@ -84,3 +84,27 @@ describe('saving a long conversation stays cheap', () => {
     const st = tmp(); st.save(meta(), [user('first question')]); st.save(meta(), [user('first question'), user('second')]); const l = st.load(A)!; expect(l.items.map((i) => (i as { text?: string }).text)).toEqual(['first question', 'second']);
   });
 });
+
+describe('the restore popup at start', () => {
+  const tick = () => new Promise((r) => setTimeout(r, 20));
+  const cwdOf = () => mkdtempSync(join(tmpdir(), 'cc-restore-'));
+  async function rig(o: { demo?: boolean; resume?: string; saved?: { messages: number } | null } = {}) {
+    const { FakeEngine } = await import('@centcom/testkit'); const cwd = cwdOf(); const sessions = tmp();
+    if (o.saved !== null) sessions.save({ id: A, cwd, engine: 'fake', title: 'Fix the flaky importer test', createdAt: Date.now() - 7200_000, updatedAt: Date.now() - 3600_000, messages: o.saved?.messages ?? 2 } as never, [user('Fix the flaky importer test'), { kind: 'assistant', id: 'a1', messageId: 'm', agentId: 'x', text: 'On it.', done: true } as never]);
+    const c = new AppController({ engine: (o.demo ? new DemoEngine({ speed: 100 }) : new FakeEngine({ id: 'claude-code' })) as never, demo: !!o.demo, cwd, version: 't', skills: [], sessions, ...(o.resume ? { resume: o.resume } : {}) }); await c.start(); return { c, sessions };
+  }
+  it('asks yes or no with the title, the size and when; yes brings the conversation back, no leaves a fresh one (and the old stays saved)', async () => {
+    const { c, sessions } = await rig(); const run = c.offerRestore(); await tick(); expect(c.state.mode).toBe('pick'); expect(c.state.pick!.title).toBe('Restore your last session?'); expect(c.state.pick!.note).toMatch(/"Fix the flaky importer test" · 2 messages · /); expect(c.state.pick!.options.map((o) => o.id)).toEqual(['yes', 'no']); expect(c.state.pick!.options.map((o) => o.key)).toEqual(['y', 'n']);
+    c.pickKey('enter'); await run; expect(c.state.items.some((i) => i.kind === 'user' && i.text === 'Fix the flaky importer test')).toBe(true); expect(c.state.sessionId).toBe(A); c.stop(); sessions.close();
+    const b = await rig(); const nope = b.c.offerRestore(); await tick(); b.c.pickKey('down'); b.c.pickKey('enter'); await nope; expect(b.c.state.items).toEqual([]); expect(b.sessions.list(b.c['o'].cwd).map((m) => m.id)).toContain(A); b.c.stop(); b.sessions.close();
+    const e = await rig(); const esc = e.c.offerRestore(); await tick(); e.c.pickKey('cancel'); await esc; expect(e.c.state.items).toEqual([]); e.c.stop(); e.sessions.close(); // Esc is no
+  });
+  it('stays out of the way: nothing saved, an empty saved session, a session chosen on the command line, and the demo', async () => {
+    for (const o of [{ saved: null }, { saved: { messages: 0 } }, { resume: 'last' }, { demo: true }] as const) { const { c, sessions } = await rig(o as never); const run = c.offerRestore(); await tick(); expect(c.state.mode).toBe('chat'); await run; c.stop(); sessions.close(); }
+  });
+  it('the setting exists, is on by default, and is documented', async () => { const { SCHEMA } = await import('@centcom/config'); expect((SCHEMA as Record<string, { default: unknown; doc: string }>)['ui.restore_prompt']).toMatchObject({ default: true }); expect((SCHEMA as Record<string, { doc: string }>)['ui.restore_prompt']!.doc).toMatch(/restore your last session/); });
+  it('y and n answer it at once (any case), other letters do nothing', async () => {
+    const a = await rig(); const ra = a.c.offerRestore(); await tick(); expect(a.c.pickHotkey('x')).toBe(false); expect(a.c.state.mode).toBe('pick'); expect(a.c.pickHotkey('Y')).toBe(true); await ra; expect(a.c.state.sessionId).toBe(A); a.c.stop(); a.sessions.close();
+    const b = await rig(); const rb = b.c.offerRestore(); await tick(); expect(b.c.pickHotkey('n')).toBe(true); await rb; expect(b.c.state.items).toEqual([]); expect(b.c.pickHotkey('y')).toBe(false); b.c.stop(); b.sessions.close(); // nothing is open any more
+  });
+});

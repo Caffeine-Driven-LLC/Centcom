@@ -12,6 +12,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve as resolvePath } from 'node:path';
 import { HANDOFF_PROMPT, readPrompt } from './handoff.js';
 import { SessionStore, ago, titleFrom, type SessionMeta } from './sessions.js';
+import { truncate } from './util/text.js';
 import { codeBlocks, lastAnswer, toMarkdown } from './util/export.js';
 import { PasteStore } from './prompt/paste.js';
 import { animationEntries, commandEntries, createFileIndex, FIRST_LABELS, listProvider, quickEntries, type FileIndex, type PaletteProvider } from './palette/index.js';
@@ -227,6 +228,13 @@ export class AppController {
     this.createdAt = undefined; this.lastItems = undefined;
     this.set({ items: [], scroll: 0, sessionId: newId('ses'), approvals: [], tasks: [] });
     await this.startEngine();
+  }
+  /** At start, in a folder you have worked in before: a small popup asks whether to restore the last session (yes: it comes back, no: a fresh one). Never when the session was chosen on the command line, in the demo, or when there is nothing to restore. */
+  async offerRestore(): Promise<void> {
+    if (this.o.demo || this.o.resume || !this.o.sessions || this.stopped || this.state.busy || this.state.items.length || this.state.mode !== 'chat') return;
+    const m = this.o.sessions.list(this.o.cwd, 5).find((x) => x.id !== this.state.sessionId && x.messages > 0); if (!m) return;
+    const ids = await this.pick({ title: 'Restore your last session?', note: `"${truncate(m.title, 56)}" · ${m.messages} message${m.messages === 1 ? '' : 's'} · ${ago(m.updatedAt)}`, multi: false, confirm: 'ok', options: [{ id: 'yes', key: 'y', label: 'Yes, restore it', hint: 'the conversation comes back and the agent continues it' }, { id: 'no', key: 'n', label: 'No, start fresh', hint: 'the old one stays saved: /resume brings it back later' }] });
+    if (ids?.[0] === 'yes') await this.resumeSession(m.id);
   }
   /** Switch to a saved conversation from this folder. `which` is a list number (1 = newest) or an id. */
   async resumeSession(which: string) {
@@ -724,6 +732,11 @@ export class AppController {
   /** Watch every event of the main agent (the plain-text mode prints them). */
   addObserver(fn: (agentId: string, ev: NormalisedEvent) => void) { (this.o.observers ??= []).push(fn); }
   /** Answer the open list without keys: the ticked option numbers (1-based), or undefined to cancel. A one-of list takes the first. */
+  /** A letter that belongs to one option of the open list chooses it at once (y and n in a yes/no question). */
+  pickHotkey(input: string): boolean {
+    const p = this.state.pick; if (this.state.mode !== 'pick' || !p || input.length !== 1) return false;
+    const i = p.options.findIndex((o) => o.key === input.toLowerCase()); if (i < 0) return false; this.pickAnswer([i + 1]); return true;
+  }
   pickAnswer(numbers: number[] | undefined) {
     const p = this.state.pick; if (!p) return;
     if (!numbers) { this.pickKey('cancel'); return; }

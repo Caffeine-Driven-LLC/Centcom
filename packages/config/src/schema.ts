@@ -14,6 +14,7 @@ export const SCHEMA = {
   'log.max_files': { kind: 'number', default: 3, min: 1, max: 20, doc: 'How many rotated log files to keep' },
   'ui.theme': { kind: 'enum', default: 'auto', enum: ['auto', 'dark', 'light', 'hc'], project: true, doc: 'Graphite (dark), Paper (light), high contrast (hc), or follow the system' },
   'ui.mascot': { kind: 'boolean', default: true, project: true, doc: 'Show Cento' },
+  'ui.restore_prompt': { kind: 'boolean', default: true, doc: 'When Centcom starts in a folder you have worked in before, ask in a small popup whether to restore your last session (yes or no)' },
   'ui.mouse': { kind: 'boolean', default: true, doc: 'Scroll with the mouse wheel in the terminal app (off gives the terminal its own text selection back)' },
   'ui.spinner': { kind: 'enum', default: 'fun', enum: ['fun', 'plain'], doc: 'The waiting line: rotating fun verbs, or a plain "Working…"' },
   'ui.density': { kind: 'enum', default: 'comfortable', enum: ['comfortable', 'compact'], doc: 'Blank rows between messages: comfortable, or compact to fit more on screen' },

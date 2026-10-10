@@ -39,6 +39,10 @@ Codex can wait for your answer while it works. Claude Code's questions come back
 
 Commands that take a choice open a list when you type them with nothing after them, so there is nothing to remember: `/mode`, `/theme`, `/color`, `/mascot`, `/motion`, `/density`, `/spinner`, `/title`, `/bell`, `/mouse`, `/auto`, `/effort`, `/model`, `/resume`, `/rewind`, `/skills`, `/permissions`, `/fleet`, `/trust`, `/demo`, `/mcp`, `/hooks` and `/memory`. `/copy` asks what to copy when the answer has code (the whole answer or any one code block), `/export` asks file or clipboard, `/find` asks what to look for, and a `# note` for memory is confirmed from a yes/no list. Typing the value yourself (`/mouse off`, `/copy code`, `/export notes.md`) still works and skips the list.
 
+## Coming back to your work
+
+When you start Centcom in a folder you have worked in before, a small popup asks **"Restore your last session?"** with the title, size and age of that conversation. Press `y` (or Enter on "Yes") and it comes back and the agent continues it; press `n` or Esc and you get a fresh session, and the old one stays saved (`/resume` brings it back later). It does not ask when you chose a session yourself (`--continue`, `--resume`), in the demo, in print mode, or when the folder has nothing saved. Turn it off with the setting `ui.restore_prompt` (`false`).
+
 ## The palette (`ctrl+k`)
 
 Type a few letters of anything: commands (`thm hc` finds `/theme hc`), project files (a pick adds `@path` to your prompt), saved conversations (a pick resumes it) and skills. With nothing typed it shows the commands people use most.

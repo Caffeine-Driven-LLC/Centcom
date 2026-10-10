@@ -355,3 +355,11 @@ describe('undo history is dropped when the prompt changes any other way', () => 
     await t.send('\x15', 40); await t.send('\x1b[200~' + Array.from({ length: 12 }, (_, i) => 'l' + i).join('\n') + '\x1b[201~', 80); await t.until(() => /Pasted/.test(t.text())); await wait(750); await t.send('\x1b', 80); expect(t.text()).toBe(''); await t.send(UNDO, 60); expect(t.text()).toBe('');
   });
 });
+
+describe('a yes/no list answers to y and n', () => {
+  it('pressing y or n in the real app chooses that option at once; an ordinary list ignores them', async () => {
+    const t = await mount(); const yes = t.ctl.pick({ title: 'Restore?', options: [{ id: 'yes', key: 'y', label: 'Yes' }, { id: 'no', key: 'n', label: 'No' }] }); await wait(); await t.send('y', 60); expect(await yes).toEqual(['yes']); expect(t.ctl.state.mode).toBe('chat');
+    const no = t.ctl.pick({ title: 'Restore?', options: [{ id: 'yes', key: 'y', label: 'Yes' }, { id: 'no', key: 'n', label: 'No' }] }); await wait(); await t.send('n', 60); expect(await no).toEqual(['no']);
+    void t.ctl.pick({ title: 'Plain', options: ['a', 'b'].map((id) => ({ id, label: id })) }); await wait(); await t.send('y', 60); expect(t.ctl.state.mode).toBe('pick'); t.ctl.pickKey('cancel');
+  });
+});
