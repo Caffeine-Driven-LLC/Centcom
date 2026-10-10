@@ -17,4 +17,6 @@
 - [lan](./lan.md): find sessions on this network
 - [doctor](./doctor.md): check this computer
 - [crash](./crash.md): crash reports on this computer
+- [link](./link.md): open a centcom:// link (the system runs this)
+- [install-handler](./install-handler.md): make centcom:// links open with Centcom
 - [help](./help.md): help on a command or topic
