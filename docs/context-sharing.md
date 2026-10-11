@@ -1,6 +1,6 @@
 # Active context sharing (design)
 
-Status: proposal. Nothing here is built. It says what to build first, what each part needs from the engines and the backend, and what could go wrong.
+Status: **phase 1 is built** (the local board, automatic capture, the digest at the start of each message, `/note` and `/context`; see the guide in docs/site/guide/terminal-app.md); phases 2 to 4 are still a proposal. It says what to build, what each part needs from the engines and the backend, and what could go wrong.
 
 ## The problem
 

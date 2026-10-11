@@ -184,3 +184,28 @@ describe('a full context: compact, or hand over to a fresh session', () => {
     expect(engine.sessions[0]!.prompts.some((p) => /running out of context/.test(p))).toBe(false); ctl.stop();
   });
 });
+
+describe('the context board, end to end through the runtime', () => {
+  const edit = (path: string): EventBody[] => [{ type: 'tool.requested', tool_id: 'e1', name: 'Edit', input_summary: path, risk: 'low', path }, { type: 'tool.result', tool_id: 'e1', status: 'ok', summary: 'edited' }];
+  const failing: EventBody[] = [{ type: 'tool.requested', tool_id: 'b1', name: 'Bash', input_summary: 'pnpm test importer', risk: 'low', command: 'pnpm test importer' }, { type: 'tool.result', tool_id: 'b1', status: 'error', summary: '2 failed: parse.test.ts' }];
+  it('what the main agent does is noted: its failing test and the file it is changing (the claim ends with the turn), and /context shows it', async () => {
+    let cwdRef = ''; const { ctl, cwd } = await app({ script: () => ({ events: [...edit(join(cwdRef, 'src/parse.ts')), ...failing] }) }); cwdRef = cwd; (ctl as never as { o: { cwd: string } }).o.cwd = cwd; // the script needs the folder, which the helper makes
+    const board = (ctl as never as { o: { board: { list(): { type: string; text: string; author: { name: string } }[]; digest(a: { id: string; name: string }): { text: string } | undefined } } }).o.board;
+    await ctl.submit('fix the importer'); await until(() => !ctl.state.busy); await until(() => board.list().some((e) => e.type === 'finding'));
+    expect(board.list().map((e) => [e.type, e.text])).toEqual([['finding', '`pnpm test importer` failed: 2 failed: parse.test.ts']]); // the claim was handed back when the turn ended
+    const d = board.digest({ id: 'agt_other', name: 'Agent 2' })!; expect(d.text).toContain('`pnpm test importer` failed'); expect(d.text).toContain('· you,'); ctl.stop();
+  });
+  it('a fleet agent\'s first prompt starts with the board, followed by its task', async () => {
+    const cwd = repo(); const { createAgentBus, createFleetManager, createRunner, createWorktreeManager, nodeGit, nodeWtFs, createBoard } = await import('@centcom/agent'); const { newIdGenerator } = await import('@centcom/protocol');
+    const bus = createAgentBus({ onError: () => undefined }); const ids = newIdGenerator({ now: () => Date.now(), random: (n) => new Uint8Array(n).map(() => Math.floor(Math.random() * 256)) });
+    const clock = { now: () => Date.now(), setTimeout: (f: () => void, ms: number) => setTimeout(f, ms), clearTimeout: (h: never) => clearTimeout(h) }; const quiet = { debug: () => undefined, info: () => undefined, warn: () => undefined, error: () => undefined };
+    const fake = new FakeEngine({ id: 'claude-code' }); const runner = createRunner({ engines: { get: () => fake as never }, bus, ids, clock, log: quiet, config: { maxParallel: 8 }, env: {} });
+    const worktrees = createWorktreeManager({ git: nodeGit, fs: nodeWtFs, bus, clock, config: { root: tmp('centcom-wt-') } }); const manager = createFleetManager({ runner, worktrees, entitlements: { maxParallelAgents: () => 4 }, bus, ids, clock, config: { staggerMs: 0 } } as never);
+    const board = createBoard({ file: join(tmp('cc-fleetboard-'), 'board.jsonl') }); board.post({ author: { kind: 'person', id: 'you', name: 'you' }, type: 'decision', text: 'use pnpm, never npm', pinned: true });
+    const ctl = new AppController({ engine: new FakeEngine({ id: 'claude-code' }) as never, demo: false, cwd, version: 't', skills: [], fleet: { manager, bus, ownerSlug: 'alex' }, board }); await ctl.start();
+    await ctl.runCommand('/fleet start 2 tidy the docs'); await until(() => fake.sessions.length === 2, 10_000);
+    for (const s of fake.sessions) { expect(s.prompts[0]!.startsWith('<team-context>')).toBe(true); expect(s.prompts[0]).toContain('use pnpm, never npm'); expect(s.prompts[0]!.endsWith('tidy the docs')).toBe(true); }
+    await ctl.runCommand('/fleet stop all'); ctl.stop();
+  }, 30_000);
+});
+

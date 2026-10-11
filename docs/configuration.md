@@ -39,6 +39,8 @@ When you change them in the app, these are saved to your user file: theme, Cento
 | `net.max_attempts` | number (1 to 20) | `5` | no | Retry attempts for network calls |
 | `budget.session_usd` | number (0 to 100000) | `0` | no | Warn when a session's reported cost passes 80 % and 100 % of this (0 = off). Only warns; nothing is stopped |
 | `telemetry.enabled` | boolean | `false` | no | Anonymous usage reporting (off unless you turn it on) |
+| `context.board` | boolean | `true` | no | The shared context board: what agents and people note (decisions, warnings, findings, who is changing which file) goes along with the other agents' next messages. Turn off to share nothing |
+| `context.digest_tokens` | number (100 to 2000) | `500` | no | The most the board adds to one message (about four characters per token) |
 | `log.level` | debug \| info \| warn \| error \| silent | `"info"` | yes | How much to write to the log file |
 | `log.max_file_bytes` | number (65536 to 268435456) | `5242880` | no | Rotate the log file at this size |
 | `log.max_files` | number (1 to 20) | `3` | no | How many rotated log files to keep |

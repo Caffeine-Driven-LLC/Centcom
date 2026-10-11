@@ -31,7 +31,7 @@ export async function runPrint(o: PrintOptions): Promise<number> {
   const onOutErr = (e: NodeJS.ErrnoException) => { if (e.code === 'EPIPE') { gone = true; finish?.(); } };
   out.on?.('error', onOutErr);
   const write = (t: string) => { if (!gone) { try { out.write(t); } catch (e) { onOutErr(e as NodeJS.ErrnoException); } } };
-  let rt; try { rt = await buildRuntime({ cwd: o.cwd, engineId: o.engine.id, demo: o.demo, dangerous: o.mode === 'bypassPermissions', checkpoints: false, allow: o.allow, ...(o.configDir ? { configDir: o.configDir } : {}) }); }
+  let rt; try { rt = await buildRuntime({ cwd: o.cwd, engineId: o.engine.id, demo: o.demo, dangerous: o.mode === 'bypassPermissions', checkpoints: false, board: false /* a one-shot run leaves no files in the folder */, allow: o.allow, ...(o.configDir ? { configDir: o.configDir } : {}) }); }
   catch (e) { say(String((e as Error).message ?? e)); return EXIT_CODES.usage; }
   let finish: (() => void) | undefined; const hold = new Holdback();
   const ctl: AppController = new AppController({ ...rt.options,
