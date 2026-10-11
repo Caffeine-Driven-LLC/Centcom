@@ -58,3 +58,12 @@ describe('attention across sessions', () => {
   });
   it('is quiet when nothing runs', () => { expect(attention({ running: [], state: undefined })).toEqual({ waiting: 0, busy: false, dir: undefined, ask: undefined }); });
 });
+describe('the rail order', () => {
+  it('puts working areas first, account areas last, and drops the duplicate local link inside the desktop app', async () => {
+    const { orderNav } = await import('../../src/app/Frame.js');
+    const n = (id: string) => ({ id, labelKey: id, to: `/${id}`, icon: 'x' });
+    const all = ['billing', 'home', 'local', 'settings', 'workspaces', 'zzz', 'aaa'].map(n);
+    expect(orderNav(all, false).map((x) => x.id)).toEqual(['home', 'local', 'workspaces', 'billing', 'settings', 'aaa', 'zzz']);
+    expect(orderNav(all, true).map((x) => x.id)).toEqual(['home', 'workspaces', 'billing', 'settings', 'aaa', 'zzz']);
+  });
+});
