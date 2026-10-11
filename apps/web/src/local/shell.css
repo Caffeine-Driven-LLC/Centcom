@@ -71,3 +71,7 @@
 .ps-icon { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--text-muted); cursor: pointer; }
 .ps-icon:hover { background: var(--bg-hover); color: var(--text-primary); } .ps-icon[aria-pressed="true"] { color: var(--accent-primary); } .ps-icon svg { width: 14px; height: 14px; }
 .ps-addnote { display: grid; grid-template-columns: 1fr auto; gap: 6px; } .ps-addnote .cc-input:first-of-type { grid-column: 1 / -1; }
+
+.pal__keys { padding: 20px 24px; } .pal__keys-title { margin: 0 0 12px; font: 500 20px var(--font-serif); }
+.pal__keys dl { margin: 0; display: flex; flex-direction: column; gap: 8px; } .pal__key { display: flex; align-items: center; gap: 16px; } .pal__key dt { flex: 0 0 140px; } .pal__key dd { margin: 0; color: var(--text-secondary); font-size: 14px; }
+.pal__key kbd { display: inline-block; padding: 2px 8px; border: 1px solid var(--border-default); border-radius: var(--r-sm); background: var(--bg-sunken); font: 12px var(--font-mono); color: var(--text-primary); }
