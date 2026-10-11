@@ -115,9 +115,15 @@ function approvalTitle(tool: string): string { return tool === 'Bash' ? 'Allow C
 const MODES: [string, string][] = [['default', 'Ask first'], ['acceptEdits', 'Accept edits'], ['plan', 'Plan (read only)'], ['bypassPermissions', 'Skip approvals']];
 
 function Workspace({ view, send }: { view: LocalView; send: Send }): React.JSX.Element {
-  const [text, setText] = useState(''); const [effort, setEffort] = useState(''); const [slashSel, setSlashSel] = useState(0); const slash = slashMatches(COMMANDS, text); const slashAt = Math.min(slashSel, Math.max(0, slash.length - 1)); const [panel, setPanel] = useState(view.launcher?.prefs.side ?? true); const togglePanel = (): void => { send({ t: 'pref', side: !panel }); setPanel(!panel); }; /* remembered in the settings file (client.side_panel) */ const s = view.state; const model = view.models.find((x) => x.id === s?.settings?.model) ?? view.models.find((x) => x.isDefault);
-  useEffect(() => { send({ t: 'models' }); }, [send, view.opened]); const approval = s?.approvals[0];
-  const submit = (): void => { const t = text.trim(); if (!t) return; send({ t: 'submit', text: t }); setText(''); };
+  const [text, setText] = useState(''); const [effort, setEffort] = useState(''); const hist = useRef<{ list: string[]; idx: number | null; draft: string }>({ list: [...view.history], idx: null, draft: '' });
+  /** Up and Down walk through earlier messages, like a terminal; the half-typed message comes back at the end. */
+  const recall = (dir: -1 | 1): boolean => {
+    const h = hist.current; if (dir === -1) { if (!h.list.length) return false; if (h.idx === null) { h.draft = text; h.idx = h.list.length - 1; } else if (h.idx > 0) h.idx--; setText(h.list[h.idx]!); return true; }
+    if (h.idx === null) return false; if (h.idx < h.list.length - 1) { h.idx++; setText(h.list[h.idx]!); } else { h.idx = null; setText(h.draft); } return true;
+  };
+  const [slashSel, setSlashSel] = useState(0); const slash = slashMatches(COMMANDS, text); const slashAt = Math.min(slashSel, Math.max(0, slash.length - 1)); const [panel, setPanel] = useState(view.launcher?.prefs.side ?? true); const togglePanel = (): void => { send({ t: 'pref', side: !panel }); setPanel(!panel); }; /* remembered in the settings file (client.side_panel) */ const s = view.state; const model = view.models.find((x) => x.id === s?.settings?.model) ?? view.models.find((x) => x.isDefault);
+  useEffect(() => { send({ t: 'models' }); send({ t: 'board' }); }, [send, view.opened]); const approval = s?.approvals[0];
+  const submit = (): void => { const t = text.trim(); if (!t) return; send({ t: 'submit', text: t }); hist.current.list = [...hist.current.list.filter((x) => x !== t), t].slice(-200); hist.current.idx = null; setText(''); };
   const log = useRef<HTMLDivElement>(null); const stick = useRef(true); const box = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { const el = log.current; if (el && stick.current) el.scrollTop = el.scrollHeight; }, [view.items, approval]);
   const busy = !!s?.busy; const name = view.opened ? baseName(view.opened) : 'Session';
@@ -131,7 +137,7 @@ function Workspace({ view, send }: { view: LocalView; send: Send }): React.JSX.E
     <div className="lc-log" role="log" aria-label="Transcript" ref={log} onScroll={(e) => { const el = e.currentTarget; stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}>
       <div className="lc-thread">
         {view.items.length ? groupItems(view.items).map((g, i) => Array.isArray(g) ? <ToolGroup key={`g${g[0]!.id}`} items={g} /> : <Turn key={g.id} it={g} />)
-          : <div className="lc-empty"><span className="lc-empty__mark"><CentoMark size={64} /></span><h3>What should we work on in {name}?</h3><div className="lc-suggest">{SUGGESTIONS.map((x) => <button key={x} type="button" className="lc-suggest__item" onClick={() => { setText(x); box.current?.focus(); }}>{x}</button>)}</div></div>}
+          : <div className="lc-empty"><span className="lc-empty__mark"><CentoMark size={64} /></span><h3>What should we work on in {name}?</h3><div className="lc-suggest">{(s?.sessions ?? []).filter((x) => x.id !== s?.sessionId && x.messages > 0).slice(0, 2).map((x) => <button key={x.id} type="button" className="lc-suggest__item lc-suggest__item--resume" title={`Continue where you left off (${whenAgo(x.updatedAt)})`} onClick={() => send({ t: 'open', dir: view.opened!, engine: view.launcher ? pickEngine(view.launcher).engine : 'claude-code', demo: !!s?.demo, resume: x.id })}>↺ Continue: {x.title || 'Untitled'}</button>)}{SUGGESTIONS.slice(0, 4 - Math.min(2, (s?.sessions ?? []).filter((x) => x.id !== s?.sessionId && x.messages > 0).length)).map((x) => <button key={x} type="button" className="lc-suggest__item" onClick={() => { setText(x); box.current?.focus(); }}>{x}</button>)}</div></div>}
         {busy && !approval ? <div className="lc-working" role="status"><span className="lc-working__dots" aria-hidden="true"><i /><i /><i /></span>{s?.verb || 'Working'}</div> : null}
       </div>
     </div>
@@ -149,6 +155,8 @@ function Workspace({ view, send }: { view: LocalView; send: Send }): React.JSX.E
           if (slash.length && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); setSlashSel((slashAt + (e.key === 'ArrowDown' ? 1 : slash.length - 1)) % slash.length); return; }
           if (slash.length && (e.key === 'Tab' || (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.shiftKey))) { e.preventDefault(); setText(`/${slash[slashAt]!.name} `); setSlashSel(0); return; }
           if (slash.length && e.key === 'Escape') { e.preventDefault(); setText(''); return; }
+          if (e.key === 'Escape' && busy) { e.preventDefault(); send({ t: 'interrupt' }); return; }
+          if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey && (hist.current.idx !== null || (!text.includes('\n') && (text === '' || (e.key === 'ArrowUp' && e.currentTarget.selectionStart === 0)))) && recall(e.key === 'ArrowUp' ? -1 : 1)) { e.preventDefault(); return; }
           if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); } }} />
       <div className="lc-composer-bar">
       <label className="lc-sel"><span>Mode</span><select aria-label="Mode" value={s?.settings?.permissionMode ?? 'default'} onChange={(e) => send({ t: 'setMode', mode: e.target.value as never })}>{MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
@@ -157,7 +165,7 @@ function Workspace({ view, send }: { view: LocalView; send: Send }): React.JSX.E
 <span className="lc-hint">Enter to send</span><span className="lc-grow" /><SButton variant="outline" size="sm" disabled={!busy} onClick={() => send({ t: 'interrupt' })}><StopIcon />Stop</SButton><SButton size="sm" variant={approval ? 'secondary' : 'default'} disabled={!text.trim()} onClick={submit}><ArrowUp />Send</SButton></div>
     </div>
   </div>
-  {panel ? <SessionPanel view={view} /> : null}
+  {panel ? <SessionPanel view={view} send={send} /> : null}
   </div>;
 }
 

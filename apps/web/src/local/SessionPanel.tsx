@@ -1,10 +1,11 @@
 import { useRouter } from '@tanstack/react-router';
-import { CheckCircle2, Circle, CircleDot, FileDiff, Gauge, ListChecks, UserPlus, Users } from 'lucide-react';
+import { CheckCircle2, Circle, CircleDot, FileDiff, Gauge, ListChecks, Pin, StickyNote, UserPlus, Users, X } from 'lucide-react';
 import React, { useState } from 'react';
 import { Avatar, Badge, Button } from '../ui/shadcn/index.js';
 import { Diff } from './Diff.js';
 import { compactNumber, duration, insights, money } from './insights.js';
 import type { LocalView } from './model.js';
+import type { ClientMsg } from '../../../desktop/src/local/protocol.js';
 import './shell.css';
 
 export function Person({ name, slot, sub, you }: { name: string; slot: number; sub?: string; you?: boolean }): React.JSX.Element {
@@ -20,7 +21,29 @@ const baseName = (p: string): string => p.split('/').pop() || p;
 const pct = (u: number): number => (u <= 1 ? u * 100 : u);
 
 /** The session at a glance: progress, context use, who is in it, and what it changed. Everything is counted from the live transcript and agent state. */
-export function SessionPanel({ view, now = Date.now() }: { view: LocalView; now?: number }): React.JSX.Element {
+const NOTE_VARIANT: Record<string, 'primary' | 'warning' | 'success' | 'default'> = { decision: 'primary', warning: 'warning', finding: 'success' };
+/** The shared context board: what agents and people noted, newest first, with a box to add a note every agent gets with its next message. */
+function Notes({ view, send }: { view: LocalView; send?: ((m: ClientMsg) => void) | undefined }): React.JSX.Element | null {
+  const [text, setText] = useState(''); const [type, setType] = useState<'decision' | 'warning' | 'finding'>('decision');
+  if (!view.board.enabled) return null;
+  const add = (): void => { const t = text.trim(); if (!t || !send) return; send({ t: 'note', type, text: t }); setText(''); };
+  return <Section icon={<StickyNote />} title="Shared notes" aside={view.board.notes.length ? String(view.board.notes.length) : undefined}>
+    {view.board.notes.length ? <ul className="ps-list">{view.board.notes.slice(0, 8).map((n) => <li key={n.id} className="ps-note-row">
+      <span className="ps-note-row__head"><Badge variant={NOTE_VARIANT[n.type] ?? 'default'}>{n.type}</Badge><span className="ps-note-row__by">{n.person ? 'you' : n.author}</span>
+        {send ? <span className="ps-note-row__acts"><button type="button" className="ps-icon" aria-pressed={n.pinned} aria-label={n.pinned ? `Unpin: ${n.text}` : `Pin: ${n.text}`} title={n.pinned ? 'Unpin' : 'Pin (keeps it until you remove it)'} onClick={() => send({ t: 'notePin', id: n.id, pinned: !n.pinned })}><Pin /></button>
+          <button type="button" className="ps-icon" aria-label={`Remove: ${n.text}`} title="Take it off the board" onClick={() => send({ t: 'noteRemove', id: n.id })}><X /></button></span> : null}</span>
+      <span className="ps-note-row__text">{n.text}</span>
+    </li>)}</ul> : <p className="ps-note">Nothing yet. Agents add what they learn as they work.</p>}
+    {send ? <form className="ps-addnote" onSubmit={(e) => { e.preventDefault(); add(); }}>
+      <label className="cc-vh" htmlFor="ps-note">Note for every agent</label>
+      <input id="ps-note" className="cc-input" value={text} maxLength={280} placeholder="Tell every agent something…" onChange={(e) => setText(e.target.value)} />
+      <select aria-label="Kind of note" className="cc-input" value={type} onChange={(e) => setType(e.target.value as typeof type)}><option value="decision">decision</option><option value="warning">warning</option><option value="finding">finding</option></select>
+      <Button size="sm" type="submit" disabled={!text.trim()}>Add</Button>
+    </form> : null}
+  </Section>;
+}
+
+export function SessionPanel({ view, send, now = Date.now() }: { view: LocalView; send?: (m: ClientMsg) => void; now?: number }): React.JSX.Element {
   const [openFile, setOpenFile] = useState<string | null>(null); const router = useRouter({ warn: false }) as { navigate(o: { to: string }): unknown } | undefined;
   const s = view.state; const info = insights(view.items, s, now); const agents = s?.agents ?? []; const limits = s?.limits ?? [];
   const rel = (p: string): string => (view.opened && p.startsWith(view.opened + '/') ? p.slice(view.opened.length + 1) : p);
@@ -55,6 +78,7 @@ export function SessionPanel({ view, now = Date.now() }: { view: LocalView; now?
       {info.people.length === 0 ? <p className="ps-note">Only you so far. Invite someone to watch or help in this session.</p> : null}
       <Button variant="outline" size="sm" onClick={() => { void router?.navigate({ to: '/workspaces' }); }}><UserPlus />Invite someone</Button>
     </Section>
+    <Notes view={view} send={send} />
     <Section icon={<FileDiff />} title="Files changed" aside={info.files.length ? <><span className="ps-add">+{info.added}</span> <span className="ps-del">−{info.removed}</span></> : undefined}>
       {shown?.diff ? <div className="ps-diff"><Button variant="ghost" size="sm" onClick={() => setOpenFile(null)}>← All files</Button><p className="ps-diff__path" title={shown.path}>{rel(shown.path)}</p><Diff diff={shown.diff} max={60} /></div>
         : info.files.length ? <ul className="ps-list ps-list--tight">{info.files.slice(0, 12).map((f) => <li key={f.path}><button type="button" disabled={!f.diff} className="ps-file" title={f.path} onClick={() => setOpenFile(f.path)}><span className="ps-file__name" data-failed={f.failed}>{rel(f.path)}</span><span className="ps-file__n">{f.added || f.removed ? `+${f.added} −${f.removed}` : `${f.edits}×`}</span></button></li>)}{info.files.length > 12 ? <li className="ps-more">and {info.files.length - 12} more</li> : null}</ul>

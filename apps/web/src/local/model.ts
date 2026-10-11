@@ -1,13 +1,13 @@
-import type { RunningSession, ServerMsg, WebState } from '../../../desktop/src/local/protocol.js';
+import type { BoardNote, RunningSession, ServerMsg, WebState } from '../../../desktop/src/local/protocol.js';
 import type { Item } from '@centcom/tui';
 
 export type Launcher = Extract<ServerMsg, { t: 'launcher' }>;
 export type DirMsg = Extract<ServerMsg, { t: 'dir' }>;
 export interface Notice { level: 'info' | 'warn' | 'error'; text: string; n: number }
 /** Everything the local-session screens show, rebuilt from the messages the main process sends. */
-export interface LocalView { launcher?: Launcher; dir?: DirMsg; opened?: string; history: string[]; /** Every agent session that is alive, shown or not. */ running: RunningSession[]; state?: WebState; items: Item[]; notice?: Notice; models: Models; byId: ReadonlyMap<string, Item> }
+export interface LocalView { launcher?: Launcher; dir?: DirMsg; opened?: string; history: string[]; /** Every agent session that is alive, shown or not. */ running: RunningSession[]; /** The context board of the shown session; `enabled` false when it is turned off. */ board: { enabled: boolean; notes: BoardNote[] }; state?: WebState; items: Item[]; notice?: Notice; models: Models; byId: ReadonlyMap<string, Item> }
 export type Models = Extract<ServerMsg, { t: 'models' }>['models'];
-export const emptyView = (): LocalView => ({ models: [], history: [], running: [], items: [], byId: new Map() });
+export const emptyView = (): LocalView => ({ models: [], history: [], running: [], board: { enabled: false, notes: [] }, items: [], byId: new Map() });
 /** One message in, the next view out. State messages carry only the items that changed plus the full order, so unchanged items keep their identity. */
 export function reduceLocal(v: LocalView, m: ServerMsg): LocalView {
   switch (m.t) {
@@ -15,8 +15,9 @@ export function reduceLocal(v: LocalView, m: ServerMsg): LocalView {
     case 'dir': return { ...v, dir: m };
     case 'models': return { ...v, models: m.models };
     case 'running': return { ...v, running: m.sessions };
-    case 'opened': return { ...v, opened: m.dir, history: m.history ?? [], state: undefined, items: [], byId: new Map(), models: [] };
-    case 'closed': return { ...v, opened: undefined, state: undefined, items: [], byId: new Map() };
+    case 'board': return { ...v, board: { enabled: m.enabled, notes: m.notes } };
+    case 'opened': return { ...v, opened: m.dir, history: m.history ?? [], state: undefined, items: [], byId: new Map(), models: [], board: { enabled: false, notes: [] } };
+    case 'closed': return { ...v, opened: undefined, state: undefined, items: [], byId: new Map(), board: { enabled: false, notes: [] } };
     case 'notice': return { ...v, notice: { level: m.level, text: m.text, n: (v.notice?.n ?? 0) + 1 } };
     case 'state': { const byId = new Map(v.byId); for (const it of m.changed) byId.set(it.id, it); return { ...v, byId, state: m.state, items: m.order.map((id) => byId.get(id)).filter((x): x is Item => !!x) }; }
     default: return v;
