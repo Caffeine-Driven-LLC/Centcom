@@ -18,7 +18,7 @@ backend   scaffold  ·······················build the serv
 | **M0** Contracts and scaffolding | Both repos build and test in CI, the contracts are frozen and locked, and each side has the mock of the other so everyone can work alone. | 12 / 12 | 26 / 32 | G0 |
 | **M1** Solo agent in the terminal | A person installs Centcom, it finds their own Claude Code and/or Codex, and they work with agents in git worktrees in a polished TUI with the mascot. No network, no account. | 39 / 0 | 109 / 0 | none (demo script) |
 | **M2** LAN multiplayer (free tier) | Two machines on the same Wi-Fi share one command post with no backend and no account: pair with a code, queue prompts, host approves, everything end-to-end encrypted. | 17 / 0 | 59 / 0 | G3 (LAN variant against the client simulator) |
-| **M3** Accounts and relay | Sign in to Centcom, create a hosted session, and work together from anywhere through the relay, with resume after a dropped connection. | 3 / 46 | 9 / 140 | G1, G2, G3 |
+| **M3** Accounts and relay | Sign in to Centcom, create a hosted session, and work together from anywhere through the relay, with resume after a dropped connection. | 3 / 47 | 9 / 145 | G1, G2, G3 |
 | **M4** Teams and money | Workspaces with members and roles, invites, plans and checkout, entitlements, quotas, notifications, and the first web screens. | 11 / 21 | 33 / 51 | G4 |
 | **M5** Fleet and polish | Branch-mode fleets across people, file locks, webhooks, audit log, updates, flags and telemetry, and the rest of the web app. | 14 / 14 | 36 / 36 | G5 |
 | **M6** Launch | Production readiness: infrastructure, load and chaos tests, security review, installers, docs, accessibility, and both conformance suites green. | 8 / 6 | 26 / 22 | G6 |
@@ -33,11 +33,11 @@ Rough calendar time to reach a milestone, per side, from the lane sizes: `weeks 
 | M2 | client | 194 | 32 | 24 wk | 16 wk | 12 wk |
 | M2 | backend | 32 | 15 | 4 wk | 3 wk | 3 wk |
 | M3 | client | 203 | 32 | 25 wk | 17 wk | 13 wk |
-| M3 | backend | 172 | 39 | 22 wk | 14 wk | 11 wk |
+| M3 | backend | 177 | 39 | 22 wk | 15 wk | 11 wk |
 | M4 | client | 236 | 32 | 30 wk | 20 wk | 15 wk |
-| M4 | backend | 223 | 39 | 28 wk | 19 wk | 14 wk |
+| M4 | backend | 228 | 39 | 28 wk | 19 wk | 14 wk |
 | M6 | client | 298 | 37 | 37 wk | 25 wk | 19 wk |
-| M6 | backend | 281 | 45 | 35 wk | 23 wk | 18 wk |
+| M6 | backend | 286 | 45 | 36 wk | 24 wk | 18 wk |
 
 
 ## M0 · Contracts and scaffolding
@@ -182,7 +182,7 @@ Sign in to Centcom, create a hosted session, and work together from anywhere thr
   - Relay handshake, sequencing, resume and queue pass the provider and consumer conformance suites
   - Relay logs and storage contain no plaintext (privacy tests)
   - Dev and stage environments deploy from CI
-- **Effort:** client 9 person-days (longest chain 6 d) · backend 140 person-days (longest chain 29 d)
+- **Effort:** client 9 person-days (longest chain 6 d) · backend 145 person-days (longest chain 29 d)
 
 **Client lanes (3):**
 
@@ -190,7 +190,7 @@ Sign in to Centcom, create a hosted session, and work together from anywhere thr
 - [C053](client/C053.md) Account and device commands (login, logout, whoami, devices) (S)
 - [C063](client/C063.md) Offline mode and reconnection behaviour (M)
 
-**Backend lanes (46):**
+**Backend lanes (47):**
 
 - [B013](backend/B013.md) User model and repository (S)
 - [B014](backend/B014.md) Passwordless email login (magic link) (M)
@@ -238,6 +238,7 @@ Sign in to Centcom, create a hosted session, and work together from anywhere thr
 - [B091](backend/B091.md) Infrastructure as code: environments dev, stage, prod (L)
 - [B092](backend/B092.md) Deployment pipeline: blue/green, safe migrations, rollback (L)
 - [B101](backend/B101.md) Credential-leak guard: scanners for logs, frames, telemetry, backups and CI (S)
+- [B102](backend/B102.md) API service entrypoint and the browser login pages (L)
 
 ## M4 · Teams and money
 

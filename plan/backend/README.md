@@ -1,8 +1,8 @@
-# Backend plan · 101 lanes (B001-B101)
+# Backend plan · 102 lanes (B001-B102)
 
 Repo: `Centcom-backend` · Rules: [`plan/GUIDELINES.md`](../GUIDELINES.md) · Format: [`plan/LANE_CARD_SPEC.md`](../LANE_CARD_SPEC.md) · Connection points: [`contracts/`](../../contracts/index.json)
 
-- **101 lanes**: 25 small (≤1 d), 60 medium (≤3 d), 16 large (≤5 d) · 285 person-days of work in total
+- **102 lanes**: 25 small (≤1 d), 60 medium (≤3 d), 17 large (≤5 d) · 290 person-days of work in total
 - **14 dependency layers** · critical path **45 days** (see [`GRAPH.md`](../GRAPH.md)) · parallelism in layer 1: 1 lanes can start on day one
 - Every lane card is independent: it names its inputs (contracts), outputs (deliverables), and how to build with no counterpart (`build_against`).
 - **No lane in this plan depends on a lane in the other plan.** The two sides meet only at contract IDs.
@@ -43,6 +43,7 @@ Repo: `Centcom-backend` · Rules: [`plan/GUIDELINES.md`](../GUIDELINES.md) · Fo
 | [B024](B024.md) | Idempotency-Key middleware | M3 | S | platform | B006, B009 | CT-PAGE | G1 |
 | [B025](B025.md) | Pagination and filtering library | M3 | S | platform | B006 | CT-PAGE | G1 |
 | [B026](B026.md) | Account deletion and data export | M3 | M | identity | B013, B036 | CT-API-ACCOUNTS | G6 |
+| [B102](B102.md) | API service entrypoint and the browser login pages | M3 | L | identity | B004, B005, B007, B009, B012, B016, B017, B018, B020 | CT-AUTH | G1 |
 
 ### P2 Workspaces
 

@@ -14,7 +14,7 @@ Contracts reviewed and locked; `tools/plan/validate_contracts.py` passes; both r
 
 Client authenticates via the device flow against the real API and fetches `/v1/me`.
 
-- **backend** lanes: B006, B007, B008, B009, B010, B012, B013, B014, B015, B016, B017, B018, B020, B021, B022, B023, B024, B025, B086
+- **backend** lanes: B006, B007, B008, B009, B010, B012, B013, B014, B015, B016, B017, B018, B020, B021, B022, B023, B024, B025, B086, B102
 - **client** lanes: C004, C005, C006, C007, C008, C011, C050, C051, C052, C053, C067, C082
 
 ## G2 · Tunnel

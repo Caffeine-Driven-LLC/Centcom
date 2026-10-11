@@ -1180,6 +1180,25 @@
     "B005",
     "B050"
    ]
+  },
+  {
+   "id": "B102",
+   "title": "API service entrypoint and the browser login pages",
+   "plan": "backend",
+   "phase": "P1 Identity",
+   "size": "L",
+   "role": "identity",
+   "depends_on": [
+    "B004",
+    "B005",
+    "B007",
+    "B009",
+    "B012",
+    "B016",
+    "B017",
+    "B018",
+    "B020"
+   ]
   }
  ],
  "client": [
