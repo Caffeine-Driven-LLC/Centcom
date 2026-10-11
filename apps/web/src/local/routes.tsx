@@ -115,9 +115,15 @@ function approvalTitle(tool: string): string { return tool === 'Bash' ? 'Allow C
 const MODES: [string, string][] = [['default', 'Ask first'], ['acceptEdits', 'Accept edits'], ['plan', 'Plan (read only)'], ['bypassPermissions', 'Skip approvals']];
 
 function Workspace({ view, send }: { view: LocalView; send: Send }): React.JSX.Element {
-  const [text, setText] = useState(''); const [effort, setEffort] = useState(''); const [slashSel, setSlashSel] = useState(0); const slash = slashMatches(COMMANDS, text); const slashAt = Math.min(slashSel, Math.max(0, slash.length - 1)); const [panel, setPanel] = useState(view.launcher?.prefs.side ?? true); const togglePanel = (): void => { send({ t: 'pref', side: !panel }); setPanel(!panel); }; /* remembered in the settings file (client.side_panel) */ const s = view.state; const model = view.models.find((x) => x.id === s?.settings?.model) ?? view.models.find((x) => x.isDefault);
+  const [text, setText] = useState(''); const [effort, setEffort] = useState(''); const hist = useRef<{ list: string[]; idx: number | null; draft: string }>({ list: [...view.history], idx: null, draft: '' });
+  /** Up and Down walk through earlier messages, like a terminal; the half-typed message comes back at the end. */
+  const recall = (dir: -1 | 1): boolean => {
+    const h = hist.current; if (dir === -1) { if (!h.list.length) return false; if (h.idx === null) { h.draft = text; h.idx = h.list.length - 1; } else if (h.idx > 0) h.idx--; setText(h.list[h.idx]!); return true; }
+    if (h.idx === null) return false; if (h.idx < h.list.length - 1) { h.idx++; setText(h.list[h.idx]!); } else { h.idx = null; setText(h.draft); } return true;
+  };
+  const [slashSel, setSlashSel] = useState(0); const slash = slashMatches(COMMANDS, text); const slashAt = Math.min(slashSel, Math.max(0, slash.length - 1)); const [panel, setPanel] = useState(view.launcher?.prefs.side ?? true); const togglePanel = (): void => { send({ t: 'pref', side: !panel }); setPanel(!panel); }; /* remembered in the settings file (client.side_panel) */ const s = view.state; const model = view.models.find((x) => x.id === s?.settings?.model) ?? view.models.find((x) => x.isDefault);
   useEffect(() => { send({ t: 'models' }); send({ t: 'board' }); }, [send, view.opened]); const approval = s?.approvals[0];
-  const submit = (): void => { const t = text.trim(); if (!t) return; send({ t: 'submit', text: t }); setText(''); };
+  const submit = (): void => { const t = text.trim(); if (!t) return; send({ t: 'submit', text: t }); hist.current.list = [...hist.current.list.filter((x) => x !== t), t].slice(-200); hist.current.idx = null; setText(''); };
   const log = useRef<HTMLDivElement>(null); const stick = useRef(true); const box = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { const el = log.current; if (el && stick.current) el.scrollTop = el.scrollHeight; }, [view.items, approval]);
   const busy = !!s?.busy; const name = view.opened ? baseName(view.opened) : 'Session';
@@ -149,6 +155,8 @@ function Workspace({ view, send }: { view: LocalView; send: Send }): React.JSX.E
           if (slash.length && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); setSlashSel((slashAt + (e.key === 'ArrowDown' ? 1 : slash.length - 1)) % slash.length); return; }
           if (slash.length && (e.key === 'Tab' || (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.shiftKey))) { e.preventDefault(); setText(`/${slash[slashAt]!.name} `); setSlashSel(0); return; }
           if (slash.length && e.key === 'Escape') { e.preventDefault(); setText(''); return; }
+          if (e.key === 'Escape' && busy) { e.preventDefault(); send({ t: 'interrupt' }); return; }
+          if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey && (hist.current.idx !== null || (!text.includes('\n') && (text === '' || (e.key === 'ArrowUp' && e.currentTarget.selectionStart === 0)))) && recall(e.key === 'ArrowUp' ? -1 : 1)) { e.preventDefault(); return; }
           if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); } }} />
       <div className="lc-composer-bar">
       <label className="lc-sel"><span>Mode</span><select aria-label="Mode" value={s?.settings?.permissionMode ?? 'default'} onChange={(e) => send({ t: 'setMode', mode: e.target.value as never })}>{MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>

@@ -94,3 +94,27 @@ describe('Enter sends', () => {
     fireEvent.keyDown(screen.getByLabelText('Message'), { key: 'Enter' }); expect(sent.at(-1)).toEqual({ t: 'submit', text: 'next' });
   });
 });
+describe('the message box keys', () => {
+  async function open(history: string[]) {
+    const sent: { t: string; [k: string]: unknown }[] = []; let push: (m: unknown) => void = () => undefined;
+    (window as { centcom?: unknown }).centcom = { desktop: true, local: { send: (m: { t: string }) => sent.push(m), onMessage: (cb: (m: unknown) => void) => { push = cb; return () => undefined; } } };
+    render(<LocalPage />); await act(async () => push(launcher)); await act(async () => push({ t: 'opened', dir: '/h/p', history }));
+    await act(async () => push({ t: 'state', state: { busy: false, approvals: [], agents: [], tasks: [], limits: [], sessions: [], settings: {} }, changed: [], order: [] }));
+    return { sent, push, box: () => screen.getByLabelText('Message') as HTMLTextAreaElement };
+  }
+  it('Up and Down walk through earlier messages and bring the draft back; a sent message joins them', async () => {
+    const { sent, box } = await open(['first', 'second']);
+    fireEvent.keyDown(box(), { key: 'ArrowUp' }); expect(box().value).toBe('second'); fireEvent.keyDown(box(), { key: 'ArrowUp' }); expect(box().value).toBe('first'); fireEvent.keyDown(box(), { key: 'ArrowUp' }); expect(box().value).toBe('first');
+    fireEvent.keyDown(box(), { key: 'ArrowDown' }); expect(box().value).toBe('second'); fireEvent.keyDown(box(), { key: 'ArrowDown' }); expect(box().value).toBe('');
+    fireEvent.change(box(), { target: { value: 'third' } }); fireEvent.keyDown(box(), { key: 'Enter' }); expect(sent.at(-1)).toEqual({ t: 'submit', text: 'third' });
+    fireEvent.keyDown(box(), { key: 'ArrowUp' }); expect(box().value).toBe('third');
+  });
+  it('Up does not steal the arrow key from a multi-line message', async () => {
+    const { box } = await open(['old']); fireEvent.change(box(), { target: { value: 'line one\nline two' } }); fireEvent.keyDown(box(), { key: 'ArrowUp' }); expect(box().value).toBe('line one\nline two');
+  });
+  it('Esc stops a working agent', async () => {
+    const { sent, push, box } = await open([]); fireEvent.keyDown(box(), { key: 'Escape' }); expect(sent.some((m) => m.t === 'interrupt')).toBe(false);
+    await act(async () => push({ t: 'state', state: { busy: true, verb: 'x', approvals: [], agents: [], tasks: [], limits: [], sessions: [], settings: {} }, changed: [], order: [] }));
+    fireEvent.keyDown(box(), { key: 'Escape' }); expect(sent.at(-1)).toEqual({ t: 'interrupt' });
+  });
+});

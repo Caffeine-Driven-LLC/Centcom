@@ -21,6 +21,8 @@ The Electron window around `apps/web` (see `apps/desktop/README.md` for how it i
 | Ctrl/Cmd+N | New session (the open one keeps running) |
 | `/` in the message box | Lists the slash commands that make sense in the app; Up/Down, Tab or Enter pick one |
 | Enter | Send the message (Shift+Enter adds a line) |
+| Up and Down in the message box | Walk through earlier messages (on an empty box or at the start of one line) |
+| Esc in the message box | Stop the agent while it works |
 
 ## Staying informed
 
