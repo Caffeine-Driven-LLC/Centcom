@@ -13,11 +13,6 @@
     ],
     "exceptions": [
       {
-        "package": "tslib",
-        "licence": "0BSD",
-        "reason": "Zero-Clause BSD: permissive, no conditions; the helper library Radix's dialog (shadcn/ui) pulls in"
-      },
-      {
         "package": "caniuse-lite",
         "licence": "CC-BY-4.0",
         "reason": "browser support data used only at build time, not shipped"
