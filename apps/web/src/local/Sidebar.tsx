@@ -34,7 +34,7 @@ export function SessionSidebar({ onNavigate, onSearch, newSession }: { onNavigat
       <h3 className="sb__head">Running</h3>
       {(view.running.length ? view.running : [{ dir: view.opened!, engine: pick.engine, demo: !!view.state?.demo, busy: !!view.state?.busy, waiting: view.state?.approvals.length ?? 0 }]).map((r) => {
         const shown = isShown(r, view);
-        return <button key={`${r.dir}::${r.demo ? 'demo' : r.engine}`} type="button" aria-current={shown ? 'true' : undefined} className="sb__row" title={shortPath(r.dir, L.home)} onClick={() => (shown ? (onNavigate(), void navigate({ to: '/local' as never })) : go({ t: 'open', dir: r.dir, engine: r.engine, demo: r.demo }))}>
+        return <button key={`${r.dir}::${r.demo ? 'demo' : r.engine}`} type="button" aria-current={shown ? 'true' : undefined} className="sb__row" title={r.waiting > 0 && r.ask ? `${shortPath(r.dir, L.home)}\nWaiting for you: ${r.ask}` : shortPath(r.dir, L.home)} onClick={() => (shown ? (onNavigate(), void navigate({ to: '/local' as never })) : go({ t: 'open', dir: r.dir, engine: r.engine, demo: r.demo }))}>
           <span role="img" aria-label={runningWord(r)} className="sb__dot" data-state={r.waiting > 0 ? 'waiting' : r.busy ? 'busy' : 'ready'} /><span className="sb__name">{baseName(r.dir)}</span><span className="sb__when">{runningWord(r)}</span>
         </button>;
       })}
