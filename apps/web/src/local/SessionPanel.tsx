@@ -1,6 +1,7 @@
 import { useRouter } from '@tanstack/react-router';
 import { CheckCircle2, Circle, CircleDot, FileDiff, Gauge, ListChecks, UserPlus, Users } from 'lucide-react';
-import React from 'react';
+import React, { useState } from 'react';
+import { Diff } from './Diff.js';
 import { Avatar, AvatarFallback, Badge, Button, cn } from '../ui/shadcn/index.js';
 import { compactNumber, duration, insights, money } from './insights.js';
 import type { LocalView } from './model.js';
@@ -25,7 +26,7 @@ const baseName = (p: string): string => p.split('/').pop() || p;
 
 /** The session at a glance: progress, context use, who is in it, and what it changed. Everything is counted from the live transcript and agent state. */
 export function SessionPanel({ view, now = Date.now() }: { view: LocalView; now?: number }): React.JSX.Element {
-  const router = useRouter({ warn: false }) as { navigate(o: { to: string }): unknown } | undefined; const s = view.state; const info = insights(view.items, s, now); const agents = s?.agents ?? []; const limits = s?.limits ?? [];
+  const [openFile, setOpenFile] = useState<string | null>(null); const router = useRouter({ warn: false }) as { navigate(o: { to: string }): unknown } | undefined; const s = view.state; const info = insights(view.items, s, now); const agents = s?.agents ?? []; const limits = s?.limits ?? [];
   const rel = (p: string): string => (view.opened && p.startsWith(view.opened + '/') ? p.slice(view.opened.length + 1) : p);
   const waiting = (s?.approvals.length ?? 0) > 0;
   return <aside className="lc-side" aria-label="Session details">
@@ -59,7 +60,8 @@ export function SessionPanel({ view, now = Date.now() }: { view: LocalView; now?
       <Button variant="outline" size="sm" className="self-start" onClick={() => { void router?.navigate({ to: '/workspaces' }); }}><UserPlus />Invite someone</Button>
     </Section>
     <Section icon={<FileDiff />} title="Files changed" aside={info.files.length ? <><span className="text-success">+{info.added}</span> <span className="text-destructive">−{info.removed}</span></> : undefined}>
-      {info.files.length ? <ul className="m-0 flex list-none flex-col gap-1 p-0">{info.files.slice(0, 12).map((f) => <li key={f.path} className="flex items-baseline gap-2 text-sm" title={f.path}><span className={cn('min-w-0 flex-1 truncate font-mono text-xs', f.failed ? 'text-destructive' : 'text-foreground')}>{rel(f.path)}</span><span className="shrink-0 text-xs text-muted-foreground tabular-nums">{f.added || f.removed ? `+${f.added} −${f.removed}` : `${f.edits}×`}</span></li>)}{info.files.length > 12 ? <li className="text-xs text-muted-foreground">and {info.files.length - 12} more</li> : null}</ul>
+      {openFile && info.files.find((f) => f.path === openFile)?.diff ? <div className="flex flex-col gap-2"><Button variant="ghost" size="sm" className="self-start" onClick={() => setOpenFile(null)}>← All files</Button><p className="m-0 truncate font-mono text-xs text-foreground" title={openFile}>{rel(openFile)}</p><Diff diff={info.files.find((f) => f.path === openFile)!.diff} max={60} /></div>
+        : info.files.length ? <ul className="m-0 flex list-none flex-col gap-0.5 p-0">{info.files.slice(0, 12).map((f) => <li key={f.path}><button type="button" disabled={!f.diff} className="flex w-full cursor-pointer items-baseline gap-2 rounded-md border-0 bg-transparent px-1.5 py-1 text-left text-sm [font:inherit] enabled:hover:bg-accent disabled:cursor-default" title={f.path} onClick={() => setOpenFile(f.path)}><span className={cn('min-w-0 flex-1 truncate font-mono text-xs', f.failed ? 'text-destructive' : 'text-foreground')}>{rel(f.path)}</span><span className="shrink-0 text-xs text-muted-foreground tabular-nums">{f.added || f.removed ? `+${f.added} −${f.removed}` : `${f.edits}×`}</span></button></li>)}{info.files.length > 12 ? <li className="px-1.5 text-xs text-muted-foreground">and {info.files.length - 12} more</li> : null}</ul>
         : <p className="m-0 text-xs text-muted-foreground">Nothing changed yet in {baseName(view.opened ?? 'this project')}.</p>}
     </Section>
   </aside>;

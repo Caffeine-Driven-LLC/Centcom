@@ -2,7 +2,7 @@ import type { Item } from '@centcom/tui';
 import type { WebState } from '../../../desktop/src/local/protocol.js';
 
 const EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'NotebookEdit']);
-export interface FileTouch { path: string; edits: number; added: number; removed: number; failed: boolean }
+export interface FileTouch { path: string; edits: number; added: number; removed: number; failed: boolean; /** The diffs of the edits that went through, one after the other. */ diff: string }
 export interface Person { name: string; slot: number; messages: number }
 export interface Insights {
   steps: number; failed: number; running: number; commands: number;
@@ -30,9 +30,9 @@ export function insights(items: readonly Item[], state: WebState | undefined, no
     if (it.kind !== 'tool') continue;
     steps++; if (it.status === 'error' || it.status === 'denied') failed++; if (it.status === 'running') running++; if (it.name === 'Bash') commands++;
     if (EDIT_TOOLS.has(it.name) && it.path) {
-      const f = files.get(it.path) ?? { path: it.path, edits: 0, added: 0, removed: 0, failed: false };
+      const f = files.get(it.path) ?? { path: it.path, edits: 0, added: 0, removed: 0, failed: false, diff: '' };
       const d = countDiff(it.diff); f.edits++; f.added += d.added; f.removed += d.removed; f.failed ||= it.status === 'error' || it.status === 'denied';
-      if (it.status === 'ok') { added += d.added; removed += d.removed; }
+      if (it.status === 'ok') { added += d.added; removed += d.removed; if (it.diff) f.diff += (f.diff ? '\n' : '') + it.diff; }
       files.set(it.path, f);
     }
   }

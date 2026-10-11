@@ -15,7 +15,7 @@ describe('session insights', () => {
     ];
     const r = insights(items, undefined);
     expect(r).toMatchObject({ steps: 5, commands: 1, failed: 1, running: 1, added: 3, removed: 1 });
-    expect(r.files).toEqual([{ path: '/p/a.ts', edits: 2, added: 3, removed: 1, failed: false }, { path: '/p/b.ts', edits: 1, added: 0, removed: 0, failed: true }]);
+    expect(r.files).toEqual([{ path: '/p/a.ts', edits: 2, added: 3, removed: 1, failed: false, diff: '--- a\n+++ b\n+one\n+two\n-gone\n+three' }, { path: '/p/b.ts', edits: 1, added: 0, removed: 0, failed: true, diff: '' }]);
   });
   it('lists the other people who wrote in a shared session, once each', () => {
     const u = (id: string, name: string, slot: number): Item => ({ kind: 'user', id, text: 'hi', ts: 0, member: { name, slot } });

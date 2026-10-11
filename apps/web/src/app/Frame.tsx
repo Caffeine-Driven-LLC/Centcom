@@ -10,6 +10,7 @@ import type { NavItem } from './types.js';
 import { unread } from '../settings/model.js';
 import { CommandPalette } from '../local/CommandPalette.js';
 import { SessionSidebar } from '../local/Sidebar.js';
+import { useAttentionTitle } from '../local/attention.js';
 import { TooltipProvider } from '../ui/shadcn/index.js';
 
 export const ShellCtx = createContext<{ nav: NavItem[]; connectivity: Connectivity; inspector: React.ReactNode }>({ nav: [], connectivity: 'unknown', inspector: null });
@@ -17,7 +18,7 @@ export const useShell = (): React.ContextType<typeof ShellCtx> => useContext(She
 /** 48 px top bar, 240 px left rail (a drawer under 1024), 320 px inspector (a bottom sheet under 768). */
 export function Frame({ children }: { children: React.ReactNode }): React.JSX.Element {
   const n = React.useSyncExternalStore((f) => unread.subscribe(f), () => unread.count, () => 0);
-  const { nav, connectivity, inspector } = useShell(); const [rail, setRail] = useState(false); const [insp, setInsp] = useState(false); const [pal, setPal] = useState(false);
+  const { nav, connectivity, inspector } = useShell(); const [rail, setRail] = useState(false); const [insp, setInsp] = useState(false); const [pal, setPal] = useState(false); useAttentionTitle();
   React.useEffect(() => { const k = (e: KeyboardEvent): void => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setPal((v) => !v); } }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k); }, []);
   const { theme, set } = useTheme();
   return (

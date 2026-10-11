@@ -28,9 +28,9 @@ function Crumbs({ path, home, go }: { path: string; home: string; go(p: string):
   return <nav className="lc-crumbs" aria-label="Folder path">{homeIdx < 0 ? <button type="button" className="lc-crumb" onClick={() => go('/')}>/</button> : null}{shown.map((x, i) => <React.Fragment key={x.to}>{i > 0 || homeIdx < 0 ? <span className="lc-crumb__sep" aria-hidden="true">›</span> : null}<button type="button" className="lc-crumb" aria-current={i === shown.length - 1 ? 'page' : undefined} onClick={() => go(x.to)}>{homeIdx >= 0 && i === 0 ? '~' : x.name}</button></React.Fragment>)}</nav>;
 }
 
-function Picker({ view, send }: { view: LocalView; send: Send }): React.JSX.Element {
+function Picker({ view, send, start }: { view: LocalView; send: Send; start(dir: string, text: string, demo: boolean, engine: 'claude-code' | 'codex'): void }): React.JSX.Element {
   const L = view.launcher!; const d = view.dir; const initial = pickEngine(L);
-  const [engine, setEngine] = useState(initial.engine); const [demo, setDemo] = useState(initial.demo); const [typed, setTyped] = useState(''); const [browse, setBrowse] = useState(!L.recent.length);
+  const [engine, setEngine] = useState(initial.engine); const [demo, setDemo] = useState(initial.demo); const [typed, setTyped] = useState(''); const [task, setTask] = useState(''); const [taskDir, setTaskDir] = useState(L.recent[0]?.dir ?? ''); const [browse, setBrowse] = useState(!L.recent.length);
   useEffect(() => { if (!d) send({ t: 'browse', path: L.cwd }); }, [d, L.cwd, send]);
   useEffect(() => { if (d) setTyped(d.path); }, [d]);
   const st = engineStatus(L, engine);
@@ -50,6 +50,12 @@ function Picker({ view, send }: { view: LocalView; send: Send }): React.JSX.Elem
       </div>
       {demo ? <Banner tone="info">Demo agent: nothing real runs.</Banner> : !st.ok ? <Banner tone="warning">{st.text}</Banner> : null}
     </section>
+    {L.recent.length ? <section className="lc-start" aria-label="Start with a task">
+      <label className="cc-vh" htmlFor="lc-task">What should the agent do?</label>
+      <textarea id="lc-task" value={task} placeholder="Describe a task and press Ctrl+Enter to start…" onChange={(e) => setTask(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && task.trim() && taskDir) { e.preventDefault(); start(taskDir, task.trim(), demo, engine); } }} />
+      <div className="lc-start__bar"><span>in</span><label className="lc-sel"><span className="cc-vh">Project</span><select aria-label="Project" value={taskDir} onChange={(e) => setTaskDir(e.target.value)}>{L.recent.map((r) => <option key={r.dir} value={r.dir}>{baseName(r.dir)}</option>)}</select></label><span className="lc-grow" />
+        <SButton size="sm" disabled={!task.trim() || !taskDir} onClick={() => start(taskDir, task.trim(), demo, engine)}><ArrowUp />Start</SButton></div>
+    </section> : null}
     {L.recent.length ? <section aria-label="Recent projects">
       <h2 className="lc-h">Pick up where you left off</h2>
       <ul className="lc-cards">{L.recent.map((r) => <li key={r.dir}><button type="button" className="lc-card" onClick={() => send({ t: 'open', dir: r.dir, demo, engine })}>
@@ -149,10 +155,12 @@ function Workspace({ view, send }: { view: LocalView; send: Send }): React.JSX.E
 }
 
 export function LocalPage(): React.JSX.Element {
-  const { view, send, available } = useLocal();
+  const { view, send, available } = useLocal(); const pending = useRef<string | null>(null);
+  /* a task typed on the home screen is sent once the project it opened has its first state */
+  useEffect(() => { if (pending.current && view.opened && view.state) { send({ t: 'submit', text: pending.current }); pending.current = null; } }, [view.opened, view.state, send]);
   if (!available) return <Card title="Local agent"><EmptyState title="Only in the desktop app">Running an agent on this computer needs the Centcom desktop app.</EmptyState></Card>;
   if (!view.launcher) return <Skeleton lines={4} />;
-  return view.opened ? <Workspace view={view} send={send} /> : <Picker view={view} send={send} />;
+  return view.opened ? <Workspace view={view} send={send} /> : <Picker view={view} send={send} start={(dir, text, demo, engine) => { pending.current = text; send({ t: 'open', dir, demo, engine }); }} />;
 }
 export const routeModule: RouteModule = { routes: [createRoute({ getParentRoute: () => rootRoute, path: '/local', component: LocalPage })], nav: [{ id: 'local', labelKey: 'nav.local', to: '/local', icon: 'home' }] };
 export default routeModule;

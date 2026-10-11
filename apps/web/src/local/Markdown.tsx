@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 /** A small, safe Markdown renderer for agent answers: paragraphs, headings, lists, fenced code, `code`, **bold**, *italic*. Links are shown as their text (nothing in an answer becomes clickable), and nothing is ever inserted as HTML. */
 function inline(text: string, key: string): React.ReactNode[] {
@@ -30,6 +30,12 @@ export function parseBlocks(src: string): Block[] {
   }
   return out;
 }
+/** A code block with a copy button that shows on hover or focus. */
+function CodeBlock({ lang, text }: { lang: string; text: string }): React.JSX.Element {
+  const [done, setDone] = useState(false);
+  const copy = (): void => { void navigator.clipboard?.writeText(text).then(() => { setDone(true); setTimeout(() => setDone(false), 1500); }).catch(() => undefined); };
+  return <div className="lc-codewrap"><pre className="lc-pre" tabIndex={0} aria-label={lang ? `${lang} code` : 'code'}><code>{text}</code></pre><button type="button" className="lc-copy cc-btn" onClick={copy} aria-label="Copy code">{done ? 'Copied' : 'Copy'}</button></div>;
+}
 export function Markdown({ text }: { text: string }): React.JSX.Element {
   return <div className="lc-md">{parseBlocks(text).map((b, n) => {
     const k = `b${n}`;
@@ -38,7 +44,7 @@ export function Markdown({ text }: { text: string }): React.JSX.Element {
       case 'h': return <p key={k} className="lc-md__h">{inline(b.text, k)}</p>;
       case 'ul': return <ul key={k}>{b.items.map((x, j) => <li key={j}>{inline(x, `${k}.${j}`)}</li>)}</ul>;
       case 'ol': return <ol key={k}>{b.items.map((x, j) => <li key={j}>{inline(x, `${k}.${j}`)}</li>)}</ol>;
-      default: return <pre key={k} className="lc-pre" tabIndex={0} aria-label={b.lang ? `${b.lang} code` : 'code'}><code>{b.text}</code></pre>;
+      default: return <CodeBlock key={k} lang={b.lang} text={b.text} />;
     }
   })}</div>;
 }
