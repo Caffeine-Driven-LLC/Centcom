@@ -1,0 +1,4 @@
+/* shadcn/ui on Tailwind v3: the utilities and the variables they read, but no preflight (corePlugins.preflight is off in
+   tailwind.config.ts), so the older screens keep their look. Colours come from the app's own tokens. */
+@tailwind base;
+@tailwind utilities;

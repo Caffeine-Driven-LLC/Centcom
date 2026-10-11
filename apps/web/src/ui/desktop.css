@@ -142,3 +142,31 @@
   .lc-hint { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { :root .cc-btn { transition: none; } }
+:root {
+  .cc-rail__nav { margin-top: auto; padding-top: var(--space-3); display: flex; flex-direction: column; gap: 2px; border-top: 1px solid var(--border-subtle); }
+}
+:root {
+  .cc-body { grid-template-rows: minmax(0, 1fr); }
+  .cc-main:has(.lc-split) { display: flex; flex-direction: column; padding-bottom: var(--space-3); overflow: hidden; }
+  .lc-split { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); flex: 1 1 auto; min-height: 0; }
+  .lc-split .lc-ws { width: 100%; height: 100%; }
+  .lc-side { display: none; }
+  @media (min-width: 1180px) {
+    .lc-split[data-panel="true"] { grid-template-columns: minmax(0, 1fr) 312px; }
+    .lc-split[data-panel="true"] .lc-side { display: block; overflow-y: auto; align-self: start; max-height: 100%; margin-top: var(--space-2); background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--r-xl); box-shadow: var(--shadow-soft); }
+  }
+  .lc-meter { appearance: none; -webkit-appearance: none; width: 100%; height: 6px; border: 0; border-radius: var(--r-pill); background: var(--bg-selected); overflow: hidden; }
+  .lc-meter::-webkit-progress-bar { background: var(--bg-selected); border-radius: var(--r-pill); }
+  .lc-meter::-webkit-progress-value { background: var(--accent-primary); border-radius: var(--r-pill); transition: width var(--dur-base) var(--ease-standard); }
+  .lc-meter[data-level="mid"]::-webkit-progress-value { background: var(--status-warning); }
+  .lc-meter[data-level="high"]::-webkit-progress-value { background: var(--status-danger); }
+  .lc-meter::-moz-progress-bar { background: var(--accent-primary); border-radius: var(--r-pill); }
+}
+:root {
+  [cmdk-input]:focus-visible { outline: none; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-button { display: none; }
+  ::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: var(--r-pill); border: 3px solid transparent; background-clip: content-box; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--border-strong); background-clip: content-box; }
+  ::-webkit-scrollbar-track { background: transparent; }
+}
