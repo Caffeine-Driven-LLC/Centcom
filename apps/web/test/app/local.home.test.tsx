@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest';
 import React from 'react';
 import { LocalPage } from '../../src/local/routes.js';
-import { titleFor } from '../../src/local/attention.js';
+import { notificationFor, titleFor } from '../../src/local/attention.js';
 
 afterEach(() => { cleanup(); delete (window as { centcom?: unknown }).centcom; });
 const st = { installed: true, version: '1.0', signedIn: 'yes' as const, kind: 'subscription' as never };
@@ -37,5 +37,12 @@ describe('the window title', () => {
     expect(titleFor({ opened: '/h/p/', waiting: 0, busy: false })).toBe('p · Centcom');
     expect(titleFor({ opened: '/h/p', waiting: 0, busy: true })).toBe('Working · p · Centcom');
     expect(titleFor({ opened: '/h/p', waiting: 2, busy: true })).toBe('(2) Needs you · p · Centcom');
+  });
+});
+describe('the approval notice', () => {
+  it('fires only for a new approval while the window is in the background', () => {
+    expect(notificationFor({ before: 0, now: 1, hidden: true, opened: '/h/p', summary: 'run ls' })).toEqual({ title: 'Needs you · p', body: 'Cento wants to: run ls' });
+    expect(notificationFor({ before: 0, now: 1, hidden: false })).toBeNull(); expect(notificationFor({ before: 1, now: 1, hidden: true })).toBeNull(); expect(notificationFor({ before: 2, now: 1, hidden: true })).toBeNull();
+    expect(notificationFor({ before: 0, now: 1, hidden: true })?.body).toBe('Cento is waiting for your decision.');
   });
 });

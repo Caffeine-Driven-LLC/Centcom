@@ -12,6 +12,8 @@ import { useLocal } from './use-local.js';
 import type { ClientMsg } from '../../../desktop/src/local/protocol.js';
 import { ArrowUp, PanelRight, Square as StopIcon } from 'lucide-react';
 import { SessionPanel } from './SessionPanel.js';
+import { COMMANDS } from '@centcom/tui-commands';
+import { slashMatches } from './slash.js';
 import { Button as SButton } from '../ui/shadcn/index.js';
 import './local.css';
 import '../ui/desktop.css';
@@ -113,7 +115,7 @@ function approvalTitle(tool: string): string { return tool === 'Bash' ? 'Allow C
 const MODES: [string, string][] = [['default', 'Ask first'], ['acceptEdits', 'Accept edits'], ['plan', 'Plan (read only)'], ['bypassPermissions', 'Skip approvals']];
 
 function Workspace({ view, send }: { view: LocalView; send: Send }): React.JSX.Element {
-  const [text, setText] = useState(''); const [effort, setEffort] = useState(''); const [panel, setPanel] = useState(true); const togglePanel = (): void => setPanel((v) => !v); const s = view.state; const model = view.models.find((x) => x.id === s?.settings?.model) ?? view.models.find((x) => x.isDefault);
+  const [text, setText] = useState(''); const [effort, setEffort] = useState(''); const [slashSel, setSlashSel] = useState(0); const slash = slashMatches(COMMANDS, text); const slashAt = Math.min(slashSel, Math.max(0, slash.length - 1)); const [panel, setPanel] = useState(true); const togglePanel = (): void => setPanel((v) => !v); const s = view.state; const model = view.models.find((x) => x.id === s?.settings?.model) ?? view.models.find((x) => x.isDefault);
   useEffect(() => { send({ t: 'models' }); }, [send, view.opened]); const approval = s?.approvals[0];
   const submit = (): void => { const t = text.trim(); if (!t) return; send({ t: 'submit', text: t }); setText(''); };
   const log = useRef<HTMLDivElement>(null); const stick = useRef(true); const box = useRef<HTMLTextAreaElement>(null);
@@ -141,8 +143,13 @@ function Workspace({ view, send }: { view: LocalView; send: Send }): React.JSX.E
       <div className="lc-approval__btns"><Button variant="primary" onClick={() => send({ t: 'approve', decision: 'approve' })}>Allow once</Button>{approval.risk === 'high' ? null : <><Button onClick={() => send({ t: 'approve', decision: 'approve', scope: 'session' })}>Allow for this session</Button><Button onClick={() => send({ t: 'approve', decision: 'approve', scope: 'always' })}>Always allow in this project</Button></>}<Button variant="danger" onClick={() => send({ t: 'approve', decision: 'deny' })}>Deny</Button></div>
     </section> : null}
     <div className="lc-composer-box">
+      {slash.length ? <ul className="lc-slash" role="listbox" aria-label="Commands">{slash.map((c, i) => <li key={c.name} role="option" aria-selected={i === slashAt} className="lc-slash__item" onMouseDown={(e) => { e.preventDefault(); setText(`/${c.name} `); box.current?.focus(); }} onMouseMove={() => setSlashSel(i)}><strong>/{c.name}</strong>{c.args ? <span className="lc-slash__args">{c.args}</span> : null}<span className="lc-slash__desc">{c.desc}</span></li>)}</ul> : null}
       <label className="cc-vh" htmlFor="lc-composer">Message</label>
-      <textarea id="lc-composer" ref={box} className="lc-composer" rows={2} value={text} placeholder="Ask the agent… (Ctrl+Enter sends)" onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); submit(); } }} />
+      <textarea id="lc-composer" ref={box} className="lc-composer" rows={2} value={text} placeholder="Ask the agent… (Ctrl+Enter sends)" onChange={(e) => setText(e.target.value)} onKeyDown={(e) => {
+          if (slash.length && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); setSlashSel((slashAt + (e.key === 'ArrowDown' ? 1 : slash.length - 1)) % slash.length); return; }
+          if (slash.length && (e.key === 'Tab' || (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.shiftKey))) { e.preventDefault(); setText(`/${slash[slashAt]!.name} `); setSlashSel(0); return; }
+          if (slash.length && e.key === 'Escape') { e.preventDefault(); setText(''); return; }
+          if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); submit(); } }} />
       <div className="lc-composer-bar">
       <label className="lc-sel"><span>Mode</span><select aria-label="Mode" value={s?.settings?.permissionMode ?? 'default'} onChange={(e) => send({ t: 'setMode', mode: e.target.value as never })}>{MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
       {view.models.length ? <label className="lc-sel"><span>Model</span><select aria-label="Model" value={s?.settings?.model ?? ''} onChange={(e) => send({ t: 'setModel', id: e.target.value })}><option value="">Default</option>{view.models.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select></label> : null}
