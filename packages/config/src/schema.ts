@@ -9,6 +9,8 @@ export const SCHEMA = {
   'net.max_attempts': { kind: 'number', default: 5, min: 1, max: 20, doc: 'Retry attempts for network calls' },
   'budget.session_usd': { kind: 'number', default: 0, min: 0, max: 100000, doc: 'Warn when a session\'s reported cost passes 80 % and 100 % of this (0 = off). Only warns; nothing is stopped' },
   'telemetry.enabled': { kind: 'boolean', default: false, doc: 'Anonymous usage reporting (off unless you turn it on)' },
+  'context.board': { kind: 'boolean', default: true, doc: 'The shared context board: what agents and people note (decisions, warnings, findings, who is changing which file) goes along with the other agents\' next messages. Turn off to share nothing' },
+  'context.digest_tokens': { kind: 'number', default: 500, min: 100, max: 2000, doc: 'The most the board adds to one message (about four characters per token)' },
   'log.level': { kind: 'enum', default: 'info', enum: ['debug', 'info', 'warn', 'error', 'silent'], project: true, doc: 'How much to write to the log file' },
   'log.max_file_bytes': { kind: 'number', default: 5242880, min: 65536, max: 268435456, doc: 'Rotate the log file at this size' },
   'log.max_files': { kind: 'number', default: 3, min: 1, max: 20, doc: 'How many rotated log files to keep' },

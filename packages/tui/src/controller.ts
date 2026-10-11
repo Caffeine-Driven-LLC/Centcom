@@ -3,7 +3,7 @@
  * answers approvals through the permission policy, runs slash commands, and drives the mascot.
  * The React tree only reads the store and calls the controller's methods.
  */
-import { CLAUDE_MODELS, createAgentBus, createCheckpointManager, createContextView, modelLabel, newId, nodeGit } from '@centcom/agent';
+import { CLAUDE_MODELS, type Board, createAgentBus, createCheckpointManager, createContextView, modelLabel, newId, nodeGit } from '@centcom/agent';
 import { createInterruptController, createModelRegistry, usageTable, type InterruptController, type ModelRegistry } from '@centcom/agent';
 import type { AgentBus, AgentId, FleetManager, FleetNode, Ledger, Checkpoint, CheckpointManager, ContextConfig, ContextView, EngineId, EngineStartOptions, GitRunner, PermissionEngine, PolicyMode, RewindMode } from '@centcom/agent';
 import type { PendingApproval as PolicyPending } from '@centcom/agent';
@@ -75,6 +75,8 @@ export interface ControllerOptions {
   checkpoints?: { git?: GitRunner };
   /** Context warnings and automatic compaction (engine-reported numbers only). */
   context?: Partial<ContextConfig>;
+  /** The shared context board: what the other agents noted goes along with the next prompt (docs/context-sharing.md). */
+  board?: Board;
   /** Parallel agents in their own worktrees (`/fleet`). Their events, branch-ready news and approvals come over `bus`. */
   fleet?: { manager: FleetManager; bus: AgentBus; ownerSlug: string };
   /** Read-only views for `/mcp`, `/hooks` and `/memory` (the CLI's own list and status output). */
@@ -224,7 +226,7 @@ export class AppController {
   /** Start over with an empty context. The old conversation stays saved and can be resumed. */
   async newSession() {
     if (this.state.busy) { this.toast('warn', 'Cento is still working. Press Esc to interrupt, then try again.'); return; }
-    this.persist(); this.o.sessions?.close(this.state.sessionId); await this.dropSession();
+    this.persist(); this.o.sessions?.close(this.state.sessionId); await this.dropSession(); this.o.board?.resetAgent(this.me);
     this.createdAt = undefined; this.lastItems = undefined;
     this.set({ items: [], scroll: 0, sessionId: newId('ses'), approvals: [], tasks: [] });
     await this.startEngine();
@@ -325,7 +327,7 @@ export class AppController {
       case 'usage.report': this.updateAgent(me, () => ({ cost: ev.cost_usd ?? 0, inTok: ev.input_tokens, outTok: ev.output_tokens, ...(ev.context_used_pct !== undefined ? { ctxPct: ev.context_used_pct, ctxTokens: ev.context_tokens, ctxWindow: ev.context_window } : {}) })); break;
       case 'limits.report': this.set({ limits: ev.windows }); break;
       case 'tasks.updated': this.set((st) => ({ tasks: reduceTasks({ items: st.tasks }, { tasks: ev.tasks }).items })); break;
-      case 'compaction.ended': this.notice('info', `Compacted the context${ev.tokens_before ? ` (${Math.round(ev.tokens_before / 1000)}k → ${Math.round((ev.tokens_after ?? 0) / 1000)}k tokens)` : ''}.`); break;
+      case 'compaction.ended': this.o.board?.resetAgent(this.me); this.notice('info', `Compacted the context${ev.tokens_before ? ` (${Math.round(ev.tokens_before / 1000)}k → ${Math.round((ev.tokens_after ?? 0) / 1000)}k tokens)` : ''}.`); break;
       case 'question.asked': this.notice('info', ev.text, ev.options?.join('  ·  ')); if (ev.options?.length && !ev.direct) void this.answerQuestion(ev.text, ev.options, ev.multi === true); break; // (a question the engine puts to the question gate itself is not opened a second time)
       case 'engine.warning': this.notice('warn', ev.text); break;
       case 'error':
@@ -504,6 +506,7 @@ export class AppController {
         if (!this.o.demo) outgoing = injection(picks) + (opts.wire ?? expanded);
       }
     }
+    { const d = this.o.board?.digest({ id: this.me, name: 'you' }); if (d) { outgoing = d.text + outgoing; this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: `${d.count} note${d.count === 1 ? '' : 's'} from other agents went along with this message`, detail: d.lines.join('\n') }); } } // the transcript shows what the agent was told
     await this.checkpointBefore(text);
     this.pastes.clear(); // the chips are spent
     if (!this.session && !this.stopped) { try { this.starting ??= this.startEngine(this.deadToken).then(() => { this.deadToken = undefined; }).finally(() => { this.starting = undefined; }); await this.starting; } catch (e) { this.addItem({ kind: 'notice', id: nid('n'), level: 'error', text: `Could not start ${this.o.engine.label} again`, detail: String((e as Error).message ?? e) }); this.set({ busy: false }); return; } }
@@ -868,6 +871,8 @@ export class AppController {
       case 'rewind': await this.rewindCommand(arg); break;
       case 'compact': await this.compactCommand(); break;
       case 'handoff': await this.handoffCommand(); break;
+      case 'note': await this.noteCommand(arg); break;
+      case 'context': await this.contextCommand(); break;
       case 'fleet': await this.fleetCommand(arg); break;
       case 'usage': this.usageCommand(); break;
       case 'mcp': case 'hooks': case 'memory': case 'doctor': case 'init': {
@@ -1024,7 +1029,7 @@ export class AppController {
         case 'start': {
           const count = /^\d+$/.test(rest[0] ?? '') ? Math.min(16, Math.max(1, Number(rest.shift()))) : 1; const task = rest.join(' ').trim(); if (!task) { this.toast('info', 'Usage: /fleet start [count] <task>'); return; }
           const label = task.split(/\s+/).slice(0, 4).join(' '); this.set({ fleet: true });
-          for (let i = 1; i <= count; i++) { const h = await f.manager.spawn({ repoRoot: this.o.cwd, engine: this.o.engine.id, prompt: task, ownerSlug: f.ownerSlug, label: count > 1 ? `${label} ${i}` : label, ...(this.state.settings.model ? { model: this.state.settings.model } : {}) }); void h.done().then((r) => { if (r.outcome !== 'ok' && r.error_code === 'fleet_timeout') this.notice('warn', `Agent ${this.fleetIds.indexOf(h.id) + 1} was stopped after its time limit.`); }); }
+          for (let i = 1; i <= count; i++) { const told = this.o.board?.digest({ id: `new-${i}`, name: `Agent ${i}` }); const h = await f.manager.spawn({ repoRoot: this.o.cwd, engine: this.o.engine.id, prompt: (told?.text ?? '') + task, ownerSlug: f.ownerSlug, label: count > 1 ? `${label} ${i}` : label, ...(this.state.settings.model ? { model: this.state.settings.model } : {}) }); if (told) this.o.board?.markDelivered(h.id, told.ids); void h.done().then((r) => { if (r.outcome !== 'ok' && r.error_code === 'fleet_timeout') this.notice('warn', `Agent ${this.fleetIds.indexOf(h.id) + 1} was stopped after its time limit.`); }); }
           this.toast('ok', `Started ${count} agent${count === 1 ? '' : 's'} on their own branches.`); break;
         }
         case 'stop': { if (!rest.length) { await this.fleetPick('stop'); break; } if (rest[0] === 'all') { await f.manager.stopAll(); this.toast('ok', 'All fleet agents stopped.'); break; } const n = this.fleetAgent(rest[0]); if (!n) { this.toast('warn', 'Which agent? /fleet stop <number> or /fleet stop all'); return; } await f.manager.stop(n.id as AgentId); this.toast('ok', `Agent ${rest[0]} stopped.`); break; }
@@ -1124,6 +1129,23 @@ export class AppController {
     const id = ids?.[0]; if (id === 'compact') await this.compactCommand(); else if (id === 'handoff') await this.handoffCommand();
   }
   /** `/handoff`: the agent writes a document for a new session (as its answer, so no file-edit approval is needed), the document is saved in the project, a fresh session starts, and its first message tells it to read the document. */
+  /** `/note [decision:|warning:|finding:] text`: something every agent should know. It is pinned on the board and goes along with each agent's next message. */
+  private async noteCommand(arg: string) {
+    const board = this.o.board; if (!board) { this.toast('info', 'The context board is turned off (setting context.board).'); return; }
+    let text = arg.trim(); if (!text) { const t = await this.askText({ id: 'note', text: 'What should every agent know?' }); if (!t?.trim()) return; text = t.trim(); }
+    const m = /^(decision|warning|finding)\s*:\s*(.+)$/is.exec(text); const type = (m ? m[1]!.toLowerCase() : 'decision') as 'decision' | 'warning' | 'finding';
+    const e = board.post({ author: { kind: 'person', id: 'you', name: 'you' }, type, text: m ? m[2]! : text, pinned: true });
+    this.toast(e ? 'ok' : 'warn', e ? 'Noted: every agent gets it with its next message.' : 'There was nothing to note.');
+  }
+  /** `/context`: what is on the board, as a list; pick one to pin it, take it off, or close. */
+  private async contextCommand() {
+    const board = this.o.board; if (!board) { this.toast('info', 'The context board is turned off (setting context.board).'); return; }
+    const list = board.list(); if (!list.length) { this.toast('info', 'The board is empty. Agents add to it as they work; /note adds your own.'); return; }
+    const ids = await this.pick({ title: `Context board (${list.length})`, note: 'What agents and people have noted. The others get it with their next message.', multi: false, confirm: 'open', options: [...list].reverse().map((e) => ({ id: e.id, label: `${e.pinned ? '★ ' : ''}[${e.type}] ${truncate(e.text, 62)}`, hint: `${e.author.name} · ${ago(e.ts)}${e.refs.files.length ? ' · ' + e.refs.files.slice(0, 2).join(', ') : ''}` })) });
+    const id = ids?.[0]; const e = id ? board.get(id) : undefined; if (!e) return;
+    const act = await this.pick({ title: truncate(e.text, 70), note: `${e.type} · ${e.author.name} · ${ago(e.ts)}`, multi: false, confirm: 'ok', options: [{ id: 'pin', label: e.pinned ? 'Unpin it' : 'Pin it', hint: e.pinned ? 'it can expire again' : 'it stays until you take it off' }, { id: 'retract', label: 'Take it off the board', hint: 'agents that have not had it yet will not get it' }, { id: 'close', label: 'Close' }] });
+    if (act?.[0] === 'pin') { board.pin(e.id, !e.pinned); this.toast('ok', e.pinned ? 'Unpinned.' : 'Pinned.'); } else if (act?.[0] === 'retract') { board.retract(e.id); this.toast('ok', 'Taken off the board.'); }
+  }
   async handoffCommand() {
     if (this.state.busy) { this.toast('warn', 'Wait until the agent is idle, then /handoff.'); return; }
     if (this.night.active()) { this.toast('warn', 'Not while the night cycle is running.'); return; }

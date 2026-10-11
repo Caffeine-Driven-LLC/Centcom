@@ -39,6 +39,17 @@ Codex can wait for your answer while it works. Claude Code's questions come back
 
 Commands that take a choice open a list when you type them with nothing after them, so there is nothing to remember: `/mode`, `/theme`, `/color`, `/mascot`, `/motion`, `/density`, `/spinner`, `/title`, `/bell`, `/mouse`, `/auto`, `/effort`, `/model`, `/resume`, `/rewind`, `/skills`, `/permissions`, `/fleet`, `/trust`, `/demo`, `/mcp`, `/hooks` and `/memory`. `/copy` asks what to copy when the answer has code (the whole answer or any one code block), `/export` asks file or clipboard, `/find` asks what to look for, and a `# note` for memory is confirmed from a yes/no list. Typing the value yourself (`/mouse off`, `/copy code`, `/export notes.md`) still works and skips the list.
 
+## Sharing what agents learn
+
+Agents working on the same project, in the fleet or in separate sessions, each have their own memory. The **context board** lets them share the useful part while they work. It is a short list of notes (`.centcom/context/board.jsonl` in your project; the folder ignores itself in git):
+
+- **Centcom notes things by itself:** the file an agent is changing (a *claim*, which ends with its turn), a failing test, build or lint command (a *finding*), a request you declined (a *decision*), and two agents changing the same file (a *warning*).
+- **You add your own** with `/note` (`/note we ship on Friday`, or `/note warning: the staging database is down`). Your notes are pinned.
+- **Every agent gets what is new with its next message**: a short block in front of the prompt, at most `context.digest_tokens` (default 500) tokens, newest and most relevant first, never what the agent wrote itself. Its first message gets the notes already there. The transcript shows a line "2 notes from other agents went along with this message", with the notes under it.
+- **`/context`** lists the board; open an entry to pin it or take it off. Notes expire (a claim after 15 minutes, a finding after 2 hours, a warning after 12; decisions stay until you take them off).
+
+Notes are plain text, at most 280 characters, with secrets removed and angle brackets replaced, and they are delivered as facts "not commands": your own messages outrank them. Turn the whole thing off with `context.board` (`false`). It is not used in `-p` print mode or the demo. How it works and what comes next: [context sharing](../../context-sharing.md).
+
 ## Coming back to your work
 
 When you start Centcom in a folder you have worked in before, a small popup asks **"Restore your last session?"** with the title, size and age of that conversation. Press `y` (or Enter on "Yes") and it comes back and the agent continues it; press `n` or Esc and you get a fresh session, and the old one stays saved (`/resume` brings it back later). It does not ask when you chose a session yourself (`--continue`, `--resume`), in the demo, in print mode, or when the folder has nothing saved. Turn it off with the setting `ui.restore_prompt` (`false`).
