@@ -57,10 +57,26 @@ describe('the sidebar', () => {
   it('shows the live session with its state, saved sessions and the other projects; a click resumes or opens', async () => {
     const { sent, push } = await mount(<SessionSidebar onNavigate={() => undefined} onSearch={() => undefined} />);
     await push(launcher); await push({ t: 'opened', dir: '/h/p', history: [] }); await push({ t: 'state', state: state({ busy: true }), changed: [], order: [] });
-    expect(screen.getByText('Active now')).toBeTruthy(); expect(screen.getByText('working')).toBeTruthy();
+    expect(screen.getByText('Running')).toBeTruthy(); expect(screen.getByText('working')).toBeTruthy();
     fireEvent.click(screen.getByText('Yesterday fix')); expect(sent.at(-1)).toEqual({ t: 'open', dir: '/h/p', engine: 'claude-code', demo: false, resume: 'old' });
     fireEvent.click(screen.getByText('q')); expect(sent.at(-1)).toEqual({ t: 'open', dir: '/h/q', engine: 'claude-code', demo: false });
     fireEvent.click(screen.getByText('New session')); expect(sent.at(-1)).toEqual({ t: 'close' });
+  });
+});
+describe('running sessions', () => {
+  it('lists every live session with its state; a click on another one switches to it', async () => {
+    const { sent, push } = await mount(<SessionSidebar onNavigate={() => undefined} onSearch={() => undefined} />);
+    await push(launcher); await push({ t: 'opened', dir: '/h/p', history: [] }); await push({ t: 'state', state: state(), changed: [], order: [] });
+    await push({ t: 'running', sessions: [{ dir: '/h/p', engine: 'claude-code', demo: false, busy: false, waiting: 0 }, { dir: '/h/q', engine: 'codex', demo: false, busy: false, waiting: 1, ask: 'run ls' }] });
+    expect(screen.getByText('needs you')).toBeTruthy(); expect(screen.getAllByText('ready').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByText('needs you')); expect(sent.at(-1)).toEqual({ t: 'open', dir: '/h/q', engine: 'codex', demo: false });
+  });
+  it('the palette offers the other running sessions', async () => {
+    const { sent, push } = await mount(<CommandPalette open onOpenChange={() => undefined} nav={[]} />);
+    await push(launcher); await push({ t: 'opened', dir: '/h/p', history: [] }); await push({ t: 'state', state: state(), changed: [], order: [] });
+    await push({ t: 'running', sessions: [{ dir: '/h/p', engine: 'claude-code', demo: false, busy: false, waiting: 0 }, { dir: '/h/q', engine: 'codex', demo: false, busy: true, waiting: 0 }] });
+    expect(screen.getByText('Running sessions')).toBeTruthy(); fireEvent.click(screen.getByText('working'));
+    expect(sent.at(-1)).toEqual({ t: 'open', dir: '/h/q', engine: 'codex', demo: false });
   });
 });
 describe('Ctrl+N', () => {

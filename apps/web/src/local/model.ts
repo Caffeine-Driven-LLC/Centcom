@@ -1,19 +1,20 @@
-import type { ServerMsg, WebState } from '../../../desktop/src/local/protocol.js';
+import type { RunningSession, ServerMsg, WebState } from '../../../desktop/src/local/protocol.js';
 import type { Item } from '@centcom/tui';
 
 export type Launcher = Extract<ServerMsg, { t: 'launcher' }>;
 export type DirMsg = Extract<ServerMsg, { t: 'dir' }>;
 export interface Notice { level: 'info' | 'warn' | 'error'; text: string; n: number }
 /** Everything the local-session screens show, rebuilt from the messages the main process sends. */
-export interface LocalView { launcher?: Launcher; dir?: DirMsg; opened?: string; history: string[]; state?: WebState; items: Item[]; notice?: Notice; models: Models; byId: ReadonlyMap<string, Item> }
+export interface LocalView { launcher?: Launcher; dir?: DirMsg; opened?: string; history: string[]; /** Every agent session that is alive, shown or not. */ running: RunningSession[]; state?: WebState; items: Item[]; notice?: Notice; models: Models; byId: ReadonlyMap<string, Item> }
 export type Models = Extract<ServerMsg, { t: 'models' }>['models'];
-export const emptyView = (): LocalView => ({ models: [], history: [], items: [], byId: new Map() });
+export const emptyView = (): LocalView => ({ models: [], history: [], running: [], items: [], byId: new Map() });
 /** One message in, the next view out. State messages carry only the items that changed plus the full order, so unchanged items keep their identity. */
 export function reduceLocal(v: LocalView, m: ServerMsg): LocalView {
   switch (m.t) {
     case 'launcher': return { ...v, launcher: m };
     case 'dir': return { ...v, dir: m };
     case 'models': return { ...v, models: m.models };
+    case 'running': return { ...v, running: m.sessions };
     case 'opened': return { ...v, opened: m.dir, history: m.history ?? [], state: undefined, items: [], byId: new Map(), models: [] };
     case 'closed': return { ...v, opened: undefined, state: undefined, items: [], byId: new Map() };
     case 'notice': return { ...v, notice: { level: m.level, text: m.text, n: (v.notice?.n ?? 0) + 1 } };
@@ -42,3 +43,8 @@ export function pickEngine(l: Launcher): { engine: 'claude-code' | 'codex'; demo
 export function whenAgo(at: number, now = Date.now()): string {
   const m = Math.max(0, Math.round((now - at) / 60000)); if (m < 1) return 'just now'; if (m < 60) return `${m} min ago`; const h = Math.round(m / 60); if (h < 24) return `${h} h ago`; const d = Math.round(h / 24); return `${d} day${d === 1 ? '' : 's'} ago`;
 }
+
+/** Is this running session the one the window shows? (Same folder; the agent matters only if the folder has two.) */
+export const isShown = (r: RunningSession, view: LocalView): boolean => r.dir === view.opened && (view.state?.demo ? r.demo : !r.demo);
+/** What a session row says. */
+export const runningWord = (r: Pick<RunningSession, 'busy' | 'waiting'>): 'needs you' | 'working' | 'ready' => (r.waiting > 0 ? 'needs you' : r.busy ? 'working' : 'ready');

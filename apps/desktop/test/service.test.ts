@@ -26,3 +26,16 @@ describe('the service', () => {
     expect(got).toEqual([{ t: 'notice', level: 'error', text: 'That folder does not exist.' }]); await w.handle({ t: 'browse', path: home }); expect(got.at(-1)).toMatchObject({ t: 'dir', path: home }); w.detach(); svc.shutdown();
   });
 });
+
+describe('running sessions', () => {
+  it('every window is told which sessions are alive; leaving a project keeps its agent, closing it ends it', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'cc-run-')); const dir = join(home, 'proj'); mkdirSync(dir); const svc = new LocalService({ home, cwd: home });
+    const a: { t: string; sessions?: { dir: string; demo: boolean }[] }[] = []; const b: typeof a = [];
+    const wa = svc.attach('a', (m) => a.push(m as never)); const wb = svc.attach('b', (m) => b.push(m as never));
+    await wb.handle({ t: 'hello' }); expect(b.find((m) => m.t === 'running')?.sessions).toEqual([]);
+    await wa.handle({ t: 'open', dir, demo: true });
+    const last = (xs: typeof a) => xs.filter((m) => m.t === 'running').at(-1)?.sessions;
+    expect(last(a)).toMatchObject([{ dir, demo: true, busy: false, waiting: 0 }]); expect(last(b)).toMatchObject([{ dir, demo: true }]);
+    await wa.handle({ t: 'close' }); expect(last(a)).toEqual([]); expect(last(b)).toEqual([]); wa.detach(); wb.detach(); svc.shutdown();
+  }, 30_000);
+});

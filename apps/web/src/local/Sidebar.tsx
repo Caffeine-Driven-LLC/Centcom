@@ -1,7 +1,7 @@
 import { useNavigate } from '@tanstack/react-router';
 import { FolderGit2, History, Plus, Search } from 'lucide-react';
 import React from 'react';
-import { shortPath, pickEngine, whenAgo, type LocalView } from './model.js';
+import { isShown, runningWord, shortPath, pickEngine, whenAgo, type LocalView } from './model.js';
 import { useLocal } from './use-local.js';
 import type { ClientMsg } from '../../../desktop/src/local/protocol.js';
 import './shell.css';
@@ -24,17 +24,20 @@ export function SessionSidebar({ onNavigate, onSearch, newSession }: { onNavigat
   if (!available || !L) return null;
   const go = (m: ClientMsg): void => { send(m); onNavigate(); void navigate({ to: '/local' as never }); };
   const pick = pickEngine(L); const saved = (view.state?.sessions ?? []).filter((s) => s.id !== view.state?.sessionId).slice(0, 5);
-  const others = L.recent.filter((r) => r.dir !== view.opened).slice(0, 6);
+  const live = new Set(view.running.map((r) => r.dir)); const others = L.recent.filter((r) => r.dir !== view.opened && !live.has(r.dir)).slice(0, 6);
   return <div className="sb">
     <div className="sb__top">
       <button type="button" className="sb__new" onClick={fresh} title="New session (Ctrl+N)"><Plus aria-hidden="true" />New session</button>
       <button type="button" className="sb__icon" aria-label="Search and commands (Ctrl+K)" title="Search and commands (Ctrl+K)" onClick={onSearch}><Search aria-hidden="true" /></button>
     </div>
-    {view.opened ? <>
-      <h3 className="sb__head">Active now</h3>
-      <button type="button" aria-current="true" className="sb__row" onClick={() => { onNavigate(); void navigate({ to: '/local' as never }); }}>
-        <StatusDot view={view} /><span className="sb__name">{baseName(view.opened)}</span><span className="sb__when">{STATE_WORD[stateOf(view)]}</span>
-      </button>
+    {view.running.length || view.opened ? <>
+      <h3 className="sb__head">Running</h3>
+      {(view.running.length ? view.running : [{ dir: view.opened!, engine: pick.engine, demo: !!view.state?.demo, busy: !!view.state?.busy, waiting: view.state?.approvals.length ?? 0 }]).map((r) => {
+        const shown = isShown(r, view);
+        return <button key={`${r.dir}::${r.demo ? 'demo' : r.engine}`} type="button" aria-current={shown ? 'true' : undefined} className="sb__row" title={shortPath(r.dir, L.home)} onClick={() => (shown ? (onNavigate(), void navigate({ to: '/local' as never })) : go({ t: 'open', dir: r.dir, engine: r.engine, demo: r.demo }))}>
+          <span role="img" aria-label={runningWord(r)} className="sb__dot" data-state={r.waiting > 0 ? 'waiting' : r.busy ? 'busy' : 'ready'} /><span className="sb__name">{baseName(r.dir)}</span><span className="sb__when">{runningWord(r)}</span>
+        </button>;
+      })}
     </> : null}
     {saved.length ? <>
       <h3 className="sb__head">In {baseName(view.opened ?? '')}</h3>
