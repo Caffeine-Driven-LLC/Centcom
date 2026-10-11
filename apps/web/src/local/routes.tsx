@@ -10,6 +10,7 @@ import { engineStatus, pickEngine, shortPath, type LocalView } from './model.js'
 import { useLocal } from './use-local.js';
 import type { ClientMsg } from '../../../desktop/src/local/protocol.js';
 import './local.css';
+import '../ui/desktop.css';
 
 type Send = (m: ClientMsg) => void;
 const baseName = (p: string): string => p.replace(/\/+$/, '').split('/').pop() || p;
@@ -35,8 +36,8 @@ function Picker({ view, send }: { view: LocalView; send: Send }): React.JSX.Elem
   const st = engineStatus(L, engine);
   return <div className="lc-home">
     <section className="lc-hero" aria-label="Welcome">
-      <span className="lc-hero__mark"><CentoMark size={96} /></span>
-      <h1 className="lc-hero__title">Command many hands.</h1>
+      <span className="lc-hero__mark"><CentoMark size={72} /></span>
+      <h1 className="lc-hero__title">What shall we work on?</h1>
       <p className="lc-hero__sub">Pick a project and an agent. It runs on this computer, with your own login.</p>
       <div className="lc-engines" role="group" aria-label="Agent">
         {ENGINES.map((e) => { const s = engineStatus(L, e.id); const info = e.id === 'codex' ? L.codex : L.claude; const on = engine === e.id;
@@ -93,6 +94,12 @@ function Turn({ it }: { it: Item }): React.JSX.Element | null {
     default: return null;
   }
 }
+function ToolGroup({ items }: { items: Item[] }): React.JSX.Element {
+  const running = items.some((x) => x.kind === 'tool' && x.status === 'running'); const failed = items.filter((x) => x.kind === 'tool' && (x.status === 'error' || x.status === 'denied')).length;
+  const last = items[items.length - 1]; const lastArg = last?.kind === 'tool' ? last.path ?? last.command ?? last.summary : '';
+  const label = running ? `Working… ${lastArg ?? ''}` : `${items.length === 1 ? 'Ran 1 step' : `Ran ${items.length} steps`}${failed ? ` · ${failed} failed` : ''}`;
+  return <details className="lc-tools" open={running || failed > 0 ? true : undefined} aria-label="Tool calls"><summary>{label}</summary><div className="lc-tools__list">{items.map((t) => <Turn key={t.id} it={t} />)}</div></details>;
+}
 /** Tool calls that follow each other sit in one quiet group, so a long run of them does not push the answer away. */
 function groupItems(items: Item[]): (Item | Item[])[] { const out: (Item | Item[])[] = []; for (const it of items) { const last = out[out.length - 1]; if (it.kind === 'tool' && Array.isArray(last)) last.push(it); else if (it.kind === 'tool') out.push([it]); else out.push(it); } return out; }
 const RISK_LABEL: Record<string, string> = { high: 'high risk', medium: 'medium risk', low: 'low risk' };
@@ -112,15 +119,10 @@ function Workspace({ view, send }: { view: LocalView; send: Send }): React.JSX.E
       <div className="lc-wshead__chips"><span className={`lc-live lc-live--${busy ? 'busy' : 'ready'}`}><span className="lc-live__dot" aria-hidden="true" />{busy ? s?.verb || 'working' : 'ready'}</span>{s?.branch ? <Chip>{s.branch}</Chip> : null}{s?.engineLabel ? <Chip>{s.engineLabel}</Chip> : null}</div>
       <span className="lc-grow" /><Button variant="ghost" onClick={() => send({ t: 'compact' })}>Compact</Button><Button variant="ghost" onClick={() => send({ t: 'close' })}>Close project</Button>
     </header>
-    <div className="lc-toolbar">
-      <label className="lc-sel"><span>Mode</span><select aria-label="Mode" value={s?.settings?.permissionMode ?? 'default'} onChange={(e) => send({ t: 'setMode', mode: e.target.value as never })}>{MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
-      {view.models.length ? <label className="lc-sel"><span>Model</span><select aria-label="Model" value={s?.settings?.model ?? ''} onChange={(e) => send({ t: 'setModel', id: e.target.value })}><option value="">Default</option>{view.models.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select></label> : null}
-      {model?.efforts?.length ? <label className="lc-sel"><span>Effort</span><select aria-label="Effort" value={effort} onChange={(e) => { setEffort(e.target.value); send({ t: 'setEffort', effort: e.target.value }); }}><option value="">Default ({model.defaultEffort ?? 'auto'})</option>{model.efforts.map((x) => <option key={x} value={x}>{x}</option>)}</select></label> : null}
-    </div>
     {view.notice ? <Banner tone={view.notice.level === 'error' ? 'danger' : view.notice.level === 'warn' ? 'warning' : 'info'}>{view.notice.text}</Banner> : null}
     <div className="lc-log" role="log" aria-label="Transcript" ref={log} onScroll={(e) => { const el = e.currentTarget; stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}>
       <div className="lc-thread">
-        {view.items.length ? groupItems(view.items).map((g, i) => Array.isArray(g) ? <div key={`g${g[0]!.id}`} className="lc-tools" aria-label="Tool calls">{g.map((t) => <Turn key={t.id} it={t} />)}</div> : <Turn key={g.id} it={g} />)
+        {view.items.length ? groupItems(view.items).map((g, i) => Array.isArray(g) ? <ToolGroup key={`g${g[0]!.id}`} items={g} /> : <Turn key={g.id} it={g} />)
           : <div className="lc-empty"><span className="lc-empty__mark"><CentoMark size={64} /></span><h3>What should we work on in {name}?</h3><div className="lc-suggest">{SUGGESTIONS.map((x) => <button key={x} type="button" className="lc-suggest__item" onClick={() => { setText(x); box.current?.focus(); }}>{x}</button>)}</div></div>}
         {busy && !approval ? <div className="lc-working" role="status"><span className="lc-working__dots" aria-hidden="true"><i /><i /><i /></span>{s?.verb || 'Working'}</div> : null}
       </div>
@@ -135,7 +137,11 @@ function Workspace({ view, send }: { view: LocalView; send: Send }): React.JSX.E
     <div className="lc-composer-box">
       <label className="cc-vh" htmlFor="lc-composer">Message</label>
       <textarea id="lc-composer" ref={box} className="lc-composer" rows={2} value={text} placeholder="Ask the agent… (Ctrl+Enter sends)" onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); submit(); } }} />
-      <div className="lc-composer-bar"><span className="lc-hint">Ctrl+Enter to send</span><span className="lc-grow" /><Button disabled={!busy} onClick={() => send({ t: 'interrupt' })}>Stop</Button><Button variant={approval ? 'secondary' : 'primary'} disabled={!text.trim()} onClick={submit}>Send</Button></div>
+      <div className="lc-composer-bar">
+      <label className="lc-sel"><span>Mode</span><select aria-label="Mode" value={s?.settings?.permissionMode ?? 'default'} onChange={(e) => send({ t: 'setMode', mode: e.target.value as never })}>{MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
+      {view.models.length ? <label className="lc-sel"><span>Model</span><select aria-label="Model" value={s?.settings?.model ?? ''} onChange={(e) => send({ t: 'setModel', id: e.target.value })}><option value="">Default</option>{view.models.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select></label> : null}
+      {model?.efforts?.length ? <label className="lc-sel"><span>Effort</span><select aria-label="Effort" value={effort} onChange={(e) => { setEffort(e.target.value); send({ t: 'setEffort', effort: e.target.value }); }}><option value="">Default ({model.defaultEffort ?? 'auto'})</option>{model.efforts.map((x) => <option key={x} value={x}>{x}</option>)}</select></label> : null}
+<span className="lc-hint">Ctrl+Enter to send</span><span className="lc-grow" /><Button disabled={!busy} onClick={() => send({ t: 'interrupt' })}>Stop</Button><Button variant={approval ? 'secondary' : 'primary'} disabled={!text.trim()} onClick={submit}>Send</Button></div>
     </div>
   </div>;
 }

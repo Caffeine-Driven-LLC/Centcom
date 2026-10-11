@@ -1,4 +1,5 @@
 import '../../../assets/theme/theme.css';
+import '../../../assets/theme/desktop-palette.css';
 import '@fontsource-variable/inter';
 import '@fontsource-variable/jetbrains-mono';
 import { RouterProvider } from '@tanstack/react-router';

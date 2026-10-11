@@ -22,7 +22,7 @@ export function Frame({ children }: { children: React.ReactNode }): React.JSX.El
         {inspector ? <button type="button" className="cc-btn cc-btn--ghost" aria-expanded={insp} aria-controls="cc-inspector" onClick={() => setInsp((v) => !v)}>{t('nav.details')}</button> : null}</header>
       {connectivity === 'offline' ? <Banner tone="info" title={t('net.unavailable')}>{t('net.unavailable.hint')}</Banner> : connectivity === 'degraded' ? <Banner tone="warning" title={t('net.degraded')}>{t('net.degraded.hint')}</Banner> : null}
       <div className="cc-body">
-        <nav id="cc-rail" className="cc-rail" data-open={rail} aria-label={t('nav.label')}>{nav.map((n) => <Link key={n.id} to={n.to} className="cc-rail__link" onClick={() => setRail(false)}><PixelIcon name={n.icon} />{t(n.labelKey as never)}</Link>)}</nav>
+        <nav id="cc-rail" className="cc-rail" data-open={rail} aria-label={t('nav.label')}><Link to={'/' as never} className="cc-rail__brand" onClick={() => setRail(false)}><CentoMark size={28} /><strong>Centcom</strong></Link>{nav.map((n) => <Link key={n.id} to={n.to} className="cc-rail__link" onClick={() => setRail(false)}><PixelIcon name={n.icon} />{t(n.labelKey as never)}</Link>)}</nav>
         <main id="main" className="cc-main">{children}</main>
         {inspector ? <aside id="cc-inspector" className="cc-inspector" data-open={insp} aria-label={t('nav.details')}>{inspector}</aside> : null}
       </div>
