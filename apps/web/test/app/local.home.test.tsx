@@ -118,3 +118,14 @@ describe('the message box keys', () => {
     fireEvent.keyDown(box(), { key: 'Escape' }); expect(sent.at(-1)).toEqual({ t: 'interrupt' });
   });
 });
+describe('the empty session', () => {
+  it('offers to continue the latest saved sessions before the stock suggestions', async () => {
+    const sent: { t: string; [k: string]: unknown }[] = []; let push: (m: unknown) => void = () => undefined;
+    (window as { centcom?: unknown }).centcom = { desktop: true, local: { send: (m: { t: string }) => sent.push(m), onMessage: (cb: (m: unknown) => void) => { push = cb; return () => undefined; } } };
+    render(<LocalPage />); await act(async () => push(launcher)); await act(async () => push({ t: 'opened', dir: '/h/p', history: [] }));
+    const sessions = [{ id: 'cur', title: 'now', updatedAt: 1, messages: 0 }, { id: 'a', title: 'Fix the login', updatedAt: 1, messages: 6 }, { id: 'b', title: 'Add dark mode', updatedAt: 1, messages: 3 }, { id: 'c', title: 'older', updatedAt: 1, messages: 2 }, { id: 'd', title: 'empty one', updatedAt: 1, messages: 0 }];
+    await act(async () => push({ t: 'state', state: { busy: false, approvals: [], agents: [], tasks: [], limits: [], sessions, sessionId: 'cur', settings: {} }, changed: [], order: [] }));
+    expect(screen.getByText('↺ Continue: Fix the login')).toBeTruthy(); expect(screen.getByText('↺ Continue: Add dark mode')).toBeTruthy(); expect(screen.queryByText(/older/)).toBeNull(); expect(screen.getByText('Explain how this project is organised')).toBeTruthy(); expect(screen.queryByText('Review my uncommitted changes')).toBeNull();
+    fireEvent.click(screen.getByText('↺ Continue: Fix the login')); expect(sent.at(-1)).toEqual({ t: 'open', dir: '/h/p', engine: 'claude-code', demo: false, resume: 'a' });
+  });
+});
