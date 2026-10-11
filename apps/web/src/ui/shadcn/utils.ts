@@ -1,5 +1,4 @@
 import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
 
-/** shadcn's class helper: joins class names and lets a later Tailwind utility replace an earlier one. */
-export const cn = (...inputs: ClassValue[]): string => twMerge(clsx(inputs));
+/** Joins class names (shadcn's `cn`; the classes themselves are plain CSS in ui/shadcn.css). */
+export const cn = (...inputs: ClassValue[]): string => clsx(inputs);

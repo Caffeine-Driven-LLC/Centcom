@@ -4,7 +4,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { NavItem } from '../app/types.js';
 import { t } from '../i18n/index.js';
 import { useTheme } from '../theme/theme.js';
-import { Dialog, cn } from '../ui/shadcn/index.js';
+import { Dialog } from '../ui/shadcn/index.js';
+import './shell.css';
 import { pickEngine, shortPath, whenAgo } from './model.js';
 import { useLocal } from './use-local.js';
 
@@ -50,13 +51,13 @@ export function CommandPalette({ open, onOpenChange, nav }: { open: boolean; onO
   };
   return <Dialog open={open} onOpenChange={onOpenChange} label="Search and commands">
     <div onKeyDown={onKey}>
-      <div className="flex items-center gap-2 border-b border-border px-4"><Search className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <input autoFocus role="combobox" aria-expanded="true" aria-controls="cc-pal" aria-activedescendant={shown[at] ? `pal-${shown[at]!.id}` : undefined} aria-label="Search commands, projects and sessions" placeholder="Search commands, projects and sessions…" value={query} onChange={(e) => { setQuery(e.target.value); setSel(0); }} className="h-12 w-full border-0 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground [font:inherit]" /></div>
-      <div id="cc-pal" role="listbox" ref={list} className="max-h-[360px] overflow-y-auto p-2">
-        {shown.length === 0 ? <p className="m-0 py-8 text-center text-sm text-muted-foreground">Nothing matches.</p> : shown.map((e, i) => <React.Fragment key={e.id}>
-          {i === 0 || shown[i - 1]!.group !== e.group ? <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground" role="presentation">{e.group}</div> : null}
-          <div id={`pal-${e.id}`} role="option" aria-selected={i === at} className={cn('flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm select-none', i === at && 'bg-accent')} onMouseMove={() => setSel(i)} onClick={() => run(e)}>
-            <e.icon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" /><span className="truncate">{e.label}</span>{e.hint ? <span className="ml-auto truncate pl-3 text-xs text-muted-foreground">{e.hint}</span> : null}
+      <div className="pal__search"><Search aria-hidden="true" />
+        <input autoFocus role="combobox" aria-expanded="true" aria-controls="cc-pal" aria-activedescendant={shown[at] ? `pal-${shown[at]!.id}` : undefined} aria-label="Search commands, projects and sessions" placeholder="Search commands, projects and sessions…" value={query} onChange={(e) => { setQuery(e.target.value); setSel(0); }} className="pal__input" /></div>
+      <div id="cc-pal" role="listbox" ref={list} className="pal__list">
+        {shown.length === 0 ? <p className="pal__empty">Nothing matches.</p> : shown.map((e, i) => <React.Fragment key={e.id}>
+          {i === 0 || shown[i - 1]!.group !== e.group ? <div className="pal__group" role="presentation">{e.group}</div> : null}
+          <div id={`pal-${e.id}`} role="option" aria-selected={i === at} className="pal__item" onMouseMove={() => setSel(i)} onClick={() => run(e)}>
+            <e.icon aria-hidden="true" /><span className="pal__label">{e.label}</span>{e.hint ? <span className="pal__hint">{e.hint}</span> : null}
           </div>
         </React.Fragment>)}
       </div>

@@ -8,8 +8,8 @@ export function Dialog({ open, onOpenChange, label, className, children }: { ope
   useEffect(() => { if (!open) return; const k = (e: KeyboardEvent): void => { if (e.key === 'Escape') { e.stopPropagation(); onOpenChange(false); } }; window.addEventListener('keydown', k, true); return () => window.removeEventListener('keydown', k, true); }, [open, onOpenChange]);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-[2px]" onMouseDown={(e) => { if (e.target === e.currentTarget) onOpenChange(false); }}>
-      <div role="dialog" aria-modal="true" aria-label={label} className={cn('absolute top-[16%] left-1/2 w-[min(640px,calc(100vw-32px))] -translate-x-1/2 overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl', className)}>
+    <div className="sc-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onOpenChange(false); }}>
+      <div role="dialog" aria-modal="true" aria-label={label} className={cn('sc-dialog', className)}>
         <FocusTrap>{children}</FocusTrap>
       </div>
     </div>

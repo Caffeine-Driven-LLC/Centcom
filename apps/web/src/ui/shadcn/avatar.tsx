@@ -1,10 +1,7 @@
-import * as AvatarPrimitive from '@radix-ui/react-avatar';
 import React from 'react';
 import { cn } from './utils.js';
 
-export function Avatar({ className, ...props }: React.ComponentProps<typeof AvatarPrimitive.Root>): React.JSX.Element {
-  return <AvatarPrimitive.Root className={cn('relative flex size-8 shrink-0 overflow-hidden rounded-full', className)} {...props} />;
-}
-export function AvatarFallback({ className, ...props }: React.ComponentProps<typeof AvatarPrimitive.Fallback>): React.JSX.Element {
-  return <AvatarPrimitive.Fallback className={cn('flex size-full items-center justify-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground', className)} {...props} />;
+/** A round initial on one of the five presence colours (`slot` 0 to 4). */
+export function Avatar({ name, slot = 0, className }: { name: string; slot?: number; className?: string }): React.JSX.Element {
+  return <span data-slot="avatar" data-colour={slot % 5} className={cn('sc-avatar', className)} aria-hidden="true">{[...name.trim()][0]?.toUpperCase() ?? '?'}</span>;
 }
