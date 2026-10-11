@@ -140,3 +140,15 @@ describe('copying', () => {
     expect(screen.getAllByLabelText('Copy answer')).toHaveLength(1); await act(async () => { fireEvent.click(screen.getByLabelText('Copy answer')); }); expect(written).toEqual([long]); expect(screen.getByText('Copied')).toBeTruthy();
   });
 });
+describe('copying inside the app', () => {
+  it('goes through the main process when the bridge offers it, and falls back when that refuses', async () => {
+    const via: string[] = []; let accept = true; let push: (m: unknown) => void = () => undefined;
+    (window as { centcom?: unknown }).centcom = { desktop: true, copy: (t: string) => { via.push(t); return Promise.resolve(accept); }, local: { send: () => undefined, onMessage: (cb: (m: unknown) => void) => { push = cb; return () => undefined; } } };
+    Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
+    render(<LocalPage />); await act(async () => push(launcher)); await act(async () => push({ t: 'opened', dir: '/h/p', history: [] }));
+    const long = 'A finished answer that is long enough to be copied by the button.';
+    await act(async () => push({ t: 'state', state: { busy: false, approvals: [], agents: [], tasks: [], limits: [], sessions: [], settings: {} }, changed: [{ kind: 'assistant', id: 'a', messageId: 'm', agentId: 'x', text: long, done: true }], order: ['a'] }));
+    await act(async () => { fireEvent.click(screen.getByLabelText('Copy answer')); }); expect(via).toEqual([long]); expect(screen.getByText('Copied')).toBeTruthy();
+    delete (window as { centcom?: unknown }).centcom;
+  });
+});

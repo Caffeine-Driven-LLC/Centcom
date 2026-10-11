@@ -1,5 +1,5 @@
 import { useNavigate } from '@tanstack/react-router';
-import { ArrowRight, Eraser, FolderGit2, History, Moon, Monitor, Plus, Search, Shield, Square, Sun, type LucideIcon } from 'lucide-react';
+import { ArrowRight, Eraser, FolderGit2, History, Keyboard, Moon, Monitor, Plus, Search, Shield, Square, Sun, type LucideIcon } from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { NavItem } from '../app/types.js';
 import { t } from '../i18n/index.js';
@@ -12,6 +12,8 @@ import { useLocal } from './use-local.js';
 const MODES: [string, string][] = [['default', 'Ask before acting'], ['acceptEdits', 'Accept edits'], ['plan', 'Plan only (read only)'], ['bypassPermissions', 'Skip approvals']];
 const baseName = (p: string): string => p.replace(/\/+$/, '').split('/').pop() || p;
 
+/** What the keys do in the app (the same list as docs/desktop-app.md). */
+export const SHORTCUTS: [string, string][] = [['Ctrl/Cmd+K', 'Search commands, sessions and projects'], ['Ctrl/Cmd+N', 'New session (the open one keeps running)'], ['Ctrl/Cmd+B', 'Hide or show the sidebar'], ['Enter', 'Send the message'], ['Shift+Enter', 'New line in the message'], ['Up / Down', 'Earlier messages (empty box or start of a line)'], ['Esc', 'Stop the agent while it works'], ['/', 'List the slash commands']];
 export interface Entry { id: string; group: string; label: string; hint?: string; icon: LucideIcon; keywords?: string; run(): void }
 /** Entries whose label or keywords contain every word typed, in their original order. */
 export function filterEntries(entries: Entry[], query: string): Entry[] {
@@ -22,7 +24,7 @@ export function filterEntries(entries: Entry[], query: string): Entry[] {
 /** Ctrl/Cmd+K: every action of the session, the projects and saved sessions, and the screens, behind one search box. */
 export function CommandPalette({ open, onOpenChange, nav }: { open: boolean; onOpenChange(o: boolean): void; nav: NavItem[] }): React.JSX.Element {
   const { view, send, available } = useLocal(); const navigate = useNavigate(); const { set: setTheme } = useTheme();
-  const [query, setQuery] = useState(''); const [sel, setSel] = useState(0); const list = useRef<HTMLDivElement>(null);
+  const [keys, setKeys] = useState(false); const [query, setQuery] = useState(''); const [sel, setSel] = useState(0); const list = useRef<HTMLDivElement>(null);
   useEffect(() => { if (open) { setQuery(''); setSel(0); } }, [open]);
   const entries = useMemo<Entry[]>(() => {
     const L = view.launcher; const pick = L ? pickEngine(L) : undefined; const out: Entry[] = []; const toLocal = (): void => { void navigate({ to: '/local' as never }); };
@@ -39,6 +41,7 @@ export function CommandPalette({ open, onOpenChange, nav }: { open: boolean; onO
       for (const r of (L?.recent ?? []).filter((x) => !view.running.some((y) => y.dir === x.dir)).slice(0, 10)) out.push({ id: `p-${r.dir}`, group: 'Projects', label: baseName(r.dir), hint: shortPath(r.dir, L!.home), keywords: r.dir, icon: FolderGit2, run: () => { send({ t: 'open', dir: r.dir, engine: pick!.engine, demo: pick!.demo }); toLocal(); } });
     }
     for (const n of nav) out.push({ id: `go-${n.id}`, group: 'Go to', label: t(n.labelKey as never), icon: ArrowRight, run: () => { void navigate({ to: n.to as never }); } });
+    out.push({ id: 'keys', group: 'Help', label: 'Keyboard shortcuts', keywords: 'keys hotkeys help', icon: Keyboard, run: () => setKeys(true) });
     out.push({ id: 'dark', group: 'Appearance', label: 'Dark theme', icon: Moon, run: () => setTheme('dark') }, { id: 'light', group: 'Appearance', label: 'Light theme', icon: Sun, run: () => setTheme('light') }, { id: 'auto', group: 'Appearance', label: 'Follow the system', keywords: 'theme auto', icon: Monitor, run: () => setTheme('auto') });
     return out;
   }, [view, available, nav, navigate, send, setTheme]);
@@ -50,7 +53,8 @@ export function CommandPalette({ open, onOpenChange, nav }: { open: boolean; onO
     else if (e.key === 'ArrowUp') { e.preventDefault(); setSel((at - 1 + shown.length) % Math.max(1, shown.length)); }
     else if (e.key === 'Enter') { e.preventDefault(); run(shown[at]); }
   };
-  return <Dialog open={open} onOpenChange={onOpenChange} label="Search and commands">
+  return <><Dialog open={keys} onOpenChange={setKeys} label="Keyboard shortcuts"><div className="pal__keys"><h2 className="pal__keys-title">Keyboard shortcuts</h2><dl>{SHORTCUTS.map(([k, d]) => <div key={k} className="pal__key"><dt><kbd>{k}</kbd></dt><dd>{d}</dd></div>)}</dl></div></Dialog>
+  <Dialog open={open} onOpenChange={onOpenChange} label="Search and commands">
     <div onKeyDown={onKey}>
       <div className="pal__search"><Search aria-hidden="true" />
         <input autoFocus role="combobox" aria-expanded="true" aria-controls="cc-pal" aria-activedescendant={shown[at] ? `pal-${shown[at]!.id}` : undefined} aria-label="Search commands, projects and sessions" placeholder="Search commands, projects and sessions…" value={query} onChange={(e) => { setQuery(e.target.value); setSel(0); }} className="pal__input" /></div>
@@ -63,5 +67,5 @@ export function CommandPalette({ open, onOpenChange, nav }: { open: boolean; onO
         </React.Fragment>)}
       </div>
     </div>
-  </Dialog>;
+  </Dialog></>;
 }

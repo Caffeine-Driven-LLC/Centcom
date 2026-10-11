@@ -48,6 +48,11 @@ describe('the palette', () => {
     const { push } = await mount(<CommandPalette open onOpenChange={() => undefined} nav={[]} />); await push(launcher);
     fireEvent.change(screen.getByLabelText('Search commands, projects and sessions'), { target: { value: 'qqqq' } }); expect(screen.getByText('Nothing matches.')).toBeTruthy();
   });
+  it('shows the keyboard shortcuts', async () => {
+    const { push } = await mount(<CommandPalette open onOpenChange={() => undefined} nav={[]} />); await push(launcher);
+    fireEvent.change(screen.getByLabelText('Search commands, projects and sessions'), { target: { value: 'shortcuts' } }); fireEvent.keyDown(screen.getByLabelText('Search commands, projects and sessions'), { key: 'Enter' });
+    expect(screen.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeTruthy(); expect(screen.getByText('Ctrl/Cmd+K')).toBeTruthy(); expect(screen.getByText('Stop the agent while it works')).toBeTruthy();
+  });
   it('Esc closes it', async () => {
     let open = true; await mount(<CommandPalette open onOpenChange={(o) => { open = o; }} nav={[]} />);
     fireEvent.keyDown(window, { key: 'Escape' }); expect(open).toBe(false);
