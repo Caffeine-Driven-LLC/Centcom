@@ -202,3 +202,8 @@
   .pal__input:focus-visible { outline: none; }
   .lc-live { white-space: nowrap; max-width: 200px; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; }
 }
+:root {
+  .lc-wshead__title { flex: 0 1 auto; min-width: 0; max-width: 40%; }
+  .lc-wshead__title h2, .lc-wshead__path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lc-wshead__chips { flex: 0 0 auto; overflow: visible; }
+}

@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest';
 import React from 'react';
 import { LocalPage } from '../../src/local/routes.js';
-import { notificationFor, titleFor } from '../../src/local/attention.js';
+import { attention, notificationFor, titleFor } from '../../src/local/attention.js';
 
 afterEach(() => { cleanup(); delete (window as { centcom?: unknown }).centcom; });
 const st = { installed: true, version: '1.0', signedIn: 'yes' as const, kind: 'subscription' as never };
@@ -45,4 +45,16 @@ describe('the approval notice', () => {
     expect(notificationFor({ before: 0, now: 1, hidden: false })).toBeNull(); expect(notificationFor({ before: 1, now: 1, hidden: true })).toBeNull(); expect(notificationFor({ before: 2, now: 1, hidden: true })).toBeNull();
     expect(notificationFor({ before: 0, now: 1, hidden: true })?.body).toBe('Cento is waiting for your decision.');
   });
+});
+describe('attention across sessions', () => {
+  const run = (dir: string, waiting: number, busy = false, ask?: string) => ({ dir, waiting, busy, ...(ask ? { ask } : {}) });
+  it('adds up what waits in the sessions that are not shown and says which one asked', () => {
+    const view = { opened: '/h/p', state: { approvals: [], busy: false }, running: [run('/h/p', 0), run('/h/q', 2, true, 'run ls')] };
+    expect(attention(view)).toEqual({ waiting: 2, busy: true, dir: '/h/q', ask: 'run ls' });
+  });
+  it('counts the shown session from its own state, not from the list', () => {
+    const view = { opened: '/h/p', state: { approvals: [{ summary: 'edit a' }], busy: true }, running: [run('/h/p', 0)] };
+    expect(attention(view)).toEqual({ waiting: 1, busy: true, dir: '/h/p', ask: 'edit a' });
+  });
+  it('is quiet when nothing runs', () => { expect(attention({ running: [], state: undefined })).toEqual({ waiting: 0, busy: false, dir: undefined, ask: undefined }); });
 });

@@ -20,7 +20,7 @@ export function sanitise(raw: unknown): ClientMsg | undefined {
   if (!raw || typeof raw !== 'object' || typeof (raw as { t?: unknown }).t !== 'string') return undefined; const m = raw as Record<string, unknown>; const t = m.t as string;
   const str = (v: unknown, max = 4096): string | undefined => (typeof v === 'string' && v.length <= max ? v : undefined);
   switch (t) {
-    case 'hello': case 'close': case 'interrupt': case 'cycleMode': return { t } as ClientMsg;
+    case 'hello': case 'close': case 'leave': case 'interrupt': case 'cycleMode': return { t } as ClientMsg;
     case 'browse': { const p = str(m.path); return p === undefined ? undefined : { t, path: p }; }
     case 'open': { const dir = str(m.dir); if (!dir) return undefined; return { t, dir, demo: m.demo === true, engine: m.engine === 'codex' ? 'codex' : 'claude-code', ...(str(m.resume, 200) ? { resume: str(m.resume, 200) } : {}) }; }
     case 'pref': return { t, ...(m.theme === 'auto' || m.theme === 'dark' || m.theme === 'light' ? { theme: m.theme } : {}), ...(typeof m.side === 'boolean' ? { side: m.side } : {}) };
@@ -37,6 +37,10 @@ export function sanitise(raw: unknown): ClientMsg | undefined {
 export class LocalService {
   private readonly home: string; private readonly stateDir: string; private readonly cwd: string; private workspaces = new Map<string, Workspace>(); private appCfg?: ClientConfig; private warned = false;
   private sessions = new Map<unknown, { current?: Workspace; leave?: () => void; send(m: ServerMsg): void }>();
+  private lastRunning = '';
+  private runningMsg(): ServerMsg { return { t: 'running', sessions: [...this.workspaces.values()].map((w) => w.status()) }; }
+  /** Tells every window which sessions are alive and what each one is doing, when that changed. */
+  private broadcastRunning(): void { const m = this.runningMsg(); const j = JSON.stringify(m); if (j === this.lastRunning) return; this.lastRunning = j; for (const s of this.sessions.values()) s.send(m); }
   constructor(o: ServiceOptions = {}) { this.home = o.home ?? homedir(); this.stateDir = o.stateDir ?? join(this.home, '.centcom'); this.cwd = o.cwd ?? this.home; mkdirSync(this.stateDir, { recursive: true, mode: 0o700 }); }
   private recentFile = (): string => join(this.stateDir, 'recent.json');
   recent(): RecentDir[] { try { return (JSON.parse(readFileSync(this.recentFile(), 'utf8')) as RecentDir[]).filter((r) => existsSync(r.dir)); } catch { return []; } }
@@ -52,10 +56,11 @@ export class LocalService {
   private async dispatch(s: { current?: Workspace; leave?: () => void; send(m: ServerMsg): void }, m: ClientMsg, detach: () => void): Promise<void> {
     const send = s.send;
     switch (m.t) {
-      case 'hello': { const [st, cx] = await Promise.all([detectClaude(), detectCodex()]); send({ t: 'launcher', home: this.home, cwd: this.cwd, recent: this.recent(), claude: { installed: st.installed, version: st.version, signedIn: st.signedIn, kind: st.loginKind }, codex: { installed: cx.installed, version: cx.version, signedIn: cx.signedIn, kind: cx.loginKind }, prefs: await this.prefs() }); if (this.appCfg && !this.warned) { this.warned = true; for (const w of this.appCfg.warnings) send({ t: 'notice', level: 'warn', text: 'Settings: ' + w }); } if (s.current) send({ t: 'opened', dir: s.current.dir, history: s.current.history() }); break; }
+      case 'hello': { send(this.runningMsg()); const [st, cx] = await Promise.all([detectClaude(), detectCodex()]); send({ t: 'launcher', home: this.home, cwd: this.cwd, recent: this.recent(), claude: { installed: st.installed, version: st.version, signedIn: st.signedIn, kind: st.loginKind }, codex: { installed: cx.installed, version: cx.version, signedIn: cx.signedIn, kind: cx.loginKind }, prefs: await this.prefs() }); if (this.appCfg && !this.warned) { this.warned = true; for (const w of this.appCfg.warnings) send({ t: 'notice', level: 'warn', text: 'Settings: ' + w }); } if (s.current) send({ t: 'opened', dir: s.current.dir, history: s.current.history() }); break; }
       case 'browse': { const d = listDir(m.path, this.home); send({ t: 'dir', ...d, saved: new SessionStore().list(d.path, 50).length }); break; }
-      case 'open': { const dir = resolve(m.dir); const key = `${dir}::${m.demo ? 'demo' : m.engine ?? 'claude-code'}`; if (!existsSync(dir) || !statSync(dir).isDirectory()) { send({ t: 'notice', level: 'error', text: 'That folder does not exist.' }); break; } detach(); let w = this.workspaces.get(key); if (!w) { w = await Workspace.open(dir, !!m.demo, m.engine === 'codex' ? 'codex' : 'claude-code', m.resume); this.workspaces.set(key, w); } this.addRecent(dir); s.current = w; send({ t: 'opened', dir, history: w.history() }); s.leave = w.join(send); break; }
-      case 'close': { if (s.current) { const w = s.current; detach(); w.close(); for (const [k, v] of this.workspaces) if (v === w) this.workspaces.delete(k); } send({ t: 'closed' }); break; }
+      case 'open': { const dir = resolve(m.dir); const key = `${dir}::${m.demo ? 'demo' : m.engine ?? 'claude-code'}`; if (!existsSync(dir) || !statSync(dir).isDirectory()) { send({ t: 'notice', level: 'error', text: 'That folder does not exist.' }); break; } detach(); let w = this.workspaces.get(key); if (!w) { w = await Workspace.open(dir, !!m.demo, m.engine === 'codex' ? 'codex' : 'claude-code', m.resume); this.workspaces.set(key, w); w.onChange(() => this.broadcastRunning()); } this.addRecent(dir); s.current = w; send({ t: 'opened', dir, history: w.history() }); s.leave = w.join(send); this.broadcastRunning(); break; }
+      case 'leave': { detach(); send({ t: 'closed' }); break; }
+      case 'close': { if (s.current) { const w = s.current; detach(); w.close(); for (const [k, v] of this.workspaces) if (v === w) this.workspaces.delete(k); } send({ t: 'closed' }); this.broadcastRunning(); break; }
       case 'submit': void s.current?.ctl.submit(m.text); break;
       case 'approve': s.current?.ctl.answerApproval(m.decision, m.scope ?? 'once'); break;
       case 'interrupt': void s.current?.ctl.interrupt(); break;
@@ -70,5 +75,5 @@ export class LocalService {
     }
   }
   /** On quit: settings are written and every agent session is stopped. */
-  shutdown(): void { this.appCfg?.flush(); for (const w of this.workspaces.values()) w.close(); this.workspaces.clear(); }
+  shutdown(): void { this.appCfg?.flush(); for (const w of this.workspaces.values()) w.close(); this.workspaces.clear(); this.lastRunning = ''; }
 }
