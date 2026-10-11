@@ -15,6 +15,9 @@ import { useApprovalNotice, useAttentionTitle } from '../local/attention.js';
 export const ShellCtx = createContext<{ nav: NavItem[]; connectivity: Connectivity; inspector: React.ReactNode }>({ nav: [], connectivity: 'unknown', inspector: null });
 export const useShell = (): React.ContextType<typeof ShellCtx> => useContext(ShellCtx);
 /** 48 px top bar, 240 px left rail (a drawer under 1024), 320 px inspector (a bottom sheet under 768). */
+/** The rail's order: where you work first, then the account areas. Anything unlisted follows alphabetically. */
+const NAV_ORDER = ['home', 'local', 'workspaces', 'fleet', 'integrations', 'billing', 'settings'];
+export const orderNav = (nav: NavItem[], local: boolean): NavItem[] => nav.filter((n) => !(local && n.id === 'local')).sort((a, b) => { const i = NAV_ORDER.indexOf(a.id); const j = NAV_ORDER.indexOf(b.id); return (i < 0 ? 99 : i) - (j < 0 ? 99 : j) || a.id.localeCompare(b.id); });
 export function Frame({ children }: { children: React.ReactNode }): React.JSX.Element {
   const n = React.useSyncExternalStore((f) => unread.subscribe(f), () => unread.count, () => 0);
   const { nav, connectivity, inspector } = useShell(); const [rail, setRail] = useState(false); const [insp, setInsp] = useState(false); const [pal, setPal] = useState(false); const newSession = React.useRef<(() => void) | null>(null); useAttentionTitle(); useApprovalNotice();
@@ -27,7 +30,7 @@ export function Frame({ children }: { children: React.ReactNode }): React.JSX.El
         {inspector ? <button type="button" className="cc-btn cc-btn--ghost" aria-expanded={insp} aria-controls="cc-inspector" onClick={() => setInsp((v) => !v)}>{t('nav.details')}</button> : null}</header>
       {connectivity === 'offline' ? <Banner tone="info" title={t('net.unavailable')}>{t('net.unavailable.hint')}</Banner> : connectivity === 'degraded' ? <Banner tone="warning" title={t('net.degraded')}>{t('net.degraded.hint')}</Banner> : null}
       <div className="cc-body">
-        <nav id="cc-rail" className="cc-rail" data-open={rail} aria-label={t('nav.label')}><Link to={'/' as never} className="cc-rail__brand" onClick={() => setRail(false)}><CentoMark size={28} /><strong>Centcom</strong></Link><SessionSidebar onNavigate={() => setRail(false)} onSearch={() => setPal(true)} newSession={newSession} /><div className="cc-rail__nav">{nav.map((n) => <Link key={n.id} to={n.to} className="cc-rail__link" onClick={() => setRail(false)}><PixelIcon name={n.icon} />{t(n.labelKey as never)}</Link>)}</div></nav>
+        <nav id="cc-rail" className="cc-rail" data-open={rail} aria-label={t('nav.label')}><Link to={'/' as never} className="cc-rail__brand" onClick={() => setRail(false)}><CentoMark size={28} /><strong>Centcom</strong></Link><SessionSidebar onNavigate={() => setRail(false)} onSearch={() => setPal(true)} newSession={newSession} /><div className="cc-rail__nav">{orderNav(nav, !!window.centcom?.local).map((n) => <Link key={n.id} to={n.to} className="cc-rail__link" onClick={() => setRail(false)}><PixelIcon name={n.icon} />{t(n.labelKey as never)}</Link>)}</div></nav>
         <main id="main" className="cc-main">{children}</main>
         {inspector ? <aside id="cc-inspector" className="cc-inspector" data-open={insp} aria-label={t('nav.details')}>{inspector}</aside> : null}
       </div>
