@@ -1,5 +1,5 @@
 /** The Electron main process: one window around the app in apps/web, served from its own `app://centcom` address with the same policy as the hosted pages. */
-import { app, BrowserWindow, ipcMain, net, protocol, session, shell } from 'electron';
+import { app, BrowserWindow, clipboard, ipcMain, net, protocol, session, shell } from 'electron';
 import { existsSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -11,6 +11,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const WEB_ROOT = app.isPackaged ? join(process.resourcesPath, 'web') : join(here, '../../web/dist');
 protocol.registerSchemesAsPrivileged([{ scheme: APP_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }]);
 const local = new LocalService({ cwd: process.cwd() }); const attached = new Map<number, ReturnType<LocalService['attach']>>();
+const MAX_COPY = 1_000_000; /* characters one copy may carry */
 let win: BrowserWindow | undefined; let pending: string | undefined; let ready = false;
 const send = (raw: string): void => { if (win && ready) { win.webContents.send('centcom:link', raw); if (win.isMinimized()) win.restore(); win.focus(); } else pending = raw; };
 function createWindow(): void {
@@ -37,6 +38,7 @@ else {
     session.defaultSession.setPermissionCheckHandler((_wc, permission, origin) => permissionAllowed(permission, origin));
     ipcMain.handle('centcom:open-external', (_e, url: unknown) => { if (typeof url === 'string' && isSafeExternal(url)) { void shell.openExternal(url); return true; } return false; });
     ipcMain.handle('centcom:local', (e, raw: unknown) => { let a = attached.get(e.sender.id); if (!a) { const wc = e.sender; a = local.attach(wc.id, (m) => { if (process.env.CENTCOM_SHOT) console.log('[local]', JSON.stringify(m).slice(0, 240)); if (!wc.isDestroyed()) wc.send('centcom:local:msg', m); }); attached.set(wc.id, a); wc.once('destroyed', () => { attached.get(wc.id)?.detach(); attached.delete(wc.id); }); } if (!isAppUrl(e.senderFrame?.url ?? '')) return; return a.handle(raw); });
+    ipcMain.handle('centcom:copy', (e, text: unknown) => { if (typeof text !== 'string' || text.length > MAX_COPY || !isAppUrl(e.senderFrame?.url ?? '')) return false; clipboard.writeText(text); return true; });
     ipcMain.handle('centcom:ready', () => { ready = true; if (pending) { const p = pending; pending = undefined; send(p); } });
     const first = linkFromArgv(process.argv); if (first) pending = first.raw; createWindow();
     app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });

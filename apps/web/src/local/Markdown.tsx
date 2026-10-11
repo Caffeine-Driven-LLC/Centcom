@@ -36,7 +36,11 @@ export function CopyButton({ text, label, className = 'lc-copy cc-btn' }: { text
   const ok = (): void => { setDone(true); setTimeout(() => setDone(false), 1500); };
   /* the clipboard API first; where the window refuses it, the old way through a hidden text box (both need the click that called this) */
   const fallback = (): void => { try { const t = document.createElement('textarea'); t.value = text; t.setAttribute('readonly', ''); t.className = 'cc-vh'; document.body.appendChild(t); t.select(); const done = document.execCommand('copy'); t.remove(); if (done) ok(); } catch { /* nothing more to try */ } };
-  const copy = (): void => { if (!navigator.clipboard) { fallback(); return; } navigator.clipboard.writeText(text).then(ok).catch(fallback); };
+  const copy = (): void => {
+    const viaApp = window.centcom?.copy; /* the desktop app copies in its main process: no permission, no click rules */
+    if (viaApp) { void viaApp(text).then((done) => { if (done) ok(); else fallback(); }).catch(fallback); return; }
+    if (!navigator.clipboard) { fallback(); return; } navigator.clipboard.writeText(text).then(ok).catch(fallback);
+  };
   return <button type="button" className={className} onClick={copy} aria-label={label}>{done ? 'Copied' : 'Copy'}</button>;
 }
 /** A code block with a copy button that shows on hover or focus. */
