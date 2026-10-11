@@ -13,6 +13,8 @@ export type ClientMsg =
   | { t: 'browse'; path: string }
   | { t: 'open'; dir: string; demo?: boolean; engine?: 'claude-code' | 'codex'; resume?: string }
   | { t: 'close' }
+  /** Go back to the project list; the agent keeps running in the background. */
+  | { t: 'leave' }
   | { t: 'pref'; theme?: Prefs['theme']; side?: boolean }
   | { t: 'submit'; text: string }
   | { t: 'approve'; decision: 'approve' | 'deny'; scope?: 'once' | 'session' | 'always' }
@@ -30,6 +32,9 @@ export type WebState = Omit<AppState, 'items' | 'approvals' | 'input' | 'cursor'
   approvals: { id: string; tool: string; summary: string; risk: string; path?: string; command?: string; diff?: string; agentName: string }[];
 };
 
+/** One agent session that is alive in the main process, whether or not a window is showing it. */
+export interface RunningSession { dir: string; engine: 'claude-code' | 'codex'; demo: boolean; busy: boolean; /** Approvals waiting for a person. */ waiting: number; /** What the first waiting approval asks for. */ ask?: string }
+
 export type ServerMsg =
   | { t: 'launcher'; home: string; cwd: string; recent: RecentDir[]; claude: ClaudeStatus; codex: CodexStatusMsg; prefs: Prefs }
   | { t: 'dir'; path: string; parent: string | null; git: boolean; entries: DirEntry[]; error?: string; saved?: number }
@@ -37,4 +42,5 @@ export type ServerMsg =
   | { t: 'closed' }
   | { t: 'state'; state: WebState; changed: Item[]; order: string[] }
   | { t: 'models'; models: { id: string; label: string; note: string; efforts?: string[]; defaultEffort?: string; isDefault?: boolean }[] }
+  | { t: 'running'; sessions: RunningSession[] }
   | { t: 'notice'; level: 'info' | 'warn' | 'error'; text: string };

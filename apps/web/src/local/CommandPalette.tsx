@@ -6,7 +6,7 @@ import { t } from '../i18n/index.js';
 import { useTheme } from '../theme/theme.js';
 import { Dialog } from '../ui/shadcn/index.js';
 import './shell.css';
-import { pickEngine, shortPath, whenAgo } from './model.js';
+import { isShown, pickEngine, runningWord, shortPath, whenAgo } from './model.js';
 import { useLocal } from './use-local.js';
 
 const MODES: [string, string][] = [['default', 'Ask before acting'], ['acceptEdits', 'Accept edits'], ['plan', 'Plan only (read only)'], ['bypassPermissions', 'Skip approvals']];
@@ -27,7 +27,7 @@ export function CommandPalette({ open, onOpenChange, nav }: { open: boolean; onO
   const entries = useMemo<Entry[]>(() => {
     const L = view.launcher; const pick = L ? pickEngine(L) : undefined; const out: Entry[] = []; const toLocal = (): void => { void navigate({ to: '/local' as never }); };
     if (available) {
-      out.push({ id: 'new', group: 'Session', label: 'New session', hint: 'Ctrl+N', icon: Plus, run: () => { send({ t: 'close' }); toLocal(); } });
+      out.push({ id: 'new', group: 'Session', label: 'New session', hint: 'Ctrl+N', keywords: 'another project leave', icon: Plus, run: () => { send({ t: 'leave' }); toLocal(); } });
       if (view.opened) {
         out.push({ id: 'compact', group: 'Session', label: 'Compact the conversation', icon: Eraser, run: () => send({ t: 'compact' }) });
         if (view.state?.busy) out.push({ id: 'stop', group: 'Session', label: 'Stop the agent', keywords: 'interrupt', icon: Square, run: () => send({ t: 'interrupt' }) });
@@ -35,7 +35,8 @@ export function CommandPalette({ open, onOpenChange, nav }: { open: boolean; onO
         for (const [m, l] of MODES) out.push({ id: `mode-${m}`, group: 'Session', label: `Mode: ${l}${view.state?.settings?.permissionMode === m ? ' ✓' : ''}`, keywords: 'permission', icon: Shield, run: () => send({ t: 'setMode', mode: m as never }) });
         for (const s of (view.state?.sessions ?? []).filter((x) => x.id !== view.state?.sessionId).slice(0, 8)) out.push({ id: `s-${s.id}`, group: 'Sessions in this project', label: s.title || 'Untitled', hint: whenAgo(s.updatedAt), keywords: 'resume session', icon: History, run: () => { send({ t: 'open', dir: view.opened!, engine: pick?.engine ?? 'claude-code', demo: !!view.state?.demo, resume: s.id }); toLocal(); } });
       }
-      for (const r of (L?.recent ?? []).slice(0, 10)) out.push({ id: `p-${r.dir}`, group: 'Projects', label: baseName(r.dir), hint: shortPath(r.dir, L!.home), keywords: r.dir, icon: FolderGit2, run: () => { send({ t: 'open', dir: r.dir, engine: pick!.engine, demo: pick!.demo }); toLocal(); } });
+      for (const r of view.running.filter((x) => !isShown(x, view))) out.push({ id: `r-${r.dir}-${r.engine}-${r.demo}`, group: 'Running sessions', label: baseName(r.dir), hint: runningWord(r), keywords: `${r.dir} switch`, icon: FolderGit2, run: () => { send({ t: 'open', dir: r.dir, engine: r.engine, demo: r.demo }); toLocal(); } });
+      for (const r of (L?.recent ?? []).filter((x) => !view.running.some((y) => y.dir === x.dir)).slice(0, 10)) out.push({ id: `p-${r.dir}`, group: 'Projects', label: baseName(r.dir), hint: shortPath(r.dir, L!.home), keywords: r.dir, icon: FolderGit2, run: () => { send({ t: 'open', dir: r.dir, engine: pick!.engine, demo: pick!.demo }); toLocal(); } });
     }
     for (const n of nav) out.push({ id: `go-${n.id}`, group: 'Go to', label: t(n.labelKey as never), icon: ArrowRight, run: () => { void navigate({ to: n.to as never }); } });
     out.push({ id: 'dark', group: 'Appearance', label: 'Dark theme', icon: Moon, run: () => setTheme('dark') }, { id: 'light', group: 'Appearance', label: 'Light theme', icon: Sun, run: () => setTheme('light') }, { id: 'auto', group: 'Appearance', label: 'Follow the system', keywords: 'theme auto', icon: Monitor, run: () => setTheme('auto') });
