@@ -33,7 +33,10 @@ export function parseBlocks(src: string): Block[] {
 /** A small button that copies `text` and says "Copied" for a moment; where the clipboard is unavailable it does nothing. */
 export function CopyButton({ text, label, className = 'lc-copy cc-btn' }: { text: string; label: string; className?: string }): React.JSX.Element {
   const [done, setDone] = useState(false);
-  const copy = (): void => { void navigator.clipboard?.writeText(text).then(() => { setDone(true); setTimeout(() => setDone(false), 1500); }).catch(() => undefined); };
+  const ok = (): void => { setDone(true); setTimeout(() => setDone(false), 1500); };
+  /* the clipboard API first; where the window refuses it, the old way through a hidden text box (both need the click that called this) */
+  const fallback = (): void => { try { const t = document.createElement('textarea'); t.value = text; t.setAttribute('readonly', ''); t.className = 'cc-vh'; document.body.appendChild(t); t.select(); const done = document.execCommand('copy'); t.remove(); if (done) ok(); } catch { /* nothing more to try */ } };
+  const copy = (): void => { if (!navigator.clipboard) { fallback(); return; } navigator.clipboard.writeText(text).then(ok).catch(fallback); };
   return <button type="button" className={className} onClick={copy} aria-label={label}>{done ? 'Copied' : 'Copy'}</button>;
 }
 /** A code block with a copy button that shows on hover or focus. */
