@@ -17,7 +17,8 @@ export function appUrlToFile(u: string, root: string): string | undefined {
 }
 const MIME: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.woff': 'font/woff', '.wasm': 'application/wasm', '.txt': 'text/plain; charset=utf-8' };
 export const mimeFor = (file: string): string => MIME[file.slice(file.lastIndexOf('.')).toLowerCase()] ?? 'application/octet-stream';
-/** The only thing the page may ask the system for. Notifications for push; nothing else. */
-export const permissionAllowed = (permission: string, origin: string): boolean => permission === 'notifications' && isAppUrl(origin);
+/** What the page may ask the system for, and only from the app's own address: notifications (an approval waits, push) and writing plain text to the clipboard (the copy buttons; the browser only honours it on a click). Reading the clipboard and everything else stay refused. */
+const ALLOWED = new Set(['notifications', 'clipboard-sanitized-write']);
+export const permissionAllowed = (permission: string, origin: string): boolean => ALLOWED.has(permission) && isAppUrl(origin);
 /** The headers every response from the app address carries. */
 export const responseHeaders = (file: string): Record<string, string> => ({ 'content-type': mimeFor(file), 'content-security-policy': CSP, 'referrer-policy': 'no-referrer', 'x-content-type-options': 'nosniff', 'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()' });

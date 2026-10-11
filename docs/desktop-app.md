@@ -9,7 +9,7 @@ The Electron window around `apps/web` (see `apps/desktop/README.md` for how it i
   - **In this project**: saved conversations of the open folder (a click resumes one).
   - **Recent projects**: folders you used before that are not running.
   - The screens (Home, Workspaces, Billing, Settings) sit at the bottom.
-- **Chat.** Your messages are soft bubbles on the right, the agent's answer is plain text. Runs of tool calls are one row ("Ran 3 steps") that opens on click; it stays open while a step runs or after one fails. Code blocks have a Copy button. Mode, model and effort are in the message box.
+- **Chat.** Your messages are soft bubbles on the right, the agent's answer is plain text. Runs of tool calls are one row ("Ran 3 steps") that opens on click; it stays open while a step runs or after one fails. Code blocks have a Copy button, and a finished answer shows "Copy" under it on hover. Mode, model and effort are in the message box.
 - **Session panel** (windows wider than about 1180 px; the button in the header hides it): status and running time, step, file and failure counts, context use with tokens and cost, usage limits, the agent's plan, the people and agents in the session, and the files changed. A click on a file shows its diff.
 - **Home.** "What shall we work on?": pick Claude Code or Codex, write a task and press **Start** (it opens the chosen project and sends the task), or open a recent project or any folder.
 
@@ -19,6 +19,7 @@ The Electron window around `apps/web` (see `apps/desktop/README.md` for how it i
 | --- | --- |
 | Ctrl/Cmd+K | Search commands, running sessions, saved sessions, projects, screens and the theme |
 | Ctrl/Cmd+N | New session (the open one keeps running) |
+| Ctrl/Cmd+B | Hide or show the sidebar (the button in the top bar does the same) |
 | `/` in the message box | Lists the slash commands that make sense in the app; Up/Down, Tab or Enter pick one |
 | Enter | Send the message (Shift+Enter adds a line) |
 | Up and Down in the message box | Walk through earlier messages (on an empty box or at the start of one line) |

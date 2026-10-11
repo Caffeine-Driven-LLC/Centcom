@@ -1,6 +1,6 @@
 # Centcom desktop app
 
-An Electron window around the app in `apps/web`. The screens are served from the app's own `app://centcom` address with the same Content-Security-Policy as the hosted pages, the window has no Node in the page (sandbox, context isolation), new windows and outside links go to the system browser (https only), and the only permission the page can get is notifications.
+An Electron window around the app in `apps/web`. The screens are served from the app's own `app://centcom` address with the same Content-Security-Policy as the hosted pages, the window has no Node in the page (sandbox, context isolation), new windows and outside links go to the system browser (https only), and the only permissions the page can get are notifications and writing text to the clipboard (the copy buttons).
 
 - `pnpm app:smoke` loads the page without showing a window and prints what it found (address, title, that the bridge is there, that the screen drew, that the page has no Node); it needs Electron's binary.
 - `pnpm app` builds the screens (`apps/web/dist`) and the main process (`apps/desktop/dist`), then starts Electron. `pnpm app:dev` skips the screens build.
