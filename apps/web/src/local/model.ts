@@ -37,3 +37,8 @@ export function pickEngine(l: Launcher): { engine: 'claude-code' | 'codex'; demo
   if (!l.codex.installed) return { engine: 'claude-code', demo: false };
   return { engine: l.prefs.engine, demo: false };
 }
+
+/** "just now", "5 min ago", "3 h ago", "2 days ago" for the recent list. */
+export function whenAgo(at: number, now = Date.now()): string {
+  const m = Math.max(0, Math.round((now - at) / 60000)); if (m < 1) return 'just now'; if (m < 60) return `${m} min ago`; const h = Math.round(m / 60); if (h < 24) return `${h} h ago`; const d = Math.round(h / 24); return `${d} day${d === 1 ? '' : 's'} ago`;
+}

@@ -1,0 +1,22 @@
+/* shadcn/ui-style components in plain CSS (no Tailwind: its build tooling carries an unpatched advisory).
+   Colours, radii and spacing come from the app's own tokens, so dark, light and the desktop palette all apply. */
+.sc-btn { display: inline-flex; flex: none; align-items: center; justify-content: center; gap: 8px; border: 1px solid transparent; border-radius: var(--r-md, 12px); background: transparent; color: var(--text-primary); font: 500 14px/20px var(--font-sans); white-space: nowrap; cursor: pointer; transition: background var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard); }
+.sc-btn svg { width: 16px; height: 16px; flex: none; pointer-events: none; }
+.sc-btn:disabled { opacity: 0.5; pointer-events: none; }
+.sc-btn--md { height: 36px; padding: 0 16px; } .sc-btn--sm { height: 32px; padding: 0 12px; font-size: 12px; } .sc-btn--lg { height: 44px; padding: 0 24px; font-size: 16px; } .sc-btn--icon { width: 36px; height: 36px; padding: 0; }
+.sc-btn--default { background: var(--accent-fill); color: var(--accent-on); } .sc-btn--default:hover { background: var(--accent-active); }
+.sc-btn--destructive { background: var(--status-danger-subtle); color: var(--status-danger); } .sc-btn--destructive:hover { border-color: var(--status-danger); }
+.sc-btn--outline { background: var(--bg-surface); border-color: var(--border-default); } .sc-btn--outline:hover { background: var(--bg-hover); }
+.sc-btn--secondary { background: var(--bg-selected); } .sc-btn--secondary:hover { background: var(--bg-hover); border-color: var(--border-default); }
+.sc-btn--ghost { color: var(--text-muted); } .sc-btn--ghost:hover { background: var(--bg-hover); color: var(--text-primary); }
+.sc-btn--link { color: var(--accent-primary); } .sc-btn--link:hover { text-decoration: underline; }
+.sc-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 999px; font: 500 12px/16px var(--font-sans); white-space: nowrap; }
+.sc-badge--default { background: var(--bg-selected); color: var(--text-primary); } .sc-badge--outline { border: 1px solid var(--border-default); color: var(--text-muted); }
+.sc-badge--primary { background: var(--accent-subtle); color: var(--accent-primary); } .sc-badge--success { background: var(--status-success-subtle); color: var(--status-success); }
+.sc-badge--warning { background: var(--status-warning-subtle); color: var(--status-warning); } .sc-badge--destructive { background: var(--status-danger-subtle); color: var(--status-danger); }
+.sc-avatar { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; font: 600 12px/1 var(--font-sans); color: var(--bg-surface); background: var(--presence-violet); }
+.sc-avatar[data-colour="0"] { background: var(--presence-violet); color: var(--accent-on); } .sc-avatar[data-colour="1"] { background: var(--presence-red); color: var(--accent-on); }
+.sc-avatar[data-colour="2"] { background: var(--presence-yellow); color: var(--ink-900); } .sc-avatar[data-colour="3"] { background: var(--presence-green); color: var(--ink-900); } .sc-avatar[data-colour="4"] { background: var(--presence-brown); color: var(--accent-on); }
+.sc-overlay { position: fixed; inset: 0; z-index: 50; background: color-mix(in srgb, var(--bg-sunken) 60%, transparent); backdrop-filter: blur(2px); }
+.sc-dialog { position: absolute; top: 16%; left: 50%; width: min(640px, calc(100vw - 32px)); transform: translateX(-50%); overflow: hidden; background: var(--bg-overlay); color: var(--text-primary); border: 1px solid var(--border-default); border-radius: 18px; box-shadow: 0 24px 64px rgb(0 0 0 / 0.3); }
+@media (prefers-reduced-motion: reduce) { .sc-btn { transition: none; } }
