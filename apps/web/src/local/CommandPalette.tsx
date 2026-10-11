@@ -26,7 +26,7 @@ export function CommandPalette({ open, onOpenChange, nav }: { open: boolean; onO
   const entries = useMemo<Entry[]>(() => {
     const L = view.launcher; const pick = L ? pickEngine(L) : undefined; const out: Entry[] = []; const toLocal = (): void => { void navigate({ to: '/local' as never }); };
     if (available) {
-      out.push({ id: 'new', group: 'Session', label: 'New session', icon: Plus, run: () => { send({ t: 'close' }); toLocal(); } });
+      out.push({ id: 'new', group: 'Session', label: 'New session', hint: 'Ctrl+N', icon: Plus, run: () => { send({ t: 'close' }); toLocal(); } });
       if (view.opened) {
         out.push({ id: 'compact', group: 'Session', label: 'Compact the conversation', icon: Eraser, run: () => send({ t: 'compact' }) });
         if (view.state?.busy) out.push({ id: 'stop', group: 'Session', label: 'Stop the agent', keywords: 'interrupt', icon: Square, run: () => send({ t: 'interrupt' }) });

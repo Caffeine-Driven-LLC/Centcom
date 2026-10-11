@@ -15,15 +15,17 @@ export function StatusDot({ view }: { view: LocalView }): React.JSX.Element {
 }
 
 /** The sidebar of the desktop app: new session, the live session, this folder's saved sessions and the recent projects. */
-export function SessionSidebar({ onNavigate, onSearch }: { onNavigate(): void; onSearch(): void }): React.JSX.Element | null {
+export function SessionSidebar({ onNavigate, onSearch, newSession }: { onNavigate(): void; onSearch(): void; /** Filled with the "new session" action, so Ctrl+N can call it. */ newSession?: React.MutableRefObject<(() => void) | null> }): React.JSX.Element | null {
   const { view, send, available } = useLocal(); const navigate = useNavigate(); const L = view.launcher;
+  const fresh = (): void => { send({ t: 'close' }); onNavigate(); void navigate({ to: '/local' as never }); };
+  React.useEffect(() => { if (!newSession) return; newSession.current = available ? fresh : null; return () => { newSession.current = null; }; }); // eslint-disable-line react-hooks/exhaustive-deps
   if (!available || !L) return null;
   const go = (m: ClientMsg): void => { send(m); onNavigate(); void navigate({ to: '/local' as never }); };
   const pick = pickEngine(L); const saved = (view.state?.sessions ?? []).filter((s) => s.id !== view.state?.sessionId).slice(0, 5);
   const others = L.recent.filter((r) => r.dir !== view.opened).slice(0, 6); const row = 'flex w-full border-0 bg-transparent [font:inherit] min-w-0 cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground';
   return <div className="flex flex-col gap-1">
     <div className="flex gap-1.5">
-      <button type="button" className="flex h-9 flex-1 cursor-pointer items-center gap-2 rounded-md border border-input bg-card px-3 text-sm font-medium text-foreground hover:bg-accent" onClick={() => go({ t: 'close' })}><Plus className="size-4" aria-hidden="true" />New session</button>
+      <button type="button" className="flex h-9 flex-1 cursor-pointer items-center gap-2 rounded-md border border-input bg-card px-3 text-sm font-medium text-foreground hover:bg-accent" onClick={fresh} title="New session (Ctrl+N)"><Plus className="size-4" aria-hidden="true" />New session</button>
       <button type="button" aria-label="Search and commands (Ctrl+K)" title="Search and commands (Ctrl+K)" className="flex size-9 cursor-pointer items-center justify-center rounded-md border border-input bg-card text-muted-foreground hover:bg-accent hover:text-foreground" onClick={onSearch}><Search className="size-4" aria-hidden="true" /></button>
     </div>
     {view.opened ? <>

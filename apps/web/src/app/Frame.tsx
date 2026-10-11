@@ -17,8 +17,8 @@ export const useShell = (): React.ContextType<typeof ShellCtx> => useContext(She
 /** 48 px top bar, 240 px left rail (a drawer under 1024), 320 px inspector (a bottom sheet under 768). */
 export function Frame({ children }: { children: React.ReactNode }): React.JSX.Element {
   const n = React.useSyncExternalStore((f) => unread.subscribe(f), () => unread.count, () => 0);
-  const { nav, connectivity, inspector } = useShell(); const [rail, setRail] = useState(false); const [insp, setInsp] = useState(false); const [pal, setPal] = useState(false); useAttentionTitle(); useApprovalNotice();
-  React.useEffect(() => { const k = (e: KeyboardEvent): void => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setPal((v) => !v); } }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k); }, []);
+  const { nav, connectivity, inspector } = useShell(); const [rail, setRail] = useState(false); const [insp, setInsp] = useState(false); const [pal, setPal] = useState(false); const newSession = React.useRef<(() => void) | null>(null); useAttentionTitle(); useApprovalNotice();
+  React.useEffect(() => { const k = (e: KeyboardEvent): void => { if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return; const key = e.key.toLowerCase(); if (key === 'k') { e.preventDefault(); setPal((v) => !v); } else if (key === 'n' && newSession.current) { e.preventDefault(); newSession.current(); } }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k); }, []);
   const { theme, set } = useTheme();
   return (
     <ShortcutHost><div className="cc-frame"><CommandPalette open={pal} onOpenChange={setPal} nav={nav} /><SkipLink />
@@ -27,7 +27,7 @@ export function Frame({ children }: { children: React.ReactNode }): React.JSX.El
         {inspector ? <button type="button" className="cc-btn cc-btn--ghost" aria-expanded={insp} aria-controls="cc-inspector" onClick={() => setInsp((v) => !v)}>{t('nav.details')}</button> : null}</header>
       {connectivity === 'offline' ? <Banner tone="info" title={t('net.unavailable')}>{t('net.unavailable.hint')}</Banner> : connectivity === 'degraded' ? <Banner tone="warning" title={t('net.degraded')}>{t('net.degraded.hint')}</Banner> : null}
       <div className="cc-body">
-        <nav id="cc-rail" className="cc-rail" data-open={rail} aria-label={t('nav.label')}><Link to={'/' as never} className="cc-rail__brand" onClick={() => setRail(false)}><CentoMark size={28} /><strong>Centcom</strong></Link><SessionSidebar onNavigate={() => setRail(false)} onSearch={() => setPal(true)} /><div className="cc-rail__nav">{nav.map((n) => <Link key={n.id} to={n.to} className="cc-rail__link" onClick={() => setRail(false)}><PixelIcon name={n.icon} />{t(n.labelKey as never)}</Link>)}</div></nav>
+        <nav id="cc-rail" className="cc-rail" data-open={rail} aria-label={t('nav.label')}><Link to={'/' as never} className="cc-rail__brand" onClick={() => setRail(false)}><CentoMark size={28} /><strong>Centcom</strong></Link><SessionSidebar onNavigate={() => setRail(false)} onSearch={() => setPal(true)} newSession={newSession} /><div className="cc-rail__nav">{nav.map((n) => <Link key={n.id} to={n.to} className="cc-rail__link" onClick={() => setRail(false)}><PixelIcon name={n.icon} />{t(n.labelKey as never)}</Link>)}</div></nav>
         <main id="main" className="cc-main">{children}</main>
         {inspector ? <aside id="cc-inspector" className="cc-inspector" data-open={insp} aria-label={t('nav.details')}>{inspector}</aside> : null}
       </div>

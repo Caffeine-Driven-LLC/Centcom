@@ -63,6 +63,14 @@ describe('the sidebar', () => {
     fireEvent.click(screen.getByText('New session')); expect(sent.at(-1)).toEqual({ t: 'close' });
   });
 });
+describe('Ctrl+N', () => {
+  it('the sidebar hands the frame a new-session action that closes the project', async () => {
+    const ref: React.MutableRefObject<(() => void) | null> = { current: null };
+    const { sent, push } = await mount(<SessionSidebar onNavigate={() => undefined} onSearch={() => undefined} newSession={ref} />);
+    await push(launcher); await waitFor(() => expect(ref.current).not.toBeNull());
+    await act(async () => { ref.current!(); }); expect(sent.at(-1)).toEqual({ t: 'close' });
+  });
+});
 describe('the session panel', () => {
   const view = (o: Record<string, unknown> = {}, items: unknown[] = []) => ({ ...emptyView(), opened: '/h/p', items, state: state(o) }) as never;
   const edit = { kind: 'tool', id: 'e', toolId: 'e', agentId: 'a', name: 'Edit', summary: '', risk: 'low', status: 'ok', startedAt: 0, path: '/h/p/src/a.ts', diff: '@@ -1,1 +1,1 @@\n-old line\n+new line' };
