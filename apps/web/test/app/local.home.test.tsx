@@ -58,3 +58,39 @@ describe('attention across sessions', () => {
   });
   it('is quiet when nothing runs', () => { expect(attention({ running: [], state: undefined })).toEqual({ waiting: 0, busy: false, dir: undefined, ask: undefined }); });
 });
+describe('the rail order', () => {
+  it('puts working areas first, account areas last, and drops the duplicate local link inside the desktop app', async () => {
+    const { orderNav } = await import('../../src/app/Frame.js');
+    const n = (id: string) => ({ id, labelKey: id, to: `/${id}`, icon: 'x' });
+    const all = ['billing', 'home', 'local', 'settings', 'workspaces', 'zzz', 'aaa'].map(n);
+    expect(orderNav(all, false).map((x) => x.id)).toEqual(['home', 'local', 'workspaces', 'billing', 'settings', 'aaa', 'zzz']);
+    expect(orderNav(all, true).map((x) => x.id)).toEqual(['home', 'workspaces', 'billing', 'settings', 'aaa', 'zzz']);
+  });
+});
+describe('the session panel switch', () => {
+  it('starts as the saved setting says and saves a change', async () => {
+    const sent: { t: string; [k: string]: unknown }[] = []; let push: (m: unknown) => void = () => undefined;
+    (window as { centcom?: unknown }).centcom = { desktop: true, local: { send: (m: { t: string }) => sent.push(m), onMessage: (cb: (m: unknown) => void) => { push = cb; return () => undefined; } } };
+    render(<LocalPage />); await act(async () => push({ ...launcher, prefs: { ...launcher.prefs, side: false } }));
+    await act(async () => push({ t: 'opened', dir: '/h/p', history: [] }));
+    await act(async () => push({ t: 'state', state: { busy: false, approvals: [], agents: [], tasks: [], limits: [], sessions: [], settings: {} }, changed: [], order: [] }));
+    expect(screen.queryByLabelText('Session details', { selector: 'aside' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Session details' })); expect(sent.at(-1)).toEqual({ t: 'pref', side: true }); expect(screen.getByLabelText('Session details', { selector: 'aside' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Session details' })); expect(sent.at(-1)).toEqual({ t: 'pref', side: false });
+  });
+});
+describe('Enter sends', () => {
+  it('Enter sends the message, Shift+Enter does not, and the home task starts on Enter', async () => {
+    const sent: { t: string; [k: string]: unknown }[] = []; let push: (m: unknown) => void = () => undefined;
+    (window as { centcom?: unknown }).centcom = { desktop: true, local: { send: (m: { t: string }) => sent.push(m), onMessage: (cb: (m: unknown) => void) => { push = cb; return () => undefined; } } };
+    render(<LocalPage />); await act(async () => push(launcher));
+    fireEvent.change(screen.getByLabelText('What should the agent do?'), { target: { value: 'fix it' } });
+    fireEvent.keyDown(screen.getByLabelText('What should the agent do?'), { key: 'Enter', shiftKey: true }); expect(sent.some((m) => m.t === 'open')).toBe(false);
+    fireEvent.keyDown(screen.getByLabelText('What should the agent do?'), { key: 'Enter' }); expect(sent.at(-1)).toMatchObject({ t: 'open', dir: '/h/p' });
+    await act(async () => push({ t: 'opened', dir: '/h/p', history: [] }));
+    await act(async () => push({ t: 'state', state: { busy: false, approvals: [], agents: [], tasks: [], limits: [], sessions: [], settings: {} }, changed: [], order: [] }));
+    fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'next' } });
+    fireEvent.keyDown(screen.getByLabelText('Message'), { key: 'Enter', shiftKey: true }); expect(sent.filter((m) => m.text === 'next')).toEqual([]);
+    fireEvent.keyDown(screen.getByLabelText('Message'), { key: 'Enter' }); expect(sent.at(-1)).toEqual({ t: 'submit', text: 'next' });
+  });
+});

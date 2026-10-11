@@ -54,7 +54,7 @@ function Picker({ view, send, start }: { view: LocalView; send: Send; start(dir:
     </section>
     {L.recent.length ? <section className="lc-start" aria-label="Start with a task">
       <label className="cc-vh" htmlFor="lc-task">What should the agent do?</label>
-      <textarea id="lc-task" value={task} placeholder="Describe a task and press Ctrl+Enter to start…" onChange={(e) => setTask(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && task.trim() && taskDir) { e.preventDefault(); start(taskDir, task.trim(), demo, engine); } }} />
+      <textarea id="lc-task" value={task} placeholder="Describe a task and press Enter to start…" onChange={(e) => setTask(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); if (task.trim() && taskDir) start(taskDir, task.trim(), demo, engine); } }} />
       <div className="lc-start__bar"><span>in</span><label className="lc-sel"><span className="cc-vh">Project</span><select aria-label="Project" value={taskDir} onChange={(e) => setTaskDir(e.target.value)}>{L.recent.map((r) => <option key={r.dir} value={r.dir}>{baseName(r.dir)}</option>)}</select></label><span className="lc-grow" />
         <SButton size="sm" disabled={!task.trim() || !taskDir} onClick={() => start(taskDir, task.trim(), demo, engine)}><ArrowUp />Start</SButton></div>
     </section> : null}
@@ -115,7 +115,7 @@ function approvalTitle(tool: string): string { return tool === 'Bash' ? 'Allow C
 const MODES: [string, string][] = [['default', 'Ask first'], ['acceptEdits', 'Accept edits'], ['plan', 'Plan (read only)'], ['bypassPermissions', 'Skip approvals']];
 
 function Workspace({ view, send }: { view: LocalView; send: Send }): React.JSX.Element {
-  const [text, setText] = useState(''); const [effort, setEffort] = useState(''); const [slashSel, setSlashSel] = useState(0); const slash = slashMatches(COMMANDS, text); const slashAt = Math.min(slashSel, Math.max(0, slash.length - 1)); const [panel, setPanel] = useState(true); const togglePanel = (): void => setPanel((v) => !v); const s = view.state; const model = view.models.find((x) => x.id === s?.settings?.model) ?? view.models.find((x) => x.isDefault);
+  const [text, setText] = useState(''); const [effort, setEffort] = useState(''); const [slashSel, setSlashSel] = useState(0); const slash = slashMatches(COMMANDS, text); const slashAt = Math.min(slashSel, Math.max(0, slash.length - 1)); const [panel, setPanel] = useState(view.launcher?.prefs.side ?? true); const togglePanel = (): void => { send({ t: 'pref', side: !panel }); setPanel(!panel); }; /* remembered in the settings file (client.side_panel) */ const s = view.state; const model = view.models.find((x) => x.id === s?.settings?.model) ?? view.models.find((x) => x.isDefault);
   useEffect(() => { send({ t: 'models' }); }, [send, view.opened]); const approval = s?.approvals[0];
   const submit = (): void => { const t = text.trim(); if (!t) return; send({ t: 'submit', text: t }); setText(''); };
   const log = useRef<HTMLDivElement>(null); const stick = useRef(true); const box = useRef<HTMLTextAreaElement>(null);
@@ -145,16 +145,16 @@ function Workspace({ view, send }: { view: LocalView; send: Send }): React.JSX.E
     <div className="lc-composer-box">
       {slash.length ? <ul className="lc-slash" role="listbox" aria-label="Commands">{slash.map((c, i) => <li key={c.name} role="option" aria-selected={i === slashAt} className="lc-slash__item" onMouseDown={(e) => { e.preventDefault(); setText(`/${c.name} `); box.current?.focus(); }} onMouseMove={() => setSlashSel(i)}><strong>/{c.name}</strong>{c.args ? <span className="lc-slash__args">{c.args}</span> : null}<span className="lc-slash__desc">{c.desc}</span></li>)}</ul> : null}
       <label className="cc-vh" htmlFor="lc-composer">Message</label>
-      <textarea id="lc-composer" ref={box} className="lc-composer" rows={2} value={text} placeholder="Ask the agent… (Ctrl+Enter sends)" onChange={(e) => setText(e.target.value)} onKeyDown={(e) => {
+      <textarea id="lc-composer" ref={box} className="lc-composer" rows={2} value={text} placeholder="Ask the agent…  (Enter sends, Shift+Enter adds a line)" onChange={(e) => setText(e.target.value)} onKeyDown={(e) => {
           if (slash.length && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); setSlashSel((slashAt + (e.key === 'ArrowDown' ? 1 : slash.length - 1)) % slash.length); return; }
           if (slash.length && (e.key === 'Tab' || (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.shiftKey))) { e.preventDefault(); setText(`/${slash[slashAt]!.name} `); setSlashSel(0); return; }
           if (slash.length && e.key === 'Escape') { e.preventDefault(); setText(''); return; }
-          if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); submit(); } }} />
+          if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); } }} />
       <div className="lc-composer-bar">
       <label className="lc-sel"><span>Mode</span><select aria-label="Mode" value={s?.settings?.permissionMode ?? 'default'} onChange={(e) => send({ t: 'setMode', mode: e.target.value as never })}>{MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
       {view.models.length ? <label className="lc-sel"><span>Model</span><select aria-label="Model" value={s?.settings?.model ?? ''} onChange={(e) => send({ t: 'setModel', id: e.target.value })}><option value="">Default</option>{view.models.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select></label> : null}
       {model?.efforts?.length ? <label className="lc-sel"><span>Effort</span><select aria-label="Effort" value={effort} onChange={(e) => { setEffort(e.target.value); send({ t: 'setEffort', effort: e.target.value }); }}><option value="">Default ({model.defaultEffort ?? 'auto'})</option>{model.efforts.map((x) => <option key={x} value={x}>{x}</option>)}</select></label> : null}
-<span className="lc-hint">Ctrl+Enter to send</span><span className="lc-grow" /><SButton variant="outline" size="sm" disabled={!busy} onClick={() => send({ t: 'interrupt' })}><StopIcon />Stop</SButton><SButton size="sm" variant={approval ? 'secondary' : 'default'} disabled={!text.trim()} onClick={submit}><ArrowUp />Send</SButton></div>
+<span className="lc-hint">Enter to send</span><span className="lc-grow" /><SButton variant="outline" size="sm" disabled={!busy} onClick={() => send({ t: 'interrupt' })}><StopIcon />Stop</SButton><SButton size="sm" variant={approval ? 'secondary' : 'default'} disabled={!text.trim()} onClick={submit}><ArrowUp />Send</SButton></div>
     </div>
   </div>
   {panel ? <SessionPanel view={view} /> : null}

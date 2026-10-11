@@ -207,3 +207,8 @@
   .lc-wshead__title h2, .lc-wshead__path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .lc-wshead__chips { flex: 0 0 auto; overflow: visible; }
 }
+:root {
+  .lc-start .lc-sel select, .lc-sel select { border-radius: var(--r-md); }
+  .lc-start .lc-sel select { min-height: 30px; background-color: transparent; border-color: transparent; color: var(--text-secondary); }
+  .lc-start .lc-sel select:hover { background-color: var(--bg-hover); color: var(--text-primary); }
+}
