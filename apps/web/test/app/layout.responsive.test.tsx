@@ -34,4 +34,14 @@ describe('offline inside the desktop app', () => {
     delete (window as { centcom?: unknown }).centcom;
   });
 });
+describe('folding the sidebar', () => {
+  it('Ctrl+B and the button hide and show it', async () => {
+    const found = { './home/routes.tsx': { routeModule: { routes: [createRoute({ getParentRoute: () => rootRoute, path: '/', component: () => <p>home page</p> })], nav: [{ id: 'home', labelKey: 'nav.home', to: '/', icon: 'home' }] } } };
+    window.scrollTo = () => undefined;
+    const { router, nav } = buildRouter(found, createMemoryHistory({ initialEntries: ['/'] })); render(<ShellCtx.Provider value={{ nav, connectivity: 'online', inspector: null }}><RouterProvider router={router} /></ShellCtx.Provider>);
+    await screen.findByText('home page'); const frame = document.querySelector('.cc-frame') as HTMLElement; expect(frame.dataset.folded).toBe('false');
+    fireEvent.keyDown(window, { key: 'b', ctrlKey: true }); expect(frame.dataset.folded).toBe('true'); expect(screen.getByLabelText('Show the sidebar (Ctrl+B)')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Show the sidebar (Ctrl+B)')); expect(frame.dataset.folded).toBe('false');
+  });
+});
 void Frame;

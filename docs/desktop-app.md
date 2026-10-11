@@ -19,6 +19,7 @@ The Electron window around `apps/web` (see `apps/desktop/README.md` for how it i
 | --- | --- |
 | Ctrl/Cmd+K | Search commands, running sessions, saved sessions, projects, screens and the theme |
 | Ctrl/Cmd+N | New session (the open one keeps running) |
+| Ctrl/Cmd+B | Hide or show the sidebar (the button in the top bar does the same) |
 | `/` in the message box | Lists the slash commands that make sense in the app; Up/Down, Tab or Enter pick one |
 | Enter | Send the message (Shift+Enter adds a line) |
 | Up and Down in the message box | Walk through earlier messages (on an empty box or at the start of one line) |
