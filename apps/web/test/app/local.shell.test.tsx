@@ -74,6 +74,7 @@ describe('running sessions', () => {
     await push(launcher); await push({ t: 'opened', dir: '/h/p', history: [] }); await push({ t: 'state', state: state(), changed: [], order: [] });
     await push({ t: 'running', sessions: [{ dir: '/h/p', engine: 'claude-code', demo: false, busy: false, waiting: 0 }, { dir: '/h/q', engine: 'codex', demo: false, busy: false, waiting: 1, ask: 'run ls' }] });
     expect(screen.getByText('needs you')).toBeTruthy(); expect(screen.getAllByText('ready').length).toBeGreaterThan(0);
+    expect(screen.getByText('needs you').closest('button')!.title).toContain('Waiting for you: run ls');
     fireEvent.click(screen.getByText('needs you')); expect(sent.at(-1)).toEqual({ t: 'open', dir: '/h/q', engine: 'codex', demo: false });
   });
   it('the palette offers the other running sessions', async () => {
