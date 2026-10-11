@@ -62,3 +62,12 @@
 .ps-more { padding: 0 6px; color: var(--text-muted); font-size: 12px; }
 .ps-diff { display: flex; flex-direction: column; gap: 8px; } .ps-diff__path { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-primary); font: 12px var(--font-mono); }
 .ps-add { color: var(--status-success); } .ps-del { color: var(--status-danger); }
+
+.ps-note-row { display: flex; flex-direction: column; gap: 4px; }
+.ps-note-row__head { display: flex; align-items: center; gap: 6px; }
+.ps-note-row__by { color: var(--text-muted); font-size: 12px; }
+.ps-note-row__acts { margin-left: auto; display: inline-flex; gap: 2px; }
+.ps-note-row__text { color: var(--text-primary); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+.ps-icon { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--text-muted); cursor: pointer; }
+.ps-icon:hover { background: var(--bg-hover); color: var(--text-primary); } .ps-icon[aria-pressed="true"] { color: var(--accent-primary); } .ps-icon svg { width: 14px; height: 14px; }
+.ps-addnote { display: grid; grid-template-columns: 1fr auto; gap: 6px; } .ps-addnote .cc-input:first-of-type { grid-column: 1 / -1; }

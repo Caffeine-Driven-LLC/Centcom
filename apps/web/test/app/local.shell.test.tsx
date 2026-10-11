@@ -79,6 +79,23 @@ describe('running sessions', () => {
     expect(sent.at(-1)).toEqual({ t: 'open', dir: '/h/q', engine: 'codex', demo: false });
   });
 });
+describe('shared notes', () => {
+  const note = (o: Record<string, unknown> = {}) => ({ id: 'n1', type: 'warning', text: 'The CI cache is stale', author: 'Agent 2', person: false, pinned: false, ts: 1, files: [], ...o });
+  const withBoard = (enabled: boolean, notes: unknown[]) => ({ ...emptyView(), opened: '/h/p', state: state(), board: { enabled, notes } }) as never;
+  it('is not shown when the board is off', () => { render(<SessionPanel view={withBoard(false, [])} send={() => undefined} />); expect(screen.queryByText('Shared notes')).toBeNull(); });
+  it('lists the notes with who wrote them; pin and remove send the right messages', () => {
+    const sent: unknown[] = []; render(<SessionPanel view={withBoard(true, [note(), note({ id: 'n2', type: 'decision', text: 'Use pnpm', author: 'you', person: true, pinned: true })])} send={(m) => sent.push(m)} />);
+    expect(screen.getByText('The CI cache is stale')).toBeTruthy(); expect(screen.getByText('Agent 2')).toBeTruthy(); expect(screen.getByText('Use pnpm')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Pin: The CI cache is stale')); fireEvent.click(screen.getByLabelText('Unpin: Use pnpm')); fireEvent.click(screen.getByLabelText('Remove: Use pnpm'));
+    expect(sent).toEqual([{ t: 'notePin', id: 'n1', pinned: true }, { t: 'notePin', id: 'n2', pinned: false }, { t: 'noteRemove', id: 'n2' }]);
+  });
+  it('adds a note of the chosen kind and clears the box', () => {
+    const sent: unknown[] = []; render(<SessionPanel view={withBoard(true, [])} send={(m) => sent.push(m)} />);
+    expect(screen.getByText(/Nothing yet/)).toBeTruthy(); expect((screen.getByRole('button', { name: 'Add' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('Note for every agent'), { target: { value: '  Do not touch src/legacy ' } }); fireEvent.change(screen.getByLabelText('Kind of note'), { target: { value: 'warning' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' })); expect(sent).toEqual([{ t: 'note', type: 'warning', text: 'Do not touch src/legacy' }]); expect((screen.getByLabelText('Note for every agent') as HTMLInputElement).value).toBe('');
+  });
+});
 describe('Ctrl+N', () => {
   it('the sidebar hands the frame a new-session action that leaves the project (its agent keeps running)', async () => {
     const ref: React.MutableRefObject<(() => void) | null> = { current: null };

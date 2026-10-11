@@ -116,7 +116,7 @@ const MODES: [string, string][] = [['default', 'Ask first'], ['acceptEdits', 'Ac
 
 function Workspace({ view, send }: { view: LocalView; send: Send }): React.JSX.Element {
   const [text, setText] = useState(''); const [effort, setEffort] = useState(''); const [slashSel, setSlashSel] = useState(0); const slash = slashMatches(COMMANDS, text); const slashAt = Math.min(slashSel, Math.max(0, slash.length - 1)); const [panel, setPanel] = useState(view.launcher?.prefs.side ?? true); const togglePanel = (): void => { send({ t: 'pref', side: !panel }); setPanel(!panel); }; /* remembered in the settings file (client.side_panel) */ const s = view.state; const model = view.models.find((x) => x.id === s?.settings?.model) ?? view.models.find((x) => x.isDefault);
-  useEffect(() => { send({ t: 'models' }); }, [send, view.opened]); const approval = s?.approvals[0];
+  useEffect(() => { send({ t: 'models' }); send({ t: 'board' }); }, [send, view.opened]); const approval = s?.approvals[0];
   const submit = (): void => { const t = text.trim(); if (!t) return; send({ t: 'submit', text: t }); setText(''); };
   const log = useRef<HTMLDivElement>(null); const stick = useRef(true); const box = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { const el = log.current; if (el && stick.current) el.scrollTop = el.scrollHeight; }, [view.items, approval]);
@@ -157,7 +157,7 @@ function Workspace({ view, send }: { view: LocalView; send: Send }): React.JSX.E
 <span className="lc-hint">Enter to send</span><span className="lc-grow" /><SButton variant="outline" size="sm" disabled={!busy} onClick={() => send({ t: 'interrupt' })}><StopIcon />Stop</SButton><SButton size="sm" variant={approval ? 'secondary' : 'default'} disabled={!text.trim()} onClick={submit}><ArrowUp />Send</SButton></div>
     </div>
   </div>
-  {panel ? <SessionPanel view={view} /> : null}
+  {panel ? <SessionPanel view={view} send={send} /> : null}
   </div>;
 }
 

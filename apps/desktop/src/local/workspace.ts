@@ -1,20 +1,21 @@
 import { execFileSync } from 'node:child_process';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { ClaudeCodeEngine, CodexEngine, DemoEngine, newId, type AgentEngine } from '@centcom/agent';
+import { ClaudeCodeEngine, CodexEngine, DemoEngine, newId, type AgentEngine, type Board } from '@centcom/agent';
 import { appLogger } from './logger.js';
 import { AppController, ClientConfig, SessionStore, buildRuntime, initialSettings, settingsFromConfig, type Item } from '@centcom/tui';
-import type { RunningSession, ServerMsg, WebState } from './protocol.js';
+import type { BoardNote, RunningSession, ServerMsg, WebState } from './protocol.js';
 
 /** One running agent session for one directory, shared by every browser tab or app window that opens it. */
 export class Workspace {
   readonly ctl: AppController;
   private clients = new Set<(m: ServerMsg) => void>();
   private sent = new Map<string, string>();
+  private lastBoard = '';
   private unsub: () => void;
   private listeners = new Set<() => void>();
 
-  private constructor(readonly dir: string, ctl: AppController, private cc: ClientConfig, readonly which: 'claude-code' | 'codex', readonly demo: boolean) {
+  private constructor(readonly dir: string, ctl: AppController, private cc: ClientConfig, readonly which: 'claude-code' | 'codex', readonly demo: boolean, private board?: Board) {
     this.ctl = ctl;
     this.unsub = ctl.store.subscribe(() => this.push());
   }
@@ -28,7 +29,7 @@ export class Workspace {
     const logger = appLogger(cc.cfg.log).child({ component: 'web', session_id: newId('ses') }); // one shared file sink for the whole server, one binding per workspace
     const rt = await buildRuntime({ cwd: dir, engineId: engine.id, demo, dangerous: settings.permissionMode === 'bypassPermissions' });
     const ctl = new AppController({ ...rt.options, logger, engine, demo, cwd: dir, branch, version: '0.1.0', ghosts: false, permissionMode: settings.permissionMode, settings, ...cc.options({ ...initialSettings(), ...settings }, { saveHistory: !demo }), night: demo ? undefined : { dir: join(homedir(), '.centcom', 'night') }, sessions: demo ? undefined : new SessionStore(), resume: demo ? undefined : resume });
-    const ws = new Workspace(dir, ctl, cc, which, demo);
+    const ws = new Workspace(dir, ctl, cc, which, demo, rt.options.board);
     rt.bind(ctl);
     await ctl.start();
     for (const w of rt.warnings) ctl.notice('warn', w);
@@ -38,7 +39,7 @@ export class Workspace {
   }
 
   join(send: (m: ServerMsg) => void): () => void {
-    this.clients.add(send); this.sent.clear(); this.push(); // a new client needs everything again
+    this.clients.add(send); this.sent.clear(); this.lastBoard = ''; this.push(); // a new client needs everything again
     return () => { this.clients.delete(send); };
   }
 
@@ -55,6 +56,14 @@ export class Workspace {
   /** Called after every change of the session, even when no window shows it. Returns how to stop. */
   onChange(f: () => void): () => void { this.listeners.add(f); return () => { this.listeners.delete(f); }; }
 
+  /** The context board as the screen shows it: newest first, at most 30. */
+  notes(): { enabled: boolean; notes: BoardNote[] } {
+    if (!this.board) return { enabled: false, notes: [] };
+    return { enabled: true, notes: this.board.list().slice(-30).reverse().map((e) => ({ id: e.id, type: e.type, text: e.text, author: e.author.name, person: e.author.kind === 'person', pinned: e.pinned, ts: e.ts, files: e.refs.files.slice(0, 5) })) };
+  }
+  pinNote(id: string, pinned: boolean): void { this.board?.pin(id, pinned); this.lastBoard = ''; this.push(); }
+  removeNote(id: string): void { this.board?.retract(id); this.lastBoard = ''; this.push(); }
+
   /** What the session list needs to know about this one. */
   status(): RunningSession {
     const a = this.ctl.state.approvals;
@@ -69,6 +78,7 @@ export class Workspace {
     for (const it of items) { const j = JSON.stringify(it); if (this.sent.get(it.id) !== j) { this.sent.set(it.id, j); changed.push(it); } }
     const msg: ServerMsg = { t: 'state', state, changed, order: items.map((i) => i.id) };
     for (const c of this.clients) c(msg);
+    const b = this.notes(); const bj = JSON.stringify(b); if (bj !== this.lastBoard) { this.lastBoard = bj; for (const c of this.clients) c({ t: 'board', ...b }); }
   }
 
   close() { this.unsub(); this.listeners.clear(); this.ctl.stop(); this.cc.flush(); this.clients.clear(); }

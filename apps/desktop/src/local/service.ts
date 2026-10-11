@@ -28,7 +28,10 @@ export function sanitise(raw: unknown): ClientMsg | undefined {
     case 'approve': return { t, decision: m.decision === 'approve' ? 'approve' : 'deny', ...(m.scope === 'session' || m.scope === 'always' ? { scope: m.scope } : {}) };
     case 'setModel': { const id = str(m.id, 200); return id === undefined ? undefined : { t, id }; }
     case 'setMode': return (MODES as readonly unknown[]).includes(m.mode) ? { t, mode: m.mode as (typeof MODES)[number] } : undefined;
-    case 'models': case 'compact': return { t } as ClientMsg;
+    case 'models': case 'compact': case 'board': return { t } as ClientMsg;
+    case 'note': { const text = str(m.text, 280); const type = m.type === 'warning' || m.type === 'finding' ? m.type : 'decision'; return text?.trim() ? { t, type, text: text.trim() } : undefined; }
+    case 'notePin': { const id = str(m.id, 80); return id ? { t, id, pinned: m.pinned === true } : undefined; }
+    case 'noteRemove': { const id = str(m.id, 80); return id ? { t, id } : undefined; }
     case 'setEffort': { const e = str(m.effort, 40); return e === undefined || !/^[\w-]*$/.test(e) ? undefined : { t, effort: e }; }
     case 'auto': return { t, on: m.on === true };
     default: return undefined;
@@ -71,6 +74,10 @@ export class LocalService {
       case 'models': { const list = await s.current?.ctl.engineModels(); send({ t: 'models', models: (list ?? []).map((x) => ({ id: x.id, label: x.label, note: x.note, efforts: x.efforts, defaultEffort: x.defaultEffort, isDefault: x.isDefault })) }); break; }
       case 'setEffort': if (!s.current?.ctl.setEffort(m.effort)) send({ t: 'notice', level: 'info', text: 'This agent has no reasoning effort setting.' }); break;
       case 'compact': void s.current?.ctl.submit('/compact'); break;
+      case 'board': send({ t: 'board', ...(s.current?.notes() ?? { enabled: false, notes: [] }) }); break;
+      case 'note': void s.current?.ctl.submit(`/note ${m.type}: ${m.text}`); break;
+      case 'notePin': s.current?.pinNote(m.id, m.pinned); break;
+      case 'noteRemove': s.current?.removeNote(m.id); break;
       case 'auto': s.current?.ctl.setSettings({ autoSkills: m.on }); break;
     }
   }
