@@ -5,7 +5,7 @@ import type { RouteModule } from '../app/types.js';
 import { Banner, Button, Card, CentoMark, Chip, EmptyState, Input, Skeleton } from '../ui/index.js';
 import type { Item } from '@centcom/tui';
 import { Diff } from './Diff.js';
-import { Markdown } from './Markdown.js';
+import { CopyButton, Markdown } from './Markdown.js';
 import { engineStatus, pickEngine, shortPath, whenAgo, type LocalView } from './model.js';
 export { whenAgo };
 import { useLocal } from './use-local.js';
@@ -95,7 +95,7 @@ function ToolRow({ it }: { it: Extract<Item, { kind: 'tool' }> }): React.JSX.Ele
 function Turn({ it }: { it: Item }): React.JSX.Element | null {
   switch (it.kind) {
     case 'user': return <div className="lc-turn lc-turn--user"><span className="cc-vh">you</span><div className="lc-bubble lc-plain">{it.text}</div></div>;
-    case 'assistant': return <div className="lc-turn lc-turn--agent"><span className="lc-avatar"><CentoMark size={26} /></span><div className="lc-body"><Markdown text={it.text} />{it.done ? null : <span className="lc-caret" aria-hidden="true">▍</span>}</div></div>;
+    case 'assistant': return <div className="lc-turn lc-turn--agent"><span className="lc-avatar"><CentoMark size={26} /></span><div className="lc-body"><Markdown text={it.text} />{it.done ? null : <span className="lc-caret" aria-hidden="true">▍</span>}{it.done && it.text.length > 40 ? <CopyButton text={it.text} label="Copy answer" className="lc-copy-msg cc-btn cc-btn--ghost" /> : null}</div></div>;
     case 'thinking': return <div className="lc-think">{it.done ? `∴ thought for ${Math.max(1, Math.round((it.ms || 0) / 1000))}s` : '∴ thinking… '}{it.done ? null : <span className="lc-caret" aria-hidden="true">▍</span>}</div>;
     case 'tool': return <ToolRow it={it} />;
     case 'notice': return <div className={`lc-note lc-note--${it.level}`}><strong>{it.text}</strong>{it.detail ? <span>{it.detail}</span> : null}</div>;

@@ -30,11 +30,15 @@ export function parseBlocks(src: string): Block[] {
   }
   return out;
 }
-/** A code block with a copy button that shows on hover or focus. */
-function CodeBlock({ lang, text }: { lang: string; text: string }): React.JSX.Element {
+/** A small button that copies `text` and says "Copied" for a moment; where the clipboard is unavailable it does nothing. */
+export function CopyButton({ text, label, className = 'lc-copy cc-btn' }: { text: string; label: string; className?: string }): React.JSX.Element {
   const [done, setDone] = useState(false);
   const copy = (): void => { void navigator.clipboard?.writeText(text).then(() => { setDone(true); setTimeout(() => setDone(false), 1500); }).catch(() => undefined); };
-  return <div className="lc-codewrap"><pre className="lc-pre" tabIndex={0} aria-label={lang ? `${lang} code` : 'code'}><code>{text}</code></pre><button type="button" className="lc-copy cc-btn" onClick={copy} aria-label="Copy code">{done ? 'Copied' : 'Copy'}</button></div>;
+  return <button type="button" className={className} onClick={copy} aria-label={label}>{done ? 'Copied' : 'Copy'}</button>;
+}
+/** A code block with a copy button that shows on hover or focus. */
+function CodeBlock({ lang, text }: { lang: string; text: string }): React.JSX.Element {
+  return <div className="lc-codewrap"><pre className="lc-pre" tabIndex={0} aria-label={lang ? `${lang} code` : 'code'}><code>{text}</code></pre><CopyButton text={text} label="Copy code" /></div>;
 }
 export function Markdown({ text }: { text: string }): React.JSX.Element {
   return <div className="lc-md">{parseBlocks(text).map((b, n) => {

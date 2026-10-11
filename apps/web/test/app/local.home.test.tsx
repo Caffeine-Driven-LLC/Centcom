@@ -129,3 +129,14 @@ describe('the empty session', () => {
     fireEvent.click(screen.getByText('↺ Continue: Fix the login')); expect(sent.at(-1)).toEqual({ t: 'open', dir: '/h/p', engine: 'claude-code', demo: false, resume: 'a' });
   });
 });
+describe('copying', () => {
+  it('copies a finished answer and says so; short or unfinished answers have no button', async () => {
+    const written: string[] = []; Object.defineProperty(navigator, 'clipboard', { value: { writeText: (t: string) => { written.push(t); return Promise.resolve(); } }, configurable: true });
+    let push: (m: unknown) => void = () => undefined;
+    (window as { centcom?: unknown }).centcom = { desktop: true, local: { send: () => undefined, onMessage: (cb: (m: unknown) => void) => { push = cb; return () => undefined; } } };
+    render(<LocalPage />); await act(async () => push(launcher)); await act(async () => push({ t: 'opened', dir: '/h/p', history: [] }));
+    const long = 'This answer is long enough to be worth copying to the clipboard.';
+    await act(async () => push({ t: 'state', state: { busy: false, approvals: [], agents: [], tasks: [], limits: [], sessions: [], settings: {} }, changed: [{ kind: 'assistant', id: 'a', messageId: 'm', agentId: 'x', text: long, done: true }, { kind: 'assistant', id: 'b', messageId: 'm2', agentId: 'x', text: 'ok', done: true }, { kind: 'assistant', id: 'c', messageId: 'm3', agentId: 'x', text: long + ' more', done: false }], order: ['a', 'b', 'c'] }));
+    expect(screen.getAllByLabelText('Copy answer')).toHaveLength(1); await act(async () => { fireEvent.click(screen.getByLabelText('Copy answer')); }); expect(written).toEqual([long]); expect(screen.getByText('Copied')).toBeTruthy();
+  });
+});

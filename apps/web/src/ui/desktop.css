@@ -219,3 +219,10 @@
   @media (min-width: 800px) { .cc-frame[data-folded="true"] .cc-rail { display: none; } .cc-frame[data-folded="true"] .cc-body { grid-template-columns: minmax(0, 1fr); } }
   @media (min-width: 1280px) { .cc-frame[data-folded="true"] .cc-body:has(.cc-inspector) { grid-template-columns: minmax(0, 1fr) 320px; } }
 }
+
+:root {
+  .lc-body { position: relative; }
+  .lc-copy-msg { opacity: 0; min-height: 28px; padding: 0 10px; font-size: 12px; margin-top: var(--space-1); transition: opacity var(--dur-fast) var(--ease-standard); }
+  .lc-turn--agent:hover .lc-copy-msg, .lc-copy-msg:focus-visible { opacity: 1; }
+  @media (pointer: coarse) { .lc-copy-msg { opacity: 1; } }
+}
