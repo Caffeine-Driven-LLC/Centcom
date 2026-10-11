@@ -20,7 +20,7 @@ The Electron window around `apps/web` (see `apps/desktop/README.md` for how it i
 | Ctrl/Cmd+K | Search commands, running sessions, saved sessions, projects, screens and the theme |
 | Ctrl/Cmd+N | New session (the open one keeps running) |
 | `/` in the message box | Lists the slash commands that make sense in the app; Up/Down, Tab or Enter pick one |
-| Ctrl/Cmd+Enter | Send the message |
+| Enter | Send the message (Shift+Enter adds a line) |
 
 ## Staying informed
 
