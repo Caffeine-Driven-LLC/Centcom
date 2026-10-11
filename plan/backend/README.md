@@ -43,7 +43,7 @@ Repo: `Centcom-backend` · Rules: [`plan/GUIDELINES.md`](../GUIDELINES.md) · Fo
 | [B024](B024.md) | Idempotency-Key middleware | M3 | S | platform | B006, B009 | CT-PAGE | G1 |
 | [B025](B025.md) | Pagination and filtering library | M3 | S | platform | B006 | CT-PAGE | G1 |
 | [B026](B026.md) | Account deletion and data export | M3 | M | identity | B013, B036 | CT-API-ACCOUNTS | G6 |
-| [B102](B102.md) | API service entrypoint and the browser login pages | M3 | L | identity | B004, B005, B007, B009, B012, B016, B017, B018, B020 | CT-AUTH, CT-PAGE | G1 |
+| [B102](B102.md) | API service entrypoint and the browser login pages | M3 | L | identity | B004, B005, B007, B009, B012, B016, B017, B018, B020 | CT-AUTH | G1 |
 
 ### P2 Workspaces
 
