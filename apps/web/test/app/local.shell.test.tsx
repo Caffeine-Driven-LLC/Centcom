@@ -60,7 +60,7 @@ describe('the sidebar', () => {
     expect(screen.getByText('Running')).toBeTruthy(); expect(screen.getByText('working')).toBeTruthy();
     fireEvent.click(screen.getByText('Yesterday fix')); expect(sent.at(-1)).toEqual({ t: 'open', dir: '/h/p', engine: 'claude-code', demo: false, resume: 'old' });
     fireEvent.click(screen.getByText('q')); expect(sent.at(-1)).toEqual({ t: 'open', dir: '/h/q', engine: 'claude-code', demo: false });
-    fireEvent.click(screen.getByText('New session')); expect(sent.at(-1)).toEqual({ t: 'close' });
+    fireEvent.click(screen.getByText('New session')); expect(sent.at(-1)).toEqual({ t: 'leave' });
   });
 });
 describe('running sessions', () => {
@@ -80,11 +80,11 @@ describe('running sessions', () => {
   });
 });
 describe('Ctrl+N', () => {
-  it('the sidebar hands the frame a new-session action that closes the project', async () => {
+  it('the sidebar hands the frame a new-session action that leaves the project (its agent keeps running)', async () => {
     const ref: React.MutableRefObject<(() => void) | null> = { current: null };
     const { sent, push } = await mount(<SessionSidebar onNavigate={() => undefined} onSearch={() => undefined} newSession={ref} />);
     await push(launcher); await waitFor(() => expect(ref.current).not.toBeNull());
-    await act(async () => { ref.current!(); }); expect(sent.at(-1)).toEqual({ t: 'close' });
+    await act(async () => { ref.current!(); }); expect(sent.at(-1)).toEqual({ t: 'leave' });
   });
 });
 describe('the session panel', () => {

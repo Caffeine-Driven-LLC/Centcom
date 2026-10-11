@@ -19,7 +19,7 @@ export function StatusDot({ view }: { view: LocalView }): React.JSX.Element {
 /** The sidebar of the desktop app: new session, the live session, this folder's saved sessions and the recent projects. */
 export function SessionSidebar({ onNavigate, onSearch, newSession }: { onNavigate(): void; onSearch(): void; /** Filled with the "new session" action, so Ctrl+N can call it. */ newSession?: React.MutableRefObject<(() => void) | null> }): React.JSX.Element | null {
   const { view, send, available } = useLocal(); const navigate = useNavigate(); const L = view.launcher;
-  const fresh = (): void => { send({ t: 'close' }); onNavigate(); void navigate({ to: '/local' as never }); };
+  const fresh = (): void => { send({ t: 'leave' }); onNavigate(); void navigate({ to: '/local' as never }); };
   React.useEffect(() => { if (!newSession) return; newSession.current = available ? fresh : null; return () => { newSession.current = null; }; }); // eslint-disable-line react-hooks/exhaustive-deps
   if (!available || !L) return null;
   const go = (m: ClientMsg): void => { send(m); onNavigate(); void navigate({ to: '/local' as never }); };

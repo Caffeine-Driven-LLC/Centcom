@@ -9,7 +9,7 @@ describe('messages from a screen are checked', () => {
     for (const bad of [null, 5, 'x', {}, { t: 5 }, { t: 'nope' }, { t: 'browse' }, { t: 'open', dir: 5 }, { t: 'setMode', mode: 'yolo' }, { t: 'setModel' }]) expect(sanitise(bad), JSON.stringify(bad)).toBeUndefined();
     expect((sanitise({ t: 'submit', text: 'a'.repeat(150_000) }) as { text: string }).text).toHaveLength(100_000); expect(sanitise({ t: 'submit', text: 'a'.repeat(250_000) })).toBeUndefined();
     expect(sanitise({ t: 'approve', decision: 'maybe', scope: 'forever', extra: 1 })).toEqual({ t: 'approve', decision: 'deny' }); expect(sanitise({ t: 'open', dir: '/x', engine: 'evil', demo: 'yes' })).toEqual({ t: 'open', dir: '/x', demo: false, engine: 'claude-code' });
-    expect(sanitise({ t: 'setEffort', effort: 'high' })).toEqual({ t: 'setEffort', effort: 'high' }); expect(sanitise({ t: 'setEffort', effort: 'a b; rm' })).toBeUndefined(); expect(sanitise({ t: 'setEffort' })).toBeUndefined(); expect(sanitise({ t: 'models', extra: 1 })).toEqual({ t: 'models' }); expect(sanitise({ t: 'compact' })).toEqual({ t: 'compact' });
+    expect(sanitise({ t: 'setEffort', effort: 'high' })).toEqual({ t: 'setEffort', effort: 'high' }); expect(sanitise({ t: 'setEffort', effort: 'a b; rm' })).toBeUndefined(); expect(sanitise({ t: 'setEffort' })).toBeUndefined(); expect(sanitise({ t: 'leave', extra: 1 })).toEqual({ t: 'leave' }); expect(sanitise({ t: 'models', extra: 1 })).toEqual({ t: 'models' }); expect(sanitise({ t: 'compact' })).toEqual({ t: 'compact' });
     expect(sanitise({ t: 'pref', theme: 'neon', side: 'no' })).toEqual({ t: 'pref' }); expect(sanitise({ t: 'setMode', mode: 'plan' })).toEqual({ t: 'setMode', mode: 'plan' });
   });
 });
@@ -36,6 +36,7 @@ describe('running sessions', () => {
     await wa.handle({ t: 'open', dir, demo: true });
     const last = (xs: typeof a) => xs.filter((m) => m.t === 'running').at(-1)?.sessions;
     expect(last(a)).toMatchObject([{ dir, demo: true, busy: false, waiting: 0 }]); expect(last(b)).toMatchObject([{ dir, demo: true }]);
-    await wa.handle({ t: 'close' }); expect(last(a)).toEqual([]); expect(last(b)).toEqual([]); wa.detach(); wb.detach(); svc.shutdown();
+    await wa.handle({ t: 'leave' }); expect(a.at(-1)).toEqual({ t: 'closed' }); expect(last(a)).toMatchObject([{ dir }]);
+    await wa.handle({ t: 'open', dir, demo: true }); await wa.handle({ t: 'close' }); expect(last(a)).toEqual([]); expect(last(b)).toEqual([]); wa.detach(); wb.detach(); svc.shutdown();
   }, 30_000);
 });

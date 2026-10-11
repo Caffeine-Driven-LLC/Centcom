@@ -13,6 +13,8 @@ export type ClientMsg =
   | { t: 'browse'; path: string }
   | { t: 'open'; dir: string; demo?: boolean; engine?: 'claude-code' | 'codex'; resume?: string }
   | { t: 'close' }
+  /** Go back to the project list; the agent keeps running in the background. */
+  | { t: 'leave' }
   | { t: 'pref'; theme?: Prefs['theme']; side?: boolean }
   | { t: 'submit'; text: string }
   | { t: 'approve'; decision: 'approve' | 'deny'; scope?: 'once' | 'session' | 'always' }
