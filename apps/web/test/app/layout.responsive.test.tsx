@@ -24,4 +24,14 @@ describe('responsive frame (acceptance 7, 9)', () => {
     await screen.findByText('home page'); expect(screen.getByRole('status').textContent).toContain('Status unavailable'); const rail = document.getElementById('cc-rail')!; expect(rail.dataset.open).toBe('false'); fireEvent.click(screen.getByText('Menu')); expect(rail.dataset.open).toBe('true'); fireEvent.click(screen.getByText('Details')); expect(document.getElementById('cc-inspector')!.dataset.open).toBe('true'); expect(screen.getByRole('navigation', { name: 'Main' })).toBeTruthy();
   });
 });
+describe('offline inside the desktop app', () => {
+  it('local sessions still work, so the banner becomes a quiet note in the top bar', async () => {
+    (window as { centcom?: unknown }).centcom = { desktop: true, platform: 'linux', local: { send: () => undefined, onMessage: () => () => undefined } };
+    const found = { './home/routes.tsx': { routeModule: { routes: [createRoute({ getParentRoute: () => rootRoute, path: '/', component: () => <p>home page</p> })], nav: [{ id: 'home', labelKey: 'nav.home', to: '/', icon: 'home' }] } } };
+    window.scrollTo = () => undefined;
+    const { router, nav } = buildRouter(found, createMemoryHistory({ initialEntries: ['/'] })); render(<ShellCtx.Provider value={{ nav, connectivity: 'offline', inspector: null }}><RouterProvider router={router} /></ShellCtx.Provider>);
+    await screen.findByText('home page'); expect(screen.queryByText('Status unavailable')).toBeNull(); expect(screen.getByRole('status').textContent).toContain('sessions on this computer still work');
+    delete (window as { centcom?: unknown }).centcom;
+  });
+});
 void Frame;
