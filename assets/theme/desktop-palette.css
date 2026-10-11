@@ -1,0 +1,32 @@
+/* The desktop app's palette: warm charcoal and cream with one clay accent. Hand-written; loaded after theme.css (generated, shared with the terminal), which it overrides for apps/web only. Raw colours live here, not in apps/web/src. */
+/* dark: warm charcoal */
+:root, :root[data-theme="dark"] {
+  --bg-base: #262624; --bg-surface: #2b2a28; --bg-raised: #30302e; --bg-overlay: #30302e; --bg-sunken: #1f1e1d;
+  --bg-hover: #30302e; --bg-selected: #3a3936;
+  --border-subtle: #3a3936; --border-default: #4a4844; --border-strong: #6a6762;
+  --text-primary: #faf9f5; --text-secondary: #c2c0b6; --text-muted: #9a978d; --text-link: #e8a287;
+  --accent-primary: #d97757; --accent-fill: #b4552f; --accent-hover: #d97757; --accent-active: #9c4726; --accent-subtle: #3d2d26; --accent-on: #ffffff;
+  --signal: #d97757; --signal-subtle: #3d2d26; --focus-ring: #d97757;
+  --status-success: #7fc79a; --status-warning: #e5b567; --status-danger: #ee7c70; --status-info: #8fb4e8;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg-base: #faf9f5; --bg-surface: #ffffff; --bg-raised: #ffffff; --bg-overlay: #ffffff; --bg-sunken: #f0eee6;
+    --bg-hover: #f0eee6; --bg-selected: #e8e6dc;
+    --border-subtle: #ece9df; --border-default: #ddd9cc; --border-strong: #b5b1a3;
+    --text-primary: #141413; --text-secondary: #4a4944; --text-muted: #6f6c63; --text-link: #9c4726;
+    --accent-primary: #b4552f; --accent-fill: #b4552f; --accent-hover: #9c4726; --accent-active: #85391c; --accent-subtle: #f6e6de; --accent-on: #ffffff;
+    --signal: #9c4726; --signal-subtle: #f6e6de; --focus-ring: #b4552f;
+    --status-success: #2f7a4d; --status-warning: #8a5a00; --status-danger: #b3362c; --status-info: #2c5fa8;
+  }
+}
+:root[data-theme="light"] {
+  --bg-base: #faf9f5; --bg-surface: #ffffff; --bg-raised: #ffffff; --bg-overlay: #ffffff; --bg-sunken: #f0eee6;
+  --bg-hover: #f0eee6; --bg-selected: #e8e6dc;
+  --border-subtle: #ece9df; --border-default: #ddd9cc; --border-strong: #b5b1a3;
+  --text-primary: #141413; --text-secondary: #4a4944; --text-muted: #6f6c63; --text-link: #9c4726;
+  --accent-primary: #b4552f; --accent-fill: #b4552f; --accent-hover: #9c4726; --accent-active: #85391c; --accent-subtle: #f6e6de; --accent-on: #ffffff;
+  --signal: #9c4726; --signal-subtle: #f6e6de; --focus-ring: #b4552f;
+  --status-success: #2f7a4d; --status-warning: #8a5a00; --status-danger: #b3362c; --status-info: #2c5fa8;
+}
+

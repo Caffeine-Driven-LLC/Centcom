@@ -13,6 +13,7 @@ export default defineConfig({
       '@centcom/net': r('./packages/net/src/index.ts'),
       '@centcom/mascot-browser': r('./packages/mascot/src/browser.ts'),
       '@centcom/fleet': r('./packages/net/src/fleet/model.ts'),
+      '@centcom/tui-commands': r('./packages/tui/src/state/commands.ts'),
       '@centcom/states': r('./packages/protocol/src/generated/agent-state.ts'),
       '@centcom/net-session': r('./packages/net/src/session/index.ts'),
       '@centcom/net-session-sodium': r('./packages/net/src/crypto/sodium.ts'),

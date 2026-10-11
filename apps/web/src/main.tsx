@@ -1,4 +1,6 @@
 import '../../../assets/theme/theme.css';
+import '../../../assets/theme/desktop-palette.css';
+import './ui/shadcn.css';
 import '@fontsource-variable/inter';
 import '@fontsource-variable/jetbrains-mono';
 import { RouterProvider } from '@tanstack/react-router';
@@ -13,10 +15,11 @@ import { initTheme } from './theme/theme.js';
 import { callback as finishSignInRaw, getToken, startAuth } from './auth/runtime.js';
 import { installDesktopBridge } from './app/desktop.js';
 import { ToastProvider } from './ui/index.js';
+import { LocalProvider } from './local/use-local.js';
 import { HttpProvider } from './lib/http-context.js';
 
 initTheme(); void startAuth(); const { env, problems: envProblems } = parseEnv(import.meta.env as Record<string, unknown>); const { router, nav, problems } = buildRouter(import.meta.glob('./*/routes.tsx', { eager: true }));
 for (const p of [...envProblems, ...problems]) console.warn(p); const api = makeApi(env, () => getToken().catch(() => undefined));
-function Shell(): React.JSX.Element { const connectivity = useConnectivity(api as never); return <ShellCtx.Provider value={{ nav, connectivity, inspector: null }}><ToastProvider><HttpProvider http={api as never}><RouterProvider router={router} /></HttpProvider></ToastProvider></ShellCtx.Provider>; }
+function Shell(): React.JSX.Element { const connectivity = useConnectivity(api as never); return <ShellCtx.Provider value={{ nav, connectivity, inspector: null }}><ToastProvider><HttpProvider http={api as never}><LocalProvider><RouterProvider router={router} /></LocalProvider></HttpProvider></ToastProvider></ShellCtx.Provider>; }
 installDesktopBridge({ router: router as never, finishSignIn: (u) => finishSignInRaw(u).then((r) => router.navigate({ to: r.returnTo as never })) });
 createRoot(document.getElementById('root')!).render(<React.StrictMode><Shell /></React.StrictMode>);
