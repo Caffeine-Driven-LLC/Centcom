@@ -1,10 +1,11 @@
 import { useNavigate } from '@tanstack/react-router';
-import { FolderGit2, History, Plus, Search } from 'lucide-react';
+import { FolderGit2, History, Plus, Search, Users } from 'lucide-react';
 import React from 'react';
 import { isShown, runningWord, shortPath, pickEngine, whenAgo, type LocalView } from './model.js';
 import { useLocal } from './use-local.js';
 import type { ClientMsg } from '../../../desktop/src/local/protocol.js';
 import { AccountChip } from './Account.js';
+import { JoinDialog, openJoin } from './JoinDialog.js';
 import './shell.css';
 
 const baseName = (p: string): string => p.replace(/\/+$/, '').split('/').pop() || p;
@@ -48,6 +49,8 @@ export function SessionSidebar({ onNavigate, onSearch, newSession }: { onNavigat
       <h3 className="sb__head">Recent projects</h3>
       {others.map((r) => <button key={r.dir} type="button" className="sb__row" title={shortPath(r.dir, L.home)} onClick={() => go({ t: 'open', dir: r.dir, engine: pick.engine, demo: pick.demo })}><FolderGit2 aria-hidden="true" /><span className="sb__name">{baseName(r.dir)}</span><span className="sb__when">{whenAgo(r.at)}</span></button>)}
     </> : null}
+    <button type="button" className="sb__account" onClick={openJoin} title="Join a session someone shared with you"><Users aria-hidden="true" /><span className="sb__name">Join a session</span></button>
+    <JoinDialog view={view} send={send} onJoin={() => { onNavigate(); void navigate({ to: '/local' as never }); }} />
     <AccountChip />
   </div>;
 }

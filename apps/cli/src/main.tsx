@@ -5,7 +5,7 @@ import { render } from 'ink';
 import { detectColorTier } from '@centcom/theme';
 import { ClaudeCodeEngine, CodexEngine, DemoEngine, detectClaude, detectCodex, isInstalled, type AgentEngine, type PermissionMode } from '@centcom/agent';
 import { chooseEngine } from './engine-pick.js';
-import { App, AppController, ClientConfig, FirstRun, SessionStore, TITLE_POP, TITLE_PUSH, resolveA11yMode, runLinear, queryBackground, buildRuntime, initialSettings, isFirstRun, markFirstRunDone, settingsFromConfig } from '@centcom/tui';
+import { Account, ShareSession, App, AppController, ClientConfig, FirstRun, SessionStore, TITLE_POP, TITLE_PUSH, resolveA11yMode, runLinear, queryBackground, buildRuntime, initialSettings, isFirstRun, markFirstRunDone, settingsFromConfig } from '@centcom/tui';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename as pathBase, join as pathJoin, resolve as pathResolve } from 'node:path';
 import { homedir } from 'node:os';
@@ -41,6 +41,8 @@ import { defaultDeps, loadConfig } from '@centcom/config';
 import { runMcpCli } from './commands/mcp/cli.js';
 import { runHooksCli } from './commands/hooks/cli.js';
 import { runAccountCli } from './commands/account/cli.js';
+import { runJoin } from './commands/join.js';
+import { createInterface as createLineReader } from 'node:readline';
 import { ACCOUNT_COMMANDS } from './commands/account/index.js';
 
 const VERSION = '0.1.0';
@@ -84,7 +86,7 @@ async function main() {
   // anonymous counts of which command ran, only when you turned telemetry on (docs/telemetry.md)
   const cfg0 = await loadConfig(defaultDeps()).catch(() => undefined); const tm = makeTelemetry({ enabled: !!cfg0?.telemetry.enabled, baseUrl: cfg0?.api.base_url ?? 'https://api.centcom.dev', version: VERSION });
   const isAccount = (ACCOUNT_COMMANDS as readonly string[]).includes(process.argv[2] ?? '');
-  const sub = ['provider', 'memory', 'mcp', 'hooks', 'init', 'keys', 'skills', 'lan', 'doctor', 'crash', 'update', 'link', 'install-handler'].includes(process.argv[2] ?? '') || isAccount ? process.argv[2]! : has('-p') || has('--print') ? 'print' : 'tui'; tm.appStart(); tm.commandRun(sub);
+  const sub = ['join', 'provider', 'memory', 'mcp', 'hooks', 'init', 'keys', 'skills', 'lan', 'doctor', 'crash', 'update', 'link', 'install-handler'].includes(process.argv[2] ?? '') || isAccount ? process.argv[2]! : has('-p') || has('--print') ? 'print' : 'tui'; tm.appStart(); tm.commandRun(sub);
   const done = async (code: number) => { tm.appExit(); await tm.flush(2000); process.exit(code); };
   // anything nobody caught is written (redacted) to ~/.centcom/crashes and never sent anywhere
   const crashes = new CrashStore(stateDir(defaultDeps()));
@@ -105,6 +107,11 @@ async function main() {
   if (process.argv[2] === 'mcp') await done(await runMcpCli(process.argv.slice(3)));
   if (process.argv[2] === 'hooks') await done(await runHooksCli(process.argv.slice(3)));
   if (isAccount) await done(await runAccountCli(process.argv[2]!, process.argv.slice(3).filter((a) => a !== '--debug'), { version: VERSION }));
+  if (process.argv[2] === 'join') {
+    const account = await Account.create({ app: 'centcom-cli', version: VERSION }); const ac = new AbortController(); process.on('SIGINT', () => ac.abort());
+    const rl = process.stdin.isTTY ? createLineReader({ input: process.stdin }) : undefined; ac.signal.addEventListener('abort', () => rl?.close());
+    await done(await runJoin(process.argv.slice(3), { account, out: (l) => console.log(l), err: (l) => console.error(l), signal: ac.signal, ...(rl ? { lines: rl } : {}) }));
+  }
   if (process.argv[2] === 'lan') { await done(await runLanCli(process.argv.slice(3), { out: (l) => console.log(l), err: (l) => console.error(l) })); }
   { // the terminal app and print mode take only the options in the help: a typo is a clear message, not a silent no-op
     const top = findCommand('centcom')!; process.argv.splice(2, process.argv.length - 2, ...normalizeArgs(process.argv.slice(2), top.flags));
@@ -193,6 +200,9 @@ async function main() {
   for (const [sig, code] of [['SIGTERM', 143], ['SIGHUP', 129]] as const) process.on(sig, () => { leave(); process.exit(code); }); // `kill` and a closing window must not leave your shell in the alternate screen with the mouse captured
   rt.bind(ctl);
   await ctl.start();
+  let share: ShareSession | undefined; // /share: made on first use, so nobody who never shares reads the keychain or the server settings for it
+  if (!demo) ctl.setShareHandler(async (arg) => { share ??= new ShareSession(ctl, await Account.create({ app: 'centcom-tui', version: VERSION, logger })); await share.handleCommand(arg); });
+  process.on('exit', () => share?.close());
   { // every start: look for a newer release in the background and bring it in, so the next start is the latest (never delays this one)
     const http = createHttpClient({ baseUrl: cc.cfg.api.base_url, getAccessToken: async () => undefined, userAgent: defaultUserAgent(VERSION) });
     const client = new UpdateClient({ http, currentVersion: VERSION, platform: process.platform, arch: process.arch, channel: cc.cfg.update.channel, keys: PRODUCTION_KEYS, installDir: pathDirname(process.execPath), install: { execPath: process.execPath, scriptPath: process.argv[1] } });

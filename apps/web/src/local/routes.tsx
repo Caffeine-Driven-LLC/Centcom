@@ -13,6 +13,8 @@ import type { ClientMsg } from '../../../desktop/src/local/protocol.js';
 import { ArrowUp, PanelRight, Square as StopIcon } from 'lucide-react';
 import { SessionPanel } from './SessionPanel.js';
 import { ModelMenu } from './ModelMenu.js';
+import { ShareButton, ShareDialog } from './ShareDialog.js';
+import { JoinedPane } from './JoinedPane.js';
 import { COMMANDS } from '@centcom/tui-commands';
 import { slashMatches } from './slash.js';
 import { Button as SButton } from '../ui/shadcn/index.js';
@@ -132,7 +134,7 @@ function Workspace({ view, send }: { view: LocalView; send: Send }): React.JSX.E
     <header className="lc-wshead">
       <div className="lc-wshead__title"><h2>{name}</h2><span className="lc-wshead__path">{view.opened ? shortPath(view.opened, view.launcher?.home ?? '') : ''}</span></div>
       <div className="lc-wshead__chips"><span className={`lc-live lc-live--${busy ? 'busy' : 'ready'}`}><span className="lc-live__dot" aria-hidden="true" />{busy ? s?.verb || 'working' : 'ready'}</span>{s?.branch ? <Chip>{s.branch}</Chip> : null}{s?.engineLabel ? <Chip>{s.engineLabel}</Chip> : null}</div>
-      <span className="lc-grow" /><SButton variant="ghost" size="sm" title="Summarise the conversation to free up context" onClick={() => send({ t: 'compact' })}>Compact</SButton><SButton variant="ghost" size="sm" title="Stop the agent and close this project (New session in the sidebar leaves it running)" onClick={() => send({ t: 'close' })}>Close project</SButton><SButton variant="ghost" size="icon" className="lc-paneltoggle" aria-pressed={panel} aria-label="Session details" title="Session details" onClick={togglePanel}><PanelRight /></SButton>
+      <span className="lc-grow" /><ShareButton view={view} /><SButton variant="ghost" size="sm" title="Summarise the conversation to free up context" onClick={() => send({ t: 'compact' })}>Compact</SButton><SButton variant="ghost" size="sm" title="Stop the agent and close this project (New session in the sidebar leaves it running)" onClick={() => send({ t: 'close' })}>Close project</SButton><SButton variant="ghost" size="icon" className="lc-paneltoggle" aria-pressed={panel} aria-label="Session details" title="Session details" onClick={togglePanel}><PanelRight /></SButton>
     </header>
     {view.notice ? <Banner tone={view.notice.level === 'error' ? 'danger' : view.notice.level === 'warn' ? 'warning' : 'info'}>{view.notice.text}</Banner> : null}
     <div className="lc-log" role="log" aria-label="Transcript" ref={log} onScroll={(e) => { const el = e.currentTarget; stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}>
@@ -166,6 +168,7 @@ function Workspace({ view, send }: { view: LocalView; send: Send }): React.JSX.E
 <span className="lc-hint">Enter to send</span><span className="lc-grow" /><SButton variant="outline" size="sm" disabled={!busy} onClick={() => send({ t: 'interrupt' })}><StopIcon />Stop</SButton><SButton size="sm" variant={approval ? 'secondary' : 'default'} disabled={!text.trim()} onClick={submit}><ArrowUp />Send</SButton></div>
     </div>
   </div>
+  <ShareDialog view={view} send={send} />
   {panel ? <SessionPanel view={view} send={send} /> : null}
   </div>;
 }
@@ -176,6 +179,7 @@ export function LocalPage(): React.JSX.Element {
   useEffect(() => { if (pending.current && view.opened && view.state) { send({ t: 'submit', text: pending.current }); pending.current = null; } }, [view.opened, view.state, send]);
   if (!available) return <Card title="Local agent"><EmptyState title="Only in the desktop app">Running an agent on this computer needs the Centcom desktop app.</EmptyState></Card>;
   if (!view.launcher) return <Skeleton lines={4} />;
+  if (view.joined) return <JoinedPane view={view} send={send} />;
   return view.opened ? <Workspace view={view} send={send} /> : <Picker view={view} send={send} start={(dir, text, demo, engine) => { pending.current = text; send({ t: 'open', dir, demo, engine }); }} />;
 }
 export const routeModule: RouteModule = { routes: [createRoute({ getParentRoute: () => rootRoute, path: '/local', component: LocalPage })], nav: [{ id: 'local', labelKey: 'nav.local', to: '/local', icon: 'home' }] };

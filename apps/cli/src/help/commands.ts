@@ -44,6 +44,7 @@ export const COMMANDS: CommandMeta[] = [
   { name: 'logout', summary: 'sign out of Centcom', usage: 'centcom logout [--revoke-device]', description: 'Signs out of Centcom on this computer.', flags: [] },
   { name: 'whoami', summary: 'who is signed in', usage: 'centcom whoami [--json]', description: 'Shows who is signed in, the plan and the active workspace.', flags: [] },
   { name: 'devices', summary: 'computers signed in to your account', usage: 'centcom devices list [--json] | revoke <dev_id> [--yes]', description: 'Lists the computers signed in to your account and revokes one.', flags: [] },
+  { name: 'join', summary: 'join a shared session', usage: 'centcom join <invite link | watch-only link | session id> [--name <name>]', description: 'Joins a session somebody shared with you and prints what their agent does. You can ask it for things (the host decides what runs); a watch-only link needs no account.', flags: [] },
   { name: 'lan', summary: 'find sessions on this network', usage: 'centcom lan scan [--timeout 3] [--json]', description: 'Lists Centcom sessions on this network (mDNS; no account needed).', flags: [] },
   { name: 'doctor', summary: 'check this computer', usage: 'centcom doctor [--json] [--bundle <file>]', description: 'Checks node, terminal, keychain, git, network and clock.', flags: [] },
   { name: 'crash', summary: 'crash reports on this computer', usage: 'centcom crash list|show <id>|delete <id|--all>', description: 'Crash reports are kept on this computer and never sent.', flags: [] },
