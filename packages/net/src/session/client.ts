@@ -21,7 +21,7 @@ import type { RelayClock } from '../relay/heartbeat.js';
 import { FrameCodec, SERVER_ONLY } from './codec.js';
 import { GuestKeys } from './guest.js';
 import { HostDuties } from './host.js';
-import { SessionRest, memberOf, type SessionCreated } from './rest.js';
+import { SessionRest, memberOf, type JoinToken, type SessionCreated } from './rest.js';
 import { Roster } from './roster.js';
 import { SNAPSHOT_EVERY_FRAMES, SNAPSHOT_EVERY_MS, fetchSnapshot, uploadSnapshot } from './snapshots.js';
 import { SessionError, type DecodedEvent, type EventP, type EventSecret, type MemberInfo, type Role, type SessionPolicy, type SessionState, type SessionSummary, type SnapshotDoc } from './types.js';
@@ -83,9 +83,9 @@ class Connection implements SessionHandle {
   private relay!: RelayClient; private channel!: ReliableChannel; private codec!: FrameCodec; private host?: HostDuties; private guest!: GuestKeys;
   private chain: Promise<void> = Promise.resolve(); private pending: SequencedFrame[] = []; private pendingKid?: string; private keyWaiters: { kid: string; res: () => void; rej: (e: unknown) => void; timer: unknown }[] = [];
   private linkNow: 'online' | 'reconnecting' | 'offline' = 'online'; private flushing = false; private recent: DecodedEvent[] = []; private presenceDrops = 0; private mutedUntil?: number; private mutedIso?: string; private removedFired = false; private catchUps: number[] = []; private catchUpWanted = false; private catchingUp = false; private catchUpHead?: number; private unreadable = new Set<string>(); private rotationRequested = false; private lastSeq = 0; private framesSinceSnapshot = 0; private snapTimer?: unknown; private rotateTimer?: unknown; private snapshotting = false; private closed = false; 
-  private readonly clock: RelayClock; private readonly ids: IdGenerator; private readonly fetchFn: typeof fetch;
+  private guestFirstUsed = false; private readonly clock: RelayClock; private readonly ids: IdGenerator; private readonly fetchFn: typeof fetch;
 
-  constructor(private readonly d: SessionClientDeps, private readonly rest: SessionRest, readonly id: string, role: Role, memberId: string, private readonly ring: KeyRing, private readonly viewOnly: boolean, policy: SessionPolicy, private readonly opts: SessionOptions, private readonly relayUrl: string) {
+  constructor(private readonly d: SessionClientDeps, private readonly rest: SessionRest, readonly id: string, role: Role, memberId: string, private readonly ring: KeyRing, private readonly viewOnly: boolean, policy: SessionPolicy, private readonly opts: SessionOptions, private readonly relayUrl: string, private readonly guestTicket?: { first: JoinToken; refresh(): Promise<JoinToken> }) {
     this.clock = d.clock ?? realClock; this.ids = d.ids ?? createMsgIdGenerator({ now: () => this.clock.now() }); this.fetchFn = d.fetch ?? fetch; this.policy = policy;
     for (const [k, fn] of Object.entries(opts.on ?? {})) this.life.on(k as LifecycleName, fn as never);
     this.me = { id: memberId, role, slot: 0, device: d.deviceId }; this.guest = new GuestKeys(ring, viewOnly ? undefined : d.crypto.device);
@@ -105,7 +105,7 @@ class Connection implements SessionHandle {
     if (this.me.role === 'host') this.host = new HostDuties({ ring: this.ring, deviceId: this.d.deviceId, policy: () => this.policy, now: () => new Date(this.clock.now()), recipients: () => this.roster_.recipients(this.d.deviceId), persist: () => this.persistKeys(), log: (m, c) => this.d.logger?.info(m, c),
       sendGrant: async (p, secret) => { await this.sendRaw('key.grant', { p, secret }); } });
     this.relay = new RelayClient({ url: this.relayUrl, sessionId: this.id, clientInfo: this.d.clientInfo, allowPlainWs: this.d.allowPlainWs, wsFactory: this.d.wsFactory, clock: this.d.relayClock, logger: this.d.logger, getLastSeq: () => this.channel?.lastSeq() ?? null,
-      getTicket: async () => { const t = await this.rest.joinToken(this.id, ['resume']); return { ticket: t.ticket, url: t.relay_url }; } });
+      getTicket: async () => { const g = this.guestTicket; let t: JoinToken; if (g) { if (!this.guestFirstUsed) { this.guestFirstUsed = true; t = g.first; } else t = await g.refresh(); } else t = await this.rest.joinToken(this.id, ['resume']); return { ticket: t.ticket, url: t.relay_url }; } });
     this.channel = new ReliableChannel({ link: this.relay, sessionId: this.id, seqStore: this.d.seqStore, clock: this.d.relayClock, ids: this.ids, logger: this.d.logger, memberId: () => this.me.id });
     await this.channel.init();
     this.relay.on('link', (l) => { this.linkNow = l; this.life.fire('link', l); if (l === 'online') void this.flushOutbox(); if (this.st === 'ended') return; if (l === 'reconnecting' || l === 'offline') this.setState('reconnecting'); else this.setState(this.guest.hasKey() ? 'live' : 'waiting_for_key'); });
@@ -264,6 +264,8 @@ export interface SessionClient {
   createShareLink(sessionId: string): Promise<{ token: string; url: string; expires_at: string }>;
   joinViaShareLink(o: { token: string; displayName: string; /** `#k=<key>&kid=<kid>` from the link */ fragment: string }): Promise<SessionHandle>;
 }
+/** The session a guest ticket is for: the response has no field for it, the ticket's `sid` claim names it (the relay checks the signature; this is only to know where to connect). */
+export function sessionOfTicket(t: JoinToken): string | undefined { const direct = (t as unknown as { session?: unknown }).session; if (typeof direct === 'string' && direct) return direct; try { const p = JSON.parse(Buffer.from(t.ticket.split('.')[1] ?? '', 'base64url').toString('utf8')) as { sid?: unknown }; return typeof p.sid === 'string' && p.sid ? p.sid : undefined; } catch { return undefined; } }
 const RELAY_DEFAULT = 'wss://relay.centcom.dev/v1/ws';
 export function createSessionClient(d: SessionClientDeps): SessionClient {
   const rest = new SessionRest(d.http);
@@ -284,8 +286,8 @@ export function createSessionClient(d: SessionClientDeps): SessionClient {
     createShareLink: (id) => rest.createShareLink(id),
     async joinViaShareLink(o) {
       const m = /(?:^|#|&)k=([A-Za-z0-9_-]{43})/.exec(o.fragment); if (!m) throw new SessionError('bad_link', 'That link has no key, so it cannot be opened.'); const kid = /(?:&|#)kid=(k[1-9]\d{0,8})(?:&|$)/.exec(o.fragment)?.[1] ?? 'k1'; epochOf(kid);
-      const t = await rest.joinViaShareLink(o.token, o.displayName); const ring = new KeyRing(); ring.addEpoch(kid, unb64(m[1]!)); void sodium;
-      const c = new Connection(d, rest, (t as unknown as { session?: string }).session ?? '', 'viewer', t.member, ring, true, {}, {}, relayUrl(t.relay_url)); await c.start(); return c;
+      const t = await rest.joinViaShareLink(o.token, o.displayName); const ring = new KeyRing(); ring.addEpoch(kid, unb64(m[1]!)); void sodium; const sid = sessionOfTicket(t); if (!sid) throw new SessionError('bad_link', 'The server did not say which session this link is for.');
+      const c = new Connection(d, rest, sid, 'viewer', t.member, ring, true, {}, {}, relayUrl(t.relay_url), { first: t, refresh: () => rest.joinViaShareLink(o.token, o.displayName) }); await c.start(); return c;
     },
   };
 }
