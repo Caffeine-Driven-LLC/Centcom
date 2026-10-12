@@ -93,3 +93,27 @@
 .acct__note { color: var(--text-muted); font-size: 12px; }
 .acct__error { color: var(--status-danger); }
 .acct__actions { display: flex; gap: var(--space-2); justify-content: flex-end; }
+
+/* ---- the Team panel ---- */
+.team { display: flex; flex-direction: column; gap: var(--space-3); min-width: min(560px, 90vw); max-width: 640px; max-height: 80vh; overflow-y: auto; }
+.team .acct__title { display: flex; align-items: center; gap: var(--space-2); }
+.team .acct__title svg { width: 20px; height: 20px; color: var(--text-muted); }
+.team p { margin: 0; line-height: 1.45; }
+.acct__ok { color: var(--status-success); }
+.team__plan { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; color: var(--text-secondary); }
+.team__plan .sc-btn { margin-left: auto; }
+.team__h { margin: var(--space-2) 0 0; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
+.team__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border: 1px solid var(--border-subtle); border-radius: var(--r-lg); overflow: hidden; }
+.team__row { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--border-subtle); }
+.team__row:last-child { border-bottom: 0; }
+.team__row > svg { width: 16px; height: 16px; color: var(--text-muted); flex: 0 0 auto; }
+.team__who { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
+.team__who strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.team__who small { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; }
+.team__owner, .team__role-ro { display: inline-flex; align-items: center; gap: 4px; color: var(--text-secondary); font-size: 13px; }
+.team__owner svg { width: 14px; height: 14px; color: var(--accent-fill); }
+.team__role, .team__invite select { min-height: 32px; border-radius: var(--r-md); border: 1px solid var(--border-default); background: var(--bg-surface); color: var(--text-primary); font: inherit; padding: 0 8px; }
+.team__invite { display: flex; flex-direction: column; gap: var(--space-2); }
+.team__invite-row { display: flex; gap: var(--space-2); }
+.team__invite-row input { flex: 1 1 auto; min-height: 34px; border-radius: var(--r-md); border: 1px solid var(--border-default); background: var(--bg-surface); color: var(--text-primary); font: inherit; padding: 0 10px; }
+@media (max-width: 560px) { .team__invite-row { flex-wrap: wrap; } .team__row { flex-wrap: wrap; } }

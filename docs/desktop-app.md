@@ -47,3 +47,8 @@ The main process (`apps/desktop/src/local/service.ts`) keeps one `Workspace` per
 ## Look
 
 The palette is `assets/theme/desktop-palette.css` (warm charcoal and cream, one clay accent); the component styles are `apps/web/src/ui/desktop.css` and `shadcn.css` (plain CSS in shadcn/ui's shapes, because Tailwind's build tooling does not pass the dependency audit). `assets/theme/theme.css` is generated and shared with the terminal, so it is left alone.
+
+## Team
+
+Account, then **Team** (signed in): the people of your workspace with their roles, invites still waiting, your plan and how many seats are used. An owner or admin can invite someone by e-mail with a role (admin, member, billing or guest), revoke an invite, change a role or remove a member; the server decides what is allowed and the panel says why when it is not. A workspace member uses a seat. To bring one person into one session without a seat, use Share in that session instead. When the plan has no relay (Free), the panel says so and offers **Upgrade**, which opens the hosted checkout in your browser (or the billing page, `CENTCOM_BILLING_URL`, when the server gives no checkout). The person who hosts a shared session pays; people who join do not.
+

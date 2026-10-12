@@ -32,6 +32,13 @@ export type ClientMsg =
   | { t: 'auto'; on: boolean }
   /** Who is signed in (nothing is needed for local sessions). */
   | { t: 'account' }
+  /** The Team panel: load it, invite by e-mail with a role, revoke an invite, change a role, remove a member, and where to upgrade the plan. */
+  | { t: 'team' }
+  | { t: 'teamInvite'; email: string; role: 'admin' | 'member' | 'billing' | 'guest' }
+  | { t: 'teamRevoke'; invite: string }
+  | { t: 'teamRole'; member: string; role: 'admin' | 'member' | 'billing' | 'guest' }
+  | { t: 'teamRemove'; member: string }
+  | { t: 'upgrade' }
   | { t: 'login' }
   | { t: 'cancelLogin' }
   | { t: 'logout' };
@@ -48,6 +55,7 @@ export interface RunningSession { dir: string; engine: 'claude-code' | 'codex'; 
 export interface BoardNote { id: string; type: string; text: string; author: string; person: boolean; pinned: boolean; ts: number; files: string[] }
 
 /** The signed-in person, as the screens show them. */
+export interface TeamViewMsg { workspace: { id: string; name: string | null }; plan: string; status: string; seats: { used: number; max: number | null }; relayAccess: boolean; myRole: string; canManage: boolean; members: { id: string; name: string; email?: string; role: string; you: boolean }[]; invites: { id: string; email: string | null; role: string; expiresAt: string }[] }
 export interface AccountView { signedIn: boolean; persisted: boolean; offline?: boolean; api: string; me?: { id: string; name: string; email: string; plan: string; workspace?: { id: string; name: string | null } } }
 export type ServerMsg =
   | { t: 'launcher'; home: string; cwd: string; recent: RecentDir[]; claude: ClaudeStatus; codex: CodexStatusMsg; prefs: Prefs }
@@ -60,6 +68,9 @@ export type ServerMsg =
   | { t: 'engineModels'; engines: { engine: 'claude-code' | 'codex'; models: { id: string; label: string; note: string; efforts?: string[]; defaultEffort?: string; isDefault?: boolean }[] }[] }
   | { t: 'running'; sessions: RunningSession[] }
   | { t: 'account'; account: AccountView }
+  /** The Team panel's content, or why it could not be loaded; `done` says what the last change did (and `link` is an invite to send by hand). */
+  | { t: 'team'; team?: TeamViewMsg; error?: string; done?: string; link?: string }
+  | { t: 'upgrade'; url: string }
   /** The sign-in dialog: `code` is shown with the address to open, then `done`, or why it ended. */
   | { t: 'login'; phase: 'code'; userCode: string; url: string; expiresInS: number; opened: boolean }
   | { t: 'login'; phase: 'done' | 'cancelled' }
