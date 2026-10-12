@@ -19,7 +19,7 @@ export function isInside(parent: string, child: string, os: 'posix' | 'win32' = 
   const a = api(os); const rel = a.relative(fold(os, a.resolve(parent)), fold(os, a.resolve(child))); return rel === '' || (!rel.startsWith('..') && !a.isAbsolute(rel));
 }
 const CRED_DIRS = ['.ssh', '.aws', '.gnupg', '.codex', '.docker', '.kube', '.azure'];
-const CRED_FILES = ['auth.json', '.credentials.json', '.netrc', '.npmrc', '.pgpass', 'login.keychain', 'login.keychain-db', 'secrets.json', 'id_rsa', 'id_ed25519', '.git-credentials'];
+const CRED_FILES = ['auth.json', '.credentials.json', '.netrc', '.npmrc', '.pgpass', 'login.keychain', 'login.keychain-db', 'secrets.json', 'id_rsa', 'id_ed25519', '.git-credentials', 'credentials.toml'];
 /** A path match on the request only (never reads the file): credential and keychain locations. */
 export function isCredentialPath(real: string, os: 'posix' | 'win32' = 'posix'): boolean {
   const segs = fold(os, real).split(/[\\/]+/).filter(Boolean); const last = segs.at(-1) ?? '';

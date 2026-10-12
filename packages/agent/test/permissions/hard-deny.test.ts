@@ -54,7 +54,7 @@ describe('installing a tool for yourself is asked about, not refused', () => {
   it('the system, shell start-up files, the keyring and credentials stay refused in every mode', async () => {
     for (const mode of MODES) {
       const r = rig({ mode, config: { bypassEnabled: true } });
-      for (const c of ['install -m755 x /usr/local/bin/x', 'echo hi > ~/.bashrc', 'cp x /etc/hosts', 'cp x ~/.local/share/keyrings/login.keyring', 'cat ~/.npmrc', 'echo x > ~/.ssh/authorized_keys', 'cp x ~/bin/x']) expect(await r.engine.decide(req({ command: c }), r.ctx), `${mode}: ${c}`).toMatchObject({ action: 'deny', hard: true });
+      for (const c of ['install -m755 x /usr/local/bin/x', 'echo hi > ~/.bashrc', 'cp x /etc/hosts', 'cp x ~/.local/share/keyrings/login.keyring', 'cat ~/.npmrc', 'echo x > ~/.ssh/authorized_keys', 'cp x ~/bin/x', 'echo x > ~/.cargo/credentials.toml']) expect(await r.engine.decide(req({ command: c }), r.ctx), `${mode}: ${c}`).toMatchObject({ action: 'deny', hard: true });
     }
   });
 });
