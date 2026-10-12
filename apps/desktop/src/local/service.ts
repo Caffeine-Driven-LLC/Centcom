@@ -5,7 +5,7 @@ import { dirname, join, resolve } from 'node:path';
 import { CLAUDE_MODELS, CodexEngine, detectClaude, detectCodex, type ModelChoice } from '@centcom/agent';
 import { ClientConfig, SessionStore } from '@centcom/tui';
 import { Workspace } from './workspace.js';
-import { CollabService, isCollabMsg, isShareMsg } from './collab.js';
+import { CollabService, isCollabMsg, isJoinMsg, isShareMsg } from './collab.js';
 import type { ClientMsg, DirEntry, Prefs, RecentDir, ServerMsg } from './protocol.js';
 
 export const MAX_TEXT = 100_000; export const MODES = ['default', 'acceptEdits', 'plan', 'bypassPermissions'] as const;
@@ -39,6 +39,9 @@ export function sanitise(raw: unknown): ClientMsg | undefined {
     case 'shareInvite': { const e = str(m.email, 254); return { t, ...(e && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) ? { email: e } : {}) } as ClientMsg; }
     case 'shareDecide': { const item = str(m.item, 80); return item && /^que_[0-9A-Za-z]+$/.test(item) ? { t, item, decision: m.decision === 'approve' ? 'approve' : 'reject' } : undefined; }
     case 'shareAuto': return { t, on: m.on === true } as ClientMsg;
+    case 'join': { const input = str(m.input, 2048); return input?.trim() ? { t, input: input.trim() } : undefined; }
+    case 'joinedAsk': { const text = str(m.text, 60_000); return text?.trim() ? { t, text } : undefined; }
+    case 'joinedLeave': return { t } as ClientMsg;
     default: return undefined;
   }
 }
@@ -77,9 +80,9 @@ export class LocalService {
     return { detach: () => { detach(); this.sessions.delete(key); }, handle: async (raw) => { const m = sanitise(raw); if (!m) return; try { await this.dispatch(s, m, detach); } catch (e) { send({ t: 'notice', level: 'error', text: e instanceof Error ? e.message : String(e) }); } } };
   }
   private async dispatch(s: { current?: Workspace; leave?: () => void; send(m: ServerMsg): void }, m: ClientMsg, detach: () => void): Promise<void> {
-    const send = s.send; if (isCollabMsg(m)) { await this.collab.handle(m, send); return; } if (isShareMsg(m)) { await this.collab.handleShare(m, s.current, send); return; }
+    const send = s.send; if (isCollabMsg(m)) { await this.collab.handle(m, send); return; } if (isJoinMsg(m)) { await this.collab.handleJoin(m, send); return; } if (isShareMsg(m)) { await this.collab.handleShare(m, s.current, send); return; }
     switch (m.t) {
-      case 'hello': { send(this.runningMsg()); const [st, cx] = await Promise.all([detectClaude(), detectCodex()]); send({ t: 'launcher', home: this.home, cwd: this.cwd, recent: this.recent(), claude: { installed: st.installed, version: st.version, signedIn: st.signedIn, kind: st.loginKind }, codex: { installed: cx.installed, version: cx.version, signedIn: cx.signedIn, kind: cx.loginKind }, prefs: await this.prefs() }); if (this.appCfg && !this.warned) { this.warned = true; for (const w of this.appCfg.warnings) send({ t: 'notice', level: 'warn', text: 'Settings: ' + w }); } if (s.current) { const w = s.current.status(); send({ t: 'opened', dir: w.dir, history: s.current.history(), engine: w.engine, demo: w.demo }); } break; }
+      case 'hello': { send(this.runningMsg()); this.collab.sendJoined(send); const [st, cx] = await Promise.all([detectClaude(), detectCodex()]); send({ t: 'launcher', home: this.home, cwd: this.cwd, recent: this.recent(), claude: { installed: st.installed, version: st.version, signedIn: st.signedIn, kind: st.loginKind }, codex: { installed: cx.installed, version: cx.version, signedIn: cx.signedIn, kind: cx.loginKind }, prefs: await this.prefs() }); if (this.appCfg && !this.warned) { this.warned = true; for (const w of this.appCfg.warnings) send({ t: 'notice', level: 'warn', text: 'Settings: ' + w }); } if (s.current) { const w = s.current.status(); send({ t: 'opened', dir: w.dir, history: s.current.history(), engine: w.engine, demo: w.demo }); } break; }
       case 'browse': { const d = listDir(m.path, this.home); send({ t: 'dir', ...d, saved: new SessionStore().list(d.path, 50).length }); break; }
       case 'open': { const dir = resolve(m.dir); const key = `${dir}::${m.demo ? 'demo' : m.engine ?? 'claude-code'}`; if (!existsSync(dir) || !statSync(dir).isDirectory()) { send({ t: 'notice', level: 'error', text: 'That folder does not exist.' }); break; } detach(); let w = this.workspaces.get(key); if (!w) { w = await Workspace.open(dir, !!m.demo, m.engine === 'codex' ? 'codex' : 'claude-code', m.resume); this.workspaces.set(key, w); w.onChange(() => this.broadcastRunning()); } this.addRecent(dir); s.current = w; send({ t: 'opened', dir, history: w.history(), engine: w.status().engine, demo: w.status().demo }); s.leave = w.join(send); this.collab.sendSharing(w, send); this.broadcastRunning(); break; }
       case 'leave': { detach(); send({ t: 'closed' }); break; }
@@ -102,7 +105,7 @@ export class LocalService {
     }
   }
   /** On quit: settings are written and every agent session is stopped. */
-  shutdown(): void { this.appCfg?.flush(); for (const w of this.workspaces.values()) { this.collab.stopSharing(w); w.close(); } this.workspaces.clear(); this.lastRunning = ''; }
+  shutdown(): void { void this.collab.leaveJoined(); this.appCfg?.flush(); for (const w of this.workspaces.values()) { this.collab.stopSharing(w); w.close(); } this.workspaces.clear(); this.lastRunning = ''; }
 }
 
 const row = (x: ModelChoice): { id: string; label: string; note: string; efforts?: string[]; defaultEffort?: string; isDefault?: boolean } => ({ id: x.id, label: x.label, note: x.note, efforts: x.efforts, defaultEffort: x.defaultEffort, isDefault: x.isDefault });

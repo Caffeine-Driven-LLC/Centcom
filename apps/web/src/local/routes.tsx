@@ -14,6 +14,7 @@ import { ArrowUp, PanelRight, Square as StopIcon } from 'lucide-react';
 import { SessionPanel } from './SessionPanel.js';
 import { ModelMenu } from './ModelMenu.js';
 import { ShareButton, ShareDialog } from './ShareDialog.js';
+import { JoinedPane } from './JoinedPane.js';
 import { COMMANDS } from '@centcom/tui-commands';
 import { slashMatches } from './slash.js';
 import { Button as SButton } from '../ui/shadcn/index.js';
@@ -178,6 +179,7 @@ export function LocalPage(): React.JSX.Element {
   useEffect(() => { if (pending.current && view.opened && view.state) { send({ t: 'submit', text: pending.current }); pending.current = null; } }, [view.opened, view.state, send]);
   if (!available) return <Card title="Local agent"><EmptyState title="Only in the desktop app">Running an agent on this computer needs the Centcom desktop app.</EmptyState></Card>;
   if (!view.launcher) return <Skeleton lines={4} />;
+  if (view.joined) return <JoinedPane view={view} send={send} />;
   return view.opened ? <Workspace view={view} send={send} /> : <Picker view={view} send={send} start={(dir, text, demo, engine) => { pending.current = text; send({ t: 'open', dir, demo, engine }); }} />;
 }
 export const routeModule: RouteModule = { routes: [createRoute({ getParentRoute: () => rootRoute, path: '/local', component: LocalPage })], nav: [{ id: 'local', labelKey: 'nav.local', to: '/local', icon: 'home' }] };

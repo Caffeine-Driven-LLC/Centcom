@@ -43,6 +43,10 @@ The **Share** button in the session header (and "Share this session" in the pane
 
 `pnpm dev:share` checks all of this against a local backend with two new accounts.
 
+## Joining a session
+
+**Join a session** (sidebar, or Ctrl+K) takes whatever you were sent: an **invite link** (it is accepted, then you join; no workspace seat is used), a **watch-only link** (no account needed, you can only read) or the **session id** of a session in your workspace. The window then shows the host's conversation as it happens: what people asked, what the agent answered and which tools it ran, and the people in the session with their roles. An editor has a box to **ask the host's agent for something**; it waits until the host presses Run it. A viewer has no box. **Leave** goes back to your own work.
+
 ## Staying informed
 
 - The window title says `(2) Needs you · project` when approvals wait in any running session, and `Working · project` while an agent works.

@@ -1,11 +1,12 @@
 import { useNavigate } from '@tanstack/react-router';
-import { ArrowRight, Eraser, FolderGit2, History, Keyboard, Moon, Monitor, Plus, Search, Shield, Square, Sun, type LucideIcon } from 'lucide-react';
+import { ArrowRight, Eraser, FolderGit2, History, Keyboard, Moon, Monitor, Plus, Search, Shield, Square, Sun, Users, type LucideIcon } from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { NavItem } from '../app/types.js';
 import { t } from '../i18n/index.js';
 import { useTheme } from '../theme/theme.js';
 import { Dialog } from '../ui/shadcn/index.js';
 import './shell.css';
+import { openJoin } from './JoinDialog.js';
 import { installedEngines, isShown, pickEngine, runningWord, shortPath, whenAgo } from './model.js';
 import { useLocal } from './use-local.js';
 
@@ -38,6 +39,7 @@ export function CommandPalette({ open, onOpenChange, nav }: { open: boolean; onO
         for (const [m, l] of MODES) out.push({ id: `mode-${m}`, group: 'Session', label: `Mode: ${l}${view.state?.settings?.permissionMode === m ? ' ✓' : ''}`, keywords: 'permission', icon: Shield, run: () => send({ t: 'setMode', mode: m as never }) });
         for (const s of (view.state?.sessions ?? []).filter((x) => x.id !== view.state?.sessionId).slice(0, 8)) out.push({ id: `s-${s.id}`, group: 'Sessions in this project', label: s.title || 'Untitled', hint: whenAgo(s.updatedAt), keywords: 'resume session', icon: History, run: () => { send({ t: 'open', dir: view.opened!, engine: pick?.engine ?? 'claude-code', demo: !!view.state?.demo, resume: s.id }); toLocal(); } });
       }
+      out.push({ id: 'join', group: 'Session', label: 'Join a session…', keywords: 'invite link share collaborate', icon: Users, run: openJoin });
       for (const r of view.running.filter((x) => !isShown(x, view))) out.push({ id: `r-${r.dir}-${r.engine}-${r.demo}`, group: 'Running sessions', label: baseName(r.dir), hint: runningWord(r), keywords: `${r.dir} switch`, icon: FolderGit2, run: () => { send({ t: 'open', dir: r.dir, engine: r.engine, demo: r.demo }); toLocal(); } });
       for (const r of (L?.recent ?? []).filter((x) => !view.running.some((y) => y.dir === x.dir)).slice(0, 10)) out.push({ id: `p-${r.dir}`, group: 'Projects', label: baseName(r.dir), hint: shortPath(r.dir, L!.home), keywords: r.dir, icon: FolderGit2, run: () => { send({ t: 'open', dir: r.dir, engine: pick!.engine, demo: pick!.demo }); toLocal(); } });
     }

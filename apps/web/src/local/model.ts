@@ -1,11 +1,11 @@
-import type { AccountView, BoardNote, RunningSession, ServerMsg, SharingView, WebState } from '../../../desktop/src/local/protocol.js';
+import type { AccountView, JoinedView, BoardNote, RunningSession, ServerMsg, SharingView, WebState } from '../../../desktop/src/local/protocol.js';
 import type { Item } from '@centcom/tui';
 
 export type Launcher = Extract<ServerMsg, { t: 'launcher' }>;
 export type DirMsg = Extract<ServerMsg, { t: 'dir' }>;
 export interface Notice { level: 'info' | 'warn' | 'error'; text: string; n: number }
 /** Everything the local-session screens show, rebuilt from the messages the main process sends. */
-export interface LocalView { launcher?: Launcher; dir?: DirMsg; opened?: string; /** Which agent the shown session is (Claude Code or Codex), once the desktop says. */ openedEngine?: { engine: 'claude-code' | 'codex'; demo: boolean }; history: string[]; /** Every agent session that is alive, shown or not. */ running: RunningSession[]; /** The context board of the shown session; `enabled` false when it is turned off. */ board: { enabled: boolean; notes: BoardNote[] }; state?: WebState; items: Item[]; notice?: Notice; models: Models; /** Who is signed in (asked for when the account button shows). */ account?: AccountView; /** The sign-in dialog: the code to show, or how it ended. */ login?: LoginView; /** The shown conversation, when it is shared. */ sharing?: SharingView; /** Every installed agent's models, for the one model menu. */ engineModels: EngineModels; byId: ReadonlyMap<string, Item> }
+export interface LocalView { launcher?: Launcher; dir?: DirMsg; opened?: string; /** Which agent the shown session is (Claude Code or Codex), once the desktop says. */ openedEngine?: { engine: 'claude-code' | 'codex'; demo: boolean }; history: string[]; /** Every agent session that is alive, shown or not. */ running: RunningSession[]; /** The context board of the shown session; `enabled` false when it is turned off. */ board: { enabled: boolean; notes: BoardNote[] }; state?: WebState; items: Item[]; notice?: Notice; models: Models; /** Who is signed in (asked for when the account button shows). */ account?: AccountView; /** The sign-in dialog: the code to show, or how it ended. */ login?: LoginView; /** The shown conversation, when it is shared. */ sharing?: SharingView; /** Somebody else's session this app has joined. */ joined?: JoinedView; /** Every installed agent's models, for the one model menu. */ engineModels: EngineModels; byId: ReadonlyMap<string, Item> }
 export type LoginView = { phase: 'code'; userCode: string; url: string; expiresInS: number; opened: boolean } | { phase: 'done' | 'cancelled' } | { phase: 'failed'; error: string };
 export type Models = Extract<ServerMsg, { t: 'models' }>['models'];
 export type EngineModels = Extract<ServerMsg, { t: 'engineModels' }>['engines'];
@@ -17,6 +17,7 @@ export function reduceLocal(v: LocalView, m: ServerMsg): LocalView {
     case 'dir': return { ...v, dir: m };
     case 'models': return { ...v, models: m.models };
     case 'account': return { ...v, account: m.account };
+    case 'joined': return { ...v, joined: m.joined ?? undefined };
     case 'sharing': return { ...v, sharing: m.sharing ?? undefined };
     case 'login': return { ...v, login: m.phase === 'code' ? { phase: 'code', userCode: m.userCode, url: m.url, expiresInS: m.expiresInS, opened: m.opened } : m.phase === 'failed' ? { phase: 'failed', error: m.error } : { phase: m.phase } };
     case 'engineModels': return { ...v, engineModels: m.engines };

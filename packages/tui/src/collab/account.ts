@@ -9,6 +9,8 @@ import { hostname } from 'node:os';
 import { join } from 'node:path';
 import { defaultDeps, loadConfig, stateDir } from '@centcom/config';
 import { CryptoError, DeviceKeyStore, TokenManager, TrustStore, createHttpClient, createKeychainApiKeyStore, createKeychainTokenStore, createSessionClient, defaultUserAgent, initCrypto, memoryKeychain, osAuthKeychain, osKeychain, realAuthClock, startDeviceLogin } from '@centcom/net';
+import { JoinedSession } from './joined.js';
+import { parseJoinTarget } from './target.js';
 import type { AuthClock, HttpClient, Keychain, Logger, SessionClient } from '@centcom/net';
 
 export interface AccountMe { id: string; name: string; email: string; plan: string; workspace?: { id: string; name: string | null } }
@@ -92,6 +94,22 @@ export class Account {
     const r = (await this.http.call('acceptInvite', { path: { token } } as never)).data as unknown as { session?: string | { id?: string }; role?: string; workspace?: string | { id?: string } };
     const id = (v: unknown): string | undefined => (typeof v === 'string' ? v : (v as { id?: string } | undefined)?.id);
     return { ...(id(r.session) ? { session: id(r.session)! } : {}), ...(r.role ? { role: r.role } : {}), ...(id(r.workspace) ? { workspace: id(r.workspace)! } : {}) };
+  }
+
+  /**
+   * Joins a session from what the person pasted: an invite link or token (accepted first), a session id, or a watch-only link (no
+   * account needed for that one, which is why it does not use this account's sign-in).
+   */
+  async join(input: string, o: { displayName?: string } = {}): Promise<{ joined: JoinedSession; how: 'invite' | 'session' | 'watch' }> {
+    const target = parseJoinTarget(input); if (!target) throw Object.assign(new Error('That does not look like a session id or an invite link.'), { code: 'bad_target' });
+    if (target.kind === 'watch') { // no account needed: the link is the credential, the keys of this visit live in memory only
+      await initCrypto(); const keys = new DeviceKeyStore(memoryKeychain(), `dev_watch${Date.now().toString(36).toUpperCase()}`.slice(0, 30)); const relayUrl = this.o.relayUrl ?? process.env.CENTCOM_RELAY_URL;
+      const client = createSessionClient({ http: this.plain, crypto: { device: keys, trust: new TrustStore() }, deviceId: 'watch', clientInfo: { name: this.o.app, version: this.o.version, contract: '1.0' } as never, ...(relayUrl ? { relayUrl } : {}), allowPlainWs: isLoopback(this.baseUrl), ...(this.o.logger ? { logger: this.o.logger } : {}) });
+      return { joined: new JoinedSession(await client.joinViaShareLink({ token: target.token, displayName: (o.displayName ?? 'Guest').slice(0, 40), fragment: target.fragment })), how: 'watch' };
+    }
+    const sessions = await this.sessions(); let sessionId = target.kind === 'session' ? target.id : '';
+    if (target.kind === 'invite') { const r = await this.acceptInvite(target.token); if (!r.session) throw Object.assign(new Error('That invite is not for a session. Ask for a session link.'), { code: 'bad_target' }); sessionId = r.session; }
+    return { joined: new JoinedSession(await sessions.joinSession({ sessionId })), how: target.kind };
   }
 
   /** The workspaces this person is in (a session is created in one). */

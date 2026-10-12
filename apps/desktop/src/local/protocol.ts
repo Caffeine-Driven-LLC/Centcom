@@ -41,7 +41,11 @@ export type ClientMsg =
   | { t: 'shareLink' }
   | { t: 'shareInvite'; email?: string }
   | { t: 'shareDecide'; item: string; decision: 'approve' | 'reject' }
-  | { t: 'shareAuto'; on: boolean };
+  | { t: 'shareAuto'; on: boolean }
+  /** Joining somebody else's session: paste an id or a link. */
+  | { t: 'join'; input: string }
+  | { t: 'joinedAsk'; text: string }
+  | { t: 'joinedLeave' };
 
 /** AppState without the parts that only make sense in a terminal or cannot be serialised. */
 export type WebState = Omit<AppState, 'items' | 'approvals' | 'input' | 'cursor' | 'histIdx' | 'draft' | 'scroll' | 'palette' | 'modelSel' | 'gallery' | 'slashSel' | 'mode' | 'history'> & {
@@ -66,6 +70,15 @@ export interface SharingView {
   auto: boolean; members: { id: string; name: string; slot: number; role: 'host' | 'editor' | 'viewer'; online: boolean; you: boolean }[];
   pending: { item: string; from: string; slot: number; text: string }[];
 }
+/** Somebody else's session that this window joined: what happened in it, who is there, what you may do. */
+export interface JoinedView {
+  state: 'joining' | 'live' | 'ended' | 'failed'; sessionId?: string; how?: 'invite' | 'session' | 'watch'; role?: 'host' | 'editor' | 'viewer'; error?: string;
+  /** waiting for the host's key, or reconnecting */ phase?: string;
+  people: { id: string; name: string; slot: number; role: 'host' | 'editor' | 'viewer'; you: boolean; online: boolean }[];
+  /** what is in the transcript (the last 300 entries) */
+  entries: { id: string; kind: 'user' | 'assistant' | 'system' | 'tool' | 'approval'; who?: string; slot?: number; text: string; done?: boolean; status?: string }[];
+  /** what you asked for that the host has not run yet */ asked: { item: string; text: string; state: string }[];
+}
 export type ServerMsg =
   | { t: 'launcher'; home: string; cwd: string; recent: RecentDir[]; claude: ClaudeStatus; codex: CodexStatusMsg; prefs: Prefs }
   | { t: 'dir'; path: string; parent: string | null; git: boolean; entries: DirEntry[]; error?: string; saved?: number }
@@ -78,6 +91,7 @@ export type ServerMsg =
   | { t: 'running'; sessions: RunningSession[] }
   | { t: 'account'; account: AccountView }
   | { t: 'sharing'; sharing: SharingView | null }
+  | { t: 'joined'; joined: JoinedView | null }
   /** The sign-in dialog: `code` is shown with the address to open, then `done`, or why it ended. */
   | { t: 'login'; phase: 'code'; userCode: string; url: string; expiresInS: number; opened: boolean }
   | { t: 'login'; phase: 'done' | 'cancelled' }

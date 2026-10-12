@@ -24,6 +24,8 @@ export class SessionRest {
   async claimHost(id: string): Promise<SessionSummary> { return (await this.http.call('claimHost', { path: { id } } as never)).data as unknown as SessionSummary; }
   /** Called for every connection attempt: a ticket works once. */
   async joinToken(id: string, caps?: string[], signal?: AbortSignal): Promise<JoinToken> { return (await this.http.call('createJoinToken', { path: { id }, body: caps ? { caps } : {} } as never, { signal })).data as unknown as JoinToken; }
+  /** A share-link guest's view of the members (public keys and names only): the link is the credential. */
+  async guestMembers(token: string): Promise<MemberInfo[]> { const r = (await this.http.call('listShareLinkMembers', { path: { token } } as never)).data as unknown as { data?: Rec[] }; return (r.data ?? []).map((m) => memberOf(m)); }
   async members(id: string): Promise<MemberInfo[]> { const out: MemberInfo[] = []; for await (const m of this.http.paginate('listSessionMembers', { path: { id } } as never, { limit: 200 })) out.push(memberOf(m as unknown as Rec)); return out; }
   async createShareLink(id: string, expiresInS?: number): Promise<{ token: string; url: string; expires_at: string }> { return (await this.http.call('createShareLink', { path: { id }, body: expiresInS ? { expires_in_s: expiresInS } : {} } as never)).data as never; }
   async revokeShareLink(id: string, token: string): Promise<void> { await this.http.call('revokeShareLink', { path: { id, token } } as never); }

@@ -533,6 +533,9 @@ export class AppController {
   /** Reasoning effort for the next turns, if the engine has the setting (Codex). Returns false when it does not. */
   setEffort(effort: string): boolean { if (!this.session?.setEffort) return false; this.session.setEffort(effort); this.effort = effort; this.toast('ok', `Reasoning effort: ${effort || 'default'}`); return true; }
   private effort = '';
+  private shareHandler?: (arg: string) => Promise<void>;
+  /** The app that has an account hands in what `/share` does. */
+  setShareHandler(f: ((arg: string) => Promise<void>) | undefined): void { this.shareHandler = f; }
   private readonly turnEndListeners = new Set<(outcome: string) => void>();
   /** Calls `fn` each time a turn ends (a sharing bridge uses it to tell when a request it ran is finished). Returns how to stop. */
   onTurnEnd(fn: (outcome: string) => void): () => void { this.turnEndListeners.add(fn); return () => { this.turnEndListeners.delete(fn); }; }
@@ -965,6 +968,7 @@ export class AppController {
         break;
       }
       case 'effort': await this.effortCommand(arg); break;
+      case 'share': { if (!this.shareHandler) { this.toast('warn', 'Sharing is not available here. Use the terminal app with an account (centcom login).'); break; } await this.shareHandler(arg); break; }
       case 'model': {
         if (!arg) { await this.openModels(); break; }
         const named = /^(codex|claude(?:[ -]?code)?)(?:[:\s]+(.*))?$/i.exec(arg.trim());

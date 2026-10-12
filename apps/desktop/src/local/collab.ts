@@ -3,10 +3,10 @@
  * that follow, hosting a session over the relay and joining one. A person who never signs in never starts any of it: local sessions do not
  * need the server.
  */
-import { Account, HostBridge, type AccountStatus } from '@centcom/tui';
+import { Account, HostBridge, JoinedSession, type AccountStatus } from '@centcom/tui';
 import type { SessionHandle } from '@centcom/net';
 import type { Workspace } from './workspace.js';
-import type { AccountView, ClientMsg, ServerMsg, SharingView } from './protocol.js';
+import type { AccountView, ClientMsg, JoinedView, ServerMsg, SharingView } from './protocol.js';
 
 export interface CollabOptions {
   version: string;
@@ -16,6 +16,8 @@ export interface CollabOptions {
   /** Tells the windows that show `ws`. */ toViewers?(ws: Workspace, m: ServerMsg): void;
 }
 export type CollabMsg = Extract<ClientMsg, { t: 'account' | 'login' | 'cancelLogin' | 'logout' }>;
+export type JoinMsg = Extract<ClientMsg, { t: 'join' | 'joinedAsk' | 'joinedLeave' }>;
+export const isJoinMsg = (m: ClientMsg): m is JoinMsg => m.t === 'join' || m.t === 'joinedAsk' || m.t === 'joinedLeave';
 export type ShareMsg = Extract<ClientMsg, { t: 'share' | 'unshare' | 'shareLink' | 'shareInvite' | 'shareDecide' | 'shareAuto' }>;
 const ACCOUNT = new Set(['account', 'login', 'cancelLogin', 'logout']); const SHARE = new Set(['share', 'unshare', 'shareLink', 'shareInvite', 'shareDecide', 'shareAuto']);
 export const isCollabMsg = (m: ClientMsg): m is CollabMsg => ACCOUNT.has(m.t);
@@ -102,6 +104,39 @@ export class CollabService {
       case 'shareAuto': { cur?.bridge?.setAutoApprove(m.on); this.publish(ws); return; }
     }
   }
+
+  /* ---------------------------------------------------------------- joining somebody else's session */
+  private joinedSession?: { session?: JoinedSession; view: JoinedView; off?: () => void; timer?: ReturnType<typeof setTimeout>; asked: Map<string, string> };
+  get joinedNow(): JoinedView | null { return this.joinedSession?.view ?? null; }
+  private pushJoined(): void { this.o.broadcast({ t: 'joined', joined: this.joinedSession?.view ?? null }); }
+  private refreshJoined(): void {
+    const j = this.joinedSession; if (!j?.session) return; const sess = j.session; const gs = sess.state();
+    const entries: JoinedView['entries'] = []; const nameOf = (id: string): { who: string; slot: number } | undefined => { const p = sess.people().find((x) => x.id === id); return p ? { who: p.you ? 'You' : p.name, slot: p.slot } : undefined; };
+    for (const e of gs.transcript.slice(-300)) {
+      if (e.kind === 'user') entries.push({ id: e.id, kind: 'user', text: e.text, ...nameOf(e.from) }); else if (e.kind === 'assistant') entries.push({ id: e.id, kind: 'assistant', text: e.text, done: e.done });
+      else if (e.kind === 'system') entries.push({ id: e.id, kind: 'system', text: e.text, status: e.level }); else if (e.kind === 'tool_request') entries.push({ id: e.id, kind: 'tool', text: `${e.name}: ${e.summary}`.slice(0, 400), status: 'running' });
+      else if (e.kind === 'tool_result') entries.push({ id: e.id, kind: 'tool', text: e.summary.slice(0, 400), status: e.status }); else if (e.kind === 'approval') entries.push({ id: e.id, kind: 'approval', text: e.summary, ...(e.decision ? { status: e.decision } : { status: 'waiting' }) });
+    }
+    const q = sess.queue.snapshot().items; const mine = sess.handle.me.id;
+    j.view = { ...j.view, state: gs.phase === 'ended' || gs.phase === 'kicked' ? 'ended' : 'live', phase: gs.phase, role: sess.role, people: sess.people(), entries, asked: q.filter((i) => i.submitter === mine && ['queued', 'approved', 'running'].includes(i.state)).map((i) => ({ item: i.id, text: i.body ?? j.asked.get(i.id) ?? '', state: i.state })), ...(gs.phase === 'kicked' ? { error: 'You were removed from this session.' } : {}) };
+    if (!j.timer) j.timer = setTimeout(() => { j.timer = undefined; this.pushJoined(); }, 120);
+  }
+  async handleJoin(m: JoinMsg, send: (m: ServerMsg) => void): Promise<void> {
+    if (m.t === 'joinedLeave') { await this.leaveJoined(); return; }
+    if (m.t === 'joinedAsk') { const s = this.joinedSession?.session; if (!s) return; try { const r = await s.ask(m.text); this.joinedSession!.asked.set(r.item, m.text); this.refreshJoined(); } catch (e) { send({ t: 'notice', level: 'warn', text: e instanceof Error ? e.message : 'Could not send that.' }); } return; }
+    await this.leaveJoined(); const view: JoinedView = { state: 'joining', people: [], entries: [], asked: [] }; this.joinedSession = { view, asked: new Map() }; this.pushJoined();
+    try {
+      const account = await this.getAccount(); const { joined, how } = await account.join(m.input);
+      const j = this.joinedSession; if (!j) { await joined.leave(); return; } j.session = joined; j.view = { ...j.view, state: 'live', how, sessionId: joined.handle.id }; j.off = joined.subscribe(() => this.refreshJoined()); joined.handle.on('roster', () => this.refreshJoined()); this.refreshJoined(); this.pushJoined();
+    } catch (e) {
+      const code = (e as { code?: string })?.code; const w = shareWhy(e);
+      const error = code === 'bad_target' ? (e as Error).message : code === 'not_signed_in' ? 'Sign in first to join this session. (A watch-only link needs no account.)' : code === 'invite_invalid' || code === 'invite_expired' || code === 'invite_revoked' ? 'That invite is no longer valid. Ask for a new one.' : code === 'session_not_found' || code === 'not_found' ? 'That session was not found, or you are not allowed in it.' : code === 'not_a_member' ? 'You are not a member of that session. Ask the host for an invite.' : w.error;
+      if (this.joinedSession) this.joinedSession.view = { ...this.joinedSession.view, state: 'failed', error, ...(code ? { } : {}) }; this.pushJoined();
+    }
+  }
+  async leaveJoined(): Promise<void> { const j = this.joinedSession; this.joinedSession = undefined; if (j?.timer) clearTimeout(j.timer); j?.off?.(); await j?.session?.leave().catch(() => undefined); this.o.broadcast({ t: 'joined', joined: null }); }
+  /** A window that starts up is told about a session the app has joined. */
+  sendJoined(send: (m: ServerMsg) => void): void { if (this.joinedSession) send({ t: 'joined', joined: this.joinedSession.view }); }
 }
 
 /** What went wrong while sharing, in words for the person. */
