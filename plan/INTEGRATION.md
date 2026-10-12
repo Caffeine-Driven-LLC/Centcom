@@ -21,7 +21,7 @@ Client authenticates via the device flow against the real API and fetches `/v1/m
 
 Client connects to the real relay: handshake, heartbeat, forced disconnect, resume.
 
-- **backend** lanes: B011, B037, B038, B039, B040, B041, B042, B053, B054, B055, B056
+- **backend** lanes: B011, B037, B038, B039, B040, B041, B042, B053, B054, B055, B056, B103
 - **client** lanes: C054, C055, C063
 
 ## G3 · Command post
@@ -35,14 +35,14 @@ Two real clients: host + guest, queue → approve → agent runs → events fan 
 
 Checkout → webhook → entitlement flips → relay unlocked; quota warnings arrive.
 
-- **backend** lanes: B019, B030, B069, B070, B071, B072, B073, B074, B075, B076, B077, B078, B079, B080
+- **backend** lanes: B019, B030, B069, B070, B071, B072, B073, B074, B075, B076, B077, B078, B079, B080, B106
 - **client** lanes: C029, C039, C044, C064, C065, C089
 
 ## G5 · Fleet
 
 Three clients, branch mode, file locks, presence, notifications, webhooks.
 
-- **backend** lanes: B029, B032, B033, B034, B035, B036, B047, B048, B057, B058, B059, B060, B061, B062, B063, B064, B065, B066, B067, B068, B081, B082, B083
+- **backend** lanes: B029, B032, B033, B034, B035, B036, B047, B048, B057, B058, B059, B060, B061, B062, B063, B064, B065, B066, B067, B068, B081, B082, B083, B104, B105
 - **client** lanes: C017, C018, C024, C059, C062, C066, C069, C070, C077, C078, C079, C080, C084, C085, C090, C091
 
 ## G6 · Launch

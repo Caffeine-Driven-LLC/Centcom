@@ -1,8 +1,8 @@
-# Backend plan · 102 lanes (B001-B102)
+# Backend plan · 106 lanes (B001-B106)
 
 Repo: `Centcom-backend` · Rules: [`plan/GUIDELINES.md`](../GUIDELINES.md) · Format: [`plan/LANE_CARD_SPEC.md`](../LANE_CARD_SPEC.md) · Connection points: [`contracts/`](../../contracts/index.json)
 
-- **102 lanes**: 25 small (≤1 d), 60 medium (≤3 d), 17 large (≤5 d) · 290 person-days of work in total
+- **106 lanes**: 26 small (≤1 d), 60 medium (≤3 d), 20 large (≤5 d) · 306 person-days of work in total
 - **14 dependency layers** · critical path **45 days** (see [`GRAPH.md`](../GRAPH.md)) · parallelism in layer 1: 1 lanes can start on day one
 - Every lane card is independent: it names its inputs (contracts), outputs (deliverables), and how to build with no counterpart (`build_against`).
 - **No lane in this plan depends on a lane in the other plan.** The two sides meet only at contract IDs.
@@ -84,6 +84,7 @@ Repo: `Centcom-backend` · Rules: [`plan/GUIDELINES.md`](../GUIDELINES.md) · Fo
 | [B054](B054.md) | Session REST endpoints: list, create, get, join-token, claim-host | M3 | M | realtime | B021, B025, B053, B017, B031 | CT-API-SESSIONS | G2 |
 | [B055](B055.md) | Encrypted history store (blob storage of ciphertext frames) | M3 | M | data | B007, B008, B039 | CT-RESUME | G2 |
 | [B056](B056.md) | Snapshot service: descriptors, pre-signed upload, commit, pruning | M3 | M | data | B055 | CT-RESUME, CT-API-SESSIONS | G2 |
+| [B103](B103.md) | Run the backend locally: sessions, workspaces, invites, relay and two accounts | M4 | L | platform | B012, B029, B031, B038, B043, B054, B068, B080, B102 | CT-API-SESSIONS, CT-API-WORKSPACES | G2 |
 
 ### P4 Fleet
 
@@ -101,6 +102,8 @@ Repo: `Centcom-backend` · Rules: [`plan/GUIDELINES.md`](../GUIDELINES.md) · Fo
 | [B066](B066.md) | Notification preferences and quiet hours | M4 | S | platform | B065 | CT-API-NOTIFY | G5 |
 | [B067](B067.md) | Presence history and last-seen API | M5 | S | realtime | B047 | CT-WS-PRESENCE | G5 |
 | [B068](B068.md) | Share links and viewer-only guest tokens | M4 | M | identity | B017, B054, B031 | CT-API-SESSIONS | G5 |
+| [B104](B104.md) | Share-link guests can read the members' public keys | M4 | S | sessions | B068, B054, B103 | CT-API-SESSIONS | G5 |
+| [B105](B105.md) | Session invites: one person into one session, no seat | M4 | L | sessions | B029, B030, B031, B054, B068, B080, B103 | CT-API-SESSIONS, CT-API-WORKSPACES | G5 |
 
 ### P5 Billing
 
@@ -133,6 +136,7 @@ Repo: `Centcom-backend` · Rules: [`plan/GUIDELINES.md`](../GUIDELINES.md) · Fo
 | [B088](B088.md) | Internal admin console (minimal web UI) | Later | M | platform | B087 | - | G6 |
 | [B089](B089.md) | Metadata search across sessions and members | Later | S | data | B054 | - | G6 |
 | [B090](B090.md) | Data retention and purge jobs | M5 | M | data | B008, B055 | - | G6 |
+| [B106](B106.md) | Collaboration wiring: metering, purge, relay delivery and the remaining API modules | M5 | L | platform | B055, B056, B063, B065, B069, B074, B075, B076, B081, B090, B103 | CT-API-USAGE, CT-API-NOTIFY, CT-API-BILLING | G4 |
 
 ### P7 Ops
 
