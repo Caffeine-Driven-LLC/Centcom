@@ -45,10 +45,12 @@ export interface BoardNote { id: string; type: string; text: string; author: str
 export type ServerMsg =
   | { t: 'launcher'; home: string; cwd: string; recent: RecentDir[]; claude: ClaudeStatus; codex: CodexStatusMsg; prefs: Prefs }
   | { t: 'dir'; path: string; parent: string | null; git: boolean; entries: DirEntry[]; error?: string; saved?: number }
-  | { t: 'opened'; dir: string; history: string[] } // prompt history rides along once here, not in every state push
+  | { t: 'opened'; dir: string; history: string[]; engine?: 'claude-code' | 'codex'; demo?: boolean } // prompt history rides along once here, not in every state push
   | { t: 'closed' }
   | { t: 'state'; state: WebState; changed: Item[]; order: string[] }
   | { t: 'models'; models: { id: string; label: string; note: string; efforts?: string[]; defaultEffort?: string; isDefault?: boolean }[] }
+  /** Every installed agent's models, for the one model menu: choosing another agent's model switches to it. */
+  | { t: 'engineModels'; engines: { engine: 'claude-code' | 'codex'; models: { id: string; label: string; note: string; efforts?: string[]; defaultEffort?: string; isDefault?: boolean }[] }[] }
   | { t: 'running'; sessions: RunningSession[] }
   /** The board of the shown session; `enabled` is false when `context.board` is off. */
   | { t: 'board'; enabled: boolean; notes: BoardNote[] }

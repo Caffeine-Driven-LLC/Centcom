@@ -6,7 +6,7 @@ import { t } from '../i18n/index.js';
 import { useTheme } from '../theme/theme.js';
 import { Dialog } from '../ui/shadcn/index.js';
 import './shell.css';
-import { isShown, pickEngine, runningWord, shortPath, whenAgo } from './model.js';
+import { installedEngines, isShown, pickEngine, runningWord, shortPath, whenAgo } from './model.js';
 import { useLocal } from './use-local.js';
 
 const MODES: [string, string][] = [['default', 'Ask before acting'], ['acceptEdits', 'Accept edits'], ['plan', 'Plan only (read only)'], ['bypassPermissions', 'Skip approvals']];
@@ -31,6 +31,7 @@ export function CommandPalette({ open, onOpenChange, nav }: { open: boolean; onO
     if (available) {
       out.push({ id: 'new', group: 'Session', label: 'New session', hint: 'Ctrl+N', keywords: 'another project leave', icon: Plus, run: () => { send({ t: 'leave' }); toLocal(); } });
       if (view.opened) {
+        if (view.openedEngine && !view.openedEngine.demo && installedEngines(L).length > 1) for (const e of installedEngines(L).filter((x) => x !== view.openedEngine?.engine)) out.push({ id: `engine-${e}`, group: 'Session', label: `Switch to ${e === 'codex' ? 'Codex' : 'Claude Code'}`, keywords: 'agent model engine claude codex openai anthropic', icon: Shield, run: () => send({ t: 'open', dir: view.opened!, engine: e }) });
         out.push({ id: 'compact', group: 'Session', label: 'Compact the conversation', icon: Eraser, run: () => send({ t: 'compact' }) });
         if (view.state?.busy) out.push({ id: 'stop', group: 'Session', label: 'Stop the agent', keywords: 'interrupt', icon: Square, run: () => send({ t: 'interrupt' }) });
         out.push({ id: 'close', group: 'Session', label: 'Close this project', icon: FolderGit2, run: () => { send({ t: 'close' }); toLocal(); } });
