@@ -15,6 +15,15 @@ export interface JoinDeps {
 }
 /** The part of a joined session this command uses (tests pass fakes). */
 export interface JoinedLike { state(): GuestState; subscribe(f: (s: GuestState) => void): () => void; people(): { id: string; name: string; role: string; you: boolean }[]; role: string; ask(text: string): Promise<unknown>; leave(): Promise<void> }
+/** What the host sends is not trusted: no terminal escape sequences, no carriage returns or other control characters reach this terminal (newlines and tabs stay). */
+export function clean(text: string): string {
+  return text
+    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, '') // CSI (colours, cursor moves, clipboard and title requests ride on these and on OSC below)
+    .replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)?/g, '') // OSC (window title, hyperlinks, clipboard)
+    .replace(/\u001b[P^_X][^\u001b]*(?:\u001b\\)?/g, '') // DCS, PM, APC, SOS strings
+    .replace(/\u001b./gs, '') // any other two-character escape
+    .replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, ''); // the rest of the control characters (CR, BEL, backspace, C1)
+}
 const WHO: Record<string, string> = { host: 'host', editor: 'can edit', viewer: 'view only' };
 
 const failure = (e: unknown): string => {
@@ -27,7 +36,8 @@ const failure = (e: unknown): string => {
   return msg && msg.length < 160 ? msg : 'Joining did not work. Try again.';
 };
 
-export async function runJoin(argv: string[], d: JoinDeps): Promise<number> {
+export async function runJoin(argv: string[], deps: JoinDeps): Promise<number> {
+  const d: JoinDeps = { ...deps, out: (l) => deps.out(clean(l)), err: (l) => deps.err(clean(l)) };
   let target: string | undefined; let displayName: string | undefined; let bad: string | undefined;
   for (let i = 0; i < argv.length; i++) { const a = argv[i]!; if (a === '--name') { displayName = argv[++i]; if (!displayName) bad = 'Give --name a value.'; } else if (a.startsWith('--')) bad = `Unknown option ${a}.`; else if (!target) target = a; else bad = 'Give one link or session id.'; }
   if (!target || bad) { d.err(bad ?? 'Usage: centcom join <invite link | watch-only link | session id> [--name <name>]'); return 1; }

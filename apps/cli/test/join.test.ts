@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { initialGuestState, reduceGuestState, type GuestState, type DecodedFrame } from '@centcom/guest';
-import { runJoin, type JoinedLike } from '../src/commands/join.js';
+import { clean, runJoin, type JoinedLike } from '../src/commands/join.js';
 
 const frame = (seq: number, k: string, from: string, secret: Record<string, unknown>, p: Record<string, unknown> = {}): DecodedFrame => ({ v: 1, t: 'event', id: `msg_${seq}`, sid: 'ses_1', from, ts: '2026-10-12T10:00:00.000Z', k, seq, p, secret } as never);
 function fake(role: 'host' | 'editor' | 'viewer' = 'editor') {
@@ -27,5 +27,14 @@ describe('centcom join', () => {
     const run = runJoin(['ses_x'], { account: { join: async () => ({ joined: f.joined, how: 'session' as const }) }, lines: lines(), ...i.d }); await new Promise((r) => setTimeout(r, 30)); f.end(); await run; expect(f.asked).toEqual(['add tests', 'and docs']);
     const v = fake('viewer'); const j = io(); async function* typed() { yield 'nope'; } const run2 = runJoin(['ses_x'], { account: { join: async () => ({ joined: v.joined, how: 'watch' as const }) }, lines: typed(), ...j.d }); await new Promise((r) => setTimeout(r, 30)); v.end(); await run2; expect(v.asked).toEqual([]); expect(j.out[0]).toMatch(/watch but not send/);
     const k = io(); expect(await runJoin(['x'], { account: { join: async () => { throw Object.assign(new Error('x'), { code: 'invite_expired' }); } }, ...k.d })).toBe(1); expect(k.err[0]).toMatch(/no longer valid/);
+  });
+  it('does not let the host write escape sequences or control characters into a guest terminal', () => {
+    expect(clean('ok\u001b[2J\u001b[Hgone')).toBe('okgone'); expect(clean('a\u001b]0;pwned title\u0007b')).toBe('ab'); expect(clean('a\u001b]52;c;ZXZpbA==\u001b\\b')).toBe('ab');
+    expect(clean('line one\nline two\ttab')).toBe('line one\nline two\ttab'); expect(clean('over\rwrite\u0007\u0008x')).toBe('overwritex'); expect(clean('\u001bPdevice control\u001b\\z')).toBe('z'); expect(clean('c1\u009b31mred')).toBe('c131mred');
+  });
+  it('prints host text through the filter', async () => {
+    const f = fake('editor'); const i = io(); const run = runJoin(['ses_x'], { account: { join: async () => ({ joined: f.joined, how: 'session' as const }) }, ...i.d }); await new Promise((r) => setTimeout(r, 10));
+    f.push(frame(1, 'message.user', 'mem_host', { text: 'hi\u001b]0;pwned\u0007 there\u001b[31m' })); await new Promise((r) => setTimeout(r, 10)); f.end(); await run;
+    expect(i.out.join('\n')).toContain('> hi there'); expect(i.out.join('\n')).not.toMatch(/\u001b|pwned/);
   });
 });
