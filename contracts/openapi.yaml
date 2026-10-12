@@ -2146,7 +2146,8 @@ paths:
       tags:
       - Workspaces
       summary: Revoke an invite
-      description: Revokes a pending invite; admins and owners of the invite's workspace.
+      description: Revokes a pending invite; admins and owners of the invite's workspace. For a session invite the session host may revoke it
+        too (scope sessions:host); revoking an accepted session invite also withdraws the right to join that session.
       x-contract: CT-API-WORKSPACES
       x-scopes:
       - workspaces:write
@@ -2171,6 +2172,8 @@ paths:
         - workspaces:write
       - apiKeyAuth:
         - workspaces:write
+      - bearerAuth:
+        - sessions:host
       parameters:
       - name: id
         in: path
@@ -2323,7 +2326,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InviteAcceptance'
+                oneOf:
+                - $ref: '#/components/schemas/InviteAcceptance'
+                - $ref: '#/components/schemas/SessionInviteAcceptance'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -6827,6 +6832,224 @@ paths:
                 $ref: '#/components/schemas/User'
         '409':
           $ref: '#/components/responses/Conflict'
+  /v1/share-links/{token}/members:
+    get:
+      operationId: listShareLinkMembers
+      tags:
+      - Sessions
+      summary: List a session's members for a share-link guest
+      description: Public, rate-limited. The share-link token is the credential. Returns the live members' public device keys (and slot, role,
+        display name) so a view-only guest can check who signed a frame (CT-CRYPTO 4a). No user ids, e-mail or workspace data.
+      x-contract: CT-API-SESSIONS
+      x-scopes: []
+      x-role: public
+      x-idempotency: none
+      x-error-codes:
+      - rate_limited
+      - internal_error
+      - service_unavailable
+      - gone
+      - not_found
+      security: []
+      parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+          description: Opaque URL-safe token (160-bit)
+      - $ref: '#/components/parameters/RequestIdHeader'
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            RateLimit-Limit:
+              $ref: '#/components/headers/RateLimit-Limit'
+            RateLimit-Remaining:
+              $ref: '#/components/headers/RateLimit-Remaining'
+            RateLimit-Reset:
+              $ref: '#/components/headers/RateLimit-Reset'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionMemberPage'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '410':
+          $ref: '#/components/responses/Gone'
+  /v1/sessions/{id}/invites:
+    get:
+      operationId: listSessionInvites
+      tags:
+      - Workspaces
+      summary: List pending session invites
+      description: Lists pending invites of this session; host only.
+      x-contract: CT-API-WORKSPACES
+      x-scopes:
+      - sessions:host
+      x-role: host
+      x-idempotency: none
+      x-error-codes:
+      - rate_limited
+      - internal_error
+      - service_unavailable
+      - unauthorized
+      - token_expired
+      - token_invalid
+      - token_revoked
+      - device_revoked
+      - client_too_old
+      - forbidden
+      - not_found
+      - session_not_found
+      - host_required
+      security:
+      - bearerAuth:
+        - sessions:host
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/SessionId'
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/RequestIdHeader'
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            RateLimit-Limit:
+              $ref: '#/components/headers/RateLimit-Limit'
+            RateLimit-Remaining:
+              $ref: '#/components/headers/RateLimit-Remaining'
+            RateLimit-Reset:
+              $ref: '#/components/headers/RateLimit-Reset'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitePage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '426':
+          $ref: '#/components/responses/ClientTooOld'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    post:
+      operationId: createSessionInvite
+      tags:
+      - Sessions
+      summary: Invite a person to one session
+      description: Invites one person to this session only, as editor or viewer, without workspace membership and without a seat. Host only; the
+        session's workspace needs relay_access.
+      x-contract: CT-API-SESSIONS
+      x-scopes:
+      - sessions:host
+      x-role: host
+      x-idempotency: accepted
+      x-error-codes:
+      - client_too_old
+      - device_revoked
+      - entitlement_required
+      - forbidden
+      - host_required
+      - idempotency_conflict
+      - internal_error
+      - invalid_request
+      - member_limit_reached
+      - not_found
+      - payload_too_large
+      - rate_limited
+      - service_unavailable
+      - session_ended
+      - session_not_found
+      - token_expired
+      - token_invalid
+      - token_revoked
+      - unauthorized
+      - unsupported_media_type
+      - validation_failed
+      security:
+      - bearerAuth:
+        - sessions:host
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/SessionId'
+      - $ref: '#/components/parameters/IdempotencyKeyOptional'
+      - $ref: '#/components/parameters/RequestIdHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionInviteCreate'
+      responses:
+        '201':
+          description: Created
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            RateLimit-Limit:
+              $ref: '#/components/headers/RateLimit-Limit'
+            RateLimit-Remaining:
+              $ref: '#/components/headers/RateLimit-Remaining'
+            RateLimit-Reset:
+              $ref: '#/components/headers/RateLimit-Reset'
+            Idempotency-Replayed:
+              $ref: '#/components/headers/Idempotency-Replayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InviteCreated'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '426':
+          $ref: '#/components/responses/ClientTooOld'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
 components:
   securitySchemes:
     bearerAuth:
@@ -7835,6 +8058,9 @@ components:
           - member
           - billing
           - guest
+          - editor
+          - viewer
+          description: editor and viewer are the roles of a session invite; workspace invites never carry them
         status:
           type: string
           enum:
@@ -7852,6 +8078,9 @@ components:
         expires_at:
           type: string
           format: date-time
+        session:
+          $ref: '#/components/schemas/SessionId'
+          description: Set for a session invite
       required:
       - id
       - workspace
@@ -7906,11 +8135,16 @@ components:
           - member
           - billing
           - guest
+          - editor
+          - viewer
         expires_at:
           type: string
           format: date-time
         has_key_bundle:
           type: boolean
+        session_name:
+          type: string
+          description: Set for a session invite
       required:
       - workspace_name
       - inviter_name
@@ -10010,5 +10244,43 @@ components:
       - data
       - next_cursor
       - has_more
+    SessionInviteCreate:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: Omit to create a link-only invite
+        role:
+          type: string
+          enum:
+          - editor
+          - viewer
+          default: editor
+        expires_in_s:
+          type: integer
+          minimum: 60
+          maximum: 604800
+          default: 86400
+        share_history:
+          type: boolean
+    SessionInviteAcceptance:
+      type: object
+      properties:
+        session:
+          $ref: '#/components/schemas/SessionId'
+        role:
+          type: string
+          enum:
+          - editor
+          - viewer
+        workspace:
+          $ref: '#/components/schemas/WorkspaceId'
+      required:
+      - session
+      - role
+      - workspace
+      description: 'Accepting a session invite creates no membership and uses no seat: it records the right to join that one session.'
 x-security-none: 'Public operations declare `security: []` (no authentication). Operations with optional authentication declare `security: [{},
   {bearerAuth: []}]`.'

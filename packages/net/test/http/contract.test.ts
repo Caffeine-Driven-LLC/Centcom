@@ -19,7 +19,7 @@ const gen = (...a: string[]) => spawnSync(process.execPath, ['--import', 'tsx', 
 
 describe('the generated operation table', () => {
   it('has every operation of openapi.yaml with the same method and path as @centcom/protocol', () => {
-    expect(IDS.length).toBe(Object.keys(OPERATIONS).length); expect(IDS.length).toBe(93);
+    expect(IDS.length).toBe(Object.keys(OPERATIONS).length); expect(IDS.length).toBe(96);
     for (const id of IDS) { const p = (OPERATIONS as Record<string, { method: string; path: string }>)[id]!; expect(HTTP_OPERATIONS[id].method, id).toBe(p.method); expect(HTTP_OPERATIONS[id].path, id).toBe(p.path); }
     expect(HTTP_OPERATIONS.ingestUsageEvents).toMatchObject({ idempotency: 'R', maxBodyBytes: 1024 * 1024, scopes: ['usage:write'] });
     expect(HTTP_OPERATIONS.createSession.idempotency).toBe('A'); expect(HTTP_OPERATIONS.revokeToken.idempotency).toBe('none'); expect(HTTP_OPERATIONS.listSessions.paginated).toBe(true);
@@ -72,7 +72,7 @@ describe('every operation against the mock backend', () => {
         failures.push(`${id}: ${(e as Error).name} ${(e as Error).message}`);
       }
     }
-    expect(failures).toEqual([]); expect(ok).toBe(93);
+    expect(failures).toEqual([]); expect(ok).toBe(96);
   }, 30_000);
   it('getStatus and getJwks return the documents, without acting on min_client_version', async () => {
     const s = await client.getStatus(); expect(typeof s.contract_version).toBe('string'); expect(s).toHaveProperty('min_client_version');
