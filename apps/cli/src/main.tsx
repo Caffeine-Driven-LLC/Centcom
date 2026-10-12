@@ -144,6 +144,7 @@ async function main() {
   // theme "auto": ask the terminal for its background colour (150 ms at most, nothing is written without a terminal) so a light terminal gets Paper instead of Graphite. The question goes out now and is answered while the agent is looked for.
   const bgAnswer = cc.cfg.ui.theme === 'auto' && !a11y.screenReader ? queryBackground({ out: process.stdout, inp: process.stdin }) : undefined;
   const { engine, demo, note } = await pickEngine(cc.cfg.client.engine);
+  const [hasClaude, hasCodex] = demo ? [false, false] : await Promise.all([isInstalled('claude'), isInstalled(process.env.CENTCOM_CODEX_BIN || 'codex')]); // both installed: the model list can switch between them
   let branch = ''; try { branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { /* not a git repo */ }
   const dangerous = has('--dangerously-skip-permissions') || has('--yolo');
   const mode: PermissionMode = dangerous || arg('--mode') === 'bypassPermissions' ? 'bypassPermissions' : cc.cfg.client.permission_mode;
@@ -166,7 +167,7 @@ async function main() {
     else resumeId = c.id;
   }
   const ctl = new AppController({ ...rt.options, views: appViews(process.cwd(), { doctor: () => realDoctorContext({ version: VERSION, contract: CONTRACT_VERSION, apiBase: cc.cfg.api.base_url, stateDir: stateDir(defaultDeps()) }) }),
-    engine, demo, cwd: process.cwd(), branch, version: VERSION, permissionMode: mode, dangerous: dangerous || mode === 'bypassPermissions', ghosts: has('--demo-team'),
+    engine, demo, engines: demo ? undefined : { ...(hasClaude ? { 'claude-code': () => new ClaudeCodeEngine() } : {}), ...(hasCodex ? { codex: () => new CodexEngine() } : {}) }, onEngine: (id) => cc.set('client.engine', id), cwd: process.cwd(), branch, version: VERSION, permissionMode: mode, dangerous: dangerous || mode === 'bypassPermissions', ghosts: has('--demo-team'),
     logger, settings, external: (task) => { pendingExternal = task; instance?.unmount(); }, bell: () => { try { process.stdout.write('\x07'); } catch { /* no terminal */ } }, ...cc.options({ ...initialSettings(), ...settings }, { saveHistory: !has('--no-save') }),
     sessions: sessionStore, night: demo ? undefined : { dir: pathJoin(homedir(), '.centcom', 'night') },
     modelCache: { read: async (f) => { try { return await readFile(pathJoin(stateDir(defaultDeps()), f), 'utf8'); } catch { return undefined; } }, write: async (f, t) => { const d = stateDir(defaultDeps()); await mkdir(d, { recursive: true, mode: 0o700 }); await writeFile(pathJoin(d, f), t, { mode: 0o600 }); } },

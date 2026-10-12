@@ -39,6 +39,8 @@ Codex can wait for your answer while it works. Claude Code's questions come back
 
 Commands that take a choice open a list when you type them with nothing after them, so there is nothing to remember: `/mode`, `/theme`, `/color`, `/mascot`, `/motion`, `/density`, `/spinner`, `/title`, `/bell`, `/mouse`, `/auto`, `/effort`, `/model`, `/resume`, `/rewind`, `/skills`, `/permissions`, `/fleet`, `/trust`, `/demo`, `/mcp`, `/hooks` and `/memory`. `/copy` asks what to copy when the answer has code (the whole answer or any one code block), `/export` asks file or clipboard, `/find` asks what to look for, and a `# note` for memory is confirmed from a yes/no list. Typing the value yourself (`/mouse off`, `/copy code`, `/export notes.md`) still works and skips the list.
 
+With both Claude Code and Codex installed, `/model` lists both agents' models in one list. A model of the other agent moves the conversation to it: the transcript stays, and the new agent continues from a summary of what was said (the agent you switch to is the one `centcom` starts with next time). `/model codex`, `/model codex <model>` and `/model claude <model>` do the same without the list. It will not switch while the agent is working.
+
 ## Sharing what agents learn
 
 Agents working on the same project, in the fleet or in separate sessions, each have their own memory. The **context board** lets them share the useful part while they work. It is a short list of notes (`.centcom/context/board.jsonl` in your project; the folder ignores itself in git):
