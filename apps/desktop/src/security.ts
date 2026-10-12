@@ -10,6 +10,11 @@ export const CSP = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; st
 export const isAppUrl = (u: string): boolean => { try { const x = new URL(u); return x.protocol === `${APP_SCHEME}:` && x.hostname === APP_HOST && !x.username && !x.password && !x.port; } catch { return false; } };
 /** What may be handed to the system browser: https, with no credentials in the address. */
 export const isSafeExternal = (u: string): boolean => { try { const x = new URL(u); return x.protocol === 'https:' && !x.username && !x.password && x.hostname.length > 0; } catch { return false; } };
+/** The sign-in page may also be on the configured API's own address when that is this computer (http on loopback), for development against a local backend. */
+export const isSafeSignInUrl = (u: string, apiBase: string): boolean => {
+  if (isSafeExternal(u)) return true;
+  try { const x = new URL(u); const b = new URL(apiBase); const loop = (h: string) => h === 'localhost' || h === '127.0.0.1' || h === '[::1]'; return x.protocol === 'http:' && loop(x.hostname) && x.origin === b.origin && !x.username && !x.password; } catch { return false; }
+};
 /** `app://centcom/assets/x.js` to a file under `root`, or `undefined` for anything that would leave it. A path with no extension is a screen: it gets index.html (the app routes itself). */
 export function appUrlToFile(u: string, root: string): string | undefined {
   if (!isAppUrl(u)) return undefined; const x = new URL(u); let p: string; try { p = decodeURIComponent(x.pathname); } catch { return undefined; } if (p.includes('\0') || p.includes('\\')) return undefined;

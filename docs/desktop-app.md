@@ -25,6 +25,12 @@ The Electron window around `apps/web` (see `apps/desktop/README.md` for how it i
 | Up and Down in the message box | Walk through earlier messages (on an empty box or at the start of one line) |
 | Esc in the message box | Stop the agent while it works |
 
+## Your account
+
+The button at the foot of the sidebar is **Sign in** until you are signed in, then your name and plan. Signing in is only needed to share a session or join one; everything on this computer works without it. **Sign in with your browser** opens the server's device page with a code (`ABCD-EFGH`): check that the page shows the same code, then allow it. The app waits, then shows who you are, your plan, your workspace and the server. It is the same sign-in as `centcom login`, kept in the same place (the operating system's keychain, or only in memory when there is none), so signing in with one app signs in the other. **Sign out** ends it on this computer and on the server. The server address is `api.base_url` of the settings (`CENTCOM_API_URL`), so the app can talk to a backend on your own computer.
+
+To try it against a local backend (the backend repository's `pnpm dev:up`, `pnpm dev:api`, `pnpm dev:relay`): `pnpm dev:collab` signs a new account in through the device flow with scripted browser steps.
+
 ## Staying informed
 
 - The window title says `(2) Needs you · project` when approvals wait in any running session, and `Working · project` while an agent works.

@@ -31,3 +31,4 @@ export * from './conflicts/index.js';
 export * from './reactions/index.js';
 export * from './night/index.js';
 export { runLinear, type LinearIO } from './a11y/run.js';
+export * from './collab/index.js';

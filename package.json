@@ -38,6 +38,7 @@
     "lanes:next": "node tools/dev/lane-tasks.mjs",
     "dogfood": "node tools/dev/lane-tasks.mjs --seed ; tsx apps/cli/src/main.tsx",
     "install:cli": "sh tools/dev/install-cli.sh",
+    "dev:collab": "tsx tools/dev/collab-live.ts",
     "onboard": "sh tools/dev/onboard.sh"
   },
   "devDependencies": {
