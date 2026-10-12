@@ -250,14 +250,3 @@
   .cc-input:hover { border-color: var(--border-strong); }
   .cc-help { line-height: 1.45; }
 }
-
-/* ---- Claude Code / Codex tabs of one project ---- */
-:root {
-  .lc-etabs { display: inline-flex; gap: 2px; padding: 3px; background: var(--bg-sunken); border-radius: var(--r-pill); flex: 0 0 auto; }
-  .lc-etab { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 12px; border: 0; border-radius: var(--r-pill); background: transparent; color: var(--text-secondary); font: inherit; font-size: 13px; cursor: pointer; transition: background var(--dur-fast) var(--ease-standard); }
-  .lc-etab:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); }
-  .lc-etab[data-on="true"] { background: var(--bg-surface); color: var(--text-primary); font-weight: 600; box-shadow: var(--shadow-pixel-sm); }
-  .lc-etab:disabled { opacity: 0.5; cursor: not-allowed; }
-  .lc-etab__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted); }
-  .lc-etab__dot--busy { background: var(--accent-fill); } .lc-etab__dot--wait { background: var(--status-warning); } .lc-etab__dot--ready { background: var(--status-success); } .lc-etab__dot--off { background: transparent; border: 1px solid var(--border-strong); }
-}

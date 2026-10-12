@@ -49,6 +49,8 @@ export type ServerMsg =
   | { t: 'closed' }
   | { t: 'state'; state: WebState; changed: Item[]; order: string[] }
   | { t: 'models'; models: { id: string; label: string; note: string; efforts?: string[]; defaultEffort?: string; isDefault?: boolean }[] }
+  /** Every installed agent's models, for the one model menu: choosing another agent's model switches to it. */
+  | { t: 'engineModels'; engines: { engine: 'claude-code' | 'codex'; models: { id: string; label: string; note: string; efforts?: string[]; defaultEffort?: string; isDefault?: boolean }[] }[] }
   | { t: 'running'; sessions: RunningSession[] }
   /** The board of the shown session; `enabled` is false when `context.board` is off. */
   | { t: 'board'; enabled: boolean; notes: BoardNote[] }

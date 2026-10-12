@@ -2,7 +2,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { detectClaude, detectCodex } from '@centcom/agent';
+import { CLAUDE_MODELS, CodexEngine, detectClaude, detectCodex, type ModelChoice } from '@centcom/agent';
 import { ClientConfig, SessionStore } from '@centcom/tui';
 import { Workspace } from './workspace.js';
 import type { ClientMsg, DirEntry, Prefs, RecentDir, ServerMsg } from './protocol.js';
@@ -41,6 +41,20 @@ export class LocalService {
   private readonly home: string; private readonly stateDir: string; private readonly cwd: string; private workspaces = new Map<string, Workspace>(); private appCfg?: ClientConfig; private warned = false;
   private sessions = new Map<unknown, { current?: Workspace; leave?: () => void; send(m: ServerMsg): void }>();
   private lastRunning = '';
+  private modelCache = new Map<string, ModelChoice[]>();
+  /** Codex's models: from its running session in this folder, else a short-lived one that is stopped again (cached). */
+  private async codexModels(dir: string): Promise<ModelChoice[]> {
+    const live = await this.workspaces.get(`${dir}::codex`)?.ctl.engineModels(); if (live?.length) { this.modelCache.set('codex', live); return live; }
+    const had = this.modelCache.get('codex'); if (had) return had;
+    try { const sess = await new CodexEngine().start({ agentId: 'agt_models', cwd: dir }); try { const l = await (sess as unknown as { listModels?: () => Promise<ModelChoice[]> }).listModels?.() ?? []; if (l.length) this.modelCache.set('codex', l); return l; } finally { await sess.stop?.().catch(() => undefined); } } catch { return []; }
+  }
+  /** The menu's content: every installed agent's models (the shown agent's list is already known). */
+  private async allModels(dir: string, shown: 'claude-code' | 'codex', mine: ModelChoice[]): Promise<Extract<ServerMsg, { t: 'engineModels' }>['engines']> {
+    const [st, cx] = await Promise.all([detectClaude(), detectCodex()]); const out: Extract<ServerMsg, { t: 'engineModels' }>['engines'] = [];
+    if (st.installed) out.push({ engine: 'claude-code', models: (shown === 'claude-code' ? mine : CLAUDE_MODELS.filter((x) => x.id)).map(row) });
+    if (cx.installed) out.push({ engine: 'codex', models: (shown === 'codex' ? mine : await this.codexModels(dir)).map(row) });
+    return out;
+  }
   private runningMsg(): ServerMsg { return { t: 'running', sessions: [...this.workspaces.values()].map((w) => w.status()) }; }
   /** Tells every window which sessions are alive and what each one is doing, when that changed. */
   private broadcastRunning(): void { const m = this.runningMsg(); const j = JSON.stringify(m); if (j === this.lastRunning) return; this.lastRunning = j; for (const s of this.sessions.values()) s.send(m); }
@@ -71,7 +85,7 @@ export class LocalService {
       case 'pref': await this.savePref(m); break;
       case 'cycleMode': s.current?.ctl.cycleMode(); break;
       case 'setMode': s.current?.ctl.setMode(m.mode); break;
-      case 'models': { const list = await s.current?.ctl.engineModels(); send({ t: 'models', models: (list ?? []).map((x) => ({ id: x.id, label: x.label, note: x.note, efforts: x.efforts, defaultEffort: x.defaultEffort, isDefault: x.isDefault })) }); break; }
+      case 'models': { const cur = s.current; const list = await cur?.ctl.engineModels(); const mine = list?.length ? list : cur?.which === 'claude-code' && !cur.demo ? CLAUDE_MODELS.filter((x) => x.id) : []; send({ t: 'models', models: mine.map(row) }); if (cur && !cur.demo) void this.allModels(cur.dir, cur.which, mine).then((engines) => send({ t: 'engineModels', engines })); break; }
       case 'setEffort': if (!s.current?.ctl.setEffort(m.effort)) send({ t: 'notice', level: 'info', text: 'This agent has no reasoning effort setting.' }); break;
       case 'compact': void s.current?.ctl.submit('/compact'); break;
       case 'board': send({ t: 'board', ...(s.current?.notes() ?? { enabled: false, notes: [] }) }); break;
@@ -84,3 +98,5 @@ export class LocalService {
   /** On quit: settings are written and every agent session is stopped. */
   shutdown(): void { this.appCfg?.flush(); for (const w of this.workspaces.values()) w.close(); this.workspaces.clear(); this.lastRunning = ''; }
 }
+
+const row = (x: ModelChoice): { id: string; label: string; note: string; efforts?: string[]; defaultEffort?: string; isDefault?: boolean } => ({ id: x.id, label: x.label, note: x.note, efforts: x.efforts, defaultEffort: x.defaultEffort, isDefault: x.isDefault });

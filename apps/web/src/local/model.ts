@@ -5,18 +5,20 @@ export type Launcher = Extract<ServerMsg, { t: 'launcher' }>;
 export type DirMsg = Extract<ServerMsg, { t: 'dir' }>;
 export interface Notice { level: 'info' | 'warn' | 'error'; text: string; n: number }
 /** Everything the local-session screens show, rebuilt from the messages the main process sends. */
-export interface LocalView { launcher?: Launcher; dir?: DirMsg; opened?: string; /** Which agent the shown session is (Claude Code or Codex), once the desktop says. */ openedEngine?: { engine: 'claude-code' | 'codex'; demo: boolean }; history: string[]; /** Every agent session that is alive, shown or not. */ running: RunningSession[]; /** The context board of the shown session; `enabled` false when it is turned off. */ board: { enabled: boolean; notes: BoardNote[] }; state?: WebState; items: Item[]; notice?: Notice; models: Models; byId: ReadonlyMap<string, Item> }
+export interface LocalView { launcher?: Launcher; dir?: DirMsg; opened?: string; /** Which agent the shown session is (Claude Code or Codex), once the desktop says. */ openedEngine?: { engine: 'claude-code' | 'codex'; demo: boolean }; history: string[]; /** Every agent session that is alive, shown or not. */ running: RunningSession[]; /** The context board of the shown session; `enabled` false when it is turned off. */ board: { enabled: boolean; notes: BoardNote[] }; state?: WebState; items: Item[]; notice?: Notice; models: Models; /** Every installed agent's models, for the one model menu. */ engineModels: EngineModels; byId: ReadonlyMap<string, Item> }
 export type Models = Extract<ServerMsg, { t: 'models' }>['models'];
-export const emptyView = (): LocalView => ({ models: [], history: [], running: [], board: { enabled: false, notes: [] }, items: [], byId: new Map() });
+export type EngineModels = Extract<ServerMsg, { t: 'engineModels' }>['engines'];
+export const emptyView = (): LocalView => ({ models: [], engineModels: [], history: [], running: [], board: { enabled: false, notes: [] }, items: [], byId: new Map() });
 /** One message in, the next view out. State messages carry only the items that changed plus the full order, so unchanged items keep their identity. */
 export function reduceLocal(v: LocalView, m: ServerMsg): LocalView {
   switch (m.t) {
     case 'launcher': return { ...v, launcher: m };
     case 'dir': return { ...v, dir: m };
     case 'models': return { ...v, models: m.models };
+    case 'engineModels': return { ...v, engineModels: m.engines };
     case 'running': return { ...v, running: m.sessions };
     case 'board': return { ...v, board: { enabled: m.enabled, notes: m.notes } };
-    case 'opened': return { ...v, opened: m.dir, openedEngine: m.engine ? { engine: m.engine, demo: !!m.demo } : undefined, history: m.history ?? [], state: undefined, items: [], byId: new Map(), models: [], board: { enabled: false, notes: [] } };
+    case 'opened': return { ...v, opened: m.dir, openedEngine: m.engine ? { engine: m.engine, demo: !!m.demo } : undefined, history: m.history ?? [], state: undefined, items: [], byId: new Map(), models: [], engineModels: [], board: { enabled: false, notes: [] } };
     case 'closed': return { ...v, opened: undefined, openedEngine: undefined, state: undefined, items: [], byId: new Map(), board: { enabled: false, notes: [] } };
     case 'notice': return { ...v, notice: { level: m.level, text: m.text, n: (v.notice?.n ?? 0) + 1 } };
     case 'state': { const byId = new Map(v.byId); for (const it of m.changed) byId.set(it.id, it); return { ...v, byId, state: m.state, items: m.order.map((id) => byId.get(id)).filter((x): x is Item => !!x) }; }
@@ -52,3 +54,5 @@ export const isShown = (r: RunningSession, view: LocalView): boolean => r.dir ==
 export const installedEngines = (l: Launcher | undefined): ('claude-code' | 'codex')[] => (l ? ([l.claude.installed ? 'claude-code' : null, l.codex.installed ? 'codex' : null].filter(Boolean) as ('claude-code' | 'codex')[]) : []);
 /** What a session row says. */
 export const runningWord = (r: Pick<RunningSession, 'busy' | 'waiting'>): 'needs you' | 'working' | 'ready' => (r.waiting > 0 ? 'needs you' : r.busy ? 'working' : 'ready');
+
+export const ENGINE_NAMES = { 'claude-code': 'Claude Code', codex: 'Codex' } as const;
