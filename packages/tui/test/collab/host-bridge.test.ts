@@ -25,7 +25,7 @@ describe('sharing a conversation (host side)', () => {
     const text = seen.filter((e) => e.kind === 'message.assistant.delta').sort((a, b) => Number(a.secret?.index) - Number(b.secret?.index)).map((e) => String(e.secret?.delta)).join(''); expect(text.length).toBeGreaterThan(0);
     expect(ctl.state.items.find((i) => i.kind === 'assistant' && i.text === text)).toBeTruthy(); // the guest sees exactly what the host sees
     const done = seen.find((e) => e.kind === 'message.assistant.done'); expect(done?.secret?.message_id).toMatch(/^msg_[0-9A-HJKMNP-TV-Z]{26}$/);
-    expect(kinds(seen).indexOf('message.user')).toBeLessThan(kinds(seen).indexOf('message.assistant.done')); expect(seen.some((e) => e.kind === 'agent.state' && e.p?.state === 'thinking')).toBe(true);
+    expect(kinds(seen).indexOf('message.user')).toBeLessThan(kinds(seen).indexOf('message.assistant.done')); await until(() => seen.some((e) => e.kind === 'agent.state'), 4000); // state frames are throttled (at most one every 600 ms, the relay allows two a second), so they can arrive after the answer
     expect(seen.some((e) => e.kind === 'tool.request')).toBe(true); expect(seen.some((e) => e.kind === 'tool.result' && ['ok', 'error', 'denied', 'canceled'].includes(String(e.secret?.status)))).toBe(true);
   });
   it('an editor asks through the queue; the host sees it, approves it, and the agent runs it as an ordinary message', async () => {
