@@ -29,7 +29,12 @@ export type ClientMsg =
   | { t: 'note'; type: 'decision' | 'warning' | 'finding'; text: string }
   | { t: 'notePin'; id: string; pinned: boolean }
   | { t: 'noteRemove'; id: string }
-  | { t: 'auto'; on: boolean };
+  | { t: 'auto'; on: boolean }
+  /** Who is signed in (nothing is needed for local sessions). */
+  | { t: 'account' }
+  | { t: 'login' }
+  | { t: 'cancelLogin' }
+  | { t: 'logout' };
 
 /** AppState without the parts that only make sense in a terminal or cannot be serialised. */
 export type WebState = Omit<AppState, 'items' | 'approvals' | 'input' | 'cursor' | 'histIdx' | 'draft' | 'scroll' | 'palette' | 'modelSel' | 'gallery' | 'slashSel' | 'mode' | 'history'> & {
@@ -42,6 +47,8 @@ export interface RunningSession { dir: string; engine: 'claude-code' | 'codex'; 
 /** One entry of the context board (docs/context-sharing.md), as the screen needs it. */
 export interface BoardNote { id: string; type: string; text: string; author: string; person: boolean; pinned: boolean; ts: number; files: string[] }
 
+/** The signed-in person, as the screens show them. */
+export interface AccountView { signedIn: boolean; persisted: boolean; offline?: boolean; api: string; me?: { id: string; name: string; email: string; plan: string; workspace?: { id: string; name: string | null } } }
 export type ServerMsg =
   | { t: 'launcher'; home: string; cwd: string; recent: RecentDir[]; claude: ClaudeStatus; codex: CodexStatusMsg; prefs: Prefs }
   | { t: 'dir'; path: string; parent: string | null; git: boolean; entries: DirEntry[]; error?: string; saved?: number }
@@ -52,6 +59,11 @@ export type ServerMsg =
   /** Every installed agent's models, for the one model menu: choosing another agent's model switches to it. */
   | { t: 'engineModels'; engines: { engine: 'claude-code' | 'codex'; models: { id: string; label: string; note: string; efforts?: string[]; defaultEffort?: string; isDefault?: boolean }[] }[] }
   | { t: 'running'; sessions: RunningSession[] }
+  | { t: 'account'; account: AccountView }
+  /** The sign-in dialog: `code` is shown with the address to open, then `done`, or why it ended. */
+  | { t: 'login'; phase: 'code'; userCode: string; url: string; expiresInS: number; opened: boolean }
+  | { t: 'login'; phase: 'done' | 'cancelled' }
+  | { t: 'login'; phase: 'failed'; error: string }
   /** The board of the shown session; `enabled` is false when `context.board` is off. */
   | { t: 'board'; enabled: boolean; notes: BoardNote[] }
   | { t: 'notice'; level: 'info' | 'warn' | 'error'; text: string };

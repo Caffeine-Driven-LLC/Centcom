@@ -75,3 +75,21 @@
 .pal__keys { padding: 20px 24px; } .pal__keys-title { margin: 0 0 12px; font: 500 20px var(--font-serif); }
 .pal__keys dl { margin: 0; display: flex; flex-direction: column; gap: 8px; } .pal__key { display: flex; align-items: center; gap: 16px; } .pal__key dt { flex: 0 0 140px; } .pal__key dd { margin: 0; color: var(--text-secondary); font-size: 14px; }
 .pal__key kbd { display: inline-block; padding: 2px 8px; border: 1px solid var(--border-default); border-radius: var(--r-sm); background: var(--bg-sunken); font: 12px var(--font-mono); color: var(--text-primary); }
+
+/* ---- the account button and its dialog ---- */
+.sb__account { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; margin-top: auto; padding: 0 var(--space-3); border: 0; border-radius: var(--r-md); background: transparent; color: var(--text-secondary); font: inherit; cursor: pointer; text-align: left; }
+.sb__account:hover { background: var(--bg-hover); color: var(--text-primary); }
+.sb__account svg { width: 16px; height: 16px; flex: none; }
+.sb__avatar { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; flex: none; border-radius: 50%; background: var(--accent-fill); color: var(--accent-on); font-size: 10px; font-weight: 700; }
+.acct { display: flex; flex-direction: column; gap: var(--space-3); min-width: min(420px, 86vw); }
+.acct__title { margin: 0; font: 600 20px/1.2 var(--font-serif); }
+.acct p { margin: 0; line-height: 1.45; }
+.acct__who { display: flex; align-items: center; gap: var(--space-3); }
+.acct__who svg { width: 28px; height: 28px; color: var(--text-muted); }
+.acct__facts { display: grid; grid-template-columns: auto 1fr; gap: 4px var(--space-4); margin: 0; }
+.acct__facts dt { color: var(--text-muted); } .acct__facts dd { margin: 0; }
+.acct__code { padding: var(--space-3); text-align: center; background: var(--bg-sunken); border-radius: var(--r-md); font: 600 28px/1.1 var(--font-mono); letter-spacing: 0.12em; user-select: all; }
+.acct__url { word-break: break-all; font: 12px var(--font-mono); color: var(--text-secondary); }
+.acct__note { color: var(--text-muted); font-size: 12px; }
+.acct__error { color: var(--status-danger); }
+.acct__actions { display: flex; gap: var(--space-2); justify-content: flex-end; }

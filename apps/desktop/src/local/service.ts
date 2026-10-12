@@ -5,10 +5,11 @@ import { dirname, join, resolve } from 'node:path';
 import { CLAUDE_MODELS, CodexEngine, detectClaude, detectCodex, type ModelChoice } from '@centcom/agent';
 import { ClientConfig, SessionStore } from '@centcom/tui';
 import { Workspace } from './workspace.js';
+import { CollabService, isCollabMsg } from './collab.js';
 import type { ClientMsg, DirEntry, Prefs, RecentDir, ServerMsg } from './protocol.js';
 
 export const MAX_TEXT = 100_000; export const MODES = ['default', 'acceptEdits', 'plan', 'bypassPermissions'] as const;
-export interface ServiceOptions { home?: string; stateDir?: string; cwd?: string; version?: string }
+export interface ServiceOptions { home?: string; stateDir?: string; cwd?: string; version?: string; /** Opens an address in the system browser (the sign-in page); `apiBase` is the configured API. Without it nothing is opened. */ openExternal?: (url: string, apiBase: string) => boolean; /** A seam for tests: the account the sign-in uses. */ makeAccount?: ConstructorParameters<typeof CollabService>[0]['makeAccount'] }
 /** Reads a folder for the picker: no hidden folders, no node_modules, git folders first, at most 400 entries. */
 export function listDir(path: string, home: string): { path: string; parent: string | null; git: boolean; entries: DirEntry[]; error?: string } {
   const p = resolve(path || home); const parent = dirname(p) === p ? null : dirname(p);
@@ -34,6 +35,7 @@ export function sanitise(raw: unknown): ClientMsg | undefined {
     case 'noteRemove': { const id = str(m.id, 80); return id ? { t, id } : undefined; }
     case 'setEffort': { const e = str(m.effort, 40); return e === undefined || !/^[\w-]*$/.test(e) ? undefined : { t, effort: e }; }
     case 'auto': return { t, on: m.on === true };
+    case 'account': case 'login': case 'cancelLogin': case 'logout': return { t } as ClientMsg;
     default: return undefined;
   }
 }
@@ -41,6 +43,7 @@ export class LocalService {
   private readonly home: string; private readonly stateDir: string; private readonly cwd: string; private workspaces = new Map<string, Workspace>(); private appCfg?: ClientConfig; private warned = false;
   private sessions = new Map<unknown, { current?: Workspace; leave?: () => void; send(m: ServerMsg): void }>();
   private lastRunning = '';
+  readonly collab: CollabService;
   private modelCache = new Map<string, ModelChoice[]>();
   /** Codex's models: from its running session in this folder, else a short-lived one that is stopped again (cached). */
   private async codexModels(dir: string): Promise<ModelChoice[]> {
@@ -58,7 +61,7 @@ export class LocalService {
   private runningMsg(): ServerMsg { return { t: 'running', sessions: [...this.workspaces.values()].map((w) => w.status()) }; }
   /** Tells every window which sessions are alive and what each one is doing, when that changed. */
   private broadcastRunning(): void { const m = this.runningMsg(); const j = JSON.stringify(m); if (j === this.lastRunning) return; this.lastRunning = j; for (const s of this.sessions.values()) s.send(m); }
-  constructor(o: ServiceOptions = {}) { this.home = o.home ?? homedir(); this.stateDir = o.stateDir ?? join(this.home, '.centcom'); this.cwd = o.cwd ?? this.home; mkdirSync(this.stateDir, { recursive: true, mode: 0o700 }); }
+  constructor(o: ServiceOptions = {}) { this.collab = new CollabService({ version: o.version ?? '0.1.0', broadcast: (m) => { for (const s of this.sessions.values()) s.send(m); }, openExternal: o.openExternal ?? (() => false), ...(o.makeAccount ? { makeAccount: o.makeAccount } : {}) }); this.home = o.home ?? homedir(); this.stateDir = o.stateDir ?? join(this.home, '.centcom'); this.cwd = o.cwd ?? this.home; mkdirSync(this.stateDir, { recursive: true, mode: 0o700 }); }
   private recentFile = (): string => join(this.stateDir, 'recent.json');
   recent(): RecentDir[] { try { return (JSON.parse(readFileSync(this.recentFile(), 'utf8')) as RecentDir[]).filter((r) => existsSync(r.dir)); } catch { return []; } }
   private addRecent(dir: string): void { const r = [{ dir, at: Date.now() }, ...this.recent().filter((x) => x.dir !== dir)].slice(0, 12); try { writeFileSync(this.recentFile(), JSON.stringify(r)); } catch { /* not critical */ } }
@@ -71,7 +74,7 @@ export class LocalService {
     return { detach: () => { detach(); this.sessions.delete(key); }, handle: async (raw) => { const m = sanitise(raw); if (!m) return; try { await this.dispatch(s, m, detach); } catch (e) { send({ t: 'notice', level: 'error', text: e instanceof Error ? e.message : String(e) }); } } };
   }
   private async dispatch(s: { current?: Workspace; leave?: () => void; send(m: ServerMsg): void }, m: ClientMsg, detach: () => void): Promise<void> {
-    const send = s.send;
+    const send = s.send; if (isCollabMsg(m)) { await this.collab.handle(m, send); return; }
     switch (m.t) {
       case 'hello': { send(this.runningMsg()); const [st, cx] = await Promise.all([detectClaude(), detectCodex()]); send({ t: 'launcher', home: this.home, cwd: this.cwd, recent: this.recent(), claude: { installed: st.installed, version: st.version, signedIn: st.signedIn, kind: st.loginKind }, codex: { installed: cx.installed, version: cx.version, signedIn: cx.signedIn, kind: cx.loginKind }, prefs: await this.prefs() }); if (this.appCfg && !this.warned) { this.warned = true; for (const w of this.appCfg.warnings) send({ t: 'notice', level: 'warn', text: 'Settings: ' + w }); } if (s.current) { const w = s.current.status(); send({ t: 'opened', dir: w.dir, history: s.current.history(), engine: w.engine, demo: w.demo }); } break; }
       case 'browse': { const d = listDir(m.path, this.home); send({ t: 'dir', ...d, saved: new SessionStore().list(d.path, 50).length }); break; }

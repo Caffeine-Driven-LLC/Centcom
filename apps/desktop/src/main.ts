@@ -5,12 +5,12 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { PROTOCOL, linkFromArgv } from './links.js';
 import { LocalService } from './local/service.js';
-import { APP_ORIGIN, APP_SCHEME, WEB_PREFERENCES, appUrlToFile, isAppUrl, isSafeExternal, permissionAllowed, responseHeaders } from './security.js';
+import { APP_ORIGIN, APP_SCHEME, WEB_PREFERENCES, appUrlToFile, isAppUrl, isSafeExternal, isSafeSignInUrl, permissionAllowed, responseHeaders } from './security.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const WEB_ROOT = app.isPackaged ? join(process.resourcesPath, 'web') : join(here, '../../web/dist');
 protocol.registerSchemesAsPrivileged([{ scheme: APP_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }]);
-const local = new LocalService({ cwd: process.cwd() }); const attached = new Map<number, ReturnType<LocalService['attach']>>();
+const local = new LocalService({ cwd: process.cwd(), openExternal: (url, apiBase) => { if (!isSafeSignInUrl(url, apiBase)) return false; void shell.openExternal(url); return true; } }); const attached = new Map<number, ReturnType<LocalService['attach']>>();
 const MAX_COPY = 1_000_000; /* characters one copy may carry */
 let win: BrowserWindow | undefined; let pending: string | undefined; let ready = false;
 const send = (raw: string): void => { if (win && ready) { win.webContents.send('centcom:link', raw); if (win.isMinimized()) win.restore(); win.focus(); } else pending = raw; };
