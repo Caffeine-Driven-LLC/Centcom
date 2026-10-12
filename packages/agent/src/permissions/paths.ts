@@ -19,13 +19,24 @@ export function isInside(parent: string, child: string, os: 'posix' | 'win32' = 
   const a = api(os); const rel = a.relative(fold(os, a.resolve(parent)), fold(os, a.resolve(child))); return rel === '' || (!rel.startsWith('..') && !a.isAbsolute(rel));
 }
 const CRED_DIRS = ['.ssh', '.aws', '.gnupg', '.codex', '.docker', '.kube', '.azure'];
-const CRED_FILES = ['auth.json', '.credentials.json', '.netrc', '.npmrc', '.pgpass', 'login.keychain', 'login.keychain-db', 'secrets.json', 'id_rsa', 'id_ed25519', '.git-credentials'];
+const CRED_FILES = ['auth.json', '.credentials.json', '.netrc', '.npmrc', '.pgpass', 'login.keychain', 'login.keychain-db', 'secrets.json', 'id_rsa', 'id_ed25519', '.git-credentials', 'credentials.toml'];
 /** A path match on the request only (never reads the file): credential and keychain locations. */
 export function isCredentialPath(real: string, os: 'posix' | 'win32' = 'posix'): boolean {
   const segs = fold(os, real).split(/[\\/]+/).filter(Boolean); const last = segs.at(-1) ?? '';
   if (segs.some((s) => CRED_DIRS.includes(s) || s.startsWith('.claude') || s === 'keychains' || s === 'gcloud')) return true;
   if (CRED_FILES.includes(last) || /\.keychain(-db)?$/.test(last) || /^id_(rsa|ed25519|ecdsa|dsa)(\.pub)?$/.test(last)) return true;
   return false;
+}
+/**
+ * Where installing a tool for yourself writes (`~/.local/bin`, `~/.cargo`, `~/.npm`, a Go or Bun home, caches). A write there from
+ * outside the project is asked about like any other command instead of being refused, because installing is a normal job. Never the
+ * system folders, shell start-up files or credential locations (those stay refused).
+ */
+const INSTALL_DIRS = ['.local', '.cargo', '.rustup', '.npm', '.cache', '.bun', '.pnpm-store', '.nvm', 'go'];
+export function isUserInstallDir(real: string, home: string, os: 'posix' | 'win32' = 'posix'): boolean {
+  const a = api(os); const rel = a.relative(fold(os, a.resolve(home)), fold(os, a.resolve(real))); if (rel === '' || rel.startsWith('..') || a.isAbsolute(rel)) return false;
+  const segs = rel.split(/[\\/]+/); if (!INSTALL_DIRS.includes(segs[0]!)) return false;
+  return !(segs[0] === '.local' && (segs[1] === 'share' && segs[2] === 'keyrings')); // the keyring is a credentials location
 }
 /** Anything inside a `.git` folder (or a `.git` file) is repository internals. */
 export const isGitInternal = (real: string, os: 'posix' | 'win32' = 'posix') => fold(os, real).split(/[\\/]+/).includes('.git');

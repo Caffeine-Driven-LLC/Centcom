@@ -1,7 +1,7 @@
 import { posix, relative, win32 } from 'node:path';
 import type { ApprovalRequest, PermissionGate, Risk } from '../types.js';
 import type { PathFs } from './paths.js';
-import { isCredentialPath, isGitInternal, isInside, realPath } from './paths.js';
+import { isCredentialPath, isGitInternal, isInside, isUserInstallDir, realPath } from './paths.js';
 import { actionKind, evaluateRules } from './rules.js';
 import { alwaysPrefix, readShell } from './shell.js';
 import type { RuleStore } from './store.js';
@@ -28,7 +28,7 @@ export function createPermissionEngine(d: PermissionEngineDeps): PermissionEngin
     if (req.command) { const s = readShell(req.command); writes.push(...s.writeTargets); touched.push(...s.pathWords); }
     for (const p of [...writes, ...touched]) { const real = await realPath(p, ctx.root, d.config, d.fs); if (isCredentialPath(real, os)) return 'credential_path'; }
     for (const p of writes) {
-      const real = await realPath(p, ctx.root, d.config, d.fs); if (!isInside(rootReal, real, os)) return 'outside_root';
+      const real = await realPath(p, ctx.root, d.config, d.fs); if (!isInside(rootReal, real, os)) { if (d.config.home && isUserInstallDir(real, d.config.home, os)) continue; return 'outside_root'; }
       const rel = (os === 'win32' ? win32 : posix).relative(rootReal, real); if (isGitInternal(rel, os)) return 'git_internals';
     }
     return undefined;
