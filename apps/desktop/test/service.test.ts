@@ -43,6 +43,12 @@ describe('running sessions', () => {
     await wa.handle({ t: 'leave' }); expect(a.at(-1)).toEqual({ t: 'closed' }); expect(last(a)).toMatchObject([{ dir }]);
     await wa.handle({ t: 'open', dir, demo: true }); await wa.handle({ t: 'close' }); expect(last(a)).toEqual([]); expect(last(b)).toEqual([]); wa.detach(); wb.detach(); svc.shutdown();
   }, 30_000);
+  it('the opened message says which agent the window shows', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'cc-eng-')); const dir = join(home, 'proj'); mkdirSync(dir); const svc = new LocalService({ home, cwd: home });
+    const got: { t: string; engine?: string; demo?: boolean }[] = []; const w = svc.attach('a', (m) => got.push(m as never));
+    await w.handle({ t: 'open', dir, demo: true }); expect(got.find((m) => m.t === 'opened')).toMatchObject({ engine: 'claude-code', demo: true });
+    w.detach(); svc.shutdown();
+  }, 30_000);
 });
 
 describe('the context board in a session', () => {

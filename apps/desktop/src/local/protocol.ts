@@ -45,7 +45,7 @@ export interface BoardNote { id: string; type: string; text: string; author: str
 export type ServerMsg =
   | { t: 'launcher'; home: string; cwd: string; recent: RecentDir[]; claude: ClaudeStatus; codex: CodexStatusMsg; prefs: Prefs }
   | { t: 'dir'; path: string; parent: string | null; git: boolean; entries: DirEntry[]; error?: string; saved?: number }
-  | { t: 'opened'; dir: string; history: string[] } // prompt history rides along once here, not in every state push
+  | { t: 'opened'; dir: string; history: string[]; engine?: 'claude-code' | 'codex'; demo?: boolean } // prompt history rides along once here, not in every state push
   | { t: 'closed' }
   | { t: 'state'; state: WebState; changed: Item[]; order: string[] }
   | { t: 'models'; models: { id: string; label: string; note: string; efforts?: string[]; defaultEffort?: string; isDefault?: boolean }[] }

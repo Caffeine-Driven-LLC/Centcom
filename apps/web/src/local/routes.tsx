@@ -12,6 +12,7 @@ import { useLocal } from './use-local.js';
 import type { ClientMsg } from '../../../desktop/src/local/protocol.js';
 import { ArrowUp, PanelRight, Square as StopIcon } from 'lucide-react';
 import { SessionPanel } from './SessionPanel.js';
+import { EngineTabs } from './EngineTabs.js';
 import { COMMANDS } from '@centcom/tui-commands';
 import { slashMatches } from './slash.js';
 import { Button as SButton } from '../ui/shadcn/index.js';
@@ -129,6 +130,7 @@ function Workspace({ view, send }: { view: LocalView; send: Send }): React.JSX.E
   const busy = !!s?.busy; const name = view.opened ? baseName(view.opened) : 'Session';
   return <div className="lc-split" data-panel={panel}><div className="lc-ws" aria-label={view.opened ? shortPath(view.opened, view.launcher?.home ?? '') : 'Session'}>
     <header className="lc-wshead">
+      <EngineTabs view={view} send={send} />
       <div className="lc-wshead__title"><h2>{name}</h2><span className="lc-wshead__path">{view.opened ? shortPath(view.opened, view.launcher?.home ?? '') : ''}</span></div>
       <div className="lc-wshead__chips"><span className={`lc-live lc-live--${busy ? 'busy' : 'ready'}`}><span className="lc-live__dot" aria-hidden="true" />{busy ? s?.verb || 'working' : 'ready'}</span>{s?.branch ? <Chip>{s.branch}</Chip> : null}{s?.engineLabel ? <Chip>{s.engineLabel}</Chip> : null}</div>
       <span className="lc-grow" /><SButton variant="ghost" size="sm" title="Summarise the conversation to free up context" onClick={() => send({ t: 'compact' })}>Compact</SButton><SButton variant="ghost" size="sm" title="Stop the agent and close this project (New session in the sidebar leaves it running)" onClick={() => send({ t: 'close' })}>Close project</SButton><SButton variant="ghost" size="icon" className="lc-paneltoggle" aria-pressed={panel} aria-label="Session details" title="Session details" onClick={togglePanel}><PanelRight /></SButton>
