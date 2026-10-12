@@ -43,9 +43,9 @@ Column legend: **Scope** = OAuth scope required (CT-AUTH). **Role** = minimum ro
 | POST | `/v1/workspaces/{id}/transfer-ownership` | workspaces:write | owner | A | Hand ownership to an admin |
 | GET | `/v1/workspaces/{id}/invites` | workspaces:read | admin+ | — | Pending invites |
 | POST | `/v1/workspaces/{id}/invites` | workspaces:write | admin+ | R | Create invite (email or link); checks seat entitlement |
-| DELETE | `/v1/invites/{id}` | workspaces:write | admin+ | — | Revoke invite |
-| GET | `/v1/invites/{token}` | none | public | — | Invite preview (workspace name, inviter, role, expiry) |
-| POST | `/v1/invites/{token}/accept` | profile | any user | A | Accept; creates membership |
+| DELETE | `/v1/invites/{id}` | workspaces:write, or sessions:host for a session invite | admin+; the host for a session invite | — | Revoke invite (revoking an accepted session invite also withdraws the right to join that session) |
+| GET | `/v1/invites/{token}` | none | public | — | Invite preview (workspace name, inviter, role, expiry; `session_name` for a session invite) |
+| POST | `/v1/invites/{token}/accept` | profile | any user | A | Accept; creates membership. A **session invite** creates no membership: it records the right to join that one session (`SessionInviteAcceptance {session, role}`) and uses no seat |
 | PUT | `/v1/invites/{id}/key-bundle` | sessions:host | host | — | Upload sealed key bundle (CT-CRYPTO §4) |
 | GET | `/v1/invites/{token}/key-bundle` | profile | invitee | — | Fetch the sealed bundle once |
 | GET | `/v1/workspaces/{id}/projects` | workspaces:read | member+ | — | Projects (named repo references) |
@@ -75,6 +75,9 @@ Column legend: **Scope** = OAuth scope required (CT-AUTH). **Role** = minimum ro
 | POST | `/v1/sessions/{id}/share-links` | sessions:host | host | A | Create a viewer-only guest link. Body `{expires_in_s (≤ 86400, default 3600), max_uses (≤ 50, default 10)}`; response `{token, url, expires_at}` (the `#k=` fragment is added by the client, CT-CRYPTO §4a) |
 | DELETE | `/v1/sessions/{id}/share-links/{token}` | sessions:host | host | — | Revoke |
 | POST | `/v1/share-links/{token}/join` | none | public | — | Join as limited viewer guest (rate-limited) |
+| GET | `/v1/share-links/{token}/members` | none | public | — | The live members' public device keys for a share-link guest, so a view-only guest can check who signed a frame (CT-CRYPTO §4a). Same limits as `join`: unknown, revoked or expired token → 404/410. Returns `SessionMemberPage` **without** `user`; no e-mail or workspace data. |
+| POST | `/v1/sessions/{id}/invites` | sessions:host | host | A | Invite one person to **this session only**, as `editor` or `viewer`, with no workspace membership and no seat. Body `{email? (omit for a link invite), role: editor\|viewer (default editor), expires_in_s (60-604800, default 86400), share_history?}`; response `InviteCreated` (`session` set, `role` editor\|viewer). Needs the session's workspace to have `relay_access`; does not check or use seats. |
+| GET | `/v1/sessions/{id}/invites` | sessions:host | host | — | Pending invites of this session |
 
 ## CT-API-BILLING
 

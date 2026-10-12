@@ -100,6 +100,7 @@ A workspace member's *default* session role: owner/admin/member → `editor`, gu
 | Create/host session | ✓ | ✓ | ✓ | — | — |
 | Join session (as editor) | ✓ | ✓ | ✓ | — | — |
 | Join session (as viewer) | ✓ | ✓ | ✓ | — | ✓ (if invited) |
+| Join one session by a **session invite** (editor or viewer, no workspace membership, no seat) | any signed-in user holding the invite | | | | |
 | Read audit log | ✓ | ✓ | — | — | — |
 | Manage webhooks, API keys | ✓ | ✓ | own keys only | — | — |
 | Delete workspace | ✓ | — | — | — | — |
@@ -120,6 +121,7 @@ A workspace member's *default* session role: owner/admin/member → `editor`, gu
 - **What a `guest` may read** of a workspace: `GET /v1/workspaces/{id}` returns `{id, name}`; `GET …/members` returns `{id, display_name, role}` per member. Nothing else (no emails, settings, projects, billing).
 - **Seats:** only `owner`, `admin`, `member` consume seats (CT-ENTITLEMENTS).
 - **The `admin` scope** is internal: it is issued only to staff by an internal identity provider and is never obtainable through the public flows. Admin endpoints are not part of this contract.
+- **Session invites** let a host bring one person into **one** session as `editor` or `viewer` without making them a workspace member: no seat is used (CT-ENTITLEMENTS counts seats by workspace role only) and the session's `max_session_members` is the only limit. The invitee signs in (an account is required, unlike a share-link guest), accepts the invite, and then may mint a join token for that session at the invited role; the right ends when the invite is revoked, the person is removed from the session, or the session ends. It grants nothing else: no workspace read, no other session. The workspace's `relay_access` entitlement is what makes the session usable.
 - **Share-link guests** have no registered device. They receive a limited relay ticket with `role: viewer`, no `dev` claim, and may **not** send signed content; they may send only `presence.update` and `reaction` (both cleartext). They decrypt using the view key carried in the share-link fragment (CT-CRYPTO §4a).
 
 ### Enforcement rules

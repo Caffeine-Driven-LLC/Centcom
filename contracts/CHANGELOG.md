@@ -1,5 +1,9 @@
 # Contract changelog
 
+## Unreleased (additive; the version bump is left to the merger, see plan/adr/0001 and 0002)
+- **Share-link guests can check senders:** `GET /v1/share-links/{token}/members` (public, rate-limited, the link token is the credential) returns the live members' public device keys without user ids or e-mail; CT-CRYPTO §4a says how guests use it and what they trust.
+- **Session invites:** `POST/GET /v1/sessions/{id}/invites` invite one person to one session as `editor` or `viewer` with no workspace membership and no seat (only `max_session_members` limits it). `Invite` gains optional `session` and the roles `editor`/`viewer`; `InvitePreview` gains `session_name`; accepting a session invite answers `SessionInviteAcceptance {session, role, workspace}` instead of a membership; `DELETE /v1/invites/{id}` may also be called by the session host. The key-bundle routes are unchanged.
+
 ## 1.2.0 (providers)
 - **New contract CT-PROVIDER** (`10-providers.md`): Anthropic and OpenAI models are used by driving the user's **own** `claude` and `codex` CLIs. Centcom never handles provider credentials, never uses the vendor SDKs or model APIs in v1, never pays for or pools usage; the backend never sees a credential. Defines the command-post "who pays" rule, kill-switch flags, login handoff, client-local error vocabulary, risk register, and shared fixtures (`fixtures/providers/`).
 - `agent.spawn` clear part gains optional `runs_on` and `provider`.

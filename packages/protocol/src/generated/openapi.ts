@@ -449,7 +449,7 @@ export interface paths {
         post?: never;
         /**
          * Revoke an invite
-         * @description Revokes a pending invite; admins and owners of the invite's workspace.
+         * @description Revokes a pending invite; admins and owners of the invite's workspace. For a session invite the session host may revoke it too (scope sessions:host); revoking an accepted session invite also withdraws the right to join that session.
          */
         delete: operations["revokeInvite"];
         options?: never;
@@ -1541,6 +1541,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/share-links/{token}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a session's members for a share-link guest
+         * @description Public, rate-limited. The share-link token is the credential. Returns the live members' public device keys (and slot, role, display name) so a view-only guest can check who signed a frame (CT-CRYPTO 4a). No user ids, e-mail or workspace data.
+         */
+        get: operations["listShareLinkMembers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{id}/invites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List pending session invites
+         * @description Lists pending invites of this session; host only.
+         */
+        get: operations["listSessionInvites"];
+        put?: never;
+        /**
+         * Invite a person to one session
+         * @description Invites one person to this session only, as editor or viewer, without workspace membership and without a seat. Host only; the session's workspace needs relay_access.
+         */
+        post: operations["createSessionInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1847,8 +1891,11 @@ export interface components {
             workspace: components["schemas"]["WorkspaceId"];
             /** Format: email */
             email?: string | null;
-            /** @enum {string} */
-            role: "admin" | "member" | "billing" | "guest";
+            /**
+             * @description editor and viewer are the roles of a session invite; workspace invites never carry them
+             * @enum {string}
+             */
+            role: "admin" | "member" | "billing" | "guest" | "editor" | "viewer";
             /** @enum {string} */
             status: "pending" | "accepted" | "revoked" | "expired";
             share_history?: boolean;
@@ -1857,6 +1904,8 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             expires_at: string;
+            /** @description Set for a session invite */
+            session?: components["schemas"]["SessionId"];
         };
         InviteCreate: {
             /**
@@ -1884,10 +1933,12 @@ export interface components {
             workspace_name: string;
             inviter_name: string;
             /** @enum {string} */
-            role: "admin" | "member" | "billing" | "guest";
+            role: "admin" | "member" | "billing" | "guest" | "editor" | "viewer";
             /** Format: date-time */
             expires_at: string;
             has_key_bundle?: boolean;
+            /** @description Set for a session invite */
+            session_name?: string;
         };
         InviteAcceptance: {
             workspace: components["schemas"]["Workspace"];
@@ -2728,6 +2779,28 @@ export interface components {
             /** @description Opaque cursor, null on the last page */
             next_cursor: string | null;
             has_more: boolean;
+        };
+        SessionInviteCreate: {
+            /**
+             * Format: email
+             * @description Omit to create a link-only invite
+             */
+            email?: string;
+            /**
+             * @default editor
+             * @enum {string}
+             */
+            role: "editor" | "viewer";
+            /** @default 86400 */
+            expires_in_s: number;
+            share_history?: boolean;
+        };
+        /** @description Accepting a session invite creates no membership and uses no seat: it records the right to join that one session. */
+        SessionInviteAcceptance: {
+            session: components["schemas"]["SessionId"];
+            /** @enum {string} */
+            role: "editor" | "viewer";
+            workspace: components["schemas"]["WorkspaceId"];
         };
     };
     responses: {
@@ -4193,7 +4266,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["InviteAcceptance"];
+                    "application/json": components["schemas"]["InviteAcceptance"] | components["schemas"]["SessionInviteAcceptance"];
                 };
             };
             401: components["responses"]["Unauthorized"];
@@ -6665,6 +6738,130 @@ export interface operations {
                 };
             };
             409: components["responses"]["Conflict"];
+        };
+    };
+    listShareLinkMembers: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional client request id (valid req_ ULID); the server reuses it */
+                "X-Request-Id"?: components["parameters"]["RequestIdHeader"];
+            };
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    "RateLimit-Limit": components["headers"]["RateLimit-Limit"];
+                    "RateLimit-Remaining": components["headers"]["RateLimit-Remaining"];
+                    "RateLimit-Reset": components["headers"]["RateLimit-Reset"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionMemberPage"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            410: components["responses"]["Gone"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listSessionInvites: {
+        parameters: {
+            query?: {
+                /** @description Page size, 1 to 200 */
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor from next_cursor; expires after 24 h, bound to the same filters */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: {
+                /** @description Optional client request id (valid req_ ULID); the server reuses it */
+                "X-Request-Id"?: components["parameters"]["RequestIdHeader"];
+            };
+            path: {
+                id: components["schemas"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    "RateLimit-Limit": components["headers"]["RateLimit-Limit"];
+                    "RateLimit-Remaining": components["headers"]["RateLimit-Remaining"];
+                    "RateLimit-Reset": components["headers"]["RateLimit-Reset"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitePage"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            426: components["responses"]["ClientTooOld"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createSessionInvite: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ULID or UUID, max 64 chars; stored 24 h. Needed for safe retries of this POST. */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKeyOptional"];
+                /** @description Optional client request id (valid req_ ULID); the server reuses it */
+                "X-Request-Id"?: components["parameters"]["RequestIdHeader"];
+            };
+            path: {
+                id: components["schemas"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionInviteCreate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    "RateLimit-Limit": components["headers"]["RateLimit-Limit"];
+                    "RateLimit-Remaining": components["headers"]["RateLimit-Remaining"];
+                    "RateLimit-Reset": components["headers"]["RateLimit-Reset"];
+                    "Idempotency-Replayed": components["headers"]["Idempotency-Replayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteCreated"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            410: components["responses"]["Gone"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["ValidationFailed"];
+            426: components["responses"]["ClientTooOld"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
 }

@@ -121,6 +121,14 @@ export const OPERATIONS = {
     ],
     "public": false
   },
+  "createSessionInvite": {
+    "method": "POST",
+    "path": "/v1/sessions/{id}/invites",
+    "tags": [
+      "Sessions"
+    ],
+    "public": false
+  },
   "createShareLink": {
     "method": "POST",
     "path": "/v1/sessions/{id}/share-links",
@@ -489,6 +497,14 @@ export const OPERATIONS = {
     ],
     "public": false
   },
+  "listSessionInvites": {
+    "method": "GET",
+    "path": "/v1/sessions/{id}/invites",
+    "tags": [
+      "Workspaces"
+    ],
+    "public": false
+  },
   "listSessionMembers": {
     "method": "GET",
     "path": "/v1/sessions/{id}/members",
@@ -504,6 +520,14 @@ export const OPERATIONS = {
       "Sessions"
     ],
     "public": false
+  },
+  "listShareLinkMembers": {
+    "method": "GET",
+    "path": "/v1/share-links/{token}/members",
+    "tags": [
+      "Sessions"
+    ],
+    "public": true
   },
   "listWebhookDeliveries": {
     "method": "GET",
