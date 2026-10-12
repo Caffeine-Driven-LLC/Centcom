@@ -8,7 +8,7 @@
 import { hostname } from 'node:os';
 import { join } from 'node:path';
 import { defaultDeps, loadConfig, stateDir } from '@centcom/config';
-import { CryptoError, DeviceKeyStore, TokenManager, TrustStore, createHttpClient, createKeychainApiKeyStore, createKeychainTokenStore, createSessionClient, defaultUserAgent, initCrypto, memoryKeychain, osAuthKeychain, osKeychain, realAuthClock, startDeviceLogin } from '@centcom/net';
+import { CryptoError, DeviceKeyStore, TokenManager, TrustStore, createHttpClient, createKeychainApiKeyStore, createKeychainTokenStore, createSessionClient, defaultUserAgent, fileKeychain, initCrypto, keychainDirFromEnv, memoryKeychain, osAuthKeychain, osKeychain, realAuthClock, startDeviceLogin } from '@centcom/net';
 import { JoinedSession } from './joined.js';
 import { parseJoinTarget } from './target.js';
 import type { AuthClock, HttpClient, Keychain, Logger, SessionClient } from '@centcom/net';
@@ -41,7 +41,7 @@ export class Account {
   static async create(o: AccountOptions): Promise<Account> {
     const d = defaultDeps(); const cfg = await loadConfig(d); const baseUrl = o.baseUrl ?? cfg.api.base_url; const apiHost = new URL(baseUrl).host; const dir = o.stateDir ?? stateDir(d);
     const memory = (o.keychain ?? (process.env.CENTCOM_KEYCHAIN === 'memory' ? 'memory' : 'os')) === 'memory';
-    const authKc = memory ? memoryKeychain() : osAuthKeychain(); const keyKc = memory ? memoryKeychain() : keysKeychain(osKeychain());
+    const kcDir = keychainDirFromEnv(); const authKc = memory ? memoryKeychain() : kcDir ? fileKeychain(kcDir) : osAuthKeychain(); const keyKc = memory ? memoryKeychain() : kcDir ? fileKeychain(kcDir) : keysKeychain(osKeychain());
     const plain = createHttpClient({ getAccessToken: async () => undefined, baseUrl, userAgent: defaultUserAgent(o.version), logger: o.logger, timeoutMs: cfg.net.timeout_ms, maxAttempts: cfg.net.max_attempts, ...(o.fetch ? { fetch: o.fetch } : {}) });
     const auth = new TokenManager({ http: plain, store: createKeychainTokenStore(apiHost, { keychain: authKc }), apiKeys: createKeychainApiKeyStore(apiHost, { keychain: authKc }), clock: o.clock ?? realAuthClock, lockDir: join(dir, 'locks'), apiHost, logger: o.logger });
     return new Account(o, auth, keyKc, plain, baseUrl);
