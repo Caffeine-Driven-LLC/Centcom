@@ -12,6 +12,7 @@ export function AccountChip(): React.JSX.Element | null {
   const { view, send, available } = useLocal(); const [open, setOpen] = useState(false); const a = view.account; const login = view.login;
   useEffect(() => { if (available) send({ t: 'account' }); }, [available, send]);
   useEffect(() => { if (login?.phase === 'done') setOpen(false); }, [login]);
+  useEffect(() => { const f = (): void => setOpen(true); window.addEventListener('centcom:account', f); return () => window.removeEventListener('centcom:account', f); }, []);
   if (!available || !a) return null;
   const close = (o: boolean): void => { setOpen(o); if (!o && login?.phase === 'code') send({ t: 'cancelLogin' }); };
   return <>

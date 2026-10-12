@@ -14,6 +14,7 @@
 - [logout](./logout.md): sign out of Centcom
 - [whoami](./whoami.md): who is signed in
 - [devices](./devices.md): computers signed in to your account
+- [join](./join.md): join a shared session
 - [lan](./lan.md): find sessions on this network
 - [doctor](./doctor.md): check this computer
 - [crash](./crash.md): crash reports on this computer

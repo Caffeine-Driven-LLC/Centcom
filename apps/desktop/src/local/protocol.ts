@@ -34,7 +34,18 @@ export type ClientMsg =
   | { t: 'account' }
   | { t: 'login' }
   | { t: 'cancelLogin' }
-  | { t: 'logout' };
+  | { t: 'logout' }
+  /** Sharing the shown conversation over the relay (needs a sign-in and a plan with the relay). */
+  | { t: 'share' }
+  | { t: 'unshare' }
+  | { t: 'shareLink' }
+  | { t: 'shareInvite'; email?: string }
+  | { t: 'shareDecide'; item: string; decision: 'approve' | 'reject' }
+  | { t: 'shareAuto'; on: boolean }
+  /** Joining somebody else's session: paste an id or a link. */
+  | { t: 'join'; input: string }
+  | { t: 'joinedAsk'; text: string }
+  | { t: 'joinedLeave' };
 
 /** AppState without the parts that only make sense in a terminal or cannot be serialised. */
 export type WebState = Omit<AppState, 'items' | 'approvals' | 'input' | 'cursor' | 'histIdx' | 'draft' | 'scroll' | 'palette' | 'modelSel' | 'gallery' | 'slashSel' | 'mode' | 'history'> & {
@@ -49,6 +60,25 @@ export interface BoardNote { id: string; type: string; text: string; author: str
 
 /** The signed-in person, as the screens show them. */
 export interface AccountView { signedIn: boolean; persisted: boolean; offline?: boolean; api: string; me?: { id: string; name: string; email: string; plan: string; workspace?: { id: string; name: string | null } } }
+/** A conversation that is being shared: who is in it, what editors asked for, the link. */
+export interface SharingView {
+  state: 'starting' | 'live' | 'ended' | 'failed'; sessionId?: string; name: string; workspace?: string;
+  /** why it is not live, in words for the person */ error?: string; code?: string;
+  /** a view-only link (the key is in its fragment: it is a secret) */ link?: { url: string; expiresAt: string };
+  /** an invite link for the workspace */ invite?: { url: string; email?: string };
+  /** a note on what could not be done and what to do instead */ hint?: string;
+  auto: boolean; members: { id: string; name: string; slot: number; role: 'host' | 'editor' | 'viewer'; online: boolean; you: boolean }[];
+  pending: { item: string; from: string; slot: number; text: string }[];
+}
+/** Somebody else's session that this window joined: what happened in it, who is there, what you may do. */
+export interface JoinedView {
+  state: 'joining' | 'live' | 'ended' | 'failed'; sessionId?: string; how?: 'invite' | 'session' | 'watch'; role?: 'host' | 'editor' | 'viewer'; error?: string;
+  /** waiting for the host's key, or reconnecting */ phase?: string;
+  people: { id: string; name: string; slot: number; role: 'host' | 'editor' | 'viewer'; you: boolean; online: boolean }[];
+  /** what is in the transcript (the last 300 entries) */
+  entries: { id: string; kind: 'user' | 'assistant' | 'system' | 'tool' | 'approval'; who?: string; slot?: number; text: string; done?: boolean; status?: string }[];
+  /** what you asked for that the host has not run yet */ asked: { item: string; text: string; state: string }[];
+}
 export type ServerMsg =
   | { t: 'launcher'; home: string; cwd: string; recent: RecentDir[]; claude: ClaudeStatus; codex: CodexStatusMsg; prefs: Prefs }
   | { t: 'dir'; path: string; parent: string | null; git: boolean; entries: DirEntry[]; error?: string; saved?: number }
@@ -60,6 +90,8 @@ export type ServerMsg =
   | { t: 'engineModels'; engines: { engine: 'claude-code' | 'codex'; models: { id: string; label: string; note: string; efforts?: string[]; defaultEffort?: string; isDefault?: boolean }[] }[] }
   | { t: 'running'; sessions: RunningSession[] }
   | { t: 'account'; account: AccountView }
+  | { t: 'sharing'; sharing: SharingView | null }
+  | { t: 'joined'; joined: JoinedView | null }
   /** The sign-in dialog: `code` is shown with the address to open, then `done`, or why it ended. */
   | { t: 'login'; phase: 'code'; userCode: string; url: string; expiresInS: number; opened: boolean }
   | { t: 'login'; phase: 'done' | 'cancelled' }

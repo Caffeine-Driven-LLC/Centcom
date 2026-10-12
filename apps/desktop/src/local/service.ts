@@ -5,7 +5,7 @@ import { dirname, join, resolve } from 'node:path';
 import { CLAUDE_MODELS, CodexEngine, detectClaude, detectCodex, type ModelChoice } from '@centcom/agent';
 import { ClientConfig, SessionStore } from '@centcom/tui';
 import { Workspace } from './workspace.js';
-import { CollabService, isCollabMsg } from './collab.js';
+import { CollabService, isCollabMsg, isJoinMsg, isShareMsg } from './collab.js';
 import type { ClientMsg, DirEntry, Prefs, RecentDir, ServerMsg } from './protocol.js';
 
 export const MAX_TEXT = 100_000; export const MODES = ['default', 'acceptEdits', 'plan', 'bypassPermissions'] as const;
@@ -35,7 +35,13 @@ export function sanitise(raw: unknown): ClientMsg | undefined {
     case 'noteRemove': { const id = str(m.id, 80); return id ? { t, id } : undefined; }
     case 'setEffort': { const e = str(m.effort, 40); return e === undefined || !/^[\w-]*$/.test(e) ? undefined : { t, effort: e }; }
     case 'auto': return { t, on: m.on === true };
-    case 'account': case 'login': case 'cancelLogin': case 'logout': return { t } as ClientMsg;
+    case 'account': case 'login': case 'cancelLogin': case 'logout': case 'share': case 'unshare': case 'shareLink': return { t } as ClientMsg;
+    case 'shareInvite': { const e = str(m.email, 254); return { t, ...(e && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) ? { email: e } : {}) } as ClientMsg; }
+    case 'shareDecide': { const item = str(m.item, 80); return item && /^que_[0-9A-Za-z]+$/.test(item) ? { t, item, decision: m.decision === 'approve' ? 'approve' : 'reject' } : undefined; }
+    case 'shareAuto': return { t, on: m.on === true } as ClientMsg;
+    case 'join': { const input = str(m.input, 2048); return input?.trim() ? { t, input: input.trim() } : undefined; }
+    case 'joinedAsk': { const text = str(m.text, 60_000); return text?.trim() ? { t, text } : undefined; }
+    case 'joinedLeave': return { t } as ClientMsg;
     default: return undefined;
   }
 }
@@ -61,7 +67,7 @@ export class LocalService {
   private runningMsg(): ServerMsg { return { t: 'running', sessions: [...this.workspaces.values()].map((w) => w.status()) }; }
   /** Tells every window which sessions are alive and what each one is doing, when that changed. */
   private broadcastRunning(): void { const m = this.runningMsg(); const j = JSON.stringify(m); if (j === this.lastRunning) return; this.lastRunning = j; for (const s of this.sessions.values()) s.send(m); }
-  constructor(o: ServiceOptions = {}) { this.collab = new CollabService({ version: o.version ?? '0.1.0', broadcast: (m) => { for (const s of this.sessions.values()) s.send(m); }, openExternal: o.openExternal ?? (() => false), ...(o.makeAccount ? { makeAccount: o.makeAccount } : {}) }); this.home = o.home ?? homedir(); this.stateDir = o.stateDir ?? join(this.home, '.centcom'); this.cwd = o.cwd ?? this.home; mkdirSync(this.stateDir, { recursive: true, mode: 0o700 }); }
+  constructor(o: ServiceOptions = {}) { this.collab = new CollabService({ version: o.version ?? '0.1.0', broadcast: (m) => { for (const s of this.sessions.values()) s.send(m); }, toViewers: (ws, m) => { for (const s of this.sessions.values()) if (s.current === ws) s.send(m); }, openExternal: o.openExternal ?? (() => false), ...(o.makeAccount ? { makeAccount: o.makeAccount } : {}) }); this.home = o.home ?? homedir(); this.stateDir = o.stateDir ?? join(this.home, '.centcom'); this.cwd = o.cwd ?? this.home; mkdirSync(this.stateDir, { recursive: true, mode: 0o700 }); }
   private recentFile = (): string => join(this.stateDir, 'recent.json');
   recent(): RecentDir[] { try { return (JSON.parse(readFileSync(this.recentFile(), 'utf8')) as RecentDir[]).filter((r) => existsSync(r.dir)); } catch { return []; } }
   private addRecent(dir: string): void { const r = [{ dir, at: Date.now() }, ...this.recent().filter((x) => x.dir !== dir)].slice(0, 12); try { writeFileSync(this.recentFile(), JSON.stringify(r)); } catch { /* not critical */ } }
@@ -74,13 +80,13 @@ export class LocalService {
     return { detach: () => { detach(); this.sessions.delete(key); }, handle: async (raw) => { const m = sanitise(raw); if (!m) return; try { await this.dispatch(s, m, detach); } catch (e) { send({ t: 'notice', level: 'error', text: e instanceof Error ? e.message : String(e) }); } } };
   }
   private async dispatch(s: { current?: Workspace; leave?: () => void; send(m: ServerMsg): void }, m: ClientMsg, detach: () => void): Promise<void> {
-    const send = s.send; if (isCollabMsg(m)) { await this.collab.handle(m, send); return; }
+    const send = s.send; if (isCollabMsg(m)) { await this.collab.handle(m, send); return; } if (isJoinMsg(m)) { await this.collab.handleJoin(m, send); return; } if (isShareMsg(m)) { await this.collab.handleShare(m, s.current, send); return; }
     switch (m.t) {
-      case 'hello': { send(this.runningMsg()); const [st, cx] = await Promise.all([detectClaude(), detectCodex()]); send({ t: 'launcher', home: this.home, cwd: this.cwd, recent: this.recent(), claude: { installed: st.installed, version: st.version, signedIn: st.signedIn, kind: st.loginKind }, codex: { installed: cx.installed, version: cx.version, signedIn: cx.signedIn, kind: cx.loginKind }, prefs: await this.prefs() }); if (this.appCfg && !this.warned) { this.warned = true; for (const w of this.appCfg.warnings) send({ t: 'notice', level: 'warn', text: 'Settings: ' + w }); } if (s.current) { const w = s.current.status(); send({ t: 'opened', dir: w.dir, history: s.current.history(), engine: w.engine, demo: w.demo }); } break; }
+      case 'hello': { send(this.runningMsg()); this.collab.sendJoined(send); const [st, cx] = await Promise.all([detectClaude(), detectCodex()]); send({ t: 'launcher', home: this.home, cwd: this.cwd, recent: this.recent(), claude: { installed: st.installed, version: st.version, signedIn: st.signedIn, kind: st.loginKind }, codex: { installed: cx.installed, version: cx.version, signedIn: cx.signedIn, kind: cx.loginKind }, prefs: await this.prefs() }); if (this.appCfg && !this.warned) { this.warned = true; for (const w of this.appCfg.warnings) send({ t: 'notice', level: 'warn', text: 'Settings: ' + w }); } if (s.current) { const w = s.current.status(); send({ t: 'opened', dir: w.dir, history: s.current.history(), engine: w.engine, demo: w.demo }); } break; }
       case 'browse': { const d = listDir(m.path, this.home); send({ t: 'dir', ...d, saved: new SessionStore().list(d.path, 50).length }); break; }
-      case 'open': { const dir = resolve(m.dir); const key = `${dir}::${m.demo ? 'demo' : m.engine ?? 'claude-code'}`; if (!existsSync(dir) || !statSync(dir).isDirectory()) { send({ t: 'notice', level: 'error', text: 'That folder does not exist.' }); break; } detach(); let w = this.workspaces.get(key); if (!w) { w = await Workspace.open(dir, !!m.demo, m.engine === 'codex' ? 'codex' : 'claude-code', m.resume); this.workspaces.set(key, w); w.onChange(() => this.broadcastRunning()); } this.addRecent(dir); s.current = w; send({ t: 'opened', dir, history: w.history(), engine: w.status().engine, demo: w.status().demo }); s.leave = w.join(send); this.broadcastRunning(); break; }
+      case 'open': { const dir = resolve(m.dir); const key = `${dir}::${m.demo ? 'demo' : m.engine ?? 'claude-code'}`; if (!existsSync(dir) || !statSync(dir).isDirectory()) { send({ t: 'notice', level: 'error', text: 'That folder does not exist.' }); break; } detach(); let w = this.workspaces.get(key); if (!w) { w = await Workspace.open(dir, !!m.demo, m.engine === 'codex' ? 'codex' : 'claude-code', m.resume); this.workspaces.set(key, w); w.onChange(() => this.broadcastRunning()); } this.addRecent(dir); s.current = w; send({ t: 'opened', dir, history: w.history(), engine: w.status().engine, demo: w.status().demo }); s.leave = w.join(send); this.collab.sendSharing(w, send); this.broadcastRunning(); break; }
       case 'leave': { detach(); send({ t: 'closed' }); break; }
-      case 'close': { if (s.current) { const w = s.current; detach(); w.close(); for (const [k, v] of this.workspaces) if (v === w) this.workspaces.delete(k); } send({ t: 'closed' }); this.broadcastRunning(); break; }
+      case 'close': { if (s.current) { const w = s.current; detach(); this.collab.stopSharing(w); w.close(); for (const [k, v] of this.workspaces) if (v === w) this.workspaces.delete(k); } send({ t: 'closed' }); this.broadcastRunning(); break; }
       case 'submit': void s.current?.ctl.submit(m.text); break;
       case 'approve': s.current?.ctl.answerApproval(m.decision, m.scope ?? 'once'); break;
       case 'interrupt': void s.current?.ctl.interrupt(); break;
@@ -99,7 +105,7 @@ export class LocalService {
     }
   }
   /** On quit: settings are written and every agent session is stopped. */
-  shutdown(): void { this.appCfg?.flush(); for (const w of this.workspaces.values()) w.close(); this.workspaces.clear(); this.lastRunning = ''; }
+  shutdown(): void { void this.collab.leaveJoined(); this.appCfg?.flush(); for (const w of this.workspaces.values()) { this.collab.stopSharing(w); w.close(); } this.workspaces.clear(); this.lastRunning = ''; }
 }
 
 const row = (x: ModelChoice): { id: string; label: string; note: string; efforts?: string[]; defaultEffort?: string; isDefault?: boolean } => ({ id: x.id, label: x.label, note: x.note, efforts: x.efforts, defaultEffort: x.defaultEffort, isDefault: x.isDefault });
