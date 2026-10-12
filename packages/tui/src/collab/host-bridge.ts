@@ -40,13 +40,14 @@ export class HostBridge {
     for (const i of this.ctl.state.items) { this.seen.add(i.id); if (i.kind === 'assistant') { this.sentLen.set(i.id, i.text.length); if (i.done) this.doneSent.add(i.id); } if (i.kind === 'tool') this.toolSent.set(i.id, i.status === 'running' ? 'request' : 'result'); }
     this.wasBusy = this.ctl.state.busy;
     this.offStore = this.ctl.store.subscribe(() => this.onState());
-    this.offTurn = this.ctl.onTurnEnd(() => { void this.settle().then(() => this.emit('agent.state', { p: { agent_id: this.agent(), state: 'idle', since: new Date().toISOString() } })); });
+    this.offTurn = this.ctl.onTurnEnd(() => { void this.settle().then(() => this.setState('idle')); });
     this.queue.on('changed', () => { this.o.onChange?.(); void this.pump(); }); this.queue.on('error', (e) => this.o.onError?.(e));
     this.handle.on('roster', () => this.o.onChange?.());
+    this.emit('agent.spawn', { p: { agent_id: this.agent(), owner: this.handle.me.id, mode: 'command_post', runs_on: this.handle.me.id, provider: this.ctl.state.engineId === 'codex' ? 'openai' : this.ctl.state.engineId === 'claude-code' ? 'anthropic' : 'other' }, secret: { label: this.ctl.state.engineLabel } });
     this.emit('message.system', { secret: { level: 'info', text: 'This conversation is now shared.' } });
     void this.pump();
   }
-  stop(): void { this.stopped = true; this.offStore?.(); this.offTurn?.(); this.queue.dispose(); if (this.flushTimer) clearTimeout(this.flushTimer); for (const w of this.busyWaiters.splice(0)) w(); for (const f of [...this.stoppers]) f(); }
+  stop(): void { this.stopped = true; this.offStore?.(); this.offTurn?.(); this.queue.dispose(); if (this.flushTimer) clearTimeout(this.flushTimer); if (this.stateTimer) clearTimeout(this.stateTimer); for (const w of this.busyWaiters.splice(0)) w(); for (const f of [...this.stoppers]) f(); }
 
   setAutoApprove(on: boolean): void { this.autoApprove = on; void this.pump(); this.o.onChange?.(); }
   get autoApproving(): boolean { return this.autoApprove; }
@@ -88,8 +89,16 @@ export class HostBridge {
   private async settle(): Promise<void> { this.onState(); if (this.flushTimer) { clearTimeout(this.flushTimer); this.flushTimer = undefined; } this.flush(); await this.chain; }
   private idOf(kind: 'agt' | 'apr' | 'msg', raw: string): string { if (ID_OK[kind].test(raw)) return raw; const k = `${kind}:${raw}`; let v = this.mapped.get(k); if (!v) { v = this.ids.next(kind); this.mapped.set(k, v); } return v; }
   private agent(): string { return this.idOf('agt', this.ctl.state.agents.find((a) => a.mine)?.id ?? this.ctl.state.activeAgent); }
+  /** The relay allows two `agent.state` frames a second per agent: the latest state wins, sent at most every 600 ms. */
+  private lastState?: { state: string; at: number }; private wantState?: string; private stateTimer?: ReturnType<typeof setTimeout>;
+  private setState(state: string): void {
+    if (this.stopped) return; this.wantState = state; if (this.stateTimer) return;
+    const wait = Math.max(0, 600 - (Date.now() - (this.lastState?.at ?? 0)));
+    this.stateTimer = setTimeout(() => { this.stateTimer = undefined; const st = this.wantState; if (!st || this.stopped || st === this.lastState?.state) return; this.lastState = { state: st, at: Date.now() }; this.emit('agent.state', { p: { agent_id: this.agent(), state: st, since: new Date().toISOString() } }); }, wait); this.stateTimer.unref?.();
+  }
+  /** One lost frame must not hold back the ones behind it. */
   private emit(kind: string, body: { p?: Record<string, unknown>; secret?: Record<string, unknown> }): void {
-    if (this.stopped) return; this.chain = this.chain.then(() => this.handle.sendEvent(kind, body as never)).catch((e) => this.o.onError?.(e));
+    if (this.stopped) return; this.chain = this.chain.then(() => withTimeout(this.handle.sendEvent(kind, body as never), 8000, kind)).catch((e) => this.o.onError?.(e));
   }
 
   private onState(): void {
@@ -103,7 +112,7 @@ export class HostBridge {
   private item(it: Item, agent: string): void {
     if (it.kind === 'user') {
       if (this.seen.has(it.id)) return; this.seen.add(it.id);
-      const queueItem = it.member && this.tagNext ? this.tagNext : undefined; this.emit('agent.state', { p: { agent_id: agent, state: 'thinking', since: new Date().toISOString() } });
+      const queueItem = it.member && this.tagNext ? this.tagNext : undefined; this.setState('thinking');
       this.emit('message.user', { secret: { text: it.text.slice(0, 60_000), agent_id: agent, ...(queueItem ? { queue_item: queueItem } : {}) } }); return;
     }
     if (it.kind === 'assistant') { this.seen.add(it.id); const sent = this.sentLen.get(it.id) ?? 0; if (it.text.length > sent || (it.done && !this.doneSent.has(it.id))) this.scheduleFlush(); return; }
@@ -125,3 +134,5 @@ export class HostBridge {
     }
   }
 }
+
+const withTimeout = <T,>(p: Promise<T>, ms: number, what: string): Promise<T> => new Promise<T>((resolve, reject) => { const t = setTimeout(() => reject(new Error(`${what} was not confirmed by the relay`)), ms); t.unref?.(); p.then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); }); });

@@ -93,9 +93,9 @@ export class CollabService {
       case 'unshare': { this.stopSharing(ws); send({ t: 'sharing', sharing: null }); this.o.toViewers?.(ws, { t: 'sharing', sharing: null }); return; }
       case 'shareLink': { if (!cur?.handle) return; try { const l = await cur.handle.createShareLink(); cur.link = { url: l.url + l.fragment, expiresAt: l.expires_at }; } catch (e) { cur.hint = shareWhy(e).error; } this.publish(ws); return; }
       case 'shareInvite': {
-        if (!cur?.handle || !cur.account) return; const account = cur.account; const spaces = await account.workspaces().catch(() => []); const home = spaces.find((w) => w.name === cur.workspace)?.id ?? spaces[0]?.id; if (!home) return;
-        try { const r = (await account.http.call('createInvite', { path: { id: home }, body: { role: 'member', ...(m.email ? { email: m.email } : {}) } } as never)).data as unknown as { url?: string }; cur.invite = { url: r.url ?? '', ...(m.email ? { email: m.email } : {}) }; cur.hint = undefined; }
-        catch (e) { const code = (e as { rawCode?: string; status?: number }); cur.hint = code.status === 403 || code.rawCode === 'forbidden' || code.rawCode === 'insufficient_scope' ? 'Inviting people is done in the Centcom web app (Workspace, Members), because this app\'s sign-in is not allowed to change the workspace. People in your workspace can join with the session id.' : shareWhy(e).error; }
+        if (!cur?.handle || !cur.account) return;
+        try { const r = await cur.account.inviteToSession(cur.handle.id, { role: 'editor', ...(m.email ? { email: m.email } : {}) }); cur.invite = { url: r.url, ...(m.email ? { email: m.email } : {}) }; cur.hint = undefined; }
+        catch (e) { cur.hint = shareWhy(e).error; }
         this.publish(ws); return;
       }
       case 'shareDecide': { try { if (m.decision === 'approve') await cur?.bridge?.approve(m.item); else await cur?.bridge?.reject(m.item); } catch { /* the item was already decided or withdrawn */ } this.publish(ws); return; }

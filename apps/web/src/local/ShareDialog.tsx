@@ -39,9 +39,9 @@ export function ShareDialog({ view, send }: { view: LocalView; send(m: ClientMsg
         <div className="acct__actions">{sh.code === 'not_signed_in' ? <Button onClick={() => { setOpen(false); window.dispatchEvent(new Event('centcom:account')); }}>Sign in</Button> : <Button onClick={() => send({ t: 'share' })}>Try again</Button>}<Button variant="ghost" onClick={() => { send({ t: 'unshare' }); setOpen(false); }}>Close</Button></div>
       </> : <>
         <section className="shr__sec"><h3><Link2 aria-hidden="true" />Join with the session id</h3>
-          <p className="acct__note">People in your workspace ({sh.workspace ?? 'yours'}) enter it in Centcom (Join a session, or <code>centcom join</code>).</p>
+          <p className="acct__note">People in your workspace ({sh.workspace ?? 'yours'}) enter it in Centcom (Join a session, or <code>centcom join</code>). Anyone else needs an invite (below).</p>
           <p className="shr__id"><code>{sh.sessionId}</code><CopyButton text={sh.sessionId ?? ''} label="Copy" /></p></section>
-        <section className="shr__sec"><h3>Invite by e-mail</h3>
+        <section className="shr__sec"><h3>Invite someone to this session</h3>
           <form className="shr__row" onSubmit={(e) => { e.preventDefault(); send({ t: 'shareInvite', ...(email.trim() ? { email: email.trim() } : {}) }); setEmail(''); }}><input className="cc-input" type="email" aria-label="E-mail address" placeholder="friend@example.com" value={email} onChange={(e) => setEmail(e.target.value)} /><Button type="submit" variant="outline" size="sm" disabled={!email.trim()}>Invite</Button></form>
           {sh.invite ? <p className="shr__id"><span>Invite link{sh.invite.email ? ` for ${sh.invite.email}` : ''}:</span><code>{sh.invite.url}</code><CopyButton text={sh.invite.url} label="Copy" /></p> : null}
           {sh.hint ? <p className="acct__note" role="status">{sh.hint}</p> : null}</section>

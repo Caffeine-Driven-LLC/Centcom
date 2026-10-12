@@ -82,6 +82,18 @@ export class Account {
     return this.sessionClient;
   }
 
+  /** Invites one person into one session only (no workspace seat): the host's call. Returns the link to send. */
+  async inviteToSession(sessionId: string, o: { email?: string; role?: 'editor' | 'viewer'; expiresInS?: number } = {}): Promise<{ url: string; token: string; email?: string }> {
+    const r = (await this.http.call('createSessionInvite', { path: { id: sessionId }, body: { role: o.role ?? 'editor', ...(o.email ? { email: o.email } : {}), ...(o.expiresInS ? { expires_in_s: o.expiresInS } : {}) } } as never)).data as unknown as { token: string; url: string };
+    return { token: r.token, url: r.url, ...(o.email ? { email: o.email } : {}) };
+  }
+  /** Accepts an invite (a session invite, or a workspace one): the session to join, when it names one. */
+  async acceptInvite(token: string): Promise<{ session?: string; role?: string; workspace?: string }> {
+    const r = (await this.http.call('acceptInvite', { path: { token } } as never)).data as unknown as { session?: string | { id?: string }; role?: string; workspace?: string | { id?: string } };
+    const id = (v: unknown): string | undefined => (typeof v === 'string' ? v : (v as { id?: string } | undefined)?.id);
+    return { ...(id(r.session) ? { session: id(r.session)! } : {}), ...(r.role ? { role: r.role } : {}), ...(id(r.workspace) ? { workspace: id(r.workspace)! } : {}) };
+  }
+
   /** The workspaces this person is in (a session is created in one). */
   async workspaces(): Promise<{ id: string; name: string }[]> { const r = (await this.http.call('listWorkspaces', {})).data as unknown as { data?: { id: string; name: string }[] }; return (r.data ?? []).map((w) => ({ id: w.id, name: w.name })); }
 }
