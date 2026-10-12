@@ -57,6 +57,10 @@ export interface ControllerOptions {
   history?: string[]; onHistory?: (h: string[]) => void;
   /** Called when a remembered setting or panel changes (the config layer decides what to write). */
   onPrefs?: (p: { settings: Settings; fleet: boolean }) => void;
+  /** Agents the conversation can be moved to from the model list (the installed ones other than `engine`). A model of another agent switches to it. */
+  engines?: Partial<Record<'claude-code' | 'codex', () => AgentEngine>>;
+  /** Called after a switch to another agent, to remember it as the one to start with next time. */
+  onEngine?: (id: 'claude-code' | 'codex') => void;
   /** Text for /config: what is set and where each value came from. */
   describeConfig?: () => string;
   /** Where to record what happened. Only ids and enums are logged, never message text, paths or commands. */
@@ -129,7 +133,7 @@ export class AppController {
     this.driver = new MascotDriver({ reducedMotion: settings.reducedMotion, color: settings.color });
     this.night = this.makeNight();
     const clock = { now: () => Date.now(), setTimeout: (f: () => void, ms: number) => { const t = setTimeout(f, ms); t.unref?.(); return t; }, clearTimeout: (h: never) => clearTimeout(h as NodeJS.Timeout) };
-    this.ctxView = createContextView({ bus: this.bus, clock, config: o.context, engines: { capabilities: () => o.engine.capabilities(), status: () => (this.state.busy ? 'running' : this.session ? 'waiting' : 'starting'), send: async (_id, prompt) => { await this.session?.send(prompt); } } });
+    this.ctxView = createContextView({ bus: this.bus, clock, config: o.context, engines: { capabilities: () => this.o.engine.capabilities(), status: () => (this.state.busy ? 'running' : this.session ? 'waiting' : 'starting'), send: async (_id, prompt) => { await this.session?.send(prompt); } } });
     this.bus.on('agent:context_alert', (a) => { if (a.level === 'warn') this.notice('warn', `The context is ${Math.round(a.pct)}% full.`, 'Type /compact to have the agent compact it, or /handoff to write a note for a fresh session.'); else if (a.level === 'full') { this.notice('warn', 'The context is almost full.', 'Choose what to do about it, or type /compact or /handoff.'); this.driver.setState('context-full'); this.offerContext = true; this.maybeOfferContext(); } else if (a.level === 'ok') this.offerContext = false; });
     if (o.fleet) this.watchFleet(o.fleet);
     this.models = createModelRegistry({
@@ -141,7 +145,7 @@ export class AppController {
     o.ledgerBus?.on('cost.alert', (a) => { if (a.session_id !== this.state.sessionId) return; this.notice(a.level === 'error' ? 'warn' : 'info', a.level === 'error' ? `This conversation has reached its cost budget (${a.pct}% of it, as the tools reported it).` : `This conversation is at ${a.pct}% of its cost budget (as the tools reported it).`, 'Budgets only warn: nothing was stopped. Change it with budget.session_usd in your settings.'); this.driver.setState('cost-alert'); });
     if (o.checkpoints) this.cp = createCheckpointManager({ worktree: o.cwd, agentId: this.me, git: o.checkpoints.git ?? nodeGit, clock,
       store: { markRewind: async (seq) => this.rewindTranscript(seq), summarize: async (seq, max) => this.summaryUpTo(seq, max) },
-      engine: { capabilities: () => o.engine.capabilities(), start: (so) => o.engine.start({ ...this.startOptions(so.resume?.engine_session_id), ...so }) } });
+      engine: { capabilities: () => this.o.engine.capabilities(), start: (so) => this.o.engine.start({ ...this.startOptions(so.resume?.engine_session_id), ...so }) } });
   }
 
   get state() { return this.store.get(); }
@@ -516,6 +520,7 @@ export class AppController {
   /** Reasoning effort for the next turns, if the engine has the setting (Codex). Returns false when it does not. */
   setEffort(effort: string): boolean { if (!this.session?.setEffort) return false; this.session.setEffort(effort); this.effort = effort; this.toast('ok', `Reasoning effort: ${effort || 'default'}`); return true; }
   private effort = '';
+  private otherModelCache = new Map<string, import('@centcom/agent').ModelChoice[]>();
   /** The levels the running engine accepts: Claude Code's fixed list, or the current Codex model's own. */
   private async effortLevels(): Promise<string[]> {
     if (this.state.engineId === 'claude-code') return ['low', 'medium', 'high', 'xhigh', 'max'];
@@ -533,8 +538,39 @@ export class AppController {
   /** The models this engine's account offers, when the engine can list them (Codex). Empty otherwise. */
   async engineModels(): Promise<import('@centcom/agent').ModelChoice[]> { const l = (this.session as { listModels?: () => Promise<import('@centcom/agent').ModelChoice[]> } | undefined)?.listModels; try { return l ? await l.call(this.session) : []; } catch { return []; } }
   /** Switch model for the next turn (the running turn keeps its model). */
-  /** The model list: Claude Code's own screen, or the models the Codex account reports (they differ per account). */
+  /** The agents the conversation can move to from the model list. */
+  private otherAgents(): ('claude-code' | 'codex')[] { if (this.o.demo) return []; return (['claude-code', 'codex'] as const).filter((id) => id !== this.o.engine.id && !!this.o.engines?.[id]); }
+  /** One agent's models: Claude Code's fixed list, or what the Codex account reports (a short-lived Codex session is asked, stopped again, and the answer kept). */
+  private async modelsOf(id: 'claude-code' | 'codex'): Promise<import('@centcom/agent').ModelChoice[]> {
+    if (id === 'claude-code') return CLAUDE_MODELS.filter((m) => m.id);
+    if (this.o.engine.id === 'codex') return this.engineModels();
+    const hit = this.otherModelCache.get(id); if (hit) return hit; const make = this.o.engines?.[id]; if (!make) return [];
+    try { const sess = await make().start({ agentId: 'agt_models', cwd: this.o.cwd }); try { const l = (await (sess as { listModels?: () => Promise<import('@centcom/agent').ModelChoice[]> }).listModels?.()) ?? []; if (l.length) this.otherModelCache.set(id, l); return l; } finally { await sess.stop().catch(() => undefined); } } catch { return []; }
+  }
+  /** Moves the conversation to another agent (and a model of it): the transcript stays on screen, the new agent continues from a summary of what was said. */
+  async switchEngine(id: 'claude-code' | 'codex', model = '') {
+    if (id === this.o.engine.id) { this.setModel(model); return; }
+    const make = this.o.engines?.[id]; if (!make) { this.toast('warn', `${id === 'codex' ? 'Codex' : 'Claude Code'} is not installed.`); return; }
+    if (this.state.busy) { this.toast('warn', 'Cento is still working. Press Esc to interrupt, then try again.'); return; }
+    const was = this.o.engine.label; await this.dropSession(); const engine = make(); this.o = { ...this.o, engine }; this.effort = '';
+    this.set({ engineId: engine.id, engineLabel: engine.label }); this.setSettings({ model }); this.updateAgent(this.me, () => ({ engine: engine.label, provider: engine.provider, model: model || 'default' })); this.o.onEngine?.(id);
+    const n = this.state.items.filter((i) => i.kind === 'user').length; const carry = n ? `This conversation started with another coding agent (${was}). Summary of it so far:\n\n${this.summaryUpTo(n + 1, 8 * 1024)}` : undefined;
+    this.notice('info', `Switched to ${engine.label}${model ? ` (${model})` : ''}.${n ? ` It continues from a summary of what was said with ${was}.` : ''}`);
+    await this.startEngine(undefined, carry);
+  }
+  /** The model list. With another agent installed it lists both agents' models, and a model of the other one switches to it. */
   async openModels() {
+    const others = this.otherAgents();
+    if (others.length) {
+      const name = (e: string) => (e === 'codex' ? 'Codex' : 'Claude Code'); const cur = this.o.engine.id as 'claude-code' | 'codex'; const order = [cur, ...others];
+      if (others.includes('codex') && !this.otherModelCache.has('codex')) this.toast('info', 'Asking Codex for its models…');
+      const lists = await Promise.all(order.map(async (e) => [e, await this.modelsOf(e)] as const));
+      const options = lists.flatMap(([e, l]) => [{ id: `${e}|`, label: `${name(e)} · Default`, hint: e === cur ? 'what the agent is set to use' : 'switch to this agent' }, ...l.map((m) => ({ id: `${e}|${m.id}`, label: `${name(e)} · ${m.label || m.id}`, hint: m.efforts?.length ? `${m.note ? m.note + ' · ' : ''}effort ${m.efforts.join('/')}` : m.note }))]);
+      const ids = await this.pick({ title: 'Model', note: 'A model of the other agent moves this conversation to it', multi: false, confirm: 'use', checked: [`${cur}|${this.state.settings.model}`], options });
+      const pickedId = ids?.[0]; if (pickedId === undefined) return; const at = pickedId.indexOf('|'); const e = pickedId.slice(0, at) as 'claude-code' | 'codex'; const m = pickedId.slice(at + 1);
+      if (e === cur) this.setModel(m); else await this.switchEngine(e, m);
+      return;
+    }
     if (this.state.engineId !== 'codex') {
       const OTHER = '\u0000other'; const cur = this.state.settings.model;
       const ids = await this.pick({ title: 'Model', note: 'Applies from your next message', multi: false, confirm: 'use', checked: CLAUDE_MODELS.some((m) => m.id === cur) ? [cur === '' ? '\u0000default' : cur] : [], options: [...CLAUDE_MODELS.map((m) => ({ id: m.id === '' ? '\u0000default' : m.id, label: m.label, hint: m.note })), { id: OTHER, label: 'Another model…', hint: 'type its id' }] });
@@ -915,6 +951,15 @@ export class AppController {
       case 'effort': await this.effortCommand(arg); break;
       case 'model': {
         if (!arg) { await this.openModels(); break; }
+        const named = /^(codex|claude(?:[ -]?code)?)(?:[:\s]+(.*))?$/i.exec(arg.trim());
+        if (named && this.o.engines && !this.o.demo) { // "/model codex", "/model codex gpt-5.6-sol", "/model claude opus"
+          const e: 'claude-code' | 'codex' = named[1]!.toLowerCase().startsWith('codex') ? 'codex' : 'claude-code'; const rest = (named[2] ?? '').trim().toLowerCase();
+          if (e === this.o.engine.id && !rest) { this.toast('info', `Already using ${this.o.engine.label}.`); break; }
+          const list = rest ? await this.modelsOf(e) : []; const hit = rest ? list.find((x) => x.id.toLowerCase() === rest || x.label.toLowerCase() === rest) ?? list.find((x) => (x.id + ' ' + x.label).toLowerCase().includes(rest)) : undefined;
+          if (rest && !hit && !/^[\w.:-]{3,}$/.test(rest)) { this.toast('warn', `No model called "${rest}"`); break; }
+          await this.switchEngine(e, hit?.id ?? rest); break;
+        }
+        if (this.o.engines && !this.o.demo) { const q0 = arg.trim().toLowerCase(); for (const e of this.otherAgents()) { const l = await this.modelsOf(e); const hit = l.find((x) => x.id.toLowerCase() === q0 || x.label.toLowerCase() === q0); if (hit) { await this.switchEngine(e, hit.id); return; } } } // a model name of the other agent
         const q = arg.toLowerCase(); const m = CLAUDE_MODELS.find((x) => x.id.toLowerCase() === q || x.label.toLowerCase() === q) ?? CLAUDE_MODELS.find((x) => (x.id + ' ' + x.label).toLowerCase().includes(q));
         if (m) this.setModel(m.id); else if (/^[\w.:-]{3,}$/.test(arg)) this.setModel(arg); else this.toast('warn', `No model called "${arg}"`);
         break;

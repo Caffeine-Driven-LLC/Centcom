@@ -13,7 +13,7 @@ export const COMMANDS: SlashCommand[] = [
   { name: 'motion', args: '[full|reduced]', desc: 'Turn mascot animation on or off' },
   { name: 'cento', args: '[animation]', desc: 'Browse all 319 Cento animations' },
   { name: 'demo', args: '[fix|search|delete|compact|ask|error|limit]', desc: 'Run a scripted demo story' },
-  { name: 'model', args: '[name]', desc: 'Pick the model (ctrl+o)' },
+  { name: 'model', args: '[name]', desc: 'Pick the model, Claude or Codex (ctrl+o)' },
   { name: 'effort', args: '[low|medium|high|xhigh|max|default]', desc: 'How hard the agent thinks (pick from a list with no argument)' },
   { name: 'density', args: '[comfortable|compact]', desc: 'Blank rows between messages, or fit more on screen' },
   { name: 'title', args: '[on|off]', desc: 'Show the folder and what the agent is doing in the terminal tab title' },
