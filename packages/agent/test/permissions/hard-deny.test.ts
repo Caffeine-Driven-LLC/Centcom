@@ -42,3 +42,19 @@ describe('hard denies hold in every mode, even with an allow rule', () => {
   it('the hard-deny check never reads a file (only the path is examined)', async () => { const r = rig(); const { writeFileSync, mkdirSync } = await import('node:fs'); mkdirSync(join(r.home, '.codex')); writeFileSync(join(r.home, '.codex', 'auth.json'), '{"secret":1}'); const reads: string[] = []; const fs = { ...r.fs, readFile: async (p: string) => { reads.push(p); return r.fs.readFile(p); } }; const r2 = rig({ fs: fs as never, home: r.home }); await r2.engine.decide(req({ tool: 'Read', path: '~/.codex/auth.json', command: undefined }), r2.ctx); expect(reads.filter((p) => p.includes('auth.json'))).toEqual([]); });
   it('audits every hard deny without the command or path', async () => { const r = rig(); await r.engine.decide(req({ command: 'cat ~/.codex/auth.json' }), r.ctx); const e = r.audit.find((x) => x.type === 'hard_deny'); expect(e).toMatchObject({ reason: 'credential_path' }); expect(JSON.stringify(e)).not.toContain('auth.json'); });
 });
+
+describe('installing a tool for yourself is asked about, not refused', () => {
+  it('writes into the usual user install folders reach the approval, in ask mode', async () => {
+    const r = rig({ mode: 'ask' });
+    for (const c of ['mkdir -p ~/.local/bin', 'cp tool ~/.local/bin/tool', 'ln -sf $PWD/bin/x ~/.local/bin/x', 'mkdir ~/.cargo/bin', 'cp x ~/.npm/x']) expect(await r.engine.decide(req({ command: c }), r.ctx), c).toMatchObject({ action: 'ask' });
+  });
+  it('bypass, which the person turned on, allows them', async () => {
+    const r = rig({ mode: 'bypass', config: { bypassEnabled: true } }); expect((await r.engine.decide(req({ command: 'cp tool ~/.local/bin/tool' }), r.ctx)).action).toBe('allow');
+  });
+  it('the system, shell start-up files, the keyring and credentials stay refused in every mode', async () => {
+    for (const mode of MODES) {
+      const r = rig({ mode, config: { bypassEnabled: true } });
+      for (const c of ['install -m755 x /usr/local/bin/x', 'echo hi > ~/.bashrc', 'cp x /etc/hosts', 'cp x ~/.local/share/keyrings/login.keyring', 'cat ~/.npmrc', 'echo x > ~/.ssh/authorized_keys', 'cp x ~/bin/x']) expect(await r.engine.decide(req({ command: c }), r.ctx), `${mode}: ${c}`).toMatchObject({ action: 'deny', hard: true });
+    }
+  });
+});
