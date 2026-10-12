@@ -1,0 +1,86 @@
+{
+  "id": "B103",
+  "title": "Run the backend locally: sessions, workspaces, invites, relay and two accounts",
+  "plan": "backend",
+  "phase": "P3 Relay",
+  "size": "L",
+  "role": "platform",
+  "depends_on": [
+    "B012",
+    "B029",
+    "B031",
+    "B038",
+    "B043",
+    "B054",
+    "B068",
+    "B080",
+    "B102"
+  ],
+  "goal": "A person can run the API and the relay on their laptop and watch two brand-new accounts sign up, share a session through the relay and read each other's encrypted messages, so the clients can be built and tried against a real backend.",
+  "scope_in": [
+    "Serve the session, workspace, member, entitlement, invite and share-link routes from `apps/api/src/modules.ts` (each skipped with one log line when its dependency is not configured), with the plugins they need (idempotency, RBAC, audit).",
+    "`pnpm dev:relay` (`tools/dev/relay.ts`): runs `apps/relay` against the dev stack with the API's JWKS and plain `ws://` for local use.",
+    "A development-only default plan for new accounts (`DEV_DEFAULT_PLAN`), written in the sign-up transaction, refused in production, and the seeded workspace on a plan with `relay_access`.",
+    "The relay announces a member's first connection (`control.member_joined`) so the host grants keys; guests without a device are admitted as viewers.",
+    "`pnpm dev:two-clients` and `pnpm dev:two-accounts` (`tools/dev/`): scripts that play two people with the client's real libraries, and `docs/api-service.md` 'Two sessions on your machine'."
+  ],
+  "scope_out": [
+    "Production deployment, a real mail provider, billing and metering (B106).",
+    "A viewer guest's sender checks (B104) and session-level invites (B105)."
+  ],
+  "implements": [
+    "CT-API-SESSIONS",
+    "CT-API-WORKSPACES"
+  ],
+  "consumes": [
+    "CT-AUTH",
+    "CT-RBAC",
+    "CT-CRYPTO",
+    "CT-WS-ENVELOPE",
+    "CT-ENTITLEMENTS",
+    "CT-PAGE",
+    "CT-ERR",
+    "CT-IDS"
+  ],
+  "build_against": "The B012 dev stack and the client checked out next to this repo (or CENTCOM_CLIENT_DIR) for the scripts; tests use the B010 testkit containers or in-memory stores.",
+  "deliverables": [
+    "apps/api/src/collab.ts",
+    "apps/relay/src/handshake/announce.ts",
+    "tools/dev/relay.ts",
+    "tools/dev/client-kit.ts",
+    "tools/dev/two-clients.ts",
+    "tools/dev/two-accounts.ts",
+    "tools/dev/token.ts",
+    "apps/api/src/dev-token.ts"
+  ],
+  "interfaces": [
+    "`pnpm dev:api`, `pnpm dev:relay`, `pnpm dev:two-clients`, `pnpm dev:two-accounts`; env `DEV_DEFAULT_PLAN`, `RELAY_PUBLIC_URL`.",
+    "Routes of B054, B029, B028, B027, B068 and the entitlement reads on the API."
+  ],
+  "acceptance": [
+    "With the stack, API and relay running, `pnpm dev:two-accounts` ends OK: a new e-mail signs up (user, personal workspace, owner membership, plan), invites a second new e-mail, both join one session through the relay and each reads the other's message.",
+    "A production configuration refuses `DEV_DEFAULT_PLAN` and a production sign-up gets the free plan (test).",
+    "The relay announces `control.member_joined` once for a member's first connection and the host grants keys (relay test).",
+    "A viewer guest ticket with no `dev` claim is admitted only as a viewer with no caps; a bad or missing `dev` for any other role is refused (relay tests).",
+    "A module whose configuration is missing is skipped with one log line and the rest boots (test)."
+  ],
+  "tests": [
+    "apps/api/test/entrypoint/app.build.test.ts",
+    "apps/api/test/modules/users/personal-workspace.test.ts",
+    "apps/relay/test/handshake/handshake.announce.test.ts",
+    "apps/relay/test/handshake/handshake.access.test.ts",
+    "apps/relay/test/handshake/handshake.ticket.test.ts",
+    "tools/dev/seed.test.ts"
+  ],
+  "guardrails": [
+    "MUST NOT put tokens, tickets, invite or link secrets, key material or e-mail addresses in logs.",
+    "MUST keep contracts/ as it is: this lane builds against the contract text and fails closed where the contract is silent.",
+    "MUST NOT let a development default (plan, rate limits, plain ws) take effect in production."
+  ],
+  "failure_modes": [
+    "Redis, Postgres or the relay down while a script runs -> the script prints which step failed and exits 1.",
+    "A second sign-in of the same e-mail -> the same user and workspace (no duplicate)."
+  ],
+  "unblocks_gate": "G2",
+  "notes": "Built first as PR backend #112 before this card existed; this card describes what that PR does. The lane also changes (does not own) apps/api/src/{app,modules,context,config}.ts (B102), docs/api-service.md (B102) and docs/dev-environment.md (B012): it adds entries to them."
+}

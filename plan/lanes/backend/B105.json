@@ -1,0 +1,80 @@
+{
+  "id": "B105",
+  "title": "Session invites: one person into one session, no seat",
+  "plan": "backend",
+  "phase": "P4 Fleet",
+  "size": "L",
+  "role": "sessions",
+  "depends_on": [
+    "B029",
+    "B030",
+    "B031",
+    "B054",
+    "B068",
+    "B080",
+    "B103"
+  ],
+  "goal": "A host on any relay plan can invite a person who has an account into one session as editor or viewer without making them a workspace member, so \"the host pays, collaborators join free\" works and Pro (one seat) can share.",
+  "scope_in": [
+    "`POST /v1/sessions/{id}/invites` (host, idempotent) and `GET /v1/sessions/{id}/invites`: email or link invites with role editor or viewer, expiry up to 7 days; needs the workspace's `relay_access`; no seat check.",
+    "Reuse of B029's invite token, preview (`GET /v1/invites/{token}` with `session_name`), revoke (also by the host), key bundle storage and fetch; `invites` gains `session_id` and the session roles (migration).",
+    "Accepting a session invite records a session grant (new table) and creates no membership and uses no seat; answer `SessionInviteAcceptance {session, role, workspace}`.",
+    "B054's join-token admits a grant holder at the invited role, counting against `max_session_members` and a slot like any member; revoking the invite withdraws the grant; a removed member cannot rejoin."
+  ],
+  "scope_out": [
+    "Workspace-level invites (B029 as is).",
+    "Billing or seat changes."
+  ],
+  "implements": [
+    "CT-API-SESSIONS",
+    "CT-API-WORKSPACES"
+  ],
+  "consumes": [
+    "CT-AUTH",
+    "CT-RBAC",
+    "CT-CRYPTO",
+    "CT-ENTITLEMENTS",
+    "CT-DEEPLINK",
+    "CT-PAGE",
+    "CT-ERR",
+    "CT-IDS"
+  ],
+  "build_against": "The in-memory invite, session and slot stores of the B029 and B054 tests.",
+  "deliverables": [
+    "apps/api/src/modules/invites/session-invites.ts",
+    "apps/api/src/routes/sessions/invites.ts",
+    "packages/db/src/schema/session-grants.ts",
+    "apps/api/test/modules/invites/session-invites.test.ts",
+    "packages/db/migrations/"
+  ],
+  "interfaces": [
+    "HTTP: `POST/GET /v1/sessions/{id}/invites`, the existing invite preview, accept, revoke and key-bundle routes for session invites."
+  ],
+  "acceptance": [
+    "A Pro-plan host (one seat) invites a signed-in user by e-mail; the user accepts and joins through the relay as editor; the workspace still has one seat used and one member (test).",
+    "Accepting uses no seat and creates no workspace membership; the invitee cannot read the workspace, its members or another session.",
+    "The invitee counts against `max_session_members` (the next join after the cap is `member_limit_reached`).",
+    "Revoking an accepted invite withdraws the right to join; a member removed by the host cannot rejoin by the same invite.",
+    "An invite for another e-mail address cannot be accepted by someone else; a used, expired or revoked token gives the same answers as workspace invites.",
+    "The sealed key bundle path works for a session invite (upload by the host, one fetch by the invitee).",
+    "A workspace without `relay_access` cannot create session invites (`entitlement_required`)."
+  ],
+  "tests": [
+    "session-invites.test.ts: create, preview, accept, join, member cap",
+    "session-invites.test.ts: revoke, kick, wrong address, used and expired tokens",
+    "session-invites.test.ts: the Pro host with one seat and an outside invitee",
+    "two-accounts step: a Pro host invites an outside account"
+  ],
+  "guardrails": [
+    "MUST NOT put tokens, tickets, invite or link secrets, key material or e-mail addresses in logs.",
+    "MUST keep contracts/ as it is: this lane builds against the contract text and fails closed where the contract is silent.",
+    "MUST NOT create a workspace membership or use a seat for a session invite.",
+    "MUST check the session's host role on create and revoke, from the records, never from token claims."
+  ],
+  "failure_modes": [
+    "Session ended or expired -> invite create 410 `session_ended`; accept of an invite for an ended session -> `session_ended`.",
+    "Cap reached between accept and join -> join is `member_limit_reached`, the grant stays."
+  ],
+  "unblocks_gate": "G5",
+  "notes": "Contract: ADR 0002 (plan/adr). Also changes (does not own) apps/api/src/routes/sessions/join-token.ts (B054), docs/api-service.md (B102) and tools/dev/two-accounts.ts (B103)."
+}

@@ -1199,6 +1199,76 @@
     "B018",
     "B020"
    ]
+  },
+  {
+   "id": "B103",
+   "title": "Run the backend locally: sessions, workspaces, invites, relay and two accounts",
+   "plan": "backend",
+   "phase": "P3 Relay",
+   "size": "L",
+   "role": "platform",
+   "depends_on": [
+    "B012",
+    "B029",
+    "B031",
+    "B038",
+    "B043",
+    "B054",
+    "B068",
+    "B080",
+    "B102"
+   ]
+  },
+  {
+   "id": "B104",
+   "title": "Share-link guests can read the members' public keys",
+   "plan": "backend",
+   "phase": "P4 Fleet",
+   "size": "S",
+   "role": "sessions",
+   "depends_on": [
+    "B068",
+    "B054",
+    "B103"
+   ]
+  },
+  {
+   "id": "B105",
+   "title": "Session invites: one person into one session, no seat",
+   "plan": "backend",
+   "phase": "P4 Fleet",
+   "size": "L",
+   "role": "sessions",
+   "depends_on": [
+    "B029",
+    "B030",
+    "B031",
+    "B054",
+    "B068",
+    "B080",
+    "B103"
+   ]
+  },
+  {
+   "id": "B106",
+   "title": "Collaboration wiring: metering, purge, relay delivery and the remaining API modules",
+   "plan": "backend",
+   "phase": "P6 Platform",
+   "size": "L",
+   "role": "platform",
+   "depends_on": [
+    "B055",
+    "B056",
+    "B063",
+    "B065",
+    "B069",
+    "B074",
+    "B075",
+    "B076",
+    "B081",
+    "B090",
+    "B103"
+   ]
   }
  ],
  "client": [

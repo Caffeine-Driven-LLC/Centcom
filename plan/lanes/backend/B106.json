@@ -1,0 +1,81 @@
+{
+  "id": "B106",
+  "title": "Collaboration wiring: metering, purge, relay delivery and the remaining API modules",
+  "plan": "backend",
+  "phase": "P6 Platform",
+  "size": "L",
+  "role": "platform",
+  "depends_on": [
+    "B055",
+    "B056",
+    "B063",
+    "B065",
+    "B069",
+    "B074",
+    "B075",
+    "B076",
+    "B081",
+    "B090",
+    "B103"
+  ],
+  "goal": "The pieces that were built and tested on their own but are not yet served or are stubbed locally run in the API and relay, so a shared session is metered, kept and cleaned up and the clients can read usage, notifications and plans.",
+  "scope_in": [
+    "Monthly usage metering behind the entitlement check (today it answers allowed): B075's counters feed B080, with B076's 80/100 percent signals.",
+    "The purge of deleted workspaces and ended sessions' history (B090, B055) as a job the worker runs.",
+    "Delivery of host changes and session state to the relay's control channel (B054's `hostNotifier`), with the retry the store already has.",
+    "The built API modules served from `modules.ts` when configured: usage, notifications and inbox, plans and entitlement reads, snapshots and history, webhooks management; each skipped with one log line when unconfigured.",
+    "Production sign-ups get the free plan: a test proves it and that `DEV_DEFAULT_PLAN` is refused in production."
+  ],
+  "scope_out": [
+    "Stripe checkout (B070-B073 stay as they are), real mail providers, deployment.",
+    "Relay durable log replay for very long reconnects (B042, B055)."
+  ],
+  "implements": [
+    "CT-API-USAGE",
+    "CT-API-NOTIFY",
+    "CT-API-BILLING"
+  ],
+  "consumes": [
+    "CT-ENTITLEMENTS",
+    "CT-RESUME",
+    "CT-API-WEBHOOKS",
+    "CT-WS-SESSION-EVENTS",
+    "CT-PAGE",
+    "CT-ERR",
+    "CT-IDS",
+    "CT-RBAC"
+  ],
+  "build_against": "The B012 dev stack and the testkit containers.",
+  "deliverables": [
+    "apps/api/src/collab-modules.ts",
+    "apps/relay/src/control/host-change.ts",
+    "apps/worker/src/purge-workspaces.ts",
+    "apps/api/test/entrypoint/collab-modules.test.ts"
+  ],
+  "interfaces": [
+    "The routes of B074, B075, B065, B066, B069, B056, B081 on the API; a worker job for purge; a relay control endpoint for host changes."
+  ],
+  "acceptance": [
+    "A session that uses more minutes than the plan allows is refused at the entitlement check with the contract's error, and the owner gets the 80 percent notice first (test).",
+    "Deleting a workspace removes its sessions' history and snapshots after the grace period (worker test).",
+    "A host change made through the API reaches the relay and connected clients see `control.host_changed` (integration test).",
+    "Each served module answers on the dev stack; one with missing configuration is skipped with one log line (test).",
+    "A production configuration gives new accounts the free plan and refuses `DEV_DEFAULT_PLAN` (test)."
+  ],
+  "tests": [
+    "apps/api/test/entrypoint/modules.test.ts",
+    "apps/worker purge test",
+    "relay host-change delivery test"
+  ],
+  "guardrails": [
+    "MUST NOT put tokens, tickets, invite or link secrets, key material or e-mail addresses in logs.",
+    "MUST keep contracts/ as it is: this lane builds against the contract text and fails closed where the contract is silent.",
+    "MUST fail closed on metering errors (an unreadable counter does not grant extra usage beyond the grace the contract allows)."
+  ],
+  "failure_modes": [
+    "Relay unreachable -> host changes stay queued and retry with backoff.",
+    "Counter store down -> the entitlement check uses its cached answer for the documented time, then refuses."
+  ],
+  "unblocks_gate": "G4",
+  "notes": "The relay durable log replay for very long reconnects is B055/B042 territory and is not in this card. Also changes (does not own) apps/api/src/{modules,context}.ts (B102), docs/api-service.md (B102) and apps/api/src/collab.ts (B103)."
+}
