@@ -14,7 +14,7 @@
     "Sequenced-frame hook storing reaction {target msg_, code, op add|remove, member} and comment.add {target, ciphertext ref seq} after sequencing.",
     "Reaction aggregate: current set of (target, code, member) with add/remove idempotent semantics; counts per target and code.",
     "Tables reaction and comment_ref (comment text is NOT stored; only seq, id, member, target, size, kid pointing to the history blob).",
-    "Limits: reaction codes limited to thumbs, heart, party, laugh, eyes, check; at most 200 reaction ops per member per minute; comment ct <= 192 KiB; 100 comments per target.",
+    "Limits: reaction codes limited to thumbs, heart, party, laugh, eyes, check; at most 200 reaction ops per member per minute; comment ct <= 192 KiB.",
     "Authorisation: host, editor and viewer may react and comment, muted members may not.",
     "Read API used by relay join flow: reactionsFor(sid, targets[]): aggregates (internal function, not a new endpoint)."
   ],
@@ -53,7 +53,7 @@
     "aggregate for 50 targets with 6 codes and 20 members returns correct counts in under 50 ms on the Postgres container.",
     "A reaction with code 'skull' is rejected `invalid_frame`; target not matching ^msg_ pattern is rejected.",
     "Muted member reaction and comment frames are dropped with `forbidden`; viewers' frames succeed.",
-    "comment.add stores no text: the comment_ref table has no text column (schema test) and a 100-comment-per-target cap rejects the 101st with `forbidden`.",
+    "comment.add stores no text: the comment_ref table has no text column (schema test).",
     "Replaying the same frame id (sid, from, id) produces one row.",
     "Deleting a session's history (B055 purge) can call ReactionStore.purge(sid) and CommentIndex.purge(sid), both removing all rows."
   ],
@@ -75,5 +75,6 @@
     "DB write fails after sequencing -> frame stays in the log; a repair job rebuilds the reaction table from the durable log on restart (idempotent).",
     "Target msg_ id not present in history -> still stored (late joiners may not have it); no error."
   ],
-  "unblocks_gate": "G5"
+  "unblocks_gate": "G5",
+  "notes": "The per-target comment cap was dropped: the comment target is inside the encrypted payload (CT-EVENTS marks `target` and `text` secret), so the relay cannot count comments per target without reading it."
 }
