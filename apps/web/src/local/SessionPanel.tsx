@@ -3,6 +3,7 @@ import { CheckCircle2, Circle, CircleDot, FileDiff, Gauge, ListChecks, Pin, Stic
 import React, { useState } from 'react';
 import { Avatar, Badge, Button } from '../ui/shadcn/index.js';
 import { Diff } from './Diff.js';
+import { openShare } from './share-event.js';
 import { compactNumber, duration, insights, money } from './insights.js';
 import type { LocalView } from './model.js';
 import type { ClientMsg } from '../../../desktop/src/local/protocol.js';
@@ -71,12 +72,13 @@ export function SessionPanel({ view, send, now = Date.now() }: { view: LocalView
     </Section> : null}
     <Section icon={<Users />} title="People and agents">
       <ul className="ps-list">
+        {view.sharing?.state === 'live' ? view.sharing.members.map((m) => <Person key={m.id} name={m.you ? 'You' : m.name} slot={m.slot} sub={`${m.role === 'host' ? 'host' : m.role === 'editor' ? 'can edit' : 'view only'}${m.online ? '' : ' · away'}`} />) : <>
         <Person name="You" slot={0} sub="on this computer" />
-        {info.people.map((p) => <Person key={p.name} name={p.name} slot={p.slot} sub={`${p.messages} message${p.messages === 1 ? '' : 's'}`} />)}
+        {info.people.map((p) => <Person key={p.name} name={p.name} slot={p.slot} sub={`${p.messages} message${p.messages === 1 ? '' : 's'}`} />)}</>}
         {agents.map((a) => <li key={a.id} className="ps-person"><span className="ps-agent" data-busy={a.busy} aria-hidden="true">◆</span><span className="ps-person__text"><span className="ps-person__name">{a.name}</span><span className="ps-person__sub">{a.model || a.engine} · {a.busy ? a.state : 'idle'}{a.cost > 0 ? ` · ${money(a.cost)}` : ''}</span></span></li>)}
       </ul>
-      {info.people.length === 0 ? <p className="ps-note">Only you so far. Invite someone to watch or help in this session.</p> : null}
-      <Button variant="outline" size="sm" onClick={() => { void router?.navigate({ to: '/workspaces' }); }}><UserPlus />Invite someone</Button>
+      {info.people.length === 0 && view.sharing?.state !== 'live' ? <p className="ps-note">Only you so far. Share the session to let someone watch or help.</p> : null}
+      <Button variant="outline" size="sm" onClick={openShare}><UserPlus />{view.sharing?.state === 'live' ? 'Invite more people' : 'Share this session'}</Button>
     </Section>
     <Notes view={view} send={send} />
     <Section icon={<FileDiff />} title="Files changed" aside={info.files.length ? <><span className="ps-add">+{info.added}</span> <span className="ps-del">−{info.removed}</span></> : undefined}>

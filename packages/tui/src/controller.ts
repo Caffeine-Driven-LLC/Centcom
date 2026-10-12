@@ -340,6 +340,7 @@ export class AppController {
         this.night.noteError(ev.code, !!ev.fatal);
         break;
       case 'turn.done':
+        queueMicrotask(() => { for (const f of [...this.turnEndListeners]) f(ev.outcome); }); // after this event's state change
         this.cancelQuestions(); // a question of a finished turn is stale
         { const q = this.queuedAnswer; if (q && ev.outcome !== 'canceled') { this.queuedAnswer = undefined; queueMicrotask(() => { void this.submit(q, { asMessage: true }); }); } else if (q) this.dropQueued('You stopped the turn first'); }
         if (ev.outcome !== 'canceled' && this.state.turnStartedAt && Date.now() - this.state.turnStartedAt >= LONG_TURN_MS) this.ring(); // you may have stepped away
@@ -517,9 +518,24 @@ export class AppController {
     try { await this.session?.send(outgoing); } catch (e) { this.addItem({ kind: 'notice', id: nid('n'), level: 'error', text: 'Could not send the prompt', detail: String(e) }); }
   }
 
+  /**
+   * A message another person in a shared session asked for, run as the agent's next message (the host approved it). It is plain text:
+   * never a slash command, never remembered in the host's history. False when the agent is busy or stopped.
+   */
+  async submitRemote(from: { name: string; slot: number }, text: string): Promise<boolean> {
+    const t = text.trim().slice(0, MAX_MESSAGE); if (!t || this.state.busy || this.stopped) return false;
+    this.addItem({ kind: 'user', id: nid('u'), text: t, ts: Date.now(), member: { name: from.name.slice(0, 60), slot: from.slot } }); this.o.sessions?.noteUser(this.state.sessionId, this.o.cwd, t);
+    this.setAgentState(this.me, 'prompt-received');
+    if (!this.session) { try { this.starting ??= this.startEngine(this.deadToken).then(() => { this.deadToken = undefined; }).finally(() => { this.starting = undefined; }); await this.starting; } catch { return false; } }
+    try { await this.session?.send(t); return true; } catch (e) { this.addItem({ kind: 'notice', id: nid('n'), level: 'error', text: 'Could not send the request', detail: String(e) }); return false; }
+  }
+
   /** Reasoning effort for the next turns, if the engine has the setting (Codex). Returns false when it does not. */
   setEffort(effort: string): boolean { if (!this.session?.setEffort) return false; this.session.setEffort(effort); this.effort = effort; this.toast('ok', `Reasoning effort: ${effort || 'default'}`); return true; }
   private effort = '';
+  private readonly turnEndListeners = new Set<(outcome: string) => void>();
+  /** Calls `fn` each time a turn ends (a sharing bridge uses it to tell when a request it ran is finished). Returns how to stop. */
+  onTurnEnd(fn: (outcome: string) => void): () => void { this.turnEndListeners.add(fn); return () => { this.turnEndListeners.delete(fn); }; }
   private otherModelCache = new Map<string, import('@centcom/agent').ModelChoice[]>();
   /** The levels the running engine accepts: Claude Code's fixed list, or the current Codex model's own. */
   private async effortLevels(): Promise<string[]> {

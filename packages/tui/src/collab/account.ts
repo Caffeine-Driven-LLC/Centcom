@@ -78,7 +78,7 @@ export class Account {
     const st = await this.auth.status(); if (!st.signedIn || !st.deviceId) throw Object.assign(new Error('Sign in to share a session.'), { code: 'not_signed_in' });
     const keys = await this.keyStore(st.deviceId); await keys.getOrCreatePublicKeys();
     const relayUrl = this.o.relayUrl ?? process.env.CENTCOM_RELAY_URL;
-    this.sessionClient = createSessionClient({ http: this.http, crypto: { device: keys, trust: new TrustStore(), keychain: this.keyKc }, deviceId: st.deviceId, clientInfo: { name: this.o.app, version: this.o.version, contract: '1.0' } as never, ...(relayUrl ? { relayUrl } : {}), allowPlainWs: isLoopback(this.baseUrl) });
+    this.sessionClient = createSessionClient({ http: this.http, crypto: { device: keys, trust: new TrustStore(), keychain: this.keyKc }, deviceId: st.deviceId, clientInfo: { name: this.o.app, version: this.o.version, contract: '1.0' } as never, ...(relayUrl ? { relayUrl } : {}), allowPlainWs: isLoopback(this.baseUrl), ...(this.o.logger ? { logger: this.o.logger } : {}) });
     return this.sessionClient;
   }
 

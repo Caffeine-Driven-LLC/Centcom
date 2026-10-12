@@ -31,6 +31,18 @@ The button at the foot of the sidebar is **Sign in** until you are signed in, th
 
 To try it against a local backend (the backend repository's `pnpm dev:up`, `pnpm dev:api`, `pnpm dev:relay`): `pnpm dev:collab` signs a new account in through the device flow with scripted browser steps.
 
+## Sharing a session
+
+The **Share** button in the session header (and "Share this session" in the panel) shares the conversation you are looking at. It needs an account (see above) and a plan that includes the relay; on a plan without it the dialog says to upgrade.
+
+- **Start sharing** creates a session in your workspace. The agent keeps running on this computer; what it says and does goes out as encrypted session events (end-to-end: the server only sees who and when). The button then reads "Shared · 2" with the number of other people.
+- **Join with the session id:** people in your workspace paste the id into Centcom's join screen or run `centcom join <id>`. **Invite by e-mail** makes an invite link for the workspace (inviting needs the web app's sign-in, so the dialog says so when this app's is refused). **Watch-only link** is a secret link anyone can open for an hour, without an account.
+- **People and agents** in the panel then lists the real people in the session with their roles (host, can edit, view only).
+- **Asked for by others:** an editor's message waits in the dialog until you press **Run it** (or **No**); with "Run requests from editors without asking me" it runs at once. It is run as an ordinary message from that person, one at a time when the agent is idle; it is never taken as a slash command. Viewers cannot send anything.
+- **Stop sharing** ends the session for everyone. Closing the project or quitting the app ends it too.
+
+`pnpm dev:share` checks all of this against a local backend with two new accounts.
+
 ## Staying informed
 
 - The window title says `(2) Needs you · project` when approvals wait in any running session, and `Working · project` while an agent works.

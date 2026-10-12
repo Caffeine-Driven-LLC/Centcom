@@ -1,0 +1,60 @@
+import { Link2, Share2, Users } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Badge, Button, Dialog } from '../ui/shadcn/index.js';
+import { CopyButton } from './Markdown.js';
+import { Person } from './SessionPanel.js';
+import { openShare } from './share-event.js';
+import type { LocalView } from './model.js';
+import type { ClientMsg } from '../../../desktop/src/local/protocol.js';
+import './shell.css';
+
+const ROLE = { host: 'host', editor: 'can edit', viewer: 'view only' } as const;
+
+/** The header button: "Share", or who is in the session when it is shared. */
+export function ShareButton({ view }: { view: LocalView }): React.JSX.Element | null {
+  const sh = view.sharing;
+  if (!view.opened || view.state?.demo) return null;
+  const live = sh?.state === 'live'; const others = (sh?.members ?? []).filter((m) => !m.you).length;
+  return <Button variant={live ? 'secondary' : 'ghost'} size="sm" title={live ? 'Who is in this session, and how to invite people' : 'Share this session with other people'} onClick={openShare}><Share2 />{live ? (others ? `Shared · ${others}` : 'Shared') : 'Share'}</Button>;
+}
+
+/** Sharing the shown conversation: start it, invite people, decide what editors ask for, stop. */
+export function ShareDialog({ view, send }: { view: LocalView; send(m: ClientMsg): void }): React.JSX.Element | null {
+  const [open, setOpen] = useState(false); const [email, setEmail] = useState(''); const sh = view.sharing; const account = view.account;
+  useEffect(() => { const f = (): void => { setOpen(true); send({ t: 'account' }); }; window.addEventListener('centcom:share', f); return () => window.removeEventListener('centcom:share', f); }, [send]);
+  if (!view.opened) return null;
+  const live = sh?.state === 'live';
+  return <Dialog open={open} onOpenChange={setOpen} label="Share this session">
+    <div className="shr">
+      <h2 className="acct__title">{live ? 'Shared session' : 'Share this session'}</h2>
+      {!sh || sh.state === 'ended' ? <>
+        <p>Other people can watch this conversation live, and the ones you allow can ask the agent for things. The agent keeps running here, on this computer; nothing is uploaded except what the agent says and does, encrypted so that only the people in the session can read it.</p>
+        {sh?.state === 'ended' ? <p className="acct__note">The last session has ended.</p> : null}
+        {account && !account.signedIn ? <>
+          <p className="acct__note">Sharing needs an account.</p>
+          <div className="acct__actions"><Button onClick={() => { setOpen(false); window.dispatchEvent(new Event('centcom:account')); }}>Sign in</Button><Button variant="ghost" onClick={() => setOpen(false)}>Not now</Button></div>
+        </> : <div className="acct__actions"><Button onClick={() => send({ t: 'share' })}>Start sharing</Button><Button variant="ghost" onClick={() => setOpen(false)}>Not now</Button></div>}
+      </> : sh.state === 'starting' ? <p>Starting the session…</p> : sh.state === 'failed' ? <>
+        <p className="acct__error" role="alert">{sh.error ?? 'Sharing did not start.'}</p>
+        <div className="acct__actions">{sh.code === 'not_signed_in' ? <Button onClick={() => { setOpen(false); window.dispatchEvent(new Event('centcom:account')); }}>Sign in</Button> : <Button onClick={() => send({ t: 'share' })}>Try again</Button>}<Button variant="ghost" onClick={() => { send({ t: 'unshare' }); setOpen(false); }}>Close</Button></div>
+      </> : <>
+        <section className="shr__sec"><h3><Link2 aria-hidden="true" />Join with the session id</h3>
+          <p className="acct__note">People in your workspace ({sh.workspace ?? 'yours'}) enter it in Centcom (Join a session, or <code>centcom join</code>).</p>
+          <p className="shr__id"><code>{sh.sessionId}</code><CopyButton text={sh.sessionId ?? ''} label="Copy" /></p></section>
+        <section className="shr__sec"><h3>Invite by e-mail</h3>
+          <form className="shr__row" onSubmit={(e) => { e.preventDefault(); send({ t: 'shareInvite', ...(email.trim() ? { email: email.trim() } : {}) }); setEmail(''); }}><input className="cc-input" type="email" aria-label="E-mail address" placeholder="friend@example.com" value={email} onChange={(e) => setEmail(e.target.value)} /><Button type="submit" variant="outline" size="sm" disabled={!email.trim()}>Invite</Button></form>
+          {sh.invite ? <p className="shr__id"><span>Invite link{sh.invite.email ? ` for ${sh.invite.email}` : ''}:</span><code>{sh.invite.url}</code><CopyButton text={sh.invite.url} label="Copy" /></p> : null}
+          {sh.hint ? <p className="acct__note" role="status">{sh.hint}</p> : null}</section>
+        <section className="shr__sec"><h3>Watch-only link</h3>
+          {sh.link ? <p className="shr__id"><code className="shr__link">{sh.link.url}</code><CopyButton text={sh.link.url} label="Copy" /></p> : <Button variant="outline" size="sm" onClick={() => send({ t: 'shareLink' })}>Make a link</Button>}
+          <p className="acct__note">Anyone with the link can watch, for an hour, without an account. Treat it like a password.</p></section>
+        <section className="shr__sec"><h3><Users aria-hidden="true" />In this session</h3>
+          <ul className="ps-list">{sh.members.map((m) => <Person key={m.id} name={m.you ? 'You' : m.name} slot={m.slot} sub={`${ROLE[m.role]}${m.online ? '' : ' · away'}`} />)}</ul></section>
+        <section className="shr__sec"><h3>Asked for by others {sh.pending.length ? <Badge>{sh.pending.length}</Badge> : null}</h3>
+          {sh.pending.length ? <ul className="shr__asks">{sh.pending.map((p) => <li key={p.item}><span><strong>{p.from}</strong>: {p.text}</span><span className="shr__btns"><Button size="sm" onClick={() => send({ t: 'shareDecide', item: p.item, decision: 'approve' })}>Run it</Button><Button size="sm" variant="ghost" onClick={() => send({ t: 'shareDecide', item: p.item, decision: 'reject' })}>No</Button></span></li>)}</ul> : <p className="acct__note">{sh.auto ? 'Requests from editors run without asking you.' : 'Nothing waiting. Requests from editors wait here for you.'}</p>}
+          <label className="shr__auto"><input type="checkbox" checked={sh.auto} onChange={(e) => send({ t: 'shareAuto', on: e.target.checked })} />Run requests from editors without asking me</label></section>
+        <div className="acct__actions"><Button variant="outline" onClick={() => { send({ t: 'unshare' }); setOpen(false); }}>Stop sharing</Button><Button variant="ghost" onClick={() => setOpen(false)}>Close</Button></div>
+      </>}
+    </div>
+  </Dialog>;
+}
