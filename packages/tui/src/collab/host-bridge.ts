@@ -57,7 +57,7 @@ export class HostBridge {
     this.emit('agent.spawn', { p: { agent_id: this.agent(), owner: this.handle.me.id, mode: this.mode, runs_on: this.handle.me.id, provider: this.ctl.state.engineId === 'codex' ? 'openai' : this.ctl.state.engineId === 'claude-code' ? 'anthropic' : 'other' }, secret: { label: this.ctl.state.engineLabel, ...(this.mode === 'branch' ? { worktree: this.ctl.state.cwd } : {}) } });
     if (this.mode === 'command_post') { this.emitActivity('message.system', { secret: { level: 'info', text: 'This conversation is now shared.' } }); void this.pump(); } else this.startBranch();
   }
-  stop(): void { if (this.mode === 'branch' && !this.stopped) this.emit('agent.exit', { p: { agent_id: this.agent(), outcome: 'ok' } }); this.offAny?.(); this.offLink?.(); if (this.branchTimer) clearTimeout(this.branchTimer); this.stopped = true; this.offStore?.(); this.offTurn?.(); this.queue.dispose(); if (this.flushTimer) clearTimeout(this.flushTimer); if (this.stateTimer) clearTimeout(this.stateTimer); for (const w of this.busyWaiters.splice(0)) w(); for (const f of [...this.stoppers]) f(); }
+  stop(): void { if (this.mode === 'branch' && !this.stopped) this.emit('agent.exit', { p: { agent_id: this.agent(), outcome: 'ok' } }); this.offAny?.(); this.offLink?.(); if (this.mode === 'branch') { this.ctl.setTeamDigest(undefined); this.ctl.setRemoteAgentNamer(undefined); } if (this.branchTimer) clearTimeout(this.branchTimer); this.stopped = true; this.offStore?.(); this.offTurn?.(); this.queue.dispose(); if (this.flushTimer) clearTimeout(this.flushTimer); if (this.stateTimer) clearTimeout(this.stateTimer); for (const w of this.busyWaiters.splice(0)) w(); for (const f of [...this.stoppers]) f(); }
 
   setAutoApprove(on: boolean): void { this.autoApprove = on; void this.pump(); this.o.onChange?.(); }
   get autoApproving(): boolean { return this.autoApprove; }
@@ -122,12 +122,13 @@ export class HostBridge {
     const team = this.team!; this.offAny = this.handle.onAny((e) => { team.apply(e); this.onTeamEvent(e); }, { replay: true });
     const offRoster = this.handle.on('roster', () => { team.setRoster(this.handle.roster(), this.handle.me.id); this.o.onChange?.(); }); const prev = this.offAny; this.offAny = () => { prev(); offRoster(); };
     const offTeam = team.subscribe(() => this.o.onChange?.()); const prev2 = this.offAny; this.offAny = () => { prev2(); offTeam(); };
+    this.ctl.setTeamDigest(() => team.digestFor(this.handle.me.id));
     this.ctl.setRemoteAgentNamer?.((id) => { for (const m of team.snapshot().members) if (m.agents.some((a) => a.id === id)) return `${m.you ? 'Your' : m.name + "'s"} agent`; return undefined; });
     if (this.o.locks) {
       const hub = this.o.locks; const link: LockLink = {
         publish: (p) => this.emit('file.lock', { p: p.clear as unknown as Record<string, unknown>, secret: p.secret }),
         ready: () => this.handle.link() === 'online', pathMac: (path) => this.handle.pathMac(path), wireId: (local) => this.idOf('agt', local),
-        conflict: (c) => { this.emit('conflict.detected', { p: c as unknown as Record<string, unknown> }); this.o.onConflict?.({ agents: c.agent_ids, hmacs: c.path_hmacs }); },
+        conflict: (c) => { this.emit('conflict.detected', { p: c as unknown as Record<string, unknown> }); this.team?.apply({ kind: 'conflict.detected', from: this.handle.me.id, seq: 0, id: 'local', ts: new Date().toISOString(), p: c as unknown as Record<string, unknown>, verified: true }); /* this person sees it even if the relay does not forward it */ this.o.onConflict?.({ agents: c.agent_ids, hmacs: c.path_hmacs }); },
       };
       this.offLink = hub.attach(link);
     }
