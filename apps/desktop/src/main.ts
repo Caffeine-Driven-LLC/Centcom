@@ -15,12 +15,28 @@ const MAX_COPY = 1_000_000; /* characters one copy may carry */
 let win: BrowserWindow | undefined; let pending: string | undefined; let ready = false;
 const send = (raw: string): void => { if (win && ready) { win.webContents.send('centcom:link', raw); if (win.isMinimized()) win.restore(); win.focus(); } else pending = raw; };
 function createWindow(): void {
-  win = new BrowserWindow({ width: 1280, height: 820, minWidth: 420, minHeight: 520, title: 'Centcom', backgroundColor: '#0A0A0C', show: false, webPreferences: { ...WEB_PREFERENCES, preload: join(here, 'preload.cjs') } });
+  win = new BrowserWindow({ width: 1280, height: 820, minWidth: 420, minHeight: 520, title: 'Centcom', backgroundColor: '#0A0A0C', show: false, paintWhenInitiallyHidden: true, webPreferences: { ...WEB_PREFERENCES, preload: join(here, 'preload.cjs') } });
   const smoke = process.env.CENTCOM_SMOKE === '1'; /* a check that loads the page without showing a window, prints what it found and quits */
-  win.once('ready-to-show', () => { if (!smoke) win?.show(); });
+  win.once('ready-to-show', () => { if (!smoke && !process.env.CENTCOM_SHOT) win?.show(); });
   const zoom = Number(process.env.CENTCOM_SHOT_ZOOM); if (zoom > 0.2 && zoom < 3) win.webContents.on('did-finish-load', () => win?.webContents.setZoomFactor(zoom));
-  const shot = process.env.CENTCOM_SHOT; /* development aid: load a route, wait, save a PNG of the window and quit */
-  if (shot) { win.webContents.on('console-message', (_e, _l, msg) => console.log('[page]', msg)); win.webContents.on('did-finish-load', () => { setTimeout(() => { void win?.webContents.capturePage().then((img) => { writeFileSync(shot, img.toPNG()); app.exit(0); }); }, Number(process.env.CENTCOM_SHOT_MS ?? 2500)); }); if (process.env.CENTCOM_SHOT_SCRIPT) win.webContents.once('did-finish-load', () => setTimeout(() => void win?.webContents.executeJavaScript(process.env.CENTCOM_SHOT_SCRIPT!), 800)); if (process.env.CENTCOM_SHOT_ROUTE) win.webContents.once('did-finish-load', () => void win?.webContents.executeJavaScript(`history.pushState({}, '', ${JSON.stringify(process.env.CENTCOM_SHOT_ROUTE)}); dispatchEvent(new PopStateEvent('popstate'))`)); }
+  const shot = process.env.CENTCOM_SHOT; /* development aid: load a route, run a script, wait for what you name, save a PNG of the window and quit */
+  if (shot) {
+    // The window is never shown: it paints while hidden, so a screenshot works from any workspace and never takes focus (CENTCOM_SHOT_SHOW=1 shows it).
+    win.webContents.setBackgroundThrottling(false);
+    win.webContents.on('console-message', (_e, _l, msg) => console.log('[page]', msg));
+    const wait = process.env.CENTCOM_SHOT_WAIT; const limit = Number(process.env.CENTCOM_SHOT_MS ?? 2500); const settle = Number(process.env.CENTCOM_SHOT_SETTLE ?? 500);
+    const run = (js: string): Promise<unknown> => win!.webContents.executeJavaScript(js).catch((e: unknown) => { console.log('[shot script failed]', String(e)); });
+    const capture = async (): Promise<void> => { await new Promise((r) => setTimeout(r, settle)); win?.webContents.invalidate(); await new Promise((r) => setTimeout(r, 80)); const img = await win!.webContents.capturePage(); writeFileSync(shot, img.toPNG()); app.exit(0); };
+    win.webContents.once('did-finish-load', () => {
+      void (async () => {
+        if (process.env.CENTCOM_SHOT_ROUTE) await run(`history.pushState({}, '', ${JSON.stringify(process.env.CENTCOM_SHOT_ROUTE)}); dispatchEvent(new PopStateEvent('popstate'))`);
+        if (process.env.CENTCOM_SHOT_SCRIPT) { await new Promise((r) => setTimeout(r, 800)); await run(process.env.CENTCOM_SHOT_SCRIPT); }
+        if (wait) { const t0 = Date.now(); while (Date.now() - t0 < Math.max(limit, 15_000) && !(await run(`!!document.querySelector(${JSON.stringify(wait)})`))) await new Promise((r) => setTimeout(r, 200)); } else await new Promise((r) => setTimeout(r, limit));
+        await capture();
+      })();
+    });
+    if (process.env.CENTCOM_SHOT_SHOW === '1') win.once('ready-to-show', () => win?.show());
+  }
   if (smoke) { win.webContents.on('did-fail-load', (_e, code, desc) => { console.log(JSON.stringify({ ok: false, code, desc })); app.exit(1); }); win.webContents.on('did-finish-load', () => { void win?.webContents.executeJavaScript(`JSON.stringify({ href: location.href, title: document.title, bridge: typeof window.centcom === 'object' && window.centcom.desktop === true, root: !!document.getElementById('root') && document.getElementById('root').childElementCount > 0, node: typeof require === 'undefined' && typeof process === 'undefined' })`).then((r: string) => { console.log(JSON.stringify({ ok: true, ...JSON.parse(r) })); app.exit(0); }); }); setTimeout(() => { console.log(JSON.stringify({ ok: false, desc: 'timeout' })); app.exit(2); }, 20_000); }
   win.webContents.setWindowOpenHandler(({ url }) => { if (isSafeExternal(url)) void shell.openExternal(url); return { action: 'deny' }; });
   win.webContents.on('will-navigate', (e, url) => { if (!isAppUrl(url)) { e.preventDefault(); if (isSafeExternal(url)) void shell.openExternal(url); } });
