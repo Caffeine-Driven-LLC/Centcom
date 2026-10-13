@@ -6,3 +6,12 @@ export function takeFragmentKey(loc: { hash: string; pathname: string; search: s
   const raw = loc.hash.startsWith('#') ? loc.hash.slice(1) : loc.hash; history.replaceState(null, '', loc.pathname + loc.search); /* gone from the address in the same step */
   const k = new URLSearchParams(raw).get('k'); if (!k || !B64U.test(k)) return new KeyHolder(); try { return new KeyHolder(decodeB64u(k)); } catch { return new KeyHolder(); }
 }
+/**
+ * A watch link carries `#k=<key>&kid=<epoch>` in its address. The text is read once into memory and the address is cleaned in the same step; it is
+ * returned only when it is well formed (a 43-character key and an epoch like `k1`). It is never sent to a server, logged or stored.
+ */
+export function takeShareFragment(loc: { hash: string; pathname: string; search: string }, history: { replaceState(s: unknown, t: string, u: string): void }): string | undefined {
+  const raw = loc.hash.startsWith('#') ? loc.hash.slice(1) : loc.hash; history.replaceState(null, '', loc.pathname + loc.search);
+  const p = new URLSearchParams(raw); const k = p.get('k'); const kid = p.get('kid') ?? 'k1';
+  return k && /^[A-Za-z0-9_-]{43}$/.test(k) && /^k[1-9]\d{0,8}$/.test(kid) ? `#k=${k}&kid=${kid}` : undefined;
+}
