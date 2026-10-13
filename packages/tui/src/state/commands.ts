@@ -34,6 +34,7 @@ export const COMMANDS: SlashCommand[] = [
   { name: 'rewind', args: '[number] [files|conversation|both]', desc: 'Go back to before an earlier prompt (Esc Esc when idle)' },
   { name: 'compact', desc: 'Ask the agent to compact its context' },
   { name: 'note', args: '[decision:|warning:|finding:] [text]', desc: 'Tell every agent something (pinned on the context board)' },
+  { name: 'board', desc: 'The shared board: notes from you, your agents and the other people of a shared session; pin or remove' },
   { name: 'context', desc: 'The context board: what agents and people have noted; pin or remove entries' },
   { name: 'handoff', desc: 'The agent writes a document for a fresh session, which starts and reads it' },
   { name: 'usage', desc: 'Tokens, agent time and the cost the tools reported, by conversation, agent and day' },
