@@ -10,12 +10,14 @@ import { SUITES } from './suites.js';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..'); const contractsDir = join(root, 'contracts');
 export async function conformance(argv: string[], now = new Date(), log: (l: string) => void = console.log): Promise<number> {
   const { values } = parseArgs({ args: argv, options: { contract: { type: 'string', multiple: true }, json: { type: 'boolean' }, out: { type: 'string' }, strict: { type: 'boolean' }, waivers: { type: 'string' } } });
-  const index = JSON.parse(readFileSync(join(contractsDir, 'index.json'), 'utf8')) as { contracts: { id: string; implemented_by: string[] }[] };
+  const index = JSON.parse(readFileSync(join(contractsDir, 'index.json'), 'utf8')) as { contracts: { id: string; implemented_by: string[]; consumed_by?: string[] }[] };
   const implemented = index.contracts.filter((c) => c.implemented_by.includes('client')).map((c) => c.id); const ids = index.contracts.map((c) => c.id);
+  /* contracts the client only CONSUMES (payload parsing, e.g. CT-API-RELEASES) run too when a suite exists for them; strict mode still only judges the implemented ones */
+  const consumed = index.contracts.filter((c) => c.consumed_by?.includes('client') && !implemented.includes(c.id) && SUITES.some((s) => s.contract === c.id)).map((c) => c.id);
   for (const c of values.contract ?? []) if (!ids.includes(c)) { console.error(`unknown contract ${c}`); return 2; }
   const wfile = values.waivers ?? join(root, 'packages/testkit/src/conformance/waivers.json'); const { valid, problems } = validateWaivers(JSON.parse(readFileSync(wfile, 'utf8')), now.getTime());
   for (const p of problems) console.error(`waiver: ${p}`); if (problems.length) return 2;
-  const contracts = await runSuites({ suites: SUITES, contracts: implemented, only: values.contract, ctx: { fixtures: loadFixtures(contractsDir), contractsDir }, waivers: valid });
+  const contracts = await runSuites({ suites: SUITES, contracts: [...implemented, ...consumed], only: values.contract, ctx: { fixtures: loadFixtures(contractsDir), contractsDir }, waivers: valid });
   const pkg = JSON.parse(readFileSync(join(root, 'apps/cli/package.json'), 'utf8')) as { version: string };
   const report = buildReport({ contracts, clientVersion: pkg.version, contractVersion: CONTRACT_VERSION, now, node: process.versions.node, os: process.platform, arch: process.arch });
   const v = validateReport(report); if (!v.ok) { console.error(`internal: report does not match its schema: ${v.errors.join('; ')}`); return 2; }

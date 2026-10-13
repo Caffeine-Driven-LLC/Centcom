@@ -55,7 +55,7 @@ describe('verify', () => {
   });
   it('apply on an unverified update is refused, every time', async () => {
     const body = Buffer.from('new program'); const srv = await artifactServer(body); open.push(srv); const t = clientFor(manifest({ url: srv.url, body })); const s = await t.c.download(); await expect(t.c.apply(s)).rejects.toBeInstanceOf(NotVerifiedError); expect(readFileSync(join(t.dir, 'centcom'), 'utf8')).toBe('old program');
-    await t.c.verify(s); const r = await t.c.apply(s); expect(r).toEqual({ restartRequired: true, previous: '1.0.0' }); expect(readFileSync(join(t.dir, 'centcom'), 'utf8')).toBe('new program'); expect(readFileSync(join(t.dir, 'centcom.prev'), 'utf8')).toBe('old program'); expect(readdirSync(t.dir).filter((f) => f.includes('.part'))).toEqual([]);
+    await t.c.verify(s); const r = await t.c.apply(s); expect(r).toEqual({ restartRequired: true, previous: '1.0.0' }); expect(readFileSync(join(t.dir, 'centcom'), 'utf8')).toBe('new program'); expect(readFileSync(join(t.dir, 'centcom.previous'), 'utf8')).toBe('old program'); expect(readdirSync(t.dir).filter((f) => f.includes('.part'))).toEqual([]);
     await t.c.rollback(); expect(readFileSync(join(t.dir, 'centcom'), 'utf8')).toBe('old program'); await expect(t.c.rollback()).rejects.toMatchObject({ code: 'no_previous' });
   });
 });

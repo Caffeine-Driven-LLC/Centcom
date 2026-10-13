@@ -22,18 +22,18 @@ describe('the update each time Centcom starts', () => {
     expect(f.said).toHaveLength(1); expect(f.said[0]!.text).toBe('Centcom updated to 2.0.0.'); expect(f.said[0]!.detail).toContain('centcom update --rollback');
   });
   it('a failed signature check stops before apply and only offers the update', async () => {
-    const f = fake('sea', { verify: new SignatureError() }); expect(await bootUpdate(f.deps)).toBe('available'); expect(f.calls).not.toContain('apply'); expect(f.said[0]!.text).toBe('Centcom 2.0.0 is available.'); expect(f.said[0]!.detail).toContain('nothing was changed');
+    const f = fake('sea', { verify: new SignatureError() }); expect(await bootUpdate(f.deps)).toBe('available'); expect(f.calls).not.toContain('apply'); expect(f.said[0]!.text).toBe('Update available: 2.0.0'); expect(f.said[0]!.detail).toContain('nothing was changed');
   });
   it('an update this computer has no download for is only offered', async () => {
     const f = fake('sea', { download: new NoUpdateError('none') }); expect(await bootUpdate(f.deps)).toBe('available'); expect(f.calls).toEqual(['check', 'download']);
   });
   it('npm and Homebrew installs run their own update command (never the standalone replace)', async () => {
-    for (const [m, argv] of [['npm', ['npm', 'install', '--global', 'centcom@latest']], ['homebrew', ['brew', 'upgrade', 'centcom']]] as const) {
+    for (const [m, argv] of [['npm', ['npm', 'i', '-g', '@centcom/cli@latest']], ['homebrew', ['brew', 'upgrade', 'centcom']]] as const) {
       const f = fake(m); const ran: string[][] = []; expect(await bootUpdate({ ...f.deps, run: async (a) => { ran.push(a); return true; } })).toBe('updated'); expect(ran).toEqual([argv]); expect(f.calls).toEqual(['check']);
     }
   });
   it('when the package manager fails (permissions, offline) the command is shown instead', async () => {
-    const f = fake('npm'); expect(await bootUpdate({ ...f.deps, run: async () => false })).toBe('available'); expect(f.said[0]!.detail).toContain('npm install --global centcom@latest');
+    const f = fake('npm'); expect(await bootUpdate({ ...f.deps, run: async () => false })).toBe('available'); expect(f.said[0]!.detail).toContain('npm i -g @centcom/cli@latest');
   });
   it('a source checkout is only told that a newer version exists', async () => {
     const f = fake('unknown'); expect(await bootUpdate(f.deps)).toBe('available'); expect(f.calls).toEqual(['check']); expect(f.said[0]!.detail).toContain('source checkout');
