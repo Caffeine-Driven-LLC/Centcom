@@ -262,12 +262,12 @@
    "note": "entitlements fetch with ETag, schema check, memory and disk cache, gates for hosted features with reasons and upgrade links, LAN/local never gated; built and tested against the mock; gap: no real billing links exercised"
   },
   "C065": {
-   "pct": 0.85,
-   "note": "usage reporter: synchronous record, hosted-only boundary, spool with caps and crash recovery, batches of 500/1 MiB with stable idempotency keys, rate spacing, outcome matrix (2xx/409/422/429/5xx/offline), quota tracker, contract test against the OpenAPI schema; gap: ledger outbox is not yet wired to the reporter in the app"
+   "pct": 1,
+   "note": "merged in #178"
   },
   "C067": {
-   "pct": 0.85,
-   "note": "flags client: non-blocking defaults, background refresh with ETag and clamped ttl, single-flight, disk cache (7 days), type checks, dev-only overrides, auth-triggered refresh; gap: no feature has registered a flag yet"
+   "pct": 1,
+   "note": "merged in #178"
   },
   "C071": {
    "pct": 0.85,
@@ -294,8 +294,8 @@
    "note": "update client: check (channel, platform, arch, pre-release and downgrade rules, required flag), resumable size-capped download, hash + Ed25519 verification before apply (two keys), atomic apply with .prev and rollback, managed-install detection, background-check schedule, centcom update with exit 10; reads both manifest spellings (contract mismatch noted); gaps: production keys empty, no run against real signed artifacts, startup background check not wired into the app; checked on every start from the app (bootUpdate), with update.check/auto/channel"
   },
   "C066": {
-   "pct": 0.8,
-   "note": "notifications client: inbox list/read/read-all with optimistic count, 60 s polling with 60/120/300 s backoff, OS notices (dedupe persisted, quiet hours, opt-in approval bypass), message table render with sanitising, deep-link action parser, preferences with ETag, push calls; gaps: not wired into the TUI/WS notices, not run against the real mock fixtures for all 14 categories, locale packs"
+   "pct": 1,
+   "note": "merged in #178"
   },
   "C100": {
    "pct": 0.6,
@@ -338,8 +338,8 @@
    "note": "fleet sync: publishers (spawn with plan-limit error, state with map validation, local-only states refused, 2/s per agent and no repeats, exit, encrypted branch.update, conflicts), lock arbitration through the relay with keyed path hashes (grant, deny, release, expire, reconnect re-ask), pure fleet model (replay deterministic, sender owns the agent, unknown states generic), bus bridge; three members on the mock relay incl. a lock clash and a conflict; mock relay gained lock arbitration and an agent limit; gaps: not wired to the real LockClient and fleet panel, state map has 64 names (card says 60); 2026-10-13: branch mode now live: publishers wired through the session bridge, TeamModel, locks and conflicts, handoff offers, mode chosen at session creation; checked against a live backend with two accounts (pnpm dev:branch-check)"
   },
   "C063": {
-   "pct": 0.75,
-   "note": "offline: NetStateMonitor (online/reconnecting/offline/degraded/backend-down and mascot names), encrypted durable outbox with caps, corruption recovery and in-order replay with original ids after reconnect, file seq store, resume reporting, wake detector with jitter, requireOnline and 24 h display rule; session client gains link(), reconnect() and the outbox hook; tested on the mock relay with maintenance mode; gaps: frames buffered offline may go under the older key if the rotate_key replay is still coming, no real kill/restart in the mock, not wired into app startup"
+   "pct": 1,
+   "note": "merged in #178"
   },
   "C072": {
    "pct": 0.8,
