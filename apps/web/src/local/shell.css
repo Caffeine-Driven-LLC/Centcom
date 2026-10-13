@@ -146,3 +146,17 @@
 .shr__mode:has(input:checked) { border-color: var(--accent-fill); background: var(--bg-selected); }
 .shr__mode input { margin-top: 3px; }
 .shr__mode small { display: block; color: var(--text-secondary); font-size: 12.5px; line-height: 1.45; margin-top: 2px; }
+.ps-team .ps-member { padding: var(--space-2) 0; border-top: 1px solid var(--border-subtle); }
+.ps-team .ps-member:first-child { border-top: 0; }
+.ps-tagent { margin: var(--space-1) 0 var(--space-2) var(--space-6); padding: var(--space-2) var(--space-3); background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--r-md); font-size: 12.5px; }
+.ps-tagent__head { display: flex; align-items: center; gap: var(--space-2); }
+.ps-tagent__line { display: flex; align-items: center; gap: 6px; margin: 4px 0 0; color: var(--text-secondary); }
+.ps-tagent__line svg { width: 13px; height: 13px; flex: none; }
+.ps-tagent__said { margin: 6px 0 0; color: var(--text-primary); overflow-wrap: anywhere; }
+.ps-tagent[data-state='awaiting-approval'] { border-color: var(--status-warning); }
+.ps-tagent[data-state='crash'] { border-color: var(--status-danger); }
+.ps-conflict { display: flex; gap: var(--space-2); align-items: flex-start; padding: var(--space-2) var(--space-3); margin-bottom: var(--space-2); border: 1px solid var(--status-warning); background: var(--status-warning-subtle); border-radius: var(--r-md); font-size: 12.5px; }
+.ps-conflict svg { width: 15px; height: 15px; flex: none; margin-top: 1px; color: var(--status-warning); }
+.ps-handoff { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; margin-top: var(--space-2); font-size: 12.5px; }
+.ps-handoffpick { margin-top: var(--space-2); font-size: 12.5px; }
+.ps-handoffpick__row { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-2); }

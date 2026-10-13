@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Avatar, Badge, Button } from '../ui/shadcn/index.js';
 import { Diff } from './Diff.js';
 import { openShare } from './share-event.js';
+import { TeamSection } from './TeamSection.js';
 import { compactNumber, duration, insights, money } from './insights.js';
 import type { LocalView } from './model.js';
 import type { ClientMsg } from '../../../desktop/src/local/protocol.js';
@@ -80,6 +81,7 @@ export function SessionPanel({ view, send, now = Date.now() }: { view: LocalView
       {info.people.length === 0 && view.sharing?.state !== 'live' ? <p className="ps-note">Only you so far. Share the session to let someone watch or help.</p> : null}
       <Button variant="outline" size="sm" onClick={openShare}><UserPlus />{view.sharing?.state === 'live' ? 'Invite more people' : 'Share this session'}</Button>
     </Section>
+    {send ? <TeamSection view={view} send={send} /> : null}
     <Notes view={view} send={send} />
     <Section icon={<FileDiff />} title="Files changed" aside={info.files.length ? <><span className="ps-add">+{info.added}</span> <span className="ps-del">−{info.removed}</span></> : undefined}>
       {shown?.diff ? <div className="ps-diff"><Button variant="ghost" size="sm" onClick={() => setOpenFile(null)}>← All files</Button><p className="ps-diff__path" title={shown.path}>{rel(shown.path)}</p><Diff diff={shown.diff} max={60} /></div>
