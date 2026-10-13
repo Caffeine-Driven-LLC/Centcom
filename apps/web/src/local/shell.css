@@ -118,3 +118,8 @@
 
 /* the account, share, join and team dialogs: the dialog itself has no padding (the command palette fills it edge to edge) */
 .acct, .shr, .team { padding: var(--space-5); }
+.shr__modes { border: 0; margin: var(--space-3) 0; padding: 0; display: grid; gap: var(--space-2); }
+.shr__mode { display: flex; gap: var(--space-3); align-items: flex-start; padding: var(--space-3); border: 1px solid var(--border-default); border-radius: var(--r-md); cursor: pointer; }
+.shr__mode:has(input:checked) { border-color: var(--accent-fill); background: var(--bg-selected); }
+.shr__mode input { margin-top: 3px; }
+.shr__mode small { display: block; color: var(--text-secondary); font-size: 12.5px; line-height: 1.45; margin-top: 2px; }

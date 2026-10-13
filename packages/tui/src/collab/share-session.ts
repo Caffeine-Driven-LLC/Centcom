@@ -6,7 +6,8 @@
 import type { SessionHandle } from '@centcom/net';
 import type { AppController } from '../controller.js';
 import type { Account } from './account.js';
-import { HostBridge } from './host-bridge.js';
+import { HostBridge, startBranchBridge, untilLive } from './host-bridge.js';
+import { renderTeam } from './team-text.js';
 
 export class ShareSession {
   private handle?: SessionHandle; private bridge?: HostBridge; private known = new Set<string>(); private order: string[] = []; private workspace = '';
@@ -26,30 +27,58 @@ export class ShareSession {
     const [sub = '', ...rest] = arg.trim().split(/\s+/).filter(Boolean); const ctl = this.ctl;
     try {
       switch (sub.toLowerCase()) {
-        case '': case 'start': return await this.start();
+        case '': case 'start': return await this.start(rest[0]?.toLowerCase() === 'branch' ? 'branch' : 'command_post');
+        case 'branch': return await this.start('branch');
+        case 'join': return await this.joinBranch(rest[0]);
+        case 'team': return this.team();
+        case 'activity': { if (!this.bridge || this.bridge.mode !== 'branch') return this.needBranch(); const on = rest[0] ? rest[0] === 'on' : !this.bridge.sharingActivity; this.bridge.setShareActivity(on); ctl.toast('info', on ? 'The team sees what your agent says and does.' : 'Your agent\'s messages are not shared. State, branch and locks still are.'); return; }
+        case 'handoff': return this.handoff(rest);
         case 'status': return this.status();
         case 'invite': return await this.invite(rest[0]);
         case 'link': return await this.link();
         case 'auto': { if (!this.bridge) return this.need(); const on = rest[0] ? rest[0] === 'on' : !this.bridge.autoApproving; this.bridge.setAutoApprove(on); ctl.toast('info', on ? 'Requests from editors run without asking you.' : 'Requests from editors wait for you.'); return; }
         case 'run': case 'no': return await this.decide(sub.toLowerCase() === 'run', rest[0]);
         case 'stop': return await this.stop();
-        default: ctl.toast('warn', 'Use /share, /share invite [email], /share link, /share status, /share run <n>, /share no <n>, /share auto or /share stop.');
+        default: ctl.toast('warn', 'Use /share, /share branch, /share join <id|link>, /team, /share activity [on|off], /share handoff <number> [note], /share invite [email], /share link, /share status, /share run <n>, /share no <n>, /share auto or /share stop.');
       }
     } catch (e) { ctl.notice('error', 'Sharing', this.why(e)); }
   }
   private need(): void { this.ctl.toast('warn', 'This conversation is not shared yet. Type /share to start.'); }
 
-  private async start(): Promise<void> {
+  private needBranch(): void { this.ctl.toast('warn', 'This is not a session where everyone runs their own agent. Start one with /share branch.'); }
+  private async start(mode: 'command_post' | 'branch' = 'command_post'): Promise<void> {
     const ctl = this.ctl; if (this.live) return this.status();
     if (ctl.state.busy) { ctl.toast('warn', 'Cento is still working. Try again when it is done.'); return; }
     ctl.toast('info', 'Starting the session…'); const st = await this.account.status();
     if (!st.signedIn) { ctl.notice('warn', 'Sharing needs an account', 'Run `centcom login` in a terminal, approve it in your browser, then type /share again.'); return; }
     const sessions = await this.account.sessions(); const spaces = await this.account.workspaces(); const home = st.me?.workspace?.id ?? spaces[0]?.id; if (!home) { ctl.notice('error', 'Sharing', 'Your account has no workspace to share in.'); return; }
     this.workspace = spaces.find((w) => w.id === home)?.name ?? home; const name = ctl.state.cwd.replace(/\/+$/, '').split('/').pop() || 'session';
-    const handle = await sessions.createSession({ name, workspace: home }); this.handle = handle;
-    this.bridge = new HostBridge(ctl, handle, { onChange: () => this.onChange(), onError: () => undefined }); this.bridge.start();
+    const handle = await sessions.createSession({ name, workspace: home, ...(mode === 'branch' ? { mode: 'branch' as const } : {}) }); this.handle = handle;
+    const branch = mode === 'branch' && handle.mode === 'branch'; if (mode === 'branch' && !branch) ctl.notice('warn', 'This server does not support everyone running their own agent yet', 'The session works as a command post instead: you run the agent and others ask.');
+    if (branch) this.bridge = this.branch(handle); else { this.bridge = new HostBridge(ctl, handle, { onChange: () => this.onChange(), onError: () => undefined }); this.bridge.start(); }
     handle.on('ended', () => { ctl.notice('info', 'The shared session ended.'); this.drop(); });
+    if (branch) { ctl.notice('ok', `Sharing ${name}: everyone runs their own agent`, `Session ${handle.id} in ${this.workspace}.\nEach person joins with their own copy of the project: /share join ${handle.id} (or centcom join, for a watch-only view). /team shows who is working on what; /share activity off keeps your agent's messages private (state, branch and locks are always shared).\n/share invite <email> makes an invite link for one person.`); return; }
     ctl.notice('ok', `Sharing ${name}`, `Session ${handle.id} in ${this.workspace}.\n/share invite <email> makes an invite link for one person, /share link makes a watch-only link, /share stop ends it.\nPeople in your workspace can join with: centcom join ${handle.id}`);
+  }
+  /** This person's own agent in a branch-mode session. */
+  private branch(handle: SessionHandle): HostBridge {
+    return startBranchBridge(this.ctl, handle, { onChange: () => this.onChange(), onError: () => undefined, onConflict: () => { const line = this.bridge?.team?.digestFor(handle.me.id)[0] ?? "A teammate's agent is changing a file your agent is changing."; this.ctl.notice('warn', 'Two agents are working on the same file', `${line} Your branches will conflict there; tell them, or pick another file.`); } });
+  }
+  /** `/share join <id|link>`: this conversation joins somebody's session with its own agent (a command post is read with `centcom join`). */
+  private async joinBranch(input?: string): Promise<void> {
+    const ctl = this.ctl; if (!input) { ctl.toast('warn', 'Usage: /share join <session id or invite link>'); return; } if (this.live) { ctl.toast('warn', 'This conversation is already in a session. /share stop leaves it.'); return; }
+    const st = await this.account.status(); if (!st.signedIn) { ctl.notice('warn', 'Joining needs an account', 'Run `centcom login` in a terminal first.'); return; }
+    const { handle } = await this.account.joinMember(input); if (handle.mode !== 'branch') { await handle.leave().catch(() => undefined); ctl.notice('warn', 'That session is a command post', `There the host runs the agent. Watch and ask with: centcom join ${input}`); return; }
+    ctl.toast('info', 'Joining…'); if (!(await untilLive(handle))) { await handle.leave().catch(() => undefined); ctl.notice('error', 'Could not join', 'The host did not let this computer in yet (it has to be online to hand out the keys). Try again in a moment.'); return; }
+    this.handle = handle; this.bridge = this.branch(handle); handle.on('ended', () => { ctl.notice('info', 'The shared session ended.'); this.drop(); });
+    ctl.notice('ok', 'You are in the session with your own agent', `Your agent works on ${ctl.state.cwd}. /team shows who is working on what; /share stop leaves.`);
+  }
+  /** `/team` (also `/share team`): everybody's agents. */
+  team(): void { const t = this.bridge?.team; if (!t) { this.ctl.toast('warn', 'No team yet. In a session where everyone runs their own agent (/share branch), /team shows who is working on what.'); return; } this.ctl.notice('info', 'Team', renderTeam(t.snapshot())); }
+  private handoff(rest: string[]): void {
+    const t = this.bridge?.team; if (!this.bridge || !t) return this.needBranch(); const people = t.snapshot().members.filter((m) => !m.you); const n = Number(rest[0]); const to = people[n - 1];
+    if (!to) { this.ctl.toast('warn', people.length ? `Hand your work to whom? ${people.map((m, i) => `${i + 1} ${m.name}`).join(', ')}: /share handoff <number> [note]` : 'Nobody else is here.'); return; }
+    this.bridge.offerHandoff(to.id, rest.slice(1).join(' ') || undefined); this.ctl.toast('ok', `Offered your work to ${to.name}.`);
   }
   private status(): void {
     if (!this.handle || !this.live) return this.need(); const people = this.handle.roster().map((m) => `${m.name || 'Someone'} (${m.role === 'host' ? 'you, host' : m.role === 'editor' ? 'can edit' : 'view only'})`).join(', ');

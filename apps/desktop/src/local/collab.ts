@@ -3,7 +3,7 @@
  * that follow, hosting a session over the relay and joining one. A person who never signs in never starts any of it: local sessions do not
  * need the server.
  */
-import { Account, HostBridge, JoinedSession, type AccountStatus } from '@centcom/tui';
+import { Account, HostBridge, JoinedSession, startBranchBridge, untilLive, type AccountStatus } from '@centcom/tui';
 import type { SessionHandle } from '@centcom/net';
 import type { Workspace } from './workspace.js';
 import type { AccountView, ClientMsg, JoinedView, ServerMsg, SharingView } from './protocol.js';
@@ -18,8 +18,8 @@ export interface CollabOptions {
 export type CollabMsg = Extract<ClientMsg, { t: 'account' | 'login' | 'cancelLogin' | 'logout' }>;
 export type JoinMsg = Extract<ClientMsg, { t: 'join' | 'joinedAsk' | 'joinedLeave' }>;
 export const isJoinMsg = (m: ClientMsg): m is JoinMsg => m.t === 'join' || m.t === 'joinedAsk' || m.t === 'joinedLeave';
-export type ShareMsg = Extract<ClientMsg, { t: 'share' | 'unshare' | 'shareLink' | 'shareInvite' | 'shareDecide' | 'shareAuto' }>;
-const ACCOUNT = new Set(['account', 'login', 'cancelLogin', 'logout']); const SHARE = new Set(['share', 'unshare', 'shareLink', 'shareInvite', 'shareDecide', 'shareAuto']);
+export type ShareMsg = Extract<ClientMsg, { t: 'share' | 'unshare' | 'shareLink' | 'shareInvite' | 'shareDecide' | 'shareAuto' | 'shareActivity' | 'shareHandoff' | 'shareHandoffAnswer' }>;
+const ACCOUNT = new Set(['account', 'login', 'cancelLogin', 'logout']); const SHARE = new Set(['share', 'unshare', 'shareLink', 'shareInvite', 'shareDecide', 'shareAuto', 'shareActivity', 'shareHandoff', 'shareHandoffAnswer']);
 export const isCollabMsg = (m: ClientMsg): m is CollabMsg => ACCOUNT.has(m.t);
 export const isShareMsg = (m: ClientMsg): m is ShareMsg => SHARE.has(m.t);
 const view = (s: AccountStatus): AccountView => ({ signedIn: s.signedIn, persisted: s.persisted, api: s.api, ...(s.offline ? { offline: true } : {}), ...(s.me ? { me: s.me } : {}) });
@@ -58,14 +58,19 @@ export class CollabService {
   }
 
   /* ---------------------------------------------------------------- sharing a conversation */
-  private shares = new Map<Workspace, { name: string; handle?: SessionHandle; bridge?: HostBridge; state: SharingView['state']; error?: string; code?: string; link?: SharingView['link']; invite?: SharingView['invite']; hint?: string; workspace?: string; account?: Account }>();
+  private shares = new Map<Workspace, { name: string; handle?: SessionHandle; bridge?: HostBridge; state: SharingView['state']; error?: string; code?: string; link?: SharingView['link']; invite?: SharingView['invite']; hint?: string; workspace?: string; account?: Account; degraded?: boolean; joinedBranch?: boolean; conflict?: { text: string; at: number } }>();
   /** What the screens show for a conversation: undefined when it is not shared. */
   sharingOf(ws: Workspace): SharingView | null {
     const sh = this.shares.get(ws); if (!sh) return null; const h = sh.handle; const me = h?.me.id;
-    return { state: sh.state, name: sh.name, ...(h ? { sessionId: h.id } : {}), ...(sh.workspace ? { workspace: sh.workspace } : {}), ...(sh.error ? { error: sh.error } : {}), ...(sh.code ? { code: sh.code } : {}), ...(sh.link ? { link: sh.link } : {}), ...(sh.invite ? { invite: sh.invite } : {}), ...(sh.hint ? { hint: sh.hint } : {}),
+    const br = sh.bridge?.mode === 'branch' ? sh.bridge : undefined;
+    return { state: sh.state, name: sh.name, mode: br ? 'branch' : 'command_post', ...(sh.degraded ? { degraded: true } : {}), ...(sh.joinedBranch ? { joinedBranch: true } : {}), ...(br ? { activity: br.sharingActivity, ...(br.team ? { team: br.team.snapshot() } : {}) } : {}), ...(h ? { sessionId: h.id } : {}), ...(sh.workspace ? { workspace: sh.workspace } : {}), ...(sh.error ? { error: sh.error } : {}), ...(sh.code ? { code: sh.code } : {}), ...(sh.link ? { link: sh.link } : {}), ...(sh.invite ? { invite: sh.invite } : {}), ...(sh.hint ? { hint: sh.hint } : {}),
       auto: sh.bridge?.autoApproving ?? false,
       members: (h?.roster() ?? []).map((m) => ({ id: m.id, name: m.name || 'Someone', slot: m.slot, role: m.role, online: m.online !== false, you: m.id === me })),
       pending: (sh.bridge?.pending() ?? []).map((p) => ({ item: p.item, from: p.from, slot: p.slot, text: p.text.slice(0, 2000) })) };
+  }
+  /** This person's own agent in a branch-mode session: it publishes, and the team's locks reach it. */
+  private branchBridge(ws: Workspace, handle: SessionHandle): HostBridge {
+    return startBranchBridge(ws.ctl, handle, { onChange: () => this.publish(ws), onError: () => undefined, onConflict: (c) => { const sh = this.shares.get(ws); if (!sh) return; const t = sh.bridge?.team?.digestFor(handle.me.id)[0] ?? 'A teammate\'s agent is working on a file your agent is changing.'; sh.conflict = { text: t, at: Date.now() }; this.o.toViewers?.(ws, { t: 'notice', level: 'warn', text: t }); this.publish(ws); } });
   }
   private publish(ws: Workspace): void { this.o.toViewers?.(ws, { t: 'sharing', sharing: this.sharingOf(ws) }); }
   /** A window that starts showing `ws` is told whether it is shared. */
@@ -85,8 +90,10 @@ export class CollabService {
           const sessions = await account.sessions(); const spaces = await account.workspaces(); const home = st.me?.workspace?.id ?? spaces[0]?.id;
           if (!home) { sh.state = 'failed'; sh.error = 'Your account has no workspace to share in.'; this.publish(ws); return; }
           sh.workspace = spaces.find((w) => w.id === home)?.name ?? home;
-          const handle = await sessions.createSession({ name, workspace: home }); sh.handle = handle;
-          const bridge = new HostBridge(ws.ctl, handle, { onChange: () => this.publish(ws), onError: () => undefined }); sh.bridge = bridge; bridge.start(); sh.state = 'live';
+          const wantBranch = m.mode === 'branch'; const handle = await sessions.createSession({ name, workspace: home, ...(wantBranch ? { mode: 'branch' as const } : {}) }); sh.handle = handle;
+          // a server that does not know about modes answers command_post: say so, and share as a command post instead of pretending
+          const branch = wantBranch && handle.mode === 'branch'; if (wantBranch && !branch) { sh.degraded = true; sh.hint = 'This server does not support "everyone runs their own agent" yet, so the session works as a command post: you run the agent and others ask.'; }
+          sh.bridge = branch ? this.branchBridge(ws, handle) : new HostBridge(ws.ctl, handle, { onChange: () => this.publish(ws), onError: () => undefined }); if (!branch) sh.bridge.start(); sh.state = 'live';
           handle.on('state', (s) => { if (s === 'ended') sh.state = 'ended'; this.publish(ws); }); handle.on('ended', () => { sh.state = 'ended'; this.publish(ws); }); handle.on('roster', () => this.publish(ws));
           this.publish(ws);
         } catch (e) { sh.state = 'failed'; const w = shareWhy(e); sh.error = w.error; sh.code = w.code; this.publish(ws); }
@@ -102,6 +109,9 @@ export class CollabService {
       }
       case 'shareDecide': { try { if (m.decision === 'approve') await cur?.bridge?.approve(m.item); else await cur?.bridge?.reject(m.item); } catch { /* the item was already decided or withdrawn */ } this.publish(ws); return; }
       case 'shareAuto': { cur?.bridge?.setAutoApprove(m.on); this.publish(ws); return; }
+      case 'shareActivity': { cur?.bridge?.setShareActivity(m.on); this.publish(ws); return; }
+      case 'shareHandoff': { cur?.bridge?.offerHandoff(m.to, m.note); this.publish(ws); return; }
+      case 'shareHandoffAnswer': { cur?.bridge?.answerHandoff(m.id, m.accept); this.publish(ws); return; }
     }
   }
 
@@ -121,12 +131,20 @@ export class CollabService {
     j.view = { ...j.view, state: gs.phase === 'ended' || gs.phase === 'kicked' ? 'ended' : 'live', phase: gs.phase, role: sess.role, people: sess.people(), entries, asked: q.filter((i) => i.submitter === mine && ['queued', 'approved', 'running'].includes(i.state)).map((i) => ({ item: i.id, text: i.body ?? j.asked.get(i.id) ?? '', state: i.state })), ...(gs.phase === 'kicked' ? { error: 'You were removed from this session.' } : {}) };
     if (!j.timer) j.timer = setTimeout(() => { j.timer = undefined; this.pushJoined(); }, 120);
   }
-  async handleJoin(m: JoinMsg, send: (m: ServerMsg) => void): Promise<void> {
+  /** Joins; in a branch-mode session this person's own agent (the open project) takes part, otherwise the session is read through a JoinedSession. */
+  private async joinAny(account: Account, input: string, ws: Workspace | undefined): Promise<{ joined?: JoinedSession; how: 'invite' | 'session' | 'watch' }> {
+    let member: Awaited<ReturnType<Account['joinMember']>> | undefined; try { member = await account.joinMember(input); } catch (e) { if ((e as { code?: string })?.code !== 'bad_target') throw e; }
+    if (!member) { const r = await account.join(input); return r; }
+    if (member.handle.mode === 'branch' && ws && !ws.demo) { if (!(await untilLive(member.handle))) { await member.handle.leave().catch(() => undefined); throw Object.assign(new Error('The host did not let this computer in yet: it has to be online to hand out the keys. Try again in a moment.'), { code: 'join_waiting' }); } const sh: NonNullable<ReturnType<typeof this.shares.get>> = { name: ws.dir.split('/').pop() || 'session', handle: member.handle, state: 'live', joinedBranch: true }; this.shares.set(ws, sh); sh.bridge = this.branchBridge(ws, member.handle); member.handle.on('ended', () => { sh.state = 'ended'; this.publish(ws); }); this.publish(ws); return { how: member.how }; }
+    return { joined: new JoinedSession(member.handle), how: member.how };
+  }
+  async handleJoin(m: JoinMsg, send: (m: ServerMsg) => void, ws?: Workspace): Promise<void> {
     if (m.t === 'joinedLeave') { await this.leaveJoined(); return; }
     if (m.t === 'joinedAsk') { const s = this.joinedSession?.session; if (!s) return; try { const r = await s.ask(m.text); this.joinedSession!.asked.set(r.item, m.text); this.refreshJoined(); } catch (e) { send({ t: 'notice', level: 'warn', text: e instanceof Error ? e.message : 'Could not send that.' }); } return; }
     await this.leaveJoined(); const view: JoinedView = { state: 'joining', people: [], entries: [], asked: [] }; this.joinedSession = { view, asked: new Map() }; this.pushJoined();
     try {
-      const account = await this.getAccount(); const { joined, how } = await account.join(m.input);
+      const account = await this.getAccount(); const { joined, how } = await this.joinAny(account, m.input, ws);
+      if (!joined) { this.joinedSession = undefined; this.pushJoined(); return; }
       const j = this.joinedSession; if (!j) { await joined.leave(); return; } j.session = joined; j.view = { ...j.view, state: 'live', how, sessionId: joined.handle.id }; j.off = joined.subscribe(() => this.refreshJoined()); joined.handle.on('roster', () => this.refreshJoined()); this.refreshJoined(); this.pushJoined();
     } catch (e) {
       const code = (e as { code?: string })?.code; const w = shareWhy(e);

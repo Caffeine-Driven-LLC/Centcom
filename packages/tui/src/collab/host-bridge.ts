@@ -186,3 +186,14 @@ export class HostBridge {
 }
 
 const withTimeout = <T,>(p: Promise<T>, ms: number, what: string): Promise<T> => new Promise<T>((resolve, reject) => { const t = setTimeout(() => reject(new Error(`${what} was not confirmed by the relay`)), ms); t.unref?.(); p.then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); }); });
+
+/** What a branch-mode member's app needs from a bridge: built on the controller's own file-lock hub, so locks reach the team and the team's locks reach this person's agent. */
+export function startBranchBridge(ctl: AppController, handle: SessionHandle, o: { shareActivity?: boolean; onChange?(): void; onConflict?(c: { agents: string[]; hmacs: string[] }): void; onError?(e: unknown): void; branchProbe?: BranchProbe } = {}): HostBridge {
+  const bridge = new HostBridge(ctl, handle, { mode: 'branch', ...(ctl.lockHub ? { locks: ctl.lockHub } : {}), ...o }); bridge.start(); return bridge;
+}
+
+/** A joiner has the session's keys only once the host has granted them (state `live`); frames sent before that cannot be sealed. Resolves false after `ms`. */
+export function untilLive(handle: SessionHandle, ms = 15_000): Promise<boolean> {
+  if (handle.state === 'live') return Promise.resolve(true); if (handle.state === 'ended') return Promise.resolve(false);
+  return new Promise((resolve) => { const t = setTimeout(() => { off(); resolve(false); }, ms); t.unref?.(); const off = handle.on('state', (st) => { if (st === 'live') { clearTimeout(t); off(); resolve(true); } else if (st === 'ended') { clearTimeout(t); off(); resolve(false); } }); });
+}
