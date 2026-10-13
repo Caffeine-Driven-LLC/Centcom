@@ -138,3 +138,6 @@
 .jn__asked { margin: 0; padding: var(--space-2) var(--space-4); list-style: none; font-size: 12px; color: var(--text-secondary); border-top: 1px solid var(--border-subtle); }
 .jn__fail { display: flex; flex-direction: column; gap: var(--space-3); align-items: flex-start; }
 .sb__account + .sb__account { margin-top: 0; }
+
+/* the account, share, join and team dialogs: the dialog itself has no padding (the command palette fills it edge to edge) */
+.acct, .shr, .team { padding: var(--space-5); }

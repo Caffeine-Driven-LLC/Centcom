@@ -4,7 +4,7 @@ import { hostname, homedir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { defaultDeps, loadConfig, stateDir } from '@centcom/config';
-import { CryptoError, DeviceKeyStore, TokenManager, createAppLogger, createHttpClient, createKeychainApiKeyStore, createKeychainTokenStore, defaultUserAgent, initCrypto, memoryKeychain, osAuthKeychain, osKeychain, realAuthClock, type Keychain } from '@centcom/net';
+import { CryptoError, DeviceKeyStore, TokenManager, createAppLogger, createHttpClient, createKeychainApiKeyStore, createKeychainTokenStore, defaultUserAgent, fileKeychain, initCrypto, keychainDirFromEnv, memoryKeychain, osAuthKeychain, osKeychain, realAuthClock, type Keychain } from '@centcom/net';
 import { createBrowserOpener } from './browser.js';
 import { createCommandRegistry, registerAccountCommands, type AccountDeps } from './index.js';
 
@@ -33,7 +33,7 @@ function keysKeychain(primary: Keychain): Keychain {
 export async function runAccountCli(name: string, argv: string[], o: { version: string }): Promise<number> {
   const deps0 = defaultDeps(); const cfg = await loadConfig(deps0); const baseUrl = cfg.api.base_url; const apiHost = new URL(baseUrl).host;
   const memoryOnly = process.env.CENTCOM_KEYCHAIN === 'memory';
-  const authKc = memoryOnly ? memoryKeychain() : osAuthKeychain(); const keyKc = memoryOnly ? memoryKeychain() : keysKeychain(osKeychain());
+  const kcDir = keychainDirFromEnv(); const authKc = memoryOnly ? memoryKeychain() : kcDir ? fileKeychain(kcDir) : osAuthKeychain(); const keyKc = memoryOnly ? memoryKeychain() : kcDir ? fileKeychain(kcDir) : keysKeychain(osKeychain());
   const { logger } = createAppLogger({ level: process.argv.includes('--debug') ? 'debug' : cfg.log.level, maxBytes: cfg.log.max_file_bytes, maxFiles: cfg.log.max_files, stateDir: stateDir(deps0), home: homedir() });
   const http = createHttpClient({ getAccessToken: async () => undefined, baseUrl, userAgent: defaultUserAgent(o.version), logger, timeoutMs: cfg.net.timeout_ms, maxAttempts: cfg.net.max_attempts });
   const store = createKeychainTokenStore(apiHost, { keychain: authKc });
