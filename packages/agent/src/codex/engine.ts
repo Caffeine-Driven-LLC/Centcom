@@ -3,7 +3,7 @@ import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process';
 import { signalLadder, type LadderClock } from '../interrupt/ladder.js';
 import { sharedProcessRegistry, type Killed, type ProcessRegistry } from '../interrupt/procs.js';
 import { newId } from '../ids.js';
-import { AsyncQueue } from '../queue.js';
+import { EventSink, eventQueue } from '../backpressure.js';
 import type { AgentEngine, ApprovalDecision, Capability, EngineQuestion, EngineSession, EngineStartOptions, EventBody, LoginKind, NormalisedEvent, PermissionMode } from '../types.js';
 import { ProviderError } from '../types.js';
 import { redact } from '../claude/engine.js';
@@ -51,7 +51,8 @@ export class CodexEngine implements AgentEngine {
 
 class CodexSession implements EngineSession {
   readonly agentId: string;
-  readonly events = new AsyncQueue<NormalisedEvent>();
+  readonly events = eventQueue();
+  private sink = new EventSink(this.events);
   private seq = 0; private turn?: string; private codexTurn?: string; private threadId?: string;
   private rpc?: RpcClient; private child?: ChildProcess;
   private mapper = new CodexMapper();
@@ -70,7 +71,10 @@ class CodexSession implements EngineSession {
   async compact(): Promise<void> { if (!this.rpc || !this.ready || !this.threadId) return; await this.rpc.request('thread/compact/start', { threadId: this.threadId }, 30_000); }
   setPermissionMode(m: PermissionMode) { this.mode = m; }
 
-  private emit(b: EventBody) { this.events.push({ ...b, v: 1, seq: ++this.seq, ts: (this.deps.now?.() ?? new Date()).toISOString(), agent_id: this.agentId, ...(this.turn ? { turn_id: this.turn } : {}) } as NormalisedEvent); }
+  private emit(b: EventBody) {
+    this.sink.push(() => ({ ...b, v: 1, seq: ++this.seq, ts: (this.deps.now?.() ?? new Date()).toISOString(), agent_id: this.agentId, ...(this.turn ? { turn_id: this.turn } : {}) } as NormalisedEvent), () => { this.seq--; },
+      (text) => this.emit({ type: 'engine.warning', code: 'events_dropped', text }));
+  }
 
   async init() {
     const spawnFn = this.deps.spawn ?? nodeSpawn;

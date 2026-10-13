@@ -60,6 +60,7 @@ When you change them in the app, these are saved to your user file: theme, Cento
 | `update.channel` | stable \| beta \| nightly | `"stable"` | no | Which releases to follow: stable, beta or nightly |
 | `lan.enabled` | boolean | `true` | no | Allow LAN sessions |
 | `agent.max_parallel` | number (1 to 16) | `4` | yes | Most agents running at once |
+| `agent.turn_timeout_s` | number (0 to 86400) | `0` | yes | Stop a turn that runs longer than this many seconds (0 means no limit) |
 | `agent.approval_timeout_ms` | number (1000 to 86400000) | `600000` | yes | How long an approval waits before it is declined |
 | `client.engine` | claude-code \| codex | `"claude-code"` | no | Last agent you used |
 | `client.model` | string | `""` | yes | Model id passed to the agent (empty = the CLI default) |

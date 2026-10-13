@@ -1,6 +1,7 @@
 export * from './types.js';
 export * from './ids.js';
 export * from './queue.js';
+export * from './backpressure.js';
 export * from './risk.js';
 export * from './detect.js';
 export * from './demo.js';

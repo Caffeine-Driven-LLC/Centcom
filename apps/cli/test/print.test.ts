@@ -2,7 +2,7 @@ import { PassThrough } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import { DemoEngine } from '@centcom/agent';
 import { FakeEngine } from '@centcom/testkit';
-import { buildPrompt, readStdin, runPrint } from '../src/print/index.js';
+import { buildPrompt, parseStreamInput, readStdin, runPrint } from '../src/print/index.js';
 
 const sink = () => { const s = new PassThrough(); let t = ''; s.on('data', (c) => (t += c)); return { s, text: () => t }; };
 const run = async (o: Partial<Parameters<typeof runPrint>[0]> = {}) => {
@@ -101,5 +101,26 @@ describe('print mode when the reader goes away (| head -1)', () => {
     const out = new Writable({ write(_c, _e, cb) { writes++; const e = Object.assign(new Error('write EPIPE'), { code: 'EPIPE' }); cb(e); } });
     const t0 = Date.now(); const code = await runPrint({ engine: new DemoEngine({ speed: 30 }), demo: true, cwd: '/tmp', branch: '', version: 't', mode: 'default', prompt: 'find where isExpired is used', format: 'text', save: false, out: out as never, err: err.s });
     expect(code).toBe(0); expect(Date.now() - t0).toBeLessThan(1500); expect(writes).toBeGreaterThan(0); expect(err.text()).not.toMatch(/at \S+ \(|EPIPE|Unhandled/);
+  });
+});
+
+describe('--input-format stream-json (lane C050)', () => {
+  const msg = (t: string | { type: string; text: string }[]) => JSON.stringify({ type: 'user', message: { role: 'user', content: t } });
+  it('reads one user message per line, as a string or as text blocks, and skips blank lines', () => {
+    expect(parseStreamInput([msg('first'), '', msg([{ type: 'text', text: 'sec' }, { type: 'text', text: 'ond' }])].join('\n'))).toEqual(['first', 'second']);
+  });
+  it('a bad line is a usage error that names the line', () => {
+    for (const [text, why] of [['not json', /line 1: not JSON/], [msg('ok') + '\n{"type":"assistant"}', /line 2: expected/], [JSON.stringify({ type: 'user', message: { role: 'user', content: 5 } }), /no text content/], [msg('  '), /is empty/], ['\n\n', /no messages/]] as const) {
+      let err: any; try { parseStreamInput(text); } catch (e) { err = e; } expect(err?.message).toMatch(why); expect(err.code).toBe('usage');
+    }
+  });
+  it('the messages run as consecutive turns of one conversation and the result is the last answer', async () => {
+    const r = await run({ mode: 'bypassPermissions', format: 'stream-json', prompt: 'find where isExpired is used', followUps: ['now list the tests'] });
+    const evs = r.out.trim().split('\n').map((l) => JSON.parse(l)); expect(evs.filter((e) => e.type === 'turn.done')).toHaveLength(2); expect(r.code).toBe(0);
+    expect(evs.at(-1)).toMatchObject({ type: 'result', is_error: false }); expect(new Set(evs.filter((e) => e.type === 'turn.done').map((e) => e.turn_id)).size).toBe(2);
+  });
+  it('a failure in an earlier message ends the run: later messages are not sent', async () => {
+    const r = await run({ mode: 'default', format: 'json', prompt: 'fix the failing test in the auth module', followUps: ['and then something else'] });
+    expect(r.code).toBe(3); expect(r.err).toMatch(/Declined/);
   });
 });

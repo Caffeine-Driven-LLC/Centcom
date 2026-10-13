@@ -79,3 +79,16 @@ describe('toasts (lane C044)', () => {
     expect(c.toastKey('x')).toBe(false); expect(c.toastKey('u')).toBe(true); expect(ran).toEqual(['update.show']); expect(c.state.toasts).toEqual([]); expect(c.toastKey('u')).toBe(false); c.stop();
   }));
 });
+
+describe('the per-turn time limit (lane C030)', () => {
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  it('a turn that runs longer than agent.turn_timeout_s is stopped, with a notice, and the session stays usable', async () => {
+    const c = new AppController({ engine: new DemoEngine({ speed: 0.2 }), demo: true, cwd: '/tmp', version: 't', skills: [], turnTimeoutS: 0.3 });
+    await c.start(); void c.submit('go'); await wait(150); expect(c.state.busy).toBe(true); await wait(700);
+    expect(c.state.toasts.some((t) => /ran longer than 0\.3 seconds|ran longer than/.test(t.text))).toBe(true); expect(c.state.busy).toBe(false); c.stop();
+  });
+  it('no limit by default, and a turn that ends in time leaves no timer behind', async () => {
+    const c = new AppController({ engine: new DemoEngine({ speed: 100 }), demo: true, cwd: '/tmp', version: 't', skills: [], turnTimeoutS: 5 });
+    await c.start(); await c.submit('go'); await wait(100); const t0 = Date.now(); c.stop(); expect(Date.now() - t0).toBeLessThan(500); expect(c.state.toasts.some((t) => /ran longer/.test(t.text))).toBe(false);
+  });
+});

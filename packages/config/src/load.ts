@@ -96,7 +96,7 @@ function parseFile(d: LoadDeps, path: string, layer: 'user' | 'project'): Partia
   }
   const flat = flatten(json); const out: Partial<Record<Key, Value>> = {};
   for (const [key, raw] of Object.entries(flat)) {
-    if (SECRET_RE.test(key.split('.').pop()!) || SECRET_RE.test(key)) throw new ConfigError('secret_in_file', `${path} contains "${key}". Credentials do not belong in a config file; Centcom never reads them from here.`, key, path);
+    if (!(key in SCHEMA) && (SECRET_RE.test(key.split('.').pop()!) || SECRET_RE.test(key))) throw new ConfigError('secret_in_file', `${path} contains "${key}". Credentials do not belong in a config file; Centcom never reads them from here.`, key, path);
     const spec = (SCHEMA as Record<string, KeySpec>)[key];
     if (!spec) { d.warn('unknown_key', key); continue; }
     if (layer === 'project' && !spec.project) { d.warn('project_key_ignored', key); continue; }
@@ -132,7 +132,7 @@ function fromEnv(d: LoadDeps): Partial<Record<Key, Value>> {
 }
 
 /* ------------------------------------------------------------------ resolve */
-export type ResolvedConfig = Readonly<{ update: { check: boolean; auto: boolean; channel: 'stable' | 'beta' | 'nightly' }; api: { base_url: string }; relay: { url: string }; net: { timeout_ms: number; max_attempts: number }; budget: { session_usd: number }; telemetry: { enabled: boolean }; log: { level: 'debug' | 'info' | 'warn' | 'error' | 'silent'; max_file_bytes: number; max_files: number }; context: { board: boolean; digest_tokens: number }; ui: { theme: 'auto' | 'dark' | 'light' | 'hc'; mascot: boolean; restore_prompt: boolean; mouse: boolean; spinner: 'fun' | 'plain'; density: 'comfortable' | 'compact'; bell: boolean; title: boolean; reduced_motion: boolean; color: 'auto' | 'truecolor' | '256' | '16' | 'never' }; a11y: { screen_reader: boolean }; lan: { enabled: boolean }; agent: { max_parallel: number; approval_timeout_ms: number }; client: { engine: 'claude-code' | 'codex'; model: string; permission_mode: 'default' | 'acceptEdits' | 'plan'; cento_color: 'violet' | 'red' | 'yellow' | 'green' | 'brown'; mascot_size: 'auto' | 'large' | 'small' | 'off'; auto_skills: boolean; side_panel: boolean; fleet_panel: boolean }; [explainSym]?: never }>;
+export type ResolvedConfig = Readonly<{ update: { check: boolean; auto: boolean; channel: 'stable' | 'beta' | 'nightly' }; api: { base_url: string }; relay: { url: string }; net: { timeout_ms: number; max_attempts: number }; budget: { session_usd: number }; telemetry: { enabled: boolean }; log: { level: 'debug' | 'info' | 'warn' | 'error' | 'silent'; max_file_bytes: number; max_files: number }; context: { board: boolean; digest_tokens: number }; ui: { theme: 'auto' | 'dark' | 'light' | 'hc'; mascot: boolean; restore_prompt: boolean; mouse: boolean; spinner: 'fun' | 'plain'; density: 'comfortable' | 'compact'; bell: boolean; title: boolean; reduced_motion: boolean; color: 'auto' | 'truecolor' | '256' | '16' | 'never' }; a11y: { screen_reader: boolean }; lan: { enabled: boolean }; agent: { max_parallel: number; approval_timeout_ms: number; turn_timeout_s: number }; client: { engine: 'claude-code' | 'codex'; model: string; permission_mode: 'default' | 'acceptEdits' | 'plan'; cento_color: 'violet' | 'red' | 'yellow' | 'green' | 'brown'; mascot_size: 'auto' | 'large' | 'small' | 'off'; auto_skills: boolean; side_panel: boolean; fleet_panel: boolean }; [explainSym]?: never }>;
 const explainSym = Symbol('centcom.config.sources');
 type Sources = Map<Key, { layer: Layer; source?: string }>;
 
@@ -185,7 +185,7 @@ export function writeUserConfig(d: LoadDeps, patch: DeepPartial): void {
   }
   for (const [sec, vals] of Object.entries(patch)) for (const [k, v] of Object.entries(vals)) {
     const key = `${sec}.${k}`; const spec = (SCHEMA as Record<string, KeySpec>)[key];
-    if (SECRET_RE.test(key) || !spec) throw new ConfigError('invalid_value', `Unknown or forbidden setting "${key}"`, key);
+    if (!spec) throw new ConfigError('invalid_value', `Unknown or forbidden setting "${key}"`, key);
     if (v === undefined) { if (cur[sec]) delete cur[sec]![k]; continue; }
     if (coerce(spec, v) === undefined) throw new ConfigError('invalid_value', `${key} has an invalid value`, key);
     (cur[sec] ??= {})[k] = v;

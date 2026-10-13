@@ -11,6 +11,7 @@ centcom [options] | centcom -p "task"
 
 - `-p, --print [task]`: run once, print the answer and exit (no screen); piped input is added to the prompt
 - `--output-format <text|json|stream-json>`: what -p prints (default text)
+- `--input-format <text|stream-json>`: with -p: stream-json reads one user message per line from standard input and runs them as turns of one conversation
 - `--engine <claude-code|codex|demo>`: choose the agent engine (default: claude-code if installed)
 - `--demo`: scripted demo agent (no login, no model)
 - `--demo-team`: with --demo: also show two pretend teammates

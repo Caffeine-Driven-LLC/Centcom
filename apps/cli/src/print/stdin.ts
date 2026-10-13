@@ -14,3 +14,16 @@ export function buildPrompt(arg: string | undefined, piped: string | undefined):
   const longest = Math.max(2, ...[...p.matchAll(/`+/g)].map((m) => m[0].length)); const fence = '`'.repeat(longest + 1);
   return `${a}\n\n${fence}\n${p}\n${fence}`;
 }
+
+/** `--input-format stream-json`: one JSON object per line, each a user message (`{"type":"user","message":{"role":"user","content":"..."}}`, content a string or text blocks). Returns the messages in order; a bad line is a usage error that names the line. */
+export function parseStreamInput(text: string): string[] {
+  const out: string[] = []; const bad = (n: number, why: string): never => { throw Object.assign(new Error(`--input-format stream-json: line ${n}: ${why}`), { code: 'usage' }); };
+  text.split('\n').forEach((raw, i) => {
+    const l = raw.trim(); if (!l) return; let j: unknown; try { j = JSON.parse(l); } catch { return bad(i + 1, 'not JSON'); }
+    const o = j as { type?: unknown; message?: { content?: unknown } }; if (!o || typeof o !== 'object' || o.type !== 'user') return bad(i + 1, 'expected {"type":"user","message":{...}}');
+    const c = o.message?.content; const t = typeof c === 'string' ? c : Array.isArray(c) ? c.map((b) => (b && typeof b === 'object' && (b as { type?: string }).type === 'text' ? String((b as { text?: unknown }).text ?? '') : '')).join('') : undefined;
+    if (t === undefined) return bad(i + 1, 'the message has no text content'); if (!t.trim()) return bad(i + 1, 'the message is empty'); out.push(t);
+  });
+  if (!out.length) throw Object.assign(new Error('--input-format stream-json: no messages on standard input.'), { code: 'usage' });
+  return out;
+}
