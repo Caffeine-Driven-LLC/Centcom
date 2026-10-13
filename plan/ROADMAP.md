@@ -19,8 +19,8 @@ backend   scaffold  ·······················build the serv
 | **M1** Solo agent in the terminal | A person installs Centcom, it finds their own Claude Code and/or Codex, and they work with agents in git worktrees in a polished TUI with the mascot. No network, no account. | 39 / 0 | 109 / 0 | none (demo script) |
 | **M2** LAN multiplayer (free tier) | Two machines on the same Wi-Fi share one command post with no backend and no account: pair with a code, queue prompts, host approves, everything end-to-end encrypted. | 17 / 0 | 59 / 0 | G3 (LAN variant against the client simulator) |
 | **M3** Accounts and relay | Sign in to Centcom, create a hosted session, and work together from anywhere through the relay, with resume after a dropped connection. | 3 / 47 | 9 / 145 | G1, G2, G3 |
-| **M4** Teams and money | Workspaces with members and roles, invites, plans and checkout, entitlements, quotas, notifications, and the first web screens. | 11 / 24 | 33 / 62 | G4 |
-| **M5** Fleet and polish | Branch-mode fleets across people, file locks, webhooks, audit log, updates, flags and telemetry, and the rest of the web app. | 14 / 15 | 36 / 41 | G5 |
+| **M4** Teams and money | Workspaces with members and roles, invites, plans and checkout, entitlements, quotas, notifications, and the first web screens. | 11 / 25 | 33 / 63 | G4 |
+| **M5** Fleet and polish | Branch-mode fleets across people, file locks, webhooks, audit log, updates, flags and telemetry, and the rest of the web app. | 14 / 17 | 36 / 47 | G5 |
 | **M6** Launch | Production readiness: infrastructure, load and chaos tests, security review, installers, docs, accessibility, and both conformance suites green. | 8 / 6 | 26 / 22 | G6 |
 | **Later** After launch | Useful but not needed for launch. | 1 / 2 | 1 / 4 | - |
 
@@ -35,9 +35,9 @@ Rough calendar time to reach a milestone, per side, from the lane sizes: `weeks 
 | M3 | client | 203 | 32 | 25 wk | 17 wk | 13 wk |
 | M3 | backend | 177 | 39 | 22 wk | 15 wk | 11 wk |
 | M4 | client | 236 | 32 | 30 wk | 20 wk | 15 wk |
-| M4 | backend | 239 | 43 | 30 wk | 20 wk | 15 wk |
+| M4 | backend | 240 | 44 | 30 wk | 20 wk | 15 wk |
 | M6 | client | 298 | 37 | 37 wk | 25 wk | 19 wk |
-| M6 | backend | 302 | 45 | 38 wk | 25 wk | 19 wk |
+| M6 | backend | 309 | 49 | 39 wk | 26 wk | 19 wk |
 
 
 ## M0 · Contracts and scaffolding
@@ -251,7 +251,7 @@ Workspaces with members and roles, invites, plans and checkout, entitlements, qu
   - Seats, proration and dunning behave per contract
   - Quota warnings reach clients as notices and notifications
   - Web app covers login, session view, members, invites, billing
-- **Effort:** client 33 person-days (longest chain 9 d) · backend 62 person-days (longest chain 16 d)
+- **Effort:** client 33 person-days (longest chain 9 d) · backend 63 person-days (longest chain 17 d)
 
 **Client lanes (11):**
 
@@ -267,7 +267,7 @@ Workspaces with members and roles, invites, plans and checkout, entitlements, qu
 - [C088](client/C088.md) Web invites and join flow with deep links (M)
 - [C089](client/C089.md) Web billing UI (M)
 
-**Backend lanes (24):**
+**Backend lanes (25):**
 
 - [B030](backend/B030.md) Seat accounting and seat-limit enforcement (S)
 - [B034](backend/B034.md) Workspace settings and policies (S)
@@ -293,6 +293,7 @@ Workspaces with members and roles, invites, plans and checkout, entitlements, qu
 - [B103](backend/B103.md) Run the backend locally: sessions, workspaces, invites, relay and two accounts (L)
 - [B104](backend/B104.md) Share-link guests can read the members' public keys (S)
 - [B105](backend/B105.md) Session invites: one person into one session, no seat (L)
+- [B108](backend/B108.md) Session invites: audit events and their own e-mail template (S)
 
 ## M5 · Fleet and polish
 
@@ -305,7 +306,7 @@ Branch-mode fleets across people, file locks, webhooks, audit log, updates, flag
   - Webhooks deliver with retries and signatures
   - Audit export works
   - Auto-update verifies signatures and rolls out by channel
-- **Effort:** client 36 person-days (longest chain 9 d) · backend 41 person-days (longest chain 10 d)
+- **Effort:** client 36 person-days (longest chain 9 d) · backend 47 person-days (longest chain 16 d)
 
 **Client lanes (14):**
 
@@ -324,7 +325,7 @@ Branch-mode fleets across people, file locks, webhooks, audit log, updates, flag
 - [C092](client/C092.md) Web accessibility and i18n framework (M)
 - [C093](client/C093.md) Web end-to-end tests with Playwright against the mock backend (M)
 
-**Backend lanes (15):**
+**Backend lanes (17):**
 
 - [B057](backend/B057.md) Agent registry (ids, owners, modes, states) (M)
 - [B058](backend/B058.md) Agent state validation against the state-map contract (S)
@@ -341,6 +342,8 @@ Branch-mode fleets across people, file locks, webhooks, audit log, updates, flag
 - [B090](backend/B090.md) Data retention and purge jobs (M)
 - [B094](backend/B094.md) Alerting and on-call runbooks (M)
 - [B106](backend/B106.md) Collaboration wiring: metering, purge, relay delivery and the remaining API modules (L)
+- [B107](backend/B107.md) History, snapshots, usage and preferences on the API, over the dev object store (M)
+- [B109](backend/B109.md) The worker process: usage counters, expiry sweeps and workspace purge (M)
 
 ## M6 · Launch
 

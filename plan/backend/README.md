@@ -1,9 +1,9 @@
-# Backend plan · 106 lanes (B001-B106)
+# Backend plan · 109 lanes (B001-B109)
 
 Repo: `Centcom-backend` · Rules: [`plan/GUIDELINES.md`](../GUIDELINES.md) · Format: [`plan/LANE_CARD_SPEC.md`](../LANE_CARD_SPEC.md) · Connection points: [`contracts/`](../../contracts/index.json)
 
-- **106 lanes**: 26 small (≤1 d), 60 medium (≤3 d), 20 large (≤5 d) · 306 person-days of work in total
-- **14 dependency layers** · critical path **45 days** (see [`GRAPH.md`](../GRAPH.md)) · parallelism in layer 1: 1 lanes can start on day one
+- **109 lanes**: 27 small (≤1 d), 62 medium (≤3 d), 20 large (≤5 d) · 313 person-days of work in total
+- **15 dependency layers** · critical path **49 days** (see [`GRAPH.md`](../GRAPH.md)) · parallelism in layer 1: 1 lanes can start on day one
 - Every lane card is independent: it names its inputs (contracts), outputs (deliverables), and how to build with no counterpart (`build_against`).
 - **No lane in this plan depends on a lane in the other plan.** The two sides meet only at contract IDs.
 
@@ -104,6 +104,8 @@ Repo: `Centcom-backend` · Rules: [`plan/GUIDELINES.md`](../GUIDELINES.md) · Fo
 | [B068](B068.md) | Share links and viewer-only guest tokens | M4 | M | identity | B017, B054, B031 | CT-API-SESSIONS | G5 |
 | [B104](B104.md) | Share-link guests can read the members' public keys | M4 | S | sessions | B068, B054, B103 | CT-API-SESSIONS | G5 |
 | [B105](B105.md) | Session invites: one person into one session, no seat | M4 | L | sessions | B029, B030, B031, B054, B068, B080, B103 | CT-API-SESSIONS, CT-API-WORKSPACES | G5 |
+| [B107](B107.md) | History, snapshots, usage and preferences on the API, over the dev object store | M5 | M | sessions | B055, B056, B063, B075, B076, B103, B106 | CT-API-SESSIONS, CT-API-USAGE, CT-API-NOTIFY | G5 |
+| [B108](B108.md) | Session invites: audit events and their own e-mail template | M4 | S | sessions | B036, B032, B105 | CT-API-AUDIT, CT-API-SESSIONS | G5 |
 
 ### P5 Billing
 
@@ -137,6 +139,7 @@ Repo: `Centcom-backend` · Rules: [`plan/GUIDELINES.md`](../GUIDELINES.md) · Fo
 | [B089](B089.md) | Metadata search across sessions and members | Later | S | data | B054 | - | G6 |
 | [B090](B090.md) | Data retention and purge jobs | M5 | M | data | B008, B055 | - | G6 |
 | [B106](B106.md) | Collaboration wiring: metering, purge, relay delivery and the remaining API modules | M5 | L | platform | B055, B056, B063, B065, B069, B074, B075, B076, B081, B090, B103 | CT-API-USAGE, CT-API-NOTIFY, CT-API-BILLING | G4 |
+| [B109](B109.md) | The worker process: usage counters, expiry sweeps and workspace purge | M5 | M | platform | B027, B029, B053, B068, B075, B107 | CT-API-USAGE, CT-API-WORKSPACES | G5 |
 
 ### P7 Ops
 
