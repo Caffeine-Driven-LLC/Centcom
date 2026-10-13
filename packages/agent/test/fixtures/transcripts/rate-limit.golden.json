@@ -1,0 +1,75 @@
+[
+ {
+  "type": "session.started",
+  "engine": "fake",
+  "engine_session_id": "sess-1",
+  "model": "fake-model",
+  "cli_version": "0.0.0",
+  "tools": [
+   "Read",
+   "Edit",
+   "Bash"
+  ],
+  "mcp_servers": [],
+  "capabilities": [
+   "streaming",
+   "approvals",
+   "resume",
+   "interrupt"
+  ],
+  "login_kind": "unknown",
+  "v": 1,
+  "seq": 1,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "turn.started",
+  "turn_id": "trn_01JTEST0000000000000000001",
+  "v": 1,
+  "seq": 2,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "limits.report",
+  "windows": [
+   {
+    "name": "five_hour",
+    "utilization": 1,
+    "resets_at": 1790000000
+   }
+  ],
+  "v": 1,
+  "seq": 3,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "error",
+  "code": "provider_rate_limited",
+  "tool_message": "You have reached your usage limit. It resets at 17:00.",
+  "fatal": true,
+  "v": 1,
+  "seq": 4,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "status",
+  "state": "error",
+  "v": 1,
+  "seq": 5,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ },
+ {
+  "type": "turn.done",
+  "outcome": "error",
+  "stop_reason": "rate_limited",
+  "v": 1,
+  "seq": 6,
+  "ts": "2026-10-05T18:00:00.000Z",
+  "agent_id": "agt_01JTEST0000000000000000001"
+ }
+]

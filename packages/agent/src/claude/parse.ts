@@ -68,6 +68,10 @@ export class ClaudeStreamParser {
   private tools = new Map<string, { name: string; input: J }>();
   private seenStream = new Set<string>();
   private subagents = new Map<string, string>();
+  /** Sub-agents that have started and not yet reported back (closed as canceled when the turn ends without them). */
+  private openSub = new Set<string>();
+  /** Tools asked for and not yet answered: a turn must never end with one open (CT-PROVIDER stream rules). */
+  private openTools = new Set<string>();
   private usage = { input: 0, output: 0, cacheRead: 0 };
   sessionId?: string;
 
@@ -98,7 +102,7 @@ export class ClaudeStreamParser {
       case 'status': return d.status === 'requesting' ? [{ type: 'status', state: 'thinking' }] : d.status === 'compacting' ? [{ type: 'compaction.started' }] : [];
       case 'api_retry': return [{ type: 'error', code: errorCodeFor(d.error, d.error_status, ''), tool_message: `API retry ${d.attempt}/${d.max_retries} (${d.error ?? 'error'})`, fatal: false,
         retry: { attempt: Number(d.attempt ?? 1), max_retries: Number(d.max_retries ?? 1), delay_ms: Number(d.retry_delay_ms ?? 0) } }];
-      case 'permission_denied': return [{ type: 'tool.result', tool_id: String(d.tool_use_id ?? d.tool_name ?? ''), status: 'denied', summary: `Not allowed: ${d.tool_name ?? 'tool'}` }];
+      case 'permission_denied': this.openTools.delete(String(d.tool_use_id ?? d.tool_name ?? '')); return [{ type: 'tool.result', tool_id: String(d.tool_use_id ?? d.tool_name ?? ''), status: 'denied', summary: `Not allowed: ${d.tool_name ?? 'tool'}` }];
       case 'compact_boundary': return [{ type: 'compaction.ended' }];
       default: return []; // hook_started, hook_response, hook_progress, plugin_install ... are the CLI's own business
     }
@@ -144,7 +148,9 @@ export class ClaudeStreamParser {
           if (parent) out.push(...this.sub(parent));
           if (name === 'TodoWrite' && !parent) { const t = todosFrom(input); if (t) out.push(t); }
           if (name === 'AskUserQuestion' && !parent) { const q = questionFrom(id, input); if (q) out.push(q); }
+          this.openTools.add(id);
           out.push({ type: 'tool.requested', tool_id: id, name, input_summary: s.text, risk: classifyTool(name, input), ...(s.path ? { path: s.path } : {}), ...(s.command ? { command: s.command } : {}), ...(parent ? { parent_tool_id: parent } : {}) });
+          if (!parent && (name === 'Task' || name === 'Agent')) out.push(...this.sub(id)); // the sub-agent exists from the moment it is asked for, not only once it talks
         }
         break;
       }
@@ -160,8 +166,9 @@ export class ClaudeStreamParser {
 
   private sub(parent: string): EventBody[] {
     if (this.subagents.has(parent)) return [];
-    this.subagents.set(parent, parent);
-    return [{ type: 'subagent.started', subagent_id: parent, parent_tool_id: parent, label: this.tools.get(parent)?.name ?? 'subagent' }];
+    this.subagents.set(parent, parent); this.openSub.add(parent);
+    const t = this.tools.get(parent); const label = String(t?.input.description ?? t?.input.subagent_type ?? t?.name ?? 'subagent').slice(0, 80);
+    return [{ type: 'subagent.started', subagent_id: parent, parent_tool_id: parent, label }];
   }
 
   /** Complete assistant messages: only used when the stream events for that message were not seen (no partial messages). */
@@ -175,6 +182,7 @@ export class ClaudeStreamParser {
         const input = (b.input ?? {}) as J; this.tools.set(String(b.id), { name: String(b.name), input }); const s = summarise(String(b.name), input);
         if (b.name === 'TodoWrite') { const t = todosFrom(input); if (t) out.push(t); }
         if (b.name === 'AskUserQuestion') { const q = questionFrom(String(b.id), input); if (q) out.push(q); }
+        this.openTools.add(String(b.id));
         out.push({ type: 'status', state: stateForTool(String(b.name)) }, { type: 'tool.requested', tool_id: String(b.id), name: String(b.name), input_summary: s.text, risk: classifyTool(String(b.name), input), ...(s.path ? { path: s.path } : {}), ...(s.command ? { command: s.command } : {}) });
       }
     }
@@ -187,7 +195,7 @@ export class ClaudeStreamParser {
     const out: EventBody[] = [];
     for (const b of content as J[]) {
       if (b.type !== 'tool_result') continue;
-      const id = String(b.tool_use_id);
+      const id = String(b.tool_use_id); this.openTools.delete(id);
       const text = Array.isArray(b.content) ? b.content.map((x: J) => x.text ?? '').join('\n') : String(b.content ?? '');
       const t = this.tools.get(id);
       const failed = b.is_error === true;
@@ -200,6 +208,7 @@ export class ClaudeStreamParser {
         else if (Array.isArray(t.input.edits)) diff = (t.input.edits as J[]).map((e) => editDiff(p, String(e.old_string ?? ''), String(e.new_string ?? ''))).join('\n');
       }
       out.push({ type: 'tool.result', tool_id: id, status: denied ? 'denied' : failed ? 'error' : 'ok', summary: firstLines(text, 3), ...(diff ? { diff } : {}) });
+      if (this.openSub.delete(id)) out.push({ type: 'subagent.done', subagent_id: id, status: denied ? 'canceled' : failed ? 'error' : 'ok' });
       out.push({ type: 'status', state: 'thinking' });
     }
     return out;
@@ -211,8 +220,11 @@ export class ClaudeStreamParser {
     return [{ type: 'limits.report', windows: Object.entries(w).map(([name, v]) => ({ name, utilization: Number((v as J).utilization ?? 0), resets_at: Number((v as J).resetsAt ?? 0) })) }];
   }
 
+  /** Tools and sub-agents still open when the turn ends (interrupted, failed or cut off) are closed as canceled so nothing keeps showing as running. */
+  closeOpen(): EventBody[] { const out: EventBody[] = [...this.openTools].map((id) => ({ type: 'tool.result' as const, tool_id: id, status: 'canceled' as const, summary: 'Stopped before it finished' })); this.openTools.clear(); out.push(...[...this.openSub].map((id) => ({ type: 'subagent.done' as const, subagent_id: id, status: 'canceled' as const }))); this.openSub.clear(); return out; }
+
   private result(d: J): EventBody[] {
-    const out: EventBody[] = [];
+    const out: EventBody[] = this.closeOpen();
     const u = (d.usage ?? {}) as J;
     // context now = the last API call's prompt (fresh + cached input); the window comes from modelUsage
     const iters = Array.isArray(u.iterations) ? (u.iterations as J[]) : [];

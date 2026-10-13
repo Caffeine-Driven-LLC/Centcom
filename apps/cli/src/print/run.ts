@@ -12,6 +12,7 @@ export interface PrintOptions {
   /** Where ctrl+c comes from (tests pass an emitter). */ proc?: NodeJS.Process;
   format: 'text' | 'json' | 'stream-json'; save: boolean; resume?: string; model?: string; out?: NodeJS.WritableStream; err?: NodeJS.WritableStream;
   /** Extra allow rules for this run, in the permission rule syntax (`Bash(npm test)`, `Edit(src/**)`). */ allow?: string[];
+  /** More user messages after `prompt` (from `--input-format stream-json`): each runs as the next turn of the same conversation; the run stops at the first one that fails. */ followUps?: string[];
   /** Stop after this many seconds (exit 124). */ timeoutS?: number;
   /** Stop after this many agent steps (tool results); default 50. */ maxTurns?: number;
   /** Where the conversation logs live (tests). */ dataDir?: string;
@@ -57,12 +58,15 @@ export async function runPrint(o: PrintOptions): Promise<number> {
   const offSig = ctl.interrupts.onSignal(o.proc ?? process, { exit: (code) => { stopped = code || EXIT_CODES.interrupted; finish?.(); }, hint: () => undefined });
   const offTurn = ctl.store.subscribe(() => { if (ctl.turnInterrupted() && stopped === undefined && !failure) stopped = EXIT_CODES.interrupted; });
   const timer = o.timeoutS ? clock.setTimeout(() => { stopped = EXIT_CODES.timeout; void ctl.interrupt(true); finish?.(); }, o.timeoutS * 1000) : undefined;
-  if (!gone) await ctl.submit(o.prompt);
-  await new Promise<void>((resolve) => {
+  const settle = () => new Promise<void>((resolve) => {
     finish = resolve; if (gone) { resolve(); return; }
     const check = () => { if (!ctl.state.busy && ctl.state.approvals.length === 0) { unsub2(); resolve(); } };
     const unsub2 = ctl.store.subscribe(check); setTimeout(check, 50);
   });
+  for (const p of [o.prompt, ...(o.followUps ?? [])]) { // each message is one turn; a failure, a stop or a closed pipe ends the run
+    if (gone || failure || stopped !== undefined || declined.length) break;
+    await ctl.submit(p); await settle();
+  }
   if (timer !== undefined) clock.clearTimeout(timer);
   unsub(); offSig(); offTurn(); out.off?.('error', onOutErr);
   if (gone) { void ctl.interrupt(true); ctl.stop(); return EXIT_CODES.ok; } // the reader went away: not our failure

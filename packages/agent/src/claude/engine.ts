@@ -7,7 +7,7 @@ import { ApprovalBridge } from './bridge.js';
 import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process';
 import { signalLadder, type LadderClock } from '../interrupt/ladder.js';
 import { sharedProcessRegistry, type Killed, type ProcessRegistry } from '../interrupt/procs.js';
-import { AsyncQueue } from '../queue.js';
+import { EventSink, eventQueue } from '../backpressure.js';
 import { newId } from '../ids.js';
 import { ClaudeStreamParser } from './parse.js';
 import { ProviderError, type AgentEngine, type Capability, type EngineSession, type EngineStartOptions, type EventBody, type NormalisedEvent, type PermissionMode } from '../types.js';
@@ -30,8 +30,9 @@ export class ClaudeCodeEngine implements AgentEngine {
   async start(o: EngineStartOptions): Promise<EngineSession> { return new ClaudeSession(o, this.deps); }
 }
 
-export function buildArgv(prompt: string, o: { resume?: string; permissionMode?: PermissionMode; model?: string; effort?: string; allowedTools?: string[]; systemPromptAppend?: string; addDirs?: string[]; extra?: string[] }): string[] {
-  const a = ['-p', prompt, '--output-format', 'stream-json', '--verbose', '--include-partial-messages'];
+/** `viaStdin`: the prompt is not on the command line (it would show in `ps`, and the system limits its size); `claude -p` then reads it from standard input. */
+export function buildArgv(prompt: string, o: { viaStdin?: boolean; resume?: string; permissionMode?: PermissionMode; model?: string; effort?: string; allowedTools?: string[]; systemPromptAppend?: string; addDirs?: string[]; extra?: string[] }): string[] {
+  const a = [...(o.viaStdin ? ['-p'] : ['-p', prompt]), '--output-format', 'stream-json', '--verbose', '--include-partial-messages'];
   if (o.resume) a.push('--resume', o.resume);
   // 'default' is Centcom's "ask first"; say so explicitly, otherwise the user's own claude settings (e.g. defaultMode: auto) decide silently
   a.push('--permission-mode', !o.permissionMode || o.permissionMode === 'default' ? 'manual' : o.permissionMode);
@@ -49,7 +50,8 @@ export const MAX_LINE_BYTES = 1024 * 1024;
 
 class ClaudeSession implements EngineSession {
   readonly agentId: string;
-  readonly events = new AsyncQueue<NormalisedEvent>();
+  readonly events = eventQueue();
+  private sink = new EventSink(this.events);
   private seq = 0;
   private sessionId?: string;
   private child?: ChildProcess;
@@ -70,7 +72,8 @@ class ClaudeSession implements EngineSession {
   setPermissionMode(m: PermissionMode) { this.mode = m; }
 
   private emit(b: EventBody) {
-    this.events.push({ ...b, v: 1, seq: ++this.seq, ts: (this.deps.now?.() ?? new Date()).toISOString(), agent_id: this.agentId, ...(this.turn ? { turn_id: this.turn } : {}) } as NormalisedEvent);
+    this.sink.push(() => ({ ...b, v: 1, seq: ++this.seq, ts: (this.deps.now?.() ?? new Date()).toISOString(), agent_id: this.agentId, ...(this.turn ? { turn_id: this.turn } : {}) } as NormalisedEvent), () => { this.seq--; },
+      (text) => this.emit({ type: 'engine.warning', code: 'events_dropped', text }));
   }
 
   async send(prompt: string): Promise<{ turn_id: string }> {
@@ -81,21 +84,28 @@ class ClaudeSession implements EngineSession {
     const turn = newId('trn'); this.turn = turn; this.sawResult = false;
     this.emit({ type: 'turn.started', turn_id: turn });
     this.emit({ type: 'status', state: 'prompt-received' });
-    const argv = buildArgv(prompt, { resume: this.sessionId, permissionMode: this.mode, model: this.model, effort: this.effort, allowedTools: this.o.allowedTools, systemPromptAppend: this.o.systemPromptAppend, addDirs: this.o.addDirs, extra: this.bridge?.argv() });
+    const argv = buildArgv(prompt, { viaStdin: true, resume: this.sessionId, permissionMode: this.mode, model: this.model, effort: this.effort, allowedTools: this.o.allowedTools, systemPromptAppend: this.o.systemPromptAppend, addDirs: this.o.addDirs, extra: this.bridge?.argv() });
     const parser = new ClaudeStreamParser();
     const spawnFn = this.deps.spawn ?? nodeSpawn;
     let child: ChildProcess;
-    try { child = spawnFn(this.deps.bin ?? 'claude', argv, { cwd: this.o.cwd, env: this.o.envExact ? { ...this.o.env } : { ...process.env, ...this.o.env }, stdio: ['ignore', 'pipe', 'pipe'], detached: GROUPS }); }
+    try { child = spawnFn(this.deps.bin ?? 'claude', argv, { cwd: this.o.cwd, env: this.o.envExact ? { ...this.o.env } : { ...process.env, ...this.o.env }, stdio: ['pipe', 'pipe', 'pipe'], detached: GROUPS }); }
     catch (e) { this.fail(e); return { turn_id: turn }; }
+    child.stdin?.on('error', () => undefined); child.stdin?.end(prompt); // the prompt goes in over stdin, whole and unquoted
     this.child = child; const unreg = child.pid ? this.procs().register(this.agentId, child.pid, { group: GROUPS }) : () => undefined; // its own process group: tools and the approval helper go with it
-    this.exitWait = new Promise<void>((res) => { child.once('close', () => { unreg(); res(); }); child.once('error', () => { unreg(); res(); }); });
+    this.exitWait = new Promise<void>((res) => { child.once('close', () => { clearTimeout(firstTimer); unreg(); res(); }); child.once('error', () => { clearTimeout(firstTimer); unreg(); res(); }); });
     let buf = ''; let err = '';
+    /** Nothing at all from the CLI within `first_event_timeout_ms` (30 s): it is hung (a dead network, a prompt waiting for a terminal). Stop it and say so. */
+    let heard = false; const firstMs = this.o.limits?.first_event_timeout_ms ?? 30_000;
+    const firstTimer = setTimeout(() => { if (heard || this.sawResult) return; this.sawResult = true; this.interrupted = false; for (const b of parser.closeOpen()) this.emit(b); try { if (child.pid && GROUPS) process.kill(-child.pid, 'SIGKILL'); else child.kill('SIGKILL'); } catch { /* gone */ }
+      this.emit({ type: 'error', code: 'provider_protocol_error', tool_message: `Claude Code did not start answering within ${Math.round(firstMs / 1000)} seconds, so the turn was stopped. Try again, or run \`claude\` yourself to see what it is waiting for.`, fatal: true });
+      this.emit({ type: 'status', state: 'error' }); this.emit({ type: 'turn.done', outcome: 'error', stop_reason: 'first_event_timeout' }); }, firstMs); firstTimer.unref?.();
     child.stdout?.setEncoding('utf8');
     child.stdout?.on('data', (chunk: string) => {
+      if (!heard) { heard = true; clearTimeout(firstTimer); }
       buf += chunk;
       let i: number;
-      while ((i = buf.indexOf('\n')) >= 0) { const line = buf.slice(0, i); buf = buf.slice(i + 1); if (Buffer.byteLength(line) > MAX_LINE_BYTES) return this.tooLong(child); this.handle(parser, line); }
-      if (Buffer.byteLength(buf) > MAX_LINE_BYTES) { buf = ''; this.tooLong(child); }
+      while ((i = buf.indexOf('\n')) >= 0) { const line = buf.slice(0, i); buf = buf.slice(i + 1); if (Buffer.byteLength(line) > MAX_LINE_BYTES) return this.tooLong(child, parser); this.handle(parser, line); }
+      if (Buffer.byteLength(buf) > MAX_LINE_BYTES) { buf = ''; this.tooLong(child, parser); }
     });
     child.stderr?.setEncoding('utf8');
     child.stderr?.on('data', (c: string) => { err = (err + c).slice(-64 * 1024); });
@@ -104,6 +114,7 @@ class ClaudeSession implements EngineSession {
       if (buf.trim()) this.handle(parser, buf);
       this.child = undefined;
       if (this.sawResult) return;
+      for (const b of parser.closeOpen()) this.emit(b);
       if (signal === 'SIGINT' || signal === 'SIGTERM' || this.interrupted) { this.interrupted = false; this.emit({ type: 'status', state: 'idle' }); this.emit({ type: 'turn.done', outcome: 'canceled' }); return; }
       const msg = redact(err.trim()).split('\n').slice(-4).join('\n') || `claude exited with code ${code}`;
       this.emit({ type: 'error', code: /not logged in|login/i.test(msg) ? 'provider_not_signed_in' : 'provider_protocol_error', tool_message: msg, fatal: true });
@@ -114,8 +125,8 @@ class ClaudeSession implements EngineSession {
   }
 
   /** A line longer than the cap means the stream cannot be trusted any more: report it and stop the process. */
-  private tooLong(child: ChildProcess) {
-    if (this.sawResult) return; this.sawResult = true; child.kill('SIGKILL');
+  private tooLong(child: ChildProcess, parser: ClaudeStreamParser) {
+    if (this.sawResult) return; this.sawResult = true; child.kill('SIGKILL'); for (const b of parser.closeOpen()) this.emit(b);
     this.emit({ type: 'error', code: 'provider_protocol_error', tool_message: 'Claude Code sent a line that was too long to read, so the turn was stopped.', fatal: true });
     this.emit({ type: 'status', state: 'error' }); this.emit({ type: 'turn.done', outcome: 'error', stop_reason: 'line_too_long' });
   }

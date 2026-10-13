@@ -6,10 +6,11 @@ import { HostBridge } from '../../src/collab/host-bridge.js';
 import { WS, rig, until } from '../../../net/test/session/rig.js';
 
 let cleanup: (() => Promise<void> | void)[] = []; afterEach(async () => { for (const c of cleanup.splice(0).reverse()) await c(); });
-async function setup(o: { autoApprove?: boolean } = {}) {
+async function setup(o: { autoApprove?: boolean; /** the store tells its listeners this many ms late (a slow machine) */ lateStore?: number } = {}) {
   const r = await rig(); cleanup.push(() => r.stop());
   const host = await r.host.client.createSession({ name: 'shared', workspace: WS }); r.host.handle = host; cleanup.push(() => host.leave().catch(() => undefined));
   const ctl = new AppController({ engine: new FakeEngine({ script: {} }) as never, demo: false, cwd: '/tmp', version: 't', skills: [] }); await ctl.start(); cleanup.push(() => ctl.stop());
+  if (o.lateStore) { const sub = ctl.store.subscribe; ctl.store.subscribe = (l) => sub(() => { const t = setTimeout(l, o.lateStore); t.unref?.(); }); }
   const bridge = new HostBridge(ctl, host, { flushMs: 5, ...(o.autoApprove ? { autoApprove: true } : {}) }); bridge.start(); cleanup.push(() => bridge.stop());
   const guest = await r.guest.client.joinSession({ sessionId: host.id }); r.guest.handle = guest; cleanup.push(() => guest.leave().catch(() => undefined));
   await until(() => guest.state === 'live', 8000);
@@ -35,6 +36,10 @@ describe('sharing a conversation (host side)', () => {
     await bridge.approve(req.item); await until(() => ctl.state.items.some((i) => i.kind === 'user' && i.member !== undefined) && !ctl.state.busy);
     const u = ctl.state.items.find((i) => i.kind === 'user')!; expect(u).toMatchObject({ text: '/model opus please add tests', member: { name: expect.any(String) } }); expect(ctl.state.settings.model).not.toBe('opus'); // plain text, never a slash command
     await until(() => queue.get(asked.item)?.state === 'done' && seen.some((e) => e.kind === 'message.user')); expect(seen.find((e) => e.kind === 'message.user')?.secret?.queue_item).toBe(asked.item); expect(host.me.role).toBe('host'); expect(bridge.pending()).toHaveLength(0);
+  });
+  it('the request\'s own message carries its queue item even when the store tells the bridge late (a slow machine)', async () => {
+    const { bridge, seen, queue } = await setup({ lateStore: 400 }); const asked = await queue.submit({ body: 'please add tests' }); await until(() => bridge.pending().length === 1, 8000); await bridge.approve(asked.item);
+    await until(() => seen.some((e) => e.kind === 'message.user'), 8000); expect(seen.find((e) => e.kind === 'message.user')?.secret?.queue_item).toBe(asked.item); expect(seen.filter((e) => e.kind === 'message.user')).toHaveLength(1);
   });
   it('a request the host rejects does not run, and the guest is told', async () => {
     const { ctl, bridge, queue } = await setup(); const a = await queue.submit({ body: 'delete everything' }); await until(() => bridge.pending().length === 1);

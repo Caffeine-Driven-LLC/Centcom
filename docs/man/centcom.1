@@ -14,6 +14,9 @@ run once, print the answer and exit (no screen); piped input is added to the pro
 .B \-\-output\-format <text|json|stream\-json>
 what \-p prints (default text)
 .TP
+.B \-\-input\-format <text|stream\-json>
+with \-p: stream\-json reads one user message per line from standard input and runs them as turns of one conversation
+.TP
 .B \-\-engine <claude\-code|codex|demo>
 choose the agent engine (default: claude\-code if installed)
 .TP

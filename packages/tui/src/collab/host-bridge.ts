@@ -83,7 +83,7 @@ export class HostBridge {
         await this.untilIdle(); if (this.stopped) return;
         const from = this.requestOf(next); this.active = { item: next.id, from: { name: from.from, slot: from.slot } };
         await this.queue.claim(next.id, this.agent()).catch((e) => this.o.onError?.(e)); this.tagNext = next.id;
-        const turn = this.turnEnds(); const ok = await this.ctl.submitRemote(this.active.from, next.body ?? ''); this.tagNext = undefined;
+        const turn = this.turnEnds(); const ok = await this.ctl.submitRemote(this.active.from, next.body ?? ''); this.onState(); /* the store tells listeners up to 24 ms late: say the request's own message now, while it is still tagged */ this.tagNext = undefined;
         if (!ok) { turn.cancel(); await this.queue.done(next.id, 'error').catch(() => undefined); this.active = undefined; continue; }
         await turn.ended; await this.settle(); await this.queue.done(next.id, 'ok').catch((e) => this.o.onError?.(e)); this.active = undefined;
       }

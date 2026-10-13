@@ -41,6 +41,8 @@ export const MAX_MESSAGE = 65_536;
 export interface ControllerOptions {
   /** How long an approval waits before the engine declines it (shown as a countdown). */
   approvalTimeoutMs?: number;
+  /** `agent.turn_timeout_s`: a turn running longer than this is stopped like an interrupt, with a notice (0 or unset: no limit). */
+  turnTimeoutS?: number;
   /** Ask the launcher to step the screen aside and run `task` with the real terminal. Without it these keys say they are not available. */
   external?: (task: ExternalTask) => void;
   /** Ring the terminal bell (a sound or a flash in most terminals). */
@@ -277,8 +279,16 @@ export class AppController {
     if (ids?.[0] && ids[0] !== this.state.sessionId) await this.resumeSession(ids[0]);
   }
 
+  /** The per-turn limit (lane C030): when it runs out the turn is interrupted with reason `timeout` and the person is told. */
+  private turnTimer?: NodeJS.Timeout;
+  private armTurnTimer(turn: string) {
+    this.clearTurnTimer(); const s = this.o.turnTimeoutS; if (!s || s <= 0) return;
+    this.turnTimer = setTimeout(() => { this.turnTimer = undefined; if (this.currentTurn !== turn || !this.state.busy) return; const m = s >= 120 ? `${Math.round(s / 60)} minutes` : `${s} seconds`; this.toast('warn', `This turn ran longer than ${m} and was stopped (agent.turn_timeout_s).`, 10_000); void this.interrupts.interrupt(this.me, { reason: 'timeout' }); }, s * 1000); this.turnTimer.unref?.();
+  }
+  private clearTurnTimer() { if (this.turnTimer) { clearTimeout(this.turnTimer); this.turnTimer = undefined; } }
+
   stop() {
-    this.stopped = true; this.persist(); this.o.sessions?.close(); void this.o.ledger?.flush().catch(() => undefined);
+    this.stopped = true; this.clearTurnTimer(); this.persist(); this.o.sessions?.close(); void this.o.ledger?.flush().catch(() => undefined);
     this.driver.stop(); this.ghostTimers.forEach(clearTimeout); if (this.verbTimer) clearInterval(this.verbTimer);
     for (let i = 0; i < 100 && this.toasts.current(); i++) this.toasts.dismiss();
     for (const a of this.state.approvals) a.resolve({ decision: 'deny', scope: 'once', reason: 'exit' });
@@ -320,7 +330,7 @@ export class AppController {
         this.updateAgent(me, () => ({ model: ev.model, loginKind: ev.login_kind, engine: this.o.engine.label }));
         break;
       case 'turn.started':
-        this.currentTurn = ev.turn_id;
+        this.currentTurn = ev.turn_id; this.armTurnTimer(ev.turn_id);
         this.set({ busy: true, turnStartedAt: Date.now(), verb: this.verbs.next() }); this.updateAgent(me, () => ({ busy: true })); break;
       case 'status': if (ev.state === 'awaiting-approval' && this.night.active()) break; /* the night answers by rule: nobody is being waited for */ this.setAgentState(me, ev.state); break;
       case 'text.delta': {
@@ -355,6 +365,7 @@ export class AppController {
         this.night.noteError(ev.code, !!ev.fatal);
         break;
       case 'turn.done':
+        this.clearTurnTimer();
         queueMicrotask(() => { for (const f of [...this.turnEndListeners]) f(ev.outcome); }); // after this event's state change
         this.cancelQuestions(); // a question of a finished turn is stale
         { const q = this.queuedAnswer; if (q && ev.outcome !== 'canceled') { this.queuedAnswer = undefined; queueMicrotask(() => { void this.submit(q, { asMessage: true }); }); } else if (q) this.dropQueued('You stopped the turn first'); }

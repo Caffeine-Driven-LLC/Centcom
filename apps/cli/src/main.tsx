@@ -13,7 +13,7 @@ import { stateDir } from '@centcom/config';
 import type { FlatFlags } from '@centcom/config';
 import { createAppLogger } from '@centcom/net';
 import type { CentoColor } from '@centcom/mascot';
-import { buildPrompt, readStdin, runPrint } from './print/index.js';
+import { buildPrompt, parseStreamInput, readStdin, runPrint } from './print/index.js';
 import { chooseSession, pickSession } from './commands/resume.js';
 import { runProviderCli } from './commands/provider/cli.js';
 import { makeMemoryFiles, runMemoryCli } from './commands/memory/cli.js';
@@ -122,8 +122,10 @@ async function main() {
     const i = Math.max(process.argv.indexOf('-p'), process.argv.indexOf('--print'));
     const next = process.argv[i + 1]; const text = next && !next.startsWith('-') ? next : undefined;
     const usage = (m: string) => { process.stderr.write(m + '\n'); process.exit(2); };
+    const inFmt = arg('--input-format'); if (inFmt && inFmt !== 'text' && inFmt !== 'stream-json') usage('--input-format must be text or stream-json');
     let piped = ''; if (!process.stdin.isTTY) { try { piped = await readStdin(); } catch (e) { usage(String((e as Error).message)); } }
-    if (!text && !piped.trim()) usage('Give Centcom something to do: centcom -p "your task" (or pipe text in).');
+    let streamMsgs: string[] | undefined; if (inFmt === 'stream-json') { if (text) usage('--input-format stream-json takes the messages from standard input, not from the command line.'); try { streamMsgs = parseStreamInput(piped); } catch (e) { usage(String((e as Error).message)); } }
+    if (!streamMsgs && !text && !piped.trim()) usage('Give Centcom something to do: centcom -p "your task" (or pipe text in).');
     const cwd = arg('--cwd') ? pathResolve(arg('--cwd')!) : process.cwd(); if (arg('--cwd')) { try { process.chdir(cwd); } catch { usage(`--cwd: no such folder: ${arg('--cwd')}`); } }
     const pc = await ClientConfig.load(cwd, cliFlags());
     for (const w of pc.warnings) process.stderr.write('centcom: settings: ' + w + '\n');
@@ -140,7 +142,7 @@ async function main() {
     const dangerous = has('--dangerously-skip-permissions') || has('--yolo');
     let resume = arg('--resume');
     if (has('-c') || has('--continue')) { const c = chooseSession(new SessionStore(), { cwd, continue: true }); if ('exit' in c) { process.stderr.write(c.message + '\n'); process.exit(c.exit); } if ('id' in c) resume = c.id; }
-    const code = await runPrint({ engine, demo, cwd, branch: br, version: VERSION, mode: dangerous || arg('--mode') === 'bypassPermissions' ? 'bypassPermissions' : pm ? modes[pm]! : pc.cfg.client.permission_mode, prompt: buildPrompt(text, piped), format: fmt, save: !has('--no-save'), resume, model: arg('--model') ?? (pc.cfg.client.model || undefined), allow, timeoutS: num('--timeout'), maxTurns: num('--max-turns') });
+    const code = await runPrint({ engine, demo, cwd, branch: br, version: VERSION, mode: dangerous || arg('--mode') === 'bypassPermissions' ? 'bypassPermissions' : pm ? modes[pm]! : pc.cfg.client.permission_mode, prompt: streamMsgs ? streamMsgs[0]! : buildPrompt(text, piped), ...(streamMsgs && streamMsgs.length > 1 ? { followUps: streamMsgs.slice(1) } : {}), format: fmt, save: !has('--no-save'), resume, model: arg('--model') ?? (pc.cfg.client.model || undefined), allow, timeoutS: num('--timeout'), maxTurns: num('--max-turns') });
     await done(code);
   }
   if (!process.stdin.isTTY || !process.stdout.isTTY) { console.error('Centcom needs an interactive terminal. Try `centcom --help`.'); process.exit(2); }
@@ -173,7 +175,7 @@ async function main() {
     else if ('pick' in c) { resumeId = await pickSession(c.pick, { input: process.stdin, output: process.stdout }); if (!resumeId) process.exit(0); }
     else resumeId = c.id;
   }
-  const ctl = new AppController({ ...rt.options, views: appViews(process.cwd(), { doctor: () => realDoctorContext({ version: VERSION, contract: CONTRACT_VERSION, apiBase: cc.cfg.api.base_url, stateDir: stateDir(defaultDeps()) }) }),
+  const ctl = new AppController({ ...rt.options, turnTimeoutS: cc.cfg.agent.turn_timeout_s || undefined, views: appViews(process.cwd(), { doctor: () => realDoctorContext({ version: VERSION, contract: CONTRACT_VERSION, apiBase: cc.cfg.api.base_url, stateDir: stateDir(defaultDeps()) }) }),
     engine, demo, engines: demo ? undefined : { ...(hasClaude ? { 'claude-code': () => new ClaudeCodeEngine() } : {}), ...(hasCodex ? { codex: () => new CodexEngine() } : {}) }, onEngine: (id) => cc.set('client.engine', id), cwd: process.cwd(), branch, version: VERSION, permissionMode: mode, dangerous: dangerous || mode === 'bypassPermissions', ghosts: has('--demo-team'),
     logger, settings, external: (task) => { pendingExternal = task; instance?.unmount(); }, bell: () => { try { process.stdout.write('\x07'); } catch { /* no terminal */ } }, ...cc.options({ ...initialSettings(), ...settings }, { saveHistory: !has('--no-save') }),
     sessions: sessionStore, night: demo ? undefined : { dir: pathJoin(homedir(), '.centcom', 'night') },

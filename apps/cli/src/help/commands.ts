@@ -7,6 +7,7 @@ export const COMMANDS: CommandMeta[] = [
     flags: [
       { flag: '-p, --print', arg: '[task]', description: 'run once, print the answer and exit (no screen); piped input is added to the prompt' },
       { flag: '--output-format', arg: '<text|json|stream-json>', description: 'what -p prints (default text)' },
+      { flag: '--input-format', arg: '<text|stream-json>', description: 'with -p: stream-json reads one user message per line from standard input and runs them as turns of one conversation' },
       { flag: '--engine', arg: '<claude-code|codex|demo>', description: 'choose the agent engine (default: claude-code if installed)' },
       { flag: '--demo', description: 'scripted demo agent (no login, no model)' },
       { flag: '--demo-team', description: 'with --demo: also show two pretend teammates' },

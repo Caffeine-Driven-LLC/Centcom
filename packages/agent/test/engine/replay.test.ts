@@ -12,7 +12,7 @@ const play = async (name: string, speed = 0) => { const clock = new VirtualClock
 const ctx: WireContext = { agentId: 'agt_01JTEST0000000000000000001', messageId: (m) => m, approverFor: () => 'host', approvalTtlMs: 600_000, now: () => new Date('2026-10-06T00:00:00Z') };
 
 describe('golden transcripts', () => {
-  it('ships exactly the 6 transcripts', () => { expect(NAMES).toEqual(['approval', 'fatal-error', 'interrupt', 'parallel-subagent', 'text-only', 'tool-read']); });
+  it('ships the 6 transcripts of the card (answer, tool with approval, denial, subagent, rate limit, interrupt) and two more', () => { expect(NAMES).toEqual(['approval', 'denial', 'fatal-error', 'interrupt', 'parallel-subagent', 'rate-limit', 'text-only', 'tool-read']); });
   it.each(NAMES)('%s: events match the golden file, pass the stream validator and are deterministic', async (name) => {
     const a = await play(name); const b = await play(name); expect(b).toEqual(a); expectGolden(a, join(DIR, `${name}.golden.json`));
     const v = new EventStreamValidator('fake'); for (const e of a) v.check(e); v.end(); expect(a[0]!.type).toBe('session.started'); expect(a.map((e) => e.seq)).toEqual(a.map((_e, i) => i + 1));
@@ -21,7 +21,19 @@ describe('golden transcripts', () => {
     let n = 0; for (const e of await play(name)) for (const o of toSessionWire(e, { ...ctx, messageId: (m) => m })) { n++; if (o.p) expect(parseEventPayload(o.k, o.p).ok, `${o.k} ${JSON.stringify(o.p)}`).toBe(true); if (o.ct) expect(parseSecretPayload(o.k, o.ct).ok, `${o.k} ${JSON.stringify(o.ct)}`).toBe(true); const mode = (EVENT_MODES as Record<string, string>)[o.k]; if (mode === 'encrypted') expect(o.p).toBeUndefined(); }
     expect(n).toBeGreaterThan(0);
   });
-  it('all 6 transcripts replay in under a second with speed 0', async () => { const t0 = Date.now(); for (const n of NAMES) await play(n); expect(Date.now() - t0).toBeLessThan(1000); });
+  it('all transcripts replay in under a second with speed 0', async () => { const t0 = Date.now(); for (const n of NAMES) await play(n); expect(Date.now() - t0).toBeLessThan(1000); });
+});
+
+describe('denial and rate-limit transcripts', () => {
+  it('denial: the gate says no, the tool ends as denied, the turn still finishes ok and the model carries on', async () => {
+    const evs = await play('denial'); const r = evs.find((e) => e.type === 'approval.resolved') as any; expect(r).toMatchObject({ decision: 'deny' });
+    expect(evs.find((e) => e.type === 'tool.result')).toMatchObject({ tool_id: 'toolu_1', status: 'denied' }); expect(evs.at(-1)).toMatchObject({ type: 'turn.done', outcome: 'ok' });
+    expect(evs.findIndex((e) => e.type === 'approval.resolved')).toBeLessThan(evs.findIndex((e) => e.type === 'tool.result'));
+  });
+  it('rate limit: a limits report, then one fatal provider_rate_limited error, then turn.done with outcome error and nothing else', async () => {
+    const evs = await play('rate-limit'); const i = evs.findIndex((e) => e.type === 'error'); expect(evs[i]).toMatchObject({ code: 'provider_rate_limited', fatal: true });
+    expect(evs.slice(i + 1).map((e) => e.type)).toEqual(['status', 'turn.done']); expect(evs.at(-1)).toMatchObject({ outcome: 'error', stop_reason: 'rate_limited' }); expect(evs.some((e) => e.type === 'limits.report')).toBe(true);
+  });
 });
 
 describe('approval and interrupt behaviour', () => {

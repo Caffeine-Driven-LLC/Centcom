@@ -23,8 +23,11 @@ One way to stop an agent, whatever the engine.
 
 The fixture processes for the tests are in `packages/agent/test/fixtures/procs/`.
 
+## Per-turn limit
+
+`agent.turn_timeout_s` (0 = off) stops a turn that runs too long: the app calls `interrupt(reason: 'timeout')` and tells the person which setting to change. In print mode `--timeout` does the same with exit code 124.
+
 ## Not yet
 
-- `agent.turnTimeoutS` (a per-turn timeout that calls `interrupt(reason: 'timeout')`).
 - Waiting for an interrupt receipt advertised in `system/init`.
 - Removing a stale `index.lock` after a git operation is killed.
