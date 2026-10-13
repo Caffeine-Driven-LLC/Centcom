@@ -68,7 +68,7 @@ export type WebState = Omit<AppState, 'items' | 'approvals' | 'input' | 'cursor'
 export interface RunningSession { dir: string; engine: 'claude-code' | 'codex'; demo: boolean; busy: boolean; /** Approvals waiting for a person. */ waiting: number; /** What the first waiting approval asks for. */ ask?: string }
 
 /** One entry of the context board (docs/context-sharing.md), as the screen needs it. */
-export interface BoardNote { id: string; type: string; text: string; author: string; person: boolean; pinned: boolean; ts: number; files: string[] }
+export interface BoardNote { id: string; type: string; text: string; author: string; person: boolean; /** the role of a teammate who wrote it (host, editor); set only for notes that came from the shared session */ role?: string; /** it came from another person in the shared session */ shared?: boolean; pinned: boolean; ts: number; files: string[] }
 
 /** The signed-in person, as the screens show them. */
 export interface TeamViewMsg { workspace: { id: string; name: string | null }; plan: string; status: string; seats: { used: number; max: number | null }; relayAccess: boolean; myRole: string; canManage: boolean; members: { id: string; name: string; email?: string; role: string; you: boolean }[]; invites: { id: string; email: string | null; role: string; expiresAt: string }[] }

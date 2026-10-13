@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { newId } from '../ids.js';
 import { cleanPath, cleanText, MAX_COMMANDS, MAX_FILES } from './text.js';
 import { buildDigest } from './digest.js';
-import { ENTRY_TYPES, type Author, type Digest, type DigestOptions, type Entry, type EntryType, type PostInput } from './types.js';
+import { ENTRY_TYPES, type Author, type BoardChange, type Digest, type DigestOptions, type Entry, type EntryType, type PostInput } from './types.js';
 
 const MIN = 60_000;
 /** How long an entry lasts unless it says otherwise (0 = until retracted). A claim is about what an agent is doing now; a decision stays. */
@@ -11,7 +11,7 @@ export const DEFAULT_TTL: Record<EntryType, number> = { claim: 15 * MIN, finding
 type Line = ({ op: 'post' } & Entry) | { op: 'retract'; id: string; ts: number } | { op: 'pin'; id: string; pinned: boolean; ts: number };
 export interface BoardOptions { /** The board file (`<project>/.centcom/context/board.jsonl`). */ file: string; now?: () => number; /** Entries one agent may post per hour; people are not limited. */ perHour?: number; maxBytes?: number; budgetTokens?: number; onWarn?: (text: string) => void }
 export interface Board {
-  post(input: PostInput): Entry | undefined; retract(id: string): boolean; pin(id: string, pinned: boolean): boolean;
+  post(input: PostInput): Entry | undefined; retract(id: string, o?: { remote?: boolean }): boolean; pin(id: string, pinned: boolean, o?: { remote?: boolean }): boolean;
   /** What is on the board now: not retracted, not replaced, not expired; oldest first. */
   list(): Entry[]; get(id: string): Entry | undefined;
   /** Retract every live claim of an agent (it finished, or stopped). */ endClaims(agentId: string): number;
@@ -19,6 +19,7 @@ export interface Board {
   /** The notes this agent has not had yet and should, packed into a budget; marks them delivered. */ digest(agent: { id: string; name: string }, o?: DigestOptions): Digest | undefined;
   /** Record that these entries reached an agent by another way (the first prompt of a fleet agent). */ markDelivered(agentId: string, ids: string[]): void;
   /** Forget what an agent was told (a new session, or after compaction): everything relevant is offered again. */ resetAgent(agentId: string): void;
+  /** Tells the listener about every change made through this board object (not edits another process makes to the file). */ subscribe(fn: (c: BoardChange) => void): () => void;
   readonly file: string;
 }
 
@@ -26,6 +27,7 @@ export function createBoard(o: BoardOptions): Board {
   const now = o.now ?? Date.now; const perHour = o.perHour ?? 20; const maxBytes = o.maxBytes ?? 256 * 1024; let warned = false;
   const warn = (t: string) => { if (!warned) { warned = true; o.onWarn?.(t); } };
   let cache: { size: number; mtime: number; lines: Line[] } | undefined; let memory: Line[] = []; let writable = true;
+  const fns = new Set<(c: BoardChange) => void>(); const tell = (c: BoardChange): void => { for (const f of [...fns]) { try { f(c); } catch { /* a listener must not break the board */ } } };
   const touchedFiles = new Map<string, string[]>(); const delivered = new Map<string, Set<string>>(); const posts = new Map<string, number[]>();
 
   const read = (): Line[] => {
@@ -57,21 +59,22 @@ export function createBoard(o: BoardOptions): Board {
 
   const board: Board = {
     file: o.file,
+    subscribe(fn) { fns.add(fn); return () => { fns.delete(fn); }; },
     post(input) {
-      if (!ENTRY_TYPES.includes(input.type)) return undefined; const author: Author = { kind: input.author.kind, id: cleanText(input.author.id, 80), name: cleanText(input.author.name, 60) || 'agent', ...(input.author.engine ? { engine: cleanText(input.author.engine, 30) } : {}) };
+      if (!ENTRY_TYPES.includes(input.type)) return undefined; const author: Author = { kind: input.author.kind, id: cleanText(input.author.id, 80), name: cleanText(input.author.name, 60) || 'agent', ...(input.author.engine ? { engine: cleanText(input.author.engine, 30) } : {}), ...(input.author.role ? { role: cleanText(input.author.role, 20) } : {}) };
       const text = cleanText(input.text); if (!text || !author.id) return undefined;
       const files = [...new Set((input.files ?? []).map(cleanPath).filter((x): x is string => !!x))].slice(0, MAX_FILES); const commands = (input.commands ?? []).map((c) => cleanText(c, 120)).filter(Boolean).slice(0, MAX_COMMANDS);
       if (input.type === 'claim' && !files.length) return undefined;
-      const t = now(); const live = list();
+      const t = input.remote?.ts ?? now(); const live = list(); if (input.remote) { const known = live.find((e) => e.id === input.remote!.id); if (known) return known; }
       const same = live.find((e) => sameAuthor(e.author, author) && e.type === input.type && (input.type === 'claim' ? files.every((f) => e.refs.files.includes(f)) && e.refs.files.length === files.length : e.text.toLowerCase() === text.toLowerCase()));
       if (same) return same; // saying it again adds nothing
       if (author.kind === 'agent') { const recent = (posts.get(author.id) ?? []).filter((x) => t - x < 60 * MIN); if (recent.length >= perHour) return undefined; recent.push(t); posts.set(author.id, recent); }
       const ttl = input.ttlMs ?? DEFAULT_TTL[input.type]; const pinned = !!input.pinned;
-      const e: Entry = { id: newId('ctx', t), ts: t, author, type: input.type, text, refs: { files, commands }, scope: input.scope ?? 'fleet', pinned, ...(ttl > 0 && !pinned ? { expires: t + ttl } : {}), ...(input.supersedes ? { supersedes: input.supersedes } : {}) };
-      write({ op: 'post', ...e }); return e;
+      const e: Entry = { id: input.remote?.id ?? newId('ctx', t), ts: t, author, type: input.type, text, refs: { files, commands }, scope: input.scope ?? 'fleet', pinned, ...(ttl > 0 && !pinned ? { expires: t + ttl } : {}), ...(input.supersedes ? { supersedes: input.supersedes } : {}), ...(input.remote ? { shared: true } : {}) };
+      write({ op: 'post', ...e }); tell({ op: 'post', entry: e, remote: !!input.remote }); return e;
     },
-    retract(id) { if (!list().some((e) => e.id === id)) return false; write({ op: 'retract', id, ts: now() }); return true; },
-    pin(id, pinned) { if (!list().some((e) => e.id === id)) return false; write({ op: 'pin', id, pinned, ts: now() }); return true; },
+    retract(id, r) { if (!list().some((e) => e.id === id)) return false; write({ op: 'retract', id, ts: now() }); tell({ op: 'retract', id, remote: !!r?.remote }); return true; },
+    pin(id, pinned, r) { if (!list().some((e) => e.id === id)) return false; write({ op: 'pin', id, pinned, ts: now() }); tell({ op: 'pin', id, pinned, remote: !!r?.remote }); return true; },
     list, get: (id) => list().find((e) => e.id === id),
     endClaims(agentId) { let n = 0; for (const e of list()) if (e.type === 'claim' && e.author.kind === 'agent' && e.author.id === agentId) { write({ op: 'retract', id: e.id, ts: now() }); n++; } return n; },
     touch(agentId, files) { const cur = touchedFiles.get(agentId) ?? []; for (const f of files.map(cleanPath)) if (f) { const i = cur.indexOf(f); if (i >= 0) cur.splice(i, 1); cur.push(f); } touchedFiles.set(agentId, cur.slice(-30)); },

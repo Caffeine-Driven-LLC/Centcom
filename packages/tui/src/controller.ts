@@ -152,6 +152,8 @@ export class AppController {
 
   /** The file-lock hub of this runtime: a shared session attaches to it to publish and receive locks. */
   get lockHub() { return this.o.lockHub; }
+  /** The shared context board, when it is on. */
+  get board() { return this.o.board; }
   get state() { return this.store.get(); }
   /** The display name of an agent ("you" for the main one). */
   agentName(id: string) { return this.state.agents.find((a) => a.id === id)?.name ?? this.remoteName?.(id) ?? 'an agent'; }
@@ -937,7 +939,7 @@ export class AppController {
       case 'compact': await this.compactCommand(); break;
       case 'handoff': await this.handoffCommand(); break;
       case 'note': await this.noteCommand(arg); break;
-      case 'context': await this.contextCommand(); break;
+      case 'context': case 'board': await this.contextCommand(); break;
       case 'fleet': await this.fleetCommand(arg); break;
       case 'usage': this.usageCommand(); break;
       case 'mcp': case 'hooks': case 'memory': case 'doctor': case 'init': {
@@ -1218,9 +1220,9 @@ export class AppController {
   private async contextCommand() {
     const board = this.o.board; if (!board) { this.toast('info', 'The context board is turned off (setting context.board).'); return; }
     const list = board.list(); if (!list.length) { this.toast('info', 'The board is empty. Agents add to it as they work; /note adds your own.'); return; }
-    const ids = await this.pick({ title: `Context board (${list.length})`, note: 'What agents and people have noted. The others get it with their next message.', multi: false, confirm: 'open', options: [...list].reverse().map((e) => ({ id: e.id, label: `${e.pinned ? '★ ' : ''}[${e.type}] ${truncate(e.text, 62)}`, hint: `${e.author.name} · ${ago(e.ts)}${e.refs.files.length ? ' · ' + e.refs.files.slice(0, 2).join(', ') : ''}` })) });
+    const ids = await this.pick({ title: `Context board (${list.length})`, note: 'What agents and people have noted. The others get it with their next message.', multi: false, confirm: 'open', options: [...list].reverse().map((e) => ({ id: e.id, label: `${e.pinned ? '★ ' : ''}[${e.type}] ${truncate(e.text, 62)}`, hint: `${e.author.name}${e.author.role ? ` (${e.author.role})` : ''}${e.shared ? ' · shared' : ''} · ${ago(e.ts)}${e.refs.files.length ? ' · ' + e.refs.files.slice(0, 2).join(', ') : ''}` })) });
     const id = ids?.[0]; const e = id ? board.get(id) : undefined; if (!e) return;
-    const act = await this.pick({ title: truncate(e.text, 70), note: `${e.type} · ${e.author.name} · ${ago(e.ts)}`, multi: false, confirm: 'ok', options: [{ id: 'pin', label: e.pinned ? 'Unpin it' : 'Pin it', hint: e.pinned ? 'it can expire again' : 'it stays until you take it off' }, { id: 'retract', label: 'Take it off the board', hint: 'agents that have not had it yet will not get it' }, { id: 'close', label: 'Close' }] });
+    const act = await this.pick({ title: truncate(e.text, 70), note: `${e.type} · ${e.author.name}${e.author.role ? ` (${e.author.role})` : ''} · ${ago(e.ts)}`, multi: false, confirm: 'ok', options: [{ id: 'pin', label: e.pinned ? 'Unpin it' : 'Pin it', hint: e.pinned ? 'it can expire again' : 'it stays until you take it off' }, { id: 'retract', label: 'Take it off the board', hint: 'agents that have not had it yet will not get it' }, { id: 'close', label: 'Close' }] });
     if (act?.[0] === 'pin') { board.pin(e.id, !e.pinned); this.toast('ok', e.pinned ? 'Unpinned.' : 'Pinned.'); } else if (act?.[0] === 'retract') { board.retract(e.id); this.toast('ok', 'Taken off the board.'); }
   }
   async handoffCommand() {
