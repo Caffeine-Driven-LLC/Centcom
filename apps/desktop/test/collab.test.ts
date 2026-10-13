@@ -48,3 +48,31 @@ describe('signing in from the desktop app', () => {
     for (const t of ['account', 'login', 'cancelLogin', 'logout']) expect(sanitise({ t, extra: 'x' })).toEqual({ t });
   });
 });
+
+describe('the Team panel messages', () => {
+  const teamAccount = (answers: Record<string, unknown>) => {
+    const calls: string[] = [];
+    const http = { call: async (op: string) => { calls.push(op); const a = answers[op]; if (a instanceof Error) throw a; if (a === undefined) throw Object.assign(new Error('no'), { code: 'not_found' }); return { data: a }; } };
+    const account = { baseUrl: 'http://localhost:3000', http, status: async () => ({ signedIn: true, persisted: true, api: 'http://localhost:3000', me: { ...ME, workspace: { id: 'wsp_1', name: 'Acme' } } }) } as unknown as Account;
+    return { account, calls };
+  };
+  const answers = { getWorkspace: { name: 'Acme' }, listMembers: { data: [{ id: 'mem_1', user: 'usr_1', display_name: 'Alice', role: 'owner' }] }, listInvites: { data: [] }, getEntitlements: { plan: 'free', limits: { relay_access: false, max_seats: 1 } }, getSubscription: { seats: 1 } };
+  const run = (a: Account) => { const all: ServerMsg[] = []; const svc = new CollabService({ version: '0', broadcast: () => undefined, openExternal: () => true, makeAccount: async () => a }); return { all, svc, send: (m: ServerMsg) => all.push(m) }; };
+  it('loads the panel, reloads it after an invite and says what it did', async () => {
+    const f = teamAccount({ ...answers, createInvite: { token: 'T' } }); const r = run(f.account);
+    await r.svc.handle({ t: 'team' }, r.send); expect(r.all[0]).toMatchObject({ t: 'team', team: { plan: 'free', relayAccess: false, canManage: true } });
+    await r.svc.handle({ t: 'teamInvite', email: 'b@x.test', role: 'member' }, r.send); expect(r.all[1]).toMatchObject({ t: 'team', done: 'Invited b@x.test as member.', link: 'https://centcom.dev/i/T' });
+  });
+  it('turns a failure into a sentence and still shows the panel', async () => {
+    const f = teamAccount({ ...answers, createInvite: Object.assign(new Error('x'), { code: 'seat_limit_reached' }) }); const r = run(f.account);
+    await r.svc.handle({ t: 'teamInvite', email: 'b@x.test', role: 'member' }, r.send); expect(r.all[0]).toMatchObject({ t: 'team', error: expect.stringMatching(/no seat left/), team: { workspace: { name: 'Acme' } } });
+  });
+  it('gives the upgrade address, and asks for sign-in first when signed out', async () => {
+    const f = teamAccount({ ...answers, createCheckout: { url: 'https://pay.example/c' } }); const r = run(f.account); await r.svc.handle({ t: 'upgrade' }, r.send); expect(r.all[0]).toEqual({ t: 'upgrade', url: 'https://pay.example/c' });
+    const g = fakeAccount(); const s = rig(g); await s.svc.handle({ t: 'team' }, s.send); expect(s.all[0]).toMatchObject({ t: 'team', error: expect.stringMatching(/Sign in/) });
+  });
+  it('sanitises the messages: a bad role or address never gets through', () => {
+    expect(sanitise({ t: 'teamInvite', email: 'a@x.test', role: 'owner' })).toBeUndefined(); expect(sanitise({ t: 'teamInvite', email: 'a@x.test', role: 'guest' })).toEqual({ t: 'teamInvite', email: 'a@x.test', role: 'guest' });
+    expect(sanitise({ t: 'teamRole', member: 'mem_2', role: 'admin' })).toEqual({ t: 'teamRole', member: 'mem_2', role: 'admin' }); expect(sanitise({ t: 'teamRemove', member: 5 })).toBeUndefined(); expect(sanitise({ t: 'team' })).toEqual({ t: 'team' });
+  });
+});

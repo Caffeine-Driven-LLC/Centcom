@@ -1,0 +1,73 @@
+{
+  "id": "B107",
+  "title": "History, snapshots, usage and preferences on the API, over the dev object store",
+  "plan": "backend",
+  "phase": "P4 Fleet",
+  "size": "M",
+  "role": "sessions",
+  "depends_on": [
+    "B055",
+    "B056",
+    "B063",
+    "B075",
+    "B076",
+    "B103",
+    "B106"
+  ],
+  "goal": "What a session leaves behind and what a workspace uses are served by the running API: the session history and snapshots over an S3-compatible store (the relay's durable log writes to it too), usage reports and the usage summary, and notification preferences; the local stack has the store, so a client that was away longer than the relay's memory gets the rest.",
+  "scope_in": [
+    "`apps/api/src/data.ts` builds the history store, history service, snapshot service (its own audit emitter over `SNAPSHOT_AUDIT_ACTIONS`), usage ingest, usage summary and notification preference services from the API context; their routes join `modules.ts` (GET and DELETE `/v1/sessions/{id}/history`, the snapshot begin, commit and latest routes, `POST /v1/usage/events`, `GET /v1/workspaces/{id}/usage/summary`, `GET` and `PUT /v1/notification-preferences`).",
+    "`OBJECT_STORE_*` in the API's configuration (all four keys or none; a half-set store is a configuration error); history and snapshots are skipped with one log line each when it is absent.",
+    "The entitlement check reads the monthly quota counters (`queue_items_month`, `hosted_minutes_month`) through the usage module instead of allowing every metered action.",
+    "`pnpm dev:api` and `pnpm dev:relay` point at the dev stack's MinIO (the `history` bucket) so the relay's durable log and replay work locally; `pnpm dev:full-check` exercises history, snapshots, usage and preferences against the live stack."
+  ],
+  "scope_out": [
+    "The worker that fills the counters (B109) and the purge of stored history (B055's hook, run by B109).",
+    "Billing, webhook, admin and release routes, which need credentials or a payment provider."
+  ],
+  "implements": [
+    "CT-API-SESSIONS",
+    "CT-API-USAGE",
+    "CT-API-NOTIFY"
+  ],
+  "consumes": [
+    "CT-ENTITLEMENTS",
+    "CT-RESUME",
+    "CT-AUTH"
+  ],
+  "build_against": "The B012 dev stack (Postgres, Redis, MinIO) for `pnpm dev:full-check`, and the in-memory stores of the module tests.",
+  "deliverables": [
+    "apps/api/src/data.ts",
+    "tools/dev/full-check.ts",
+    "apps/api/test/entrypoint/data.test.ts"
+  ],
+  "interfaces": [
+    "`OBJECT_STORE_ENDPOINT`, `OBJECT_STORE_REGION`, `OBJECT_STORE_BUCKET`, `OBJECT_STORE_ACCESS_KEY_ID`, `OBJECT_STORE_SECRET_ACCESS_KEY` on the API; `pnpm dev:full-check`.",
+    "HTTP: the history, snapshot, usage and preference routes of CT-API-SESSIONS, CT-API-USAGE and CT-API-NOTIFY."
+  ],
+  "acceptance": [
+    "With an object store configured, a session's frames written by the relay are returned by `GET /v1/sessions/{id}/history?after_seq=0`, and a snapshot uploaded through the client can be downloaded again (checked live by `pnpm dev:full-check`).",
+    "Without an object store the API starts, leaves out history and snapshots with one `api.module_skipped` line each, and still serves usage and preferences (test).",
+    "A device's usage report is stored and the usage summary reads; the entitlement check refuses a metered action once its monthly counter reaches the plan's limit (test with in-memory counters).",
+    "A half-set `OBJECT_STORE_*` configuration refuses to start and names the bad keys, never their values (test).",
+    "The relay writes every sequenced frame to the object store's history bucket locally, so a client that reconnects after a gap longer than the relay keeps gets the missing frames through the history route (checked live).",
+    "`DELETE /v1/sessions/{id}/history` by the host removes the history and snapshots of the session and writes a `history.purge` audit event (test)."
+  ],
+  "tests": [
+    "app.build.test.ts: the modules with and without an object store.",
+    "Config tests for the object store keys.",
+    "`pnpm dev:full-check` against the live stack.",
+    "data.test.ts: the services built with and without an object store."
+  ],
+  "guardrails": [
+    "MUST NOT put object-store credentials, tokens or history content in logs.",
+    "MUST keep history and snapshot routes users-only: API keys are refused.",
+    "MUST NOT widen the history and snapshot access rules: a guest reads history only when the session shares it (B055's `mayRead`)."
+  ],
+  "failure_modes": [
+    "Object store unreachable -> the history routes answer 503 with `retry_after_s`; the rest of the API is unaffected.",
+    "Counters unreadable -> the entitlement check allows the action and counts `entitlements.quota_check_failed`, as B080 specifies."
+  ],
+  "unblocks_gate": "G5",
+  "notes": "Stacked after B106. Also changes (does not own) apps/api/src/{config,context,modules}.ts, tools/dev/{api,relay}.ts and docs/api-service.md (B102, B103). The counters stay at zero locally until B109's worker runs."
+}

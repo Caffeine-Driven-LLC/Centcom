@@ -42,7 +42,7 @@ Checkout → webhook → entitlement flips → relay unlocked; quota warnings ar
 
 Three clients, branch mode, file locks, presence, notifications, webhooks.
 
-- **backend** lanes: B029, B032, B033, B034, B035, B036, B047, B048, B057, B058, B059, B060, B061, B062, B063, B064, B065, B066, B067, B068, B081, B082, B083, B104, B105
+- **backend** lanes: B029, B032, B033, B034, B035, B036, B047, B048, B057, B058, B059, B060, B061, B062, B063, B064, B065, B066, B067, B068, B081, B082, B083, B104, B105, B107, B108, B109, B110, B111
 - **client** lanes: C017, C018, C024, C059, C062, C066, C069, C070, C077, C078, C079, C080, C084, C085, C090, C091
 
 ## G6 · Launch

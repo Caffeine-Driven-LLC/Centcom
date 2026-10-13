@@ -1,0 +1,65 @@
+{
+  "id": "B108",
+  "title": "Session invites: audit events and their own e-mail template",
+  "plan": "backend",
+  "phase": "P4 Fleet",
+  "size": "S",
+  "role": "sessions",
+  "depends_on": [
+    "B036",
+    "B032",
+    "B105"
+  ],
+  "goal": "Creating, accepting and revoking a session invite leave audit events like workspace invites do, and the invite mail says it is for one session only.",
+  "scope_in": [
+    "`invite.create` (kind `session`, the role), `invite.accept` (user id and role) and `invite.revoke` events written in the background by the session invite service; the token is never in an event.",
+    "A `session_invite` e-mail template in @centcom/core (inviter, session name, role, link, expiry; every value escaped) used instead of the workspace invite template.",
+    "The event is built by one small pure function (`session-invite-audit.ts`) that never receives the token or the address.",
+    "A session invite revoked by someone other than its creator names the revoking user as the actor."
+  ],
+  "scope_out": [
+    "Audit events for the key bundle routes.",
+    "Changing the workspace invite mail."
+  ],
+  "implements": [
+    "CT-API-AUDIT",
+    "CT-API-SESSIONS"
+  ],
+  "consumes": [
+    "CT-API-WORKSPACES"
+  ],
+  "build_against": "The Postgres test database of B105's session invite tests and the in-memory e-mail service of B032's tests.",
+  "deliverables": [
+    "apps/api/src/modules/invites/session-invite-audit.ts",
+    "apps/api/test/modules/invites/session-invites.audit.test.ts"
+  ],
+  "interfaces": [
+    "`SessionInviteServiceOptions.audit?: Pick<AuditEmitter, 'emitDetached'>`; `SessionInviteService.revoke(invite, actorUserId?)`.",
+    "E-mail template id `session_invite`."
+  ],
+  "acceptance": [
+    "Creating, accepting and revoking a session invite emits `invite.create`, `invite.accept` and `invite.revoke` with the actor, the workspace and the invite as target, and no token or address in the event (test).",
+    "The mail for a session invite uses the `session_invite` template with the session's name and the role; the HTML escapes the inviter and session names (test).",
+    "A revoke by a user other than the creator names that user as the actor (test).",
+    "An event never contains the invite token, its hash or the invited address (property test over random values).",
+    "An audit write that throws does not fail create, accept or revoke (test)."
+  ],
+  "tests": [
+    "session-invites.postgres.test.ts: the events and the mail parameters.",
+    "render.test.ts: the template and the registry's four templates.",
+    "session-invites.audit.test.ts: the event for each action; the actor of a revoke.",
+    "session-invites.audit.test.ts: a property test that no event holds the token, hash or address.",
+    "session-invites.audit.test.ts: a throwing emitter does not fail the request."
+  ],
+  "guardrails": [
+    "MUST NOT put the invite token or the invited address in an audit event or a log line.",
+    "MUST write the events in the background: a slow or failing audit store never delays or fails an invite.",
+    "MUST use the existing `invite.*` actions (CT-API-AUDIT's list) with kind `session`, not new action names."
+  ],
+  "failure_modes": [
+    "The audit write fails -> the request still succeeds (events are detached) and the failure is logged by the emitter.",
+    "The invited user is not the invite's address -> the accept is refused as before and no `invite.accept` event is written."
+  ],
+  "unblocks_gate": "G5",
+  "notes": "Stacked after B105. Also changes (does not own) apps/api/src/modules/invites/{session-invites,routes}.ts, apps/api/src/collab.ts, packages/core/src/email/templates.ts and their tests (B105, B103, B032)."
+}

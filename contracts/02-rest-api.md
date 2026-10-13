@@ -60,7 +60,7 @@ Column legend: **Scope** = OAuth scope required (CT-AUTH). **Role** = minimum ro
 | Method | Path | Scope | Role | Idem | Summary |
 |---|---|---|---|:-:|---|
 | GET | `/v1/sessions` | sessions:read | member+ | — | List sessions (filters: `workspace`, `state`, `mine`) |
-| POST | `/v1/sessions` | sessions:host | member+ | A | Create a command post (checks `relay` entitlement); returns region hint and `host` member |
+| POST | `/v1/sessions` | sessions:host | member+ | A | Create a session (checks `relay` entitlement). Body `mode?`: `command_post` (default: the host runs the agents, others send requests through the queue) or `branch` (every member runs their own agents and emits their own events; CT-WS-SESSION-EVENTS `*` notes). The mode is fixed at creation. Returns region hint and `host` member |
 | GET | `/v1/sessions/{id}` | sessions:read | participant | — | Session detail, state, policy, region |
 | PATCH | `/v1/sessions/{id}` | sessions:host | host | — | Rename, policy defaults |
 | POST | `/v1/sessions/{id}/end` | sessions:host | host | — | End session |

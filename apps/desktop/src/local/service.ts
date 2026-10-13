@@ -17,6 +17,7 @@ export function listDir(path: string, home: string): { path: string; parent: str
   catch (e) { return { path: p, parent, git: false, entries: [], error: (e as NodeJS.ErrnoException).code === 'EACCES' ? 'No permission to read this folder.' : 'Cannot read this folder.' }; }
 }
 /** A message from a screen is trusted for nothing: the type is checked, text is capped, enums are matched. */
+const ROLES = ['admin', 'member', 'billing', 'guest'] as const;
 export function sanitise(raw: unknown): ClientMsg | undefined {
   if (!raw || typeof raw !== 'object' || typeof (raw as { t?: unknown }).t !== 'string') return undefined; const m = raw as Record<string, unknown>; const t = m.t as string;
   const str = (v: unknown, max = 4096): string | undefined => (typeof v === 'string' && v.length <= max ? v : undefined);
@@ -35,13 +36,17 @@ export function sanitise(raw: unknown): ClientMsg | undefined {
     case 'noteRemove': { const id = str(m.id, 80); return id ? { t, id } : undefined; }
     case 'setEffort': { const e = str(m.effort, 40); return e === undefined || !/^[\w-]*$/.test(e) ? undefined : { t, effort: e }; }
     case 'auto': return { t, on: m.on === true };
-    case 'account': case 'login': case 'cancelLogin': case 'logout': case 'share': case 'unshare': case 'shareLink': return { t } as ClientMsg;
+    case 'account': case 'login': case 'cancelLogin': case 'logout': case 'team': case 'upgrade': case 'share': case 'unshare': case 'shareLink': return { t } as ClientMsg;
     case 'shareInvite': { const e = str(m.email, 254); return { t, ...(e && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) ? { email: e } : {}) } as ClientMsg; }
     case 'shareDecide': { const item = str(m.item, 80); return item && /^que_[0-9A-Za-z]+$/.test(item) ? { t, item, decision: m.decision === 'approve' ? 'approve' : 'reject' } : undefined; }
     case 'shareAuto': return { t, on: m.on === true } as ClientMsg;
     case 'join': { const input = str(m.input, 2048); return input?.trim() ? { t, input: input.trim() } : undefined; }
     case 'joinedAsk': { const text = str(m.text, 60_000); return text?.trim() ? { t, text } : undefined; }
     case 'joinedLeave': return { t } as ClientMsg;
+    case 'teamInvite': { const email = str(m.email, 254)?.trim(); const role = ROLES.find((r) => r === m.role); return email && role ? { t, email, role } : undefined; }
+    case 'teamRevoke': { const invite = str(m.invite, 80); return invite ? { t, invite } : undefined; }
+    case 'teamRole': { const member = str(m.member, 80); const role = ROLES.find((r) => r === m.role); return member && role ? { t, member, role } : undefined; }
+    case 'teamRemove': { const member = str(m.member, 80); return member ? { t, member } : undefined; }
     default: return undefined;
   }
 }

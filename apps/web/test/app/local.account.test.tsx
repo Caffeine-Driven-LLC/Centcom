@@ -33,3 +33,29 @@ describe('the account button', () => {
     await push(inn); fireEvent.click(screen.getByRole('button', { name: /Alice Example/ })); expect(screen.getByText('alice@example.test')).toBeTruthy(); fireEvent.click(screen.getByRole('button', { name: 'Sign out' })); expect(sent.at(-1)).toEqual({ t: 'logout' });
   });
 });
+
+describe('the Team panel', () => {
+  const launcher = { t: 'launcher', home: '/h', cwd: '/h', recent: [], claude: { installed: true, signedIn: 'yes' }, codex: { installed: false, signedIn: 'unknown' }, prefs: { theme: 'auto', side: true, engine: 'claude-code' } };
+  const team = { workspace: { id: 'wsp_1', name: 'Acme' }, plan: 'free', status: 'active', seats: { used: 2, max: 3 }, relayAccess: false, myRole: 'owner', canManage: true,
+    members: [{ id: 'mem_1', name: 'Alice Example', email: 'alice@example.test', role: 'owner', you: true }, { id: 'mem_2', name: 'Bob', role: 'member', you: false }], invites: [{ id: 'inv_1', email: 'c@x.test', role: 'guest', expiresAt: '2026-10-20T00:00:00Z' }] };
+  async function open() {
+    const m = await mount(); await m.push(launcher); await m.push(inn); fireEvent.click(screen.getByRole('button', { name: /Alice Example/ })); fireEvent.click(screen.getByRole('button', { name: /Team/ })); return m;
+  }
+  it('asks for the team, lists people, plan and seats, and offers Upgrade when the plan has no relay', async () => {
+    const { sent, push } = await open(); expect(sent.at(-1)).toEqual({ t: 'team' }); await push({ t: 'team', team });
+    expect(screen.getByText('Acme')).toBeTruthy(); expect(screen.getByText(/2 of 3 seats used/)).toBeTruthy(); expect(screen.getByText('Bob')).toBeTruthy(); expect(screen.getByText('c@x.test')).toBeTruthy(); expect(screen.getByText(/The person who hosts pays/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Upgrade/ })); expect(sent.at(-1)).toEqual({ t: 'upgrade' });
+  });
+  it('invites with a role, changes a role, removes a member and revokes an invite', async () => {
+    const { sent, push } = await open(); await push({ t: 'team', team });
+    fireEvent.change(screen.getByLabelText('E-mail address'), { target: { value: 'new@x.test' } }); fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'admin' } }); fireEvent.click(screen.getByRole('button', { name: 'Invite' })); expect(sent.at(-1)).toEqual({ t: 'teamInvite', email: 'new@x.test', role: 'admin' });
+    await push({ t: 'team', team, done: 'Invited new@x.test as admin.', link: 'https://centcom.dev/i/T' }); expect(screen.getByRole('status').textContent).toContain('https://centcom.dev/i/T');
+    fireEvent.change(screen.getByLabelText('Role of Bob'), { target: { value: 'billing' } }); expect(sent.at(-1)).toEqual({ t: 'teamRole', member: 'mem_2', role: 'billing' });
+    await push({ t: 'team', team }); fireEvent.click(screen.getByRole('button', { name: 'Remove Bob' })); expect(sent.at(-1)).toEqual({ t: 'teamRemove', member: 'mem_2' });
+    await push({ t: 'team', team }); fireEvent.click(screen.getByRole('button', { name: 'Revoke' })); expect(sent.at(-1)).toEqual({ t: 'teamRevoke', invite: 'inv_1' });
+  });
+  it('a plain member sees the people but no controls, and an error is shown', async () => {
+    const { push } = await open(); await push({ t: 'team', team: { ...team, canManage: false, relayAccess: true }, error: 'Only an owner or admin can do this.' });
+    expect(screen.queryByLabelText('E-mail address')).toBeNull(); expect(screen.queryByLabelText('Role of Bob')).toBeNull(); expect(screen.queryByRole('button', { name: /Upgrade/ })).toBeNull(); expect(screen.getByRole('alert').textContent).toMatch(/owner or admin/);
+  });
+});

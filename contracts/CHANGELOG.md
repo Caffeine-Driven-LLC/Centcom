@@ -1,6 +1,8 @@
 # Contract changelog
 
-## Unreleased (additive; the version bump is left to the merger, see plan/adr/0001 and 0002)
+## Unreleased (additive; the version bump is left to the merger, see plan/adr/0001, 0002 and 0003)
+- **Branch mode can be chosen:** `POST /v1/sessions` takes `mode` (`command_post` default, or `branch`: every member runs their own agents), `Session.mode` returns it, fixed at creation. Until now no session could be created in branch mode.
+- **Shared context board notes:** new event kinds `board.note` (hybrid; text and refs encrypted), `board.pin` and `board.remove` (clear). Host and editors add and pin; the host or the note's author removes; viewers send none. 20 notes per member per hour, 500 live per session, 280 characters. The note id is the `msg_` id of the `board.note` frame (no new id prefix).
 - **Share-link guests can check senders:** `GET /v1/share-links/{token}/members` (public, rate-limited, the link token is the credential) returns the live members' public device keys without user ids or e-mail; CT-CRYPTO §4a says how guests use it and what they trust.
 - **Session invites:** `POST/GET /v1/sessions/{id}/invites` invite one person to one session as `editor` or `viewer` with no workspace membership and no seat (only `max_session_members` limits it). `Invite` gains optional `session` and the roles `editor`/`viewer`; `InvitePreview` gains `session_name`; accepting a session invite answers `SessionInviteAcceptance {session, role, workspace}` instead of a membership; `DELETE /v1/invites/{id}` may also be called by the session host. The key-bundle routes are unchanged.
 

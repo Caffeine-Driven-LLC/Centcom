@@ -1,0 +1,68 @@
+{
+  "id": "B109",
+  "title": "The worker process: usage counters, expiry sweeps and workspace purge",
+  "plan": "backend",
+  "phase": "P6 Platform",
+  "size": "M",
+  "role": "platform",
+  "depends_on": [
+    "B027",
+    "B029",
+    "B053",
+    "B068",
+    "B075",
+    "B107"
+  ],
+  "goal": "A worker process runs the jobs that were built as a library, so usage reports become counters the entitlement check enforces, sessions and invites expire, and a deleted workspace is purged, locally and in production.",
+  "scope_in": [
+    "`apps/api/src/worker.ts` (started by `main.ts --worker`, and by `pnpm dev:worker` locally): the same configuration as the API, the API's services and @centcom/worker's queues and workers for `usage.aggregate`, `session-expiry`, `invite-expiry` and `workspace-purge`, stopping on SIGTERM and SIGINT.",
+    "`apps/api/src/jobs.ts` builds the job services from the API context: the usage aggregator, the session and share-link sweeps, the invite store and the workspace purge hooks (invites, entitlements, projects, workspace settings and, with an object store, session history).",
+    "The API creates the BullMQ `workspace-purge` queue so a deleted workspace is purged as soon as a worker runs; without a queue (tests) it only logs.",
+    "`pnpm dev:full-check` reports usage, waits for the counters to move and deletes a scratch workspace to see it purged."
+  ],
+  "scope_out": [
+    "The email queue, notification dispatch, webhook delivery, billing and retention jobs (they stay library code for now).",
+    "Production deployment of the worker (B091, B092)."
+  ],
+  "implements": [
+    "CT-API-USAGE",
+    "CT-API-WORKSPACES"
+  ],
+  "consumes": [
+    "CT-ENTITLEMENTS",
+    "CT-ERR"
+  ],
+  "build_against": "The B012 dev stack (Postgres, Redis) and the in-memory services of the job tests.",
+  "deliverables": [
+    "apps/api/src/worker.ts",
+    "apps/api/src/jobs.ts",
+    "apps/api/test/entrypoint/jobs.test.ts"
+  ],
+  "interfaces": [
+    "`pnpm dev:worker`; `main.ts --worker`; `runWorker(env)`; `createJobServices(ctx)`."
+  ],
+  "acceptance": [
+    "A usage report of a device becomes a counter within one aggregation run (30 s settle plus the 15 s schedule), and the usage summary shows it (checked live).",
+    "Deleting a workspace through the API leaves no row of it in Postgres once a worker has run its purge, and runs five hooks with an object store, four without (test and live check).",
+    "The worker exits 1 with the configuration error before opening a queue when the configuration is invalid, and 0 after SIGTERM, letting a job in hand finish (test).",
+    "The session expiry sweep pauses a session whose host has been away past the grace period and expires one past its end time, and removes the guests of expired share links (live check: the first run on the dev database reports them).",
+    "An invite past its expiry is expired by the invite sweep and its key bundle is dropped (test)."
+  ],
+  "tests": [
+    "jobs.test.ts: the hooks with and without an object store, the sweeps with and without session routes.",
+    "`pnpm dev:full-check` against the live stack.",
+    "jobs.test.ts: the sweeps with and without session routes.",
+    "`pnpm dev:full-check`: the counters move and a deleted workspace is purged."
+  ],
+  "guardrails": [
+    "MUST read `process.env` only in `main.ts` (the worker body takes the environment as an argument).",
+    "MUST NOT log tokens, ticket, e-mail addresses or event contents.",
+    "MUST give a purge hook failure its retries before anything is deleted: the rows go last."
+  ],
+  "failure_modes": [
+    "Redis unreachable at start -> exit 1 after three tries.",
+    "A purge hook fails -> the job is retried with backoff and the rows are not deleted until every hook has succeeded."
+  ],
+  "unblocks_gate": "G5",
+  "notes": "Stacked after B107 (counters) and B108. Also changes (does not own) apps/api/src/{main,context,collab}.ts, apps/worker/src/index.ts (exports the usage jobs), tools/dev/api.ts and docs/api-service.md. Adds `@centcom/worker`, `bullmq` and `ioredis` (exact pins, already in the lockfile) to apps/api."
+}
