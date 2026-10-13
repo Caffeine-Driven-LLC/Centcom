@@ -13,7 +13,7 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 
 ![Progress](docs/progress.svg)
 
-**86% built** (weighted by lane size across 105 lanes). Details and how this is computed: [`tools/plan/progress.py`](tools/plan/progress.py). Update [`plan/STATUS.json`](plan/STATUS.json) when you finish or advance a lane, then run `python3 tools/plan/progress.py`.
+**87% built** (weighted by lane size across 105 lanes). Details and how this is computed: [`tools/plan/progress.py`](tools/plan/progress.py). Update [`plan/STATUS.json`](plan/STATUS.json) when you finish or advance a lane, then run `python3 tools/plan/progress.py`.
 
 ## Next steps
 
@@ -35,7 +35,7 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 | [C049](plan/client/C049.md) | TUI accessibility: reduced motion, NO_COLOR, screen-reader mode | 90% | mode resolution, MotionProvider, sentences for all 64 states, linear renderer with y/n/a permission prompt and Status:/Error: announcements, no-colour/no-escape test helpers, conformance for task list and progress bar; gaps: linear mode not started from main.tsx, a11y.screenReader config key, conformance for the other components; screen-reader mode (plain lines, zero escape codes), NO_COLOR conformance over 14 screens, reduced motion, high-contrast theme |
 | [C103](plan/client/C103.md) | Codex engine: drive the user’s own codex binary (app-server JSON-RPC, exec fallback) | 90% | codex app-server engine tested against a protocol-faithful fake; no real turn yet. Real-Codex checklist: docs/codex-verification.md, recorder: tools/codex/record.ts; verified on a real Codex (codex-cli 0.161.0): a real turn, questions (needs the default_mode_request_user_input flag, passed per process), /effort, models, cancel. Not tried live: secret and multi-question requests |
 
-+62 more in [`plan/STATUS.json`](plan/STATUS.json).
++56 more in [`plan/STATUS.json`](plan/STATUS.json).
 
 ### Ready to pick up (all dependencies done)
 
