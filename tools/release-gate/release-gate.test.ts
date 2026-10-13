@@ -16,6 +16,12 @@ describe('release gate', () => {
     ['contract lock mismatch', (i) => { i.contractLock = { ok: false }; }], ['docs failed', (i) => { i.docs = { ok: false }; }], ['installers failed', (i) => { i.installers = { ok: false }; }], ['update failed', (i) => { i.update = { ok: false }; }],
   ];
   for (const [name, f] of flips) it(`fails on: ${name}`, () => { const i = good(); f(i); expect(evaluate(i).passed).toBe(false); });
+  it('the update line also needs every scenario of the report to pass, and a report with none is a failure', () => {
+    const base = good(); const ok = [{ id: 'a', ok: true }, { id: 'b', ok: true }];
+    base.update = { ok: true, scenarios: ok }; expect(evaluate(base).checks.find((c) => c.id === 'update')).toMatchObject({ ok: true, detail: 'update path verified (2 scenarios)' });
+    base.update = { ok: true, scenarios: [...ok, { id: 'tampered-artifact-refused', ok: false }] }; expect(evaluate(base).checks.find((c) => c.id === 'update')).toMatchObject({ ok: false, detail: 'update scenarios failed: tampered-artifact-refused' }); expect(evaluate(base).passed).toBe(false);
+    base.update = { ok: true, scenarios: [] }; expect(evaluate(base).checks.find((c) => c.id === 'update')).toMatchObject({ ok: false, detail: 'the update report lists no scenarios' });
+  });
   it('a missing report is a failure, never a pass', () => { for (const k of Object.keys(good()) as (keyof Inputs)[]) { const i = good(); delete i[k]; const r = evaluate(i); expect(r.passed).toBe(false); expect(r.checks.filter((c) => !c.ok)).toHaveLength(1); } });
   it('the runner reads the report files and exits 0 or 1', () => {
     const dir = mkdtempSync(join(tmpdir(), 'cc-rg-')); const w = (n: string, v: unknown) => writeFileSync(join(dir, n), JSON.stringify(v)); const g = good();

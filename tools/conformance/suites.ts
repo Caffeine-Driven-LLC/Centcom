@@ -1,10 +1,12 @@
 /** The per-contract suites (lane C100). Each reads the shared fixtures in contracts/fixtures and checks the client's own code against them.
  *  A suite returns one case per fixture or check; the runner turns that into pass / fail / skipped / waived per contract. */
-import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CaseResult, Suite, SuiteResult } from '../../packages/testkit/src/conformance/index.js';
 import { AGENT_WIRE_STATES, compareVersions, isClientTooOld, userAgent, ID_PREFIXES, STATE_NAMES, assertWritableFrame, isId, parseEventPayload, parseFrame, parseSecretPayload, payloadMode, validateAgainst, type EventKind } from '../../packages/protocol/src/index.js';
-import { KeyRing, decryptPayload, encryptPayload, fingerprint, initCrypto, pathHmac, pathMacKey, retryDecision, signFrame, sodium, verifyFrame, parseProblem, canonicalJson, b64, unb64, type FrameHeader } from '../../packages/net/src/index.js';
+import { KeyRing, decryptPayload, encryptPayload, fingerprint, initCrypto, pathHmac, pathMacKey, retryDecision, signFrame, sodium, verifyFrame, parseProblem, normaliseManifest, verifyArtifact, compareVersions as compareUpdateVersions, isPrerelease, canonicalJson, b64, unb64, type FrameHeader } from '../../packages/net/src/index.js';
 
 const done = (cases: CaseResult[], total = cases.length): SuiteResult => ({ fixtures_total: total, fixtures_passed: cases.filter((c) => c.ok).length, cases });
 const attempt = (name: string, f: () => boolean | string | void): CaseResult => { try { const r = f(); return r === false ? { name, ok: false } : typeof r === 'string' ? { name, ok: false, detail: r } : { name, ok: true }; } catch (e) { return { name, ok: false, detail: (e as Error).message.slice(0, 200) }; } };
@@ -76,7 +78,22 @@ export const SUITES: Suite[] = [
   } },
   { contract: 'CT-TELEMETRY', areas: ['telemetry'], run: ({ fixtures }) => done(schemaCases(fixtures.area('telemetry'))) },
   { contract: 'CT-NOTIF-PAYLOAD', areas: ['notification'], run: ({ fixtures }) => done(schemaCases(fixtures.area('notification'))) },
-  { contract: 'CT-API-RELEASES', areas: ['release'], run: ({ fixtures }) => done(schemaCases(fixtures.area('release'))) },
+  { contract: 'CT-API-RELEASES', areas: ['release'], run: async ({ fixtures }) => {
+    /* The consumer side (lane C095/C100): both spellings of the manifest read the same, a release is offered only when newer and on the channel, a pre-release never on stable,
+       a tampered file and a bad signature are refused, and an older release is a downgrade. Uses a throwaway key; nothing is downloaded from anywhere. */
+    const cases = schemaCases(fixtures.area('release')); await initCrypto();
+    const ok = fixtures.area('release').find((f) => fx(f).valid === true && fx(f).schema === 'release-manifest.schema.json');
+    cases.push(attempt('the JSON-schema spelling of a valid manifest reads into the client form', () => { if (!ok) return 'no valid manifest fixture'; const m = normaliseManifest(fx(ok).data); const a = fx(ok).data as { artifacts: { sha256: string; sig: string }[]; min_supported: string }; return m.min_supported === a.min_supported && m.artifacts[0]!.sha256 === a.artifacts[0]!.sha256 && m.artifacts[0]!.sig === a.artifacts[0]!.sig || 'fields differ'; }));
+    cases.push(attempt('the REST (OpenAPI) spelling reads the same: sha256:<hex>, signature, min_supported_version, macos/windows', () => { const m = normaliseManifest({ channel: 'stable', version: '1.0.0', released_at: 'x', min_supported_version: '0.9.0', artifacts: [{ platform: 'macos', arch: 'arm64', url: 'u', sha256: `sha256:${'a'.repeat(64)}`, size: 1, signature: 'AAAA' }] }); return m.min_supported === '0.9.0' && m.artifacts[0]!.platform === 'darwin' && m.artifacts[0]!.sha256 === 'a'.repeat(64) && m.artifacts[0]!.sig === 'AAAA'; }));
+    cases.push(attempt('versions: a higher one is newer, a pre-release is older than its release, a pre-release is not offered on stable', () => compareUpdateVersions('1.0.1', '1.0.0') > 0 && compareUpdateVersions('1.1.0-rc.1', '1.1.0') < 0 && isPrerelease('1.1.0-rc.1') && !isPrerelease('1.1.0')));
+    const kp = sodium().crypto_sign_keypair(); const body = Buffer.from('a program'); const digest = createHash('sha256').update(body).digest(); const art = (b: Buffer, sk = kp.privateKey) => ({ sha256: digest.toString('hex'), sig: b64(sodium().crypto_sign_detached(digest, sk)), file: b }); const keys = { keys: [{ id: 'k', publicKey: b64(kp.publicKey) }] };
+    const verify = async (a: ReturnType<typeof art>, k = keys): Promise<string> => { const dir = mkdtempSync(join(tmpdir(), 'cc-conf-')); const f = join(dir, 'f'); writeFileSync(f, a.file); try { await verifyArtifact(f, a, k); return 'ok'; } catch (e) { return (e as { code?: string }).code ?? 'error'; } finally { rmSync(dir, { recursive: true, force: true }); } };
+    const other = sodium().crypto_sign_keypair();
+    for (const [name, a, k, want] of [['a good file verifies', art(body), keys, 'ok'], ['one changed byte is a hash mismatch', art(Buffer.from('a prograM')), keys, 'hash_mismatch'], ['a signature from another key is refused', art(body, other.privateKey), keys, 'bad_signature'], ['no trusted key at all is refused (fail closed)', art(body), { keys: [] as { id: string; publicKey: string }[] }, 'bad_signature']] as const) {
+      let got = ''; try { got = await verify(a, k); } catch (e) { got = (e as Error).message; } cases.push({ name: `verify: ${name}`, ok: got === want, ...(got === want ? {} : { detail: `got ${got}` }) });
+    }
+    return done(cases);
+  } },
   { contract: 'CT-ENTITLEMENTS', areas: ['entitlements'], run: ({ fixtures }) => done(schemaCases(fixtures.area('entitlements'))) },
   { contract: 'CT-LAN', areas: ['lan'], run: ({ fixtures }) => done(schemaCases(fixtures.area('lan'))) },
   { contract: 'CT-STATE-MAP', areas: [], run: ({ contractsDir }) => {

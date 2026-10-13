@@ -29,6 +29,8 @@
     "docs:build": "vitepress build docs/site",
     "conformance": "tsx tools/conformance/run.ts",
     "release-gate": "tsx tools/release-gate/run.ts",
+    "release:update-check": "tsx tools/release-channels/run.ts --out release-gate-inputs/update-report.json",
+    "gate": "tsx tools/gates/run.ts",
     "security:check": "tsx tools/security/run.ts",
     "sbom": "tsx tools/security/sbom-cli.ts",
     "web:dev": "pnpm --filter @centcom/web exec vite",

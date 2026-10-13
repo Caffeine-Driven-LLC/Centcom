@@ -8,7 +8,7 @@ export interface Inputs {
   contractLock?: { ok: boolean };
   docs?: { ok: boolean };
   installers?: { ok: boolean };
-  update?: { ok: boolean };
+  /** `pnpm release:update-check` (lane C095); when it lists scenarios, every one must pass. */ update?: { ok: boolean; scenarios?: { id: string; ok: boolean }[] };
 }
 export interface Check { id: string; required: boolean; ok: boolean; detail: string }
 export const COVERAGE_FLOOR = 80;
@@ -24,7 +24,7 @@ export function evaluate(i: Inputs): { passed: boolean; checks: Check[] } {
     need('contract-lock', i.contractLock, (c) => ({ ok: c.ok, detail: c.ok ? 'lock matches' : 'the contract lock check failed' })),
     need('docs', i.docs, (c) => ({ ok: c.ok, detail: c.ok ? 'docs check passed' : 'the docs check failed' })),
     need('installers', i.installers, (c) => ({ ok: c.ok, detail: c.ok ? 'installers verified' : 'installer verification failed' })),
-    need('update', i.update, (c) => ({ ok: c.ok, detail: c.ok ? 'update path verified' : 'update verification failed' })),
+    need('update', i.update, (c) => { const bad = (c.scenarios ?? []).filter((s) => !s.ok); const empty = c.scenarios !== undefined && c.scenarios.length === 0; const ok = c.ok && bad.length === 0 && !empty; return { ok, detail: ok ? `update path verified${c.scenarios ? ` (${c.scenarios.length} scenarios)` : ''}` : empty ? 'the update report lists no scenarios' : bad.length ? `update scenarios failed: ${bad.map((s) => s.id).join(', ')}` : 'update verification failed' }; }),
   ];
   return { passed: checks.every((c) => !c.required || c.ok), checks };
 }

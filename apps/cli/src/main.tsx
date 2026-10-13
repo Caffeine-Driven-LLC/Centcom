@@ -30,12 +30,12 @@ import { COMMANDS } from './help/commands.js';
 import { checkArgs, normalizeArgs } from './flags.js';
 import { becomesForeground, editInEditor, stopUntilContinued, type ExternalTask } from './external.js';
 import { runUpdate } from './commands/update/index.js';
-import { bootUpdate } from './bootUpdate.js';
+import { applyUpdate, detectInstallMethod, nodeFs, nodeRunner, recoverInterrupted, startUpdateCheck, trustedKeys } from './autoupdate/index.js';
 import { isYes, openerFor, runLink } from './protocol-handler/link.js';
 import { runDetached, runInstallHandler, startCommand } from './protocol-handler/handler.js';
 import { createInterface } from 'node:readline';
 import { dirname as pathDirname } from 'node:path';
-import { PRODUCTION_KEYS, UpdateClient, createHttpClient, defaultUserAgent } from '@centcom/net';
+import { UpdateClient, createHttpClient, defaultUserAgent } from '@centcom/net';
 import { makeTelemetry, runTelemetry } from './commands/telemetry.js';
 import { defaultDeps, loadConfig } from '@centcom/config';
 import { runMcpCli } from './commands/mcp/cli.js';
@@ -99,7 +99,7 @@ async function main() {
   if (process.argv[2] === 'skills') await done(await runSkills(process.argv.slice(3), { out: (l) => console.log(l), err: (l) => console.error(l), ask: ttyAsk, cwd: process.cwd() }));
   if (process.argv[2] === 'update') {
     const base = cfg0?.api.base_url ?? 'https://api.centcom.dev'; const http = createHttpClient({ baseUrl: base, getAccessToken: async () => undefined, userAgent: defaultUserAgent(VERSION) });
-    await done(await runUpdate(process.argv.slice(3), { version: VERSION, defaultChannel: (cfg0?.update?.channel ?? 'stable') as 'stable' | 'beta' | 'nightly', client: (channel) => new UpdateClient({ http, currentVersion: VERSION, platform: process.platform, arch: process.arch, channel, keys: PRODUCTION_KEYS, installDir: pathDirname(process.execPath), install: { execPath: process.execPath, scriptPath: process.argv[1] } }) }, { out: (l) => console.log(l), err: (l) => console.error(l), progress: (p) => { if (process.stdout.isTTY) process.stdout.write(`\r${Math.round((p.received / p.total) * 100)}%`); }, confirm: (q) => new Promise((res) => { const rl = createInterface({ input: process.stdin, output: process.stdout }); rl.question(q, (a) => { rl.close(); res(/^y(es)?$/i.test(a.trim())); }); }) }));
+    await done(await runUpdate(process.argv.slice(3), { version: VERSION, defaultChannel: (cfg0?.update?.channel ?? 'stable') as 'stable' | 'beta' | 'nightly', client: (channel) => new UpdateClient({ http, currentVersion: VERSION, platform: process.platform, arch: process.arch, channel, keys: trustedKeys(), installDir: pathDirname(process.execPath), install: { execPath: process.execPath, scriptPath: process.argv[1], isSea: detectInstallMethod(process.execPath, process.env) === 'standalone' } }), applyStaged: (client, staged) => { const p = client.paths(); return applyUpdate({ exe: p.exe, staged: p.staged, from: VERSION, to: staged.version, platform: process.platform }, nodeFs, nodeRunner); } }, { out: (l) => console.log(l), err: (l) => console.error(l), progress: (p) => { if (process.stdout.isTTY) process.stdout.write(`\r${Math.round((p.received / p.total) * 100)}%`); }, confirm: (q) => new Promise((res) => { const rl = createInterface({ input: process.stdin, output: process.stdout }); rl.question(q, (a) => { rl.close(); res(/^y(es)?$/i.test(a.trim())); }); }) }));
   }
   if (process.argv[2] === 'keys') await done(runKeys(process.argv.slice(3), { out: (l) => console.log(l), err: (l) => console.error(l) }));
   if (process.argv[2] === 'init') await done(await runInitCli(process.argv.slice(3)));
@@ -203,10 +203,12 @@ async function main() {
   let share: ShareSession | undefined; // /share: made on first use, so nobody who never shares reads the keychain or the server settings for it
   if (!demo) ctl.setShareHandler(async (arg) => { share ??= new ShareSession(ctl, await Account.create({ app: 'centcom-tui', version: VERSION, logger })); await share.handleCommand(arg); });
   process.on('exit', () => share?.close());
-  { // every start: look for a newer release in the background and bring it in, so the next start is the latest (never delays this one)
+  { // every start: look for a newer release in the background and bring it in, so the next start is the latest (never delays this one, never while a session is live)
     const http = createHttpClient({ baseUrl: cc.cfg.api.base_url, getAccessToken: async () => undefined, userAgent: defaultUserAgent(VERSION) });
-    const client = new UpdateClient({ http, currentVersion: VERSION, platform: process.platform, arch: process.arch, channel: cc.cfg.update.channel, keys: PRODUCTION_KEYS, installDir: pathDirname(process.execPath), install: { execPath: process.execPath, scriptPath: process.argv[1] } });
-    void bootUpdate({ client, env: process.env, version: VERSION, check: cc.cfg.update.check && !demo, auto: cc.cfg.update.auto, say: (level, text, detail) => { logger.info('update', { text }); ctl.notice(level, text, detail); } }).catch(() => undefined);
+    const client = new UpdateClient({ http, currentVersion: VERSION, platform: process.platform, arch: process.arch, channel: cc.cfg.update.channel, keys: trustedKeys(), installDir: pathDirname(process.execPath), install: { execPath: process.execPath, scriptPath: process.argv[1], isSea: detectInstallMethod(process.execPath, process.env) === 'standalone' } });
+    const method = client.method === 'sea' ? 'standalone' : client.method === 'homebrew' ? 'brew' : client.method;
+    void recoverInterrupted(client.paths().exe, process.platform, nodeFs).catch(() => undefined);
+    startUpdateCheck({ client, method, version: VERSION, channel: cc.cfg.update.channel, channelChosen: cc.cfg.update.channel !== 'stable', platform: process.platform, check: cc.cfg.update.check && !demo, auto: cc.cfg.update.auto, env: process.env, fs: nodeFs, runner: nodeRunner, cachePath: pathJoin(stateDir(defaultDeps()), 'update-check.json'), now: () => Date.now(), rng: Math.random, sessionsLive: () => !!share?.live, say: (level, text, detail) => { logger.info('update', { text }); ctl.notice(level, text, detail); } });
   }
   if (note) ctl.notice('warn', note);
   for (const w of rt.warnings) ctl.notice('warn', w);

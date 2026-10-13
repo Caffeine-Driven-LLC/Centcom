@@ -13,7 +13,7 @@ import { rm } from 'node:fs/promises';
 export type Channel = 'stable' | 'beta' | 'nightly';
 export interface ReleaseArtifact { platform: string; arch: string; kind?: string; url: string; sha256: string; size: number; sig: string; sig_kid?: string }
 export interface ReleaseManifest { channel: Channel; version: string; released_at: string; min_supported: string; notes_url?: string; artifacts: ReleaseArtifact[] }
-export interface CheckResult { available: boolean; version?: string; channel: Channel; notesUrl?: string; required: boolean }
+export interface CheckResult { available: boolean; version?: string; channel: Channel; notesUrl?: string; required: boolean; /** The channel's latest release is OLDER than this install. Never offered unless `allowDowngrade` was asked for. */ downgrade?: { version: string } }
 export interface StagedUpdate { version: string; channel: Channel; path: string; artifact: ReleaseArtifact; verified: boolean }
 export interface UpdateClientOptions {
   http: HttpClient; currentVersion: string; platform: NodeJS.Platform; arch: string; channel: Channel; keys: ReleaseKeySet; installDir: string;
@@ -34,17 +34,20 @@ export class UpdateClient {
   private readonly exe: string; private readonly staged: string; private readonly prev: string;
   constructor(private readonly o: UpdateClientOptions) {
     this.method = detectInstallMethod({ execPath: o.install?.execPath ?? o.exePath ?? '', scriptPath: o.install?.scriptPath, isSea: o.install?.isSea, platform: o.platform });
-    this.exe = o.exePath ?? join(o.installDir, o.platform === 'win32' ? 'centcom.exe' : 'centcom'); this.staged = join(dirname(this.exe), `.centcom-update${o.platform === 'win32' ? '.exe' : ''}.part`); this.prev = `${this.exe}.prev`;
+    this.exe = o.exePath ?? join(o.installDir, o.platform === 'win32' ? 'centcom.exe' : 'centcom'); this.staged = join(dirname(this.exe), `.centcom-update${o.platform === 'win32' ? '.exe' : ''}.part`); this.prev = `${this.exe}.previous`;
   }
+  /** Where the program, the staged download and the kept previous copy live (for the apply step with its health check). */
+  paths(): { exe: string; staged: string; prev: string } { return { exe: this.exe, staged: this.staged, prev: this.prev }; }
   /** The service said this client is too old (HTTP 426 or close code 4426): an update is required. */
   markRequired(): void { this.tooOld = true; }
 
-  async check(o: { signal?: AbortSignal } = {}): Promise<CheckResult> {
+  async check(o: { signal?: AbortSignal; allowDowngrade?: boolean } = {}): Promise<CheckResult> {
     const r = await this.o.http.call('getLatestRelease', { path: { channel: this.o.channel }, query: { platform: API_PLATFORM[this.o.platform] ?? this.o.platform, arch: this.o.arch } } as never, { signal: o.signal });
     const m = normaliseManifest(r.data); this.manifest = m; const required = this.tooOld || compareVersions(this.o.currentVersion, m.min_supported ?? '0.0.0') < 0;
     /* only a higher version on this channel; a pre-release is never offered on stable */
     const newer = compareVersions(m.version, this.o.currentVersion) > 0 && !(this.o.channel === 'stable' && isPrerelease(m.version)) && m.channel === this.o.channel;
-    return { available: newer, channel: this.o.channel, required, ...(newer ? { version: m.version } : {}), ...(m.notes_url ? { notesUrl: m.notes_url } : {}) };
+    const lower = compareVersions(m.version, this.o.currentVersion) < 0 && m.channel === this.o.channel; const offer = newer || (lower && o.allowDowngrade === true);
+    return { available: offer, channel: this.o.channel, required, ...(offer ? { version: m.version } : {}), ...(lower ? { downgrade: { version: m.version } } : {}), ...(m.notes_url ? { notesUrl: m.notes_url } : {}) };
   }
   private artifact(): ReleaseArtifact { const a = this.manifest?.artifacts.find((x) => x.platform === this.o.platform && x.arch === this.o.arch && (x.kind ?? 'binary') === 'binary'); if (!a) throw new NoUpdateError('There is no download for this computer in that release.'); return a; }
 

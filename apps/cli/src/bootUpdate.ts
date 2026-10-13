@@ -19,12 +19,13 @@ export interface BootUpdateDeps {
   /** `update.auto`: bring a newer version in without asking; off only says that one exists. */ auto: boolean;
   say(level: 'info' | 'warn', text: string, detail?: string): void;
   /** Runs a package manager command; true when it succeeded. */ run?(argv: string[], signal: AbortSignal): Promise<boolean>;
+  /** Any session (host or guest) is live: nothing is downloaded or put in place now, it waits for the next start. */ sessionsLive?(): boolean;
   checkMs?: number; installMs?: number;
 }
 export type BootUpdateResult = 'off' | 'current' | 'available' | 'updated' | 'failed';
 
 export const CHECK_MS = 5000; export const INSTALL_MS = 120_000;
-export const packageManagerArgv = (m: InstallMethod): string[] | undefined => (m === 'homebrew' ? ['brew', 'upgrade', 'centcom'] : m === 'npm' ? ['npm', 'install', '--global', 'centcom@latest'] : undefined);
+export const packageManagerArgv = (m: InstallMethod): string[] | undefined => (m === 'homebrew' ? ['brew', 'upgrade', 'centcom'] : m === 'npm' ? ['npm', 'i', '-g', '@centcom/cli@latest'] : undefined);
 
 /** Is the check allowed at all? Not when switched off, not under CI, and not when the user asked for no update check. */
 export function updatesWanted(o: { check: boolean; env: Record<string, string | undefined> }): boolean {
@@ -38,15 +39,16 @@ export async function bootUpdate(d: BootUpdateDeps): Promise<BootUpdateResult> {
   try { c = await within(d.checkMs ?? CHECK_MS, (signal) => d.client.check({ signal })); } catch { return 'failed'; } // offline or slow: the next start tries again
   if (!c.available || !c.version) { if (c.required) d.say('warn', 'This version of Centcom is too old for the service, and no newer one is published on your channel yet.'); return 'current'; }
   const v = c.version; const how = updateCommand(d.client.method); const notes = c.notesUrl ? ` Notes: ${c.notesUrl}` : '';
-  const offer = (why?: string) => { d.say('info', `Centcom ${v} is available.`, `${how ? `Update with: ${how}` : d.client.method === 'sea' ? 'Update with: centcom update' : 'You are running from a source checkout: pull the latest and rebuild.'}${why ? ` (${why})` : ''}${notes}`); return 'available' as const; };
+  const offer = (why?: string) => { d.say('info', `Update available: ${v}`, `${how ? `Update with: ${how}` : d.client.method === 'sea' ? 'Update with: centcom update' : 'You are running from a source checkout: pull the latest and rebuild.'}${why ? ` (${why})` : ''}${notes}`); return 'available' as const; };
   if (!d.auto) return offer();
+  if (d.sessionsLive?.()) return offer('a session is open, so it waits for the next start');
   const ms = d.installMs ?? INSTALL_MS;
   try {
     const argv = packageManagerArgv(d.client.method);
     if (argv) { const ok = await within(ms, (s) => (d.run ?? runCommand)(argv, s)); if (!ok) return offer('the automatic update did not work'); }
     else if (d.client.method === 'sea') { await within(ms, async (signal) => { const s = await d.client.download({ signal }); await d.client.verify(s); await d.client.apply(s); }); }
     else return offer();
-  } catch (e) { return e instanceof ManagedInstallError ? offer() : offer('the automatic update did not work, and nothing was changed'); }
+  } catch (e) { return e instanceof ManagedInstallError ? offer() : (e as { code?: string }).code === 'deferred' ? offer('a session is open, so it waits for the next start') : offer('the automatic update did not work, and nothing was changed'); }
   d.say('info', `Centcom updated to ${v}.`, `It is used the next time you start it. To go back: centcom update --rollback.${notes}`);
   return 'updated';
 }
