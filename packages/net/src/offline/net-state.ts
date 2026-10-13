@@ -7,6 +7,8 @@ export interface StatusProbe { (): Promise<{ status: 'ok' | 'partial_outage' | '
 export interface NetClock { now(): number; setTimeout(fn: () => void, ms: number): unknown; clearTimeout(h: never): void }
 export interface NetStateOptions { sessions: () => LinkSource[]; /** `GET /v1/status`: resolves with the feed, rejects when the network or the service fails */ status: StatusProbe; clock: NetClock; pollStatusMs?: number; /** how many failed attempts in a row before reconnecting becomes offline */ offlineAfter?: number }
 type Fn = (s: NetState, prev: NetState) => void;
+/** The status feed's words (contracts/00-foundations.md: operational, degraded, partial_outage, major_outage; the older `ok` still counts as fine). Something the client does not know is not read as an outage. */
+export function feedKind(status: string): 'ok' | 'partial' | 'down' { return status === 'major_outage' || status === 'maintenance' ? 'down' : status === 'degraded' || status === 'partial_outage' ? 'partial' : 'ok'; }
 
 export class NetStateMonitor {
   private state: NetState = 'online'; private fns = new Set<Fn>(); private timer: unknown; private failures = 0; private lastStatus: { at: number; ok: boolean; kind: 'ok' | 'partial' | 'down' | 'unreachable' } | undefined; private offs: (() => void)[] = []; private reconnectingSince = 0; private attempts = 0; private stopped = false;
@@ -19,7 +21,7 @@ export class NetStateMonitor {
   watch(): void { for (const f of this.offs.splice(0)) f(); for (const s of this.o.sessions()) this.offs.push(s.on('link', (l) => { if (l === 'reconnecting') { this.attempts++; if (!this.reconnectingSince) this.reconnectingSince = this.o.clock.now(); } else if (l === 'online') { this.attempts = 0; this.reconnectingSince = 0; } this.recompute(); })); }
   private async poll(): Promise<void> {
     if (this.stopped) return; const gap = this.o.pollStatusMs ?? 15_000;
-    try { const r = await this.o.status(); this.failures = 0; this.lastStatus = { at: this.o.clock.now(), ok: true, kind: r.status === 'ok' ? 'ok' : r.status === 'partial_outage' ? 'partial' : 'down' }; } catch (e) { this.failures++; const status = (e as { status?: number }).status; this.lastStatus = { at: this.o.clock.now(), ok: false, kind: status !== undefined && status >= 500 ? 'down' : 'unreachable' }; }
+    try { const r = await this.o.status(); this.failures = 0; this.lastStatus = { at: this.o.clock.now(), ok: true, kind: feedKind(r.status) }; } catch (e) { this.failures++; const status = (e as { status?: number }).status; this.lastStatus = { at: this.o.clock.now(), ok: false, kind: status !== undefined && status >= 500 ? 'down' : 'unreachable' }; }
     this.recompute(); if (!this.stopped) this.timer = this.o.clock.setTimeout(() => { void this.poll(); }, gap);
   }
   /** Sockets first (they are the freshest), then the status feed. Reconnecting becomes offline from the second failed attempt on. */

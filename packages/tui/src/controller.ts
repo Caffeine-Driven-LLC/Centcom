@@ -26,6 +26,7 @@ import { MascotDriver, bakedByCategory, bakedCategories, getBaked, type CentoCol
 import type { AgentEngine, ApprovalDecision, ApprovalRequest, EngineQuestion, EngineSession, QuestionGate, NormalisedEvent, PermissionGate, PermissionMode } from '@centcom/agent';
 import { Store } from './state/store.js';
 import { createToastController, type ToastController, type ToastInput } from './toast/controller.js';
+import { noticeToToast, type NoticeIn } from './toast/messages.js';
 import { initialSettings, isBusyState, stateToMini, type AgentView, type AppState, type Item, type Mode, type PendingApproval, type Settings } from './state/model.js';
 import { COMMANDS } from './state/commands.js';
 import { emptyText } from './onboarding/copy.js';
@@ -997,6 +998,7 @@ export class AppController {
       case 'effort': await this.effortCommand(arg); break;
       case 'watch': { if (!this.shareHandler) { this.toast('warn', 'No team here. /share branch starts a session where everyone runs their own agent.'); break; } await this.shareHandler('watch ' + arg); break; }
       case 'team': { if (!this.shareHandler) { this.toast('warn', 'No team here. /share branch starts a session where everyone runs their own agent.'); break; } await this.shareHandler('team'); break; }
+      case 'inbox': { if (!this.shareHandler) { this.toast('warn', 'The inbox needs an account. Run `centcom login` in a terminal first.'); break; } await this.shareHandler('inbox ' + arg); break; }
       case 'share': { if (!this.shareHandler) { this.toast('warn', 'Sharing is not available here. Use the terminal app with an account (centcom login).'); break; } await this.shareHandler(arg); break; }
       case 'model': {
         if (!arg) { await this.openModels(); break; }
@@ -1272,6 +1274,22 @@ export class AppController {
   }
   /** `state.toasts`: the showing notice and the queue, oldest first (`ctl.toasts.current()` is the one on screen). */
   private syncToasts() { const cur = this.toasts.current(); const next = cur ? [cur, ...this.toasts.pending()].map((t) => ({ ...t })).sort((a, b) => Number(a.id.slice(6)) - Number(b.id.slice(6))) : []; if (next.length || this.store.get().toasts.length) this.store.set({ toasts: next }); }
+  /** The usage ledger of this run (for reporting a shared session). */
+  get ledger() { return this.o.ledger; }
+  /** A notice from the service (`sys.notice`): shown from the local message table only, never the server's own text. */
+  showNotice(n: NoticeIn) { this.toasts.show(noticeToToast(n, { now: new Date(), locale: Intl.DateTimeFormat().resolvedOptions().locale })); this.syncToasts(); }
+  /** The hosted link changed (or sharing ended: undefined). Said once per change, in words; local work is never blocked. */
+  setNet(next: AppState['net'], prev?: AppState['net']) {
+    this.set({ net: next }); if (!next || next === prev) return;
+    const said: Record<NonNullable<AppState['net']>, [level: 'info' | 'ok' | 'warn', text: string] | undefined> = {
+      online: prev ? ['ok', 'Back online. Shared changes are going out.'] : undefined,
+      reconnecting: ['warn', 'Connection lost. Reconnecting…'],
+      offline: ['warn', 'Offline. Your work here continues; what you share goes out when the connection is back.'],
+      degraded: ['info', 'The Centcom service is slow right now. Sessions keep working.'],
+      'backend-down': ['warn', 'The Centcom service is down. Local work is not affected; sharing waits for it.'],
+    };
+    const m = said[next]; if (m) this.toast(m[0], m[1], undefined, { key: `net:${next}` });
+  }
   /** Dismiss the notice that is showing; false when there was none. */
   dismissToast(): boolean { if (!this.toasts.current()) return false; this.toasts.dismiss(); this.syncToasts(); return true; }
   /** What a toast's action key does (for example "update"): set by the host app. */

@@ -95,6 +95,12 @@ Both Claude Code and Codex forget the oldest messages when they run out of room.
 
 `/compact` and `/handoff` do the same at any time. The document has fixed sections (goal, where things stand, next step, decisions and why, files that matter, how to run and check, gotchas, rules to keep following), so check it before relying on it; the new agent is told to verify anything that looks out of date.
 
+## While a session is shared
+
+The status line says when the connection to the service is not fine (`↻ reconnecting`, `○ offline`, `! service slow`, `✗ service down`). What you do here goes on: your own agent and your files are not affected, and what you share goes out when the connection is back. `/inbox` lists your unread notifications from the service and `/inbox read` marks them all read; while a session is shared new ones appear as a notice. What the shared session uses is reported to the service for your plan's meter (counts only: never text, paths or names).
+
+If the service switches an agent off (a kill switch), Centcom does not start it: it uses the other one, or the demo, and says so. Running work is never stopped. `CENTCOM_NO_REMOTE_FLAGS=1` stops Centcom from asking for these switches.
+
 ## Approvals
 
 A new approval ignores keys for a third of a second so a key you were typing cannot approve something you have not read. It shows how long is left before it is declined on its own (`agent.approval_timeout_ms`, ten minutes by default). `s` allows it for this session only.

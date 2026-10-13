@@ -3,14 +3,16 @@
  * hand out ways in, and what editors ask for arrives as a notice that `/share run <n>` or `/share no <n>` answers. The
  * conversation stays on this computer; the same HostBridge as the desktop app does the work.
  */
-import type { SessionHandle } from '@centcom/net';
+import { NetStateMonitor, NotificationsClient, render as renderNotification, type NetState, type SessionHandle } from '@centcom/net';
+import { defaultDeps, stateDir } from '@centcom/config';
+import { startUsageReporting, type UsageLink } from './usage-link.js';
 import type { AppController } from '../controller.js';
 import type { Account } from './account.js';
 import { HostBridge, startBranchBridge, untilLive } from './host-bridge.js';
 import { renderTeam, renderTranscript } from './team-text.js';
 
 export class ShareSession {
-  private handle?: SessionHandle; private bridge?: HostBridge; private known = new Set<string>(); private order: string[] = []; private workspace = '';
+  private handle?: SessionHandle; private bridge?: HostBridge; private net?: NetStateMonitor; private lastNet?: NetState; private usage?: UsageLink; private inbox?: NotificationsClient; private known = new Set<string>(); private order: string[] = []; private workspace = '';
   constructor(private readonly ctl: AppController, private readonly account: Account) {}
   get live(): boolean { return !!this.handle && this.handle.state !== 'ended'; }
 
@@ -34,6 +36,7 @@ export class ShareSession {
         case 'watch': return this.watch(rest.join(' '));
         case 'activity': { if (!this.bridge || this.bridge.mode !== 'branch') return this.needBranch(); const on = rest[0] ? rest[0] === 'on' : !this.bridge.sharingActivity; this.bridge.setShareActivity(on); ctl.toast('info', on ? 'The team sees what your agent says and does.' : 'Your agent\'s messages are not shared. State, branch and locks still are.'); return; }
         case 'handoff': return this.handoff(rest);
+        case 'inbox': return await this.inboxCommand(rest[0]);
         case 'status': return this.status();
         case 'invite': return await this.invite(rest[0]);
         case 'link': return await this.link();
@@ -56,6 +59,7 @@ export class ShareSession {
     this.workspace = spaces.find((w) => w.id === home)?.name ?? home; const name = ctl.state.cwd.replace(/\/+$/, '').split('/').pop() || 'session';
     const handle = await sessions.createSession({ name, workspace: home, ...(mode === 'branch' ? { mode: 'branch' as const } : {}) }); this.handle = handle;
     const branch = mode === 'branch' && handle.mode === 'branch'; if (mode === 'branch' && !branch) ctl.notice('warn', 'This server does not support everyone running their own agent yet', 'The session works as a command post instead: you run the agent and others ask.');
+    this.watchNet(handle);
     if (branch) this.bridge = this.branch(handle); else { this.bridge = new HostBridge(ctl, handle, { onChange: () => this.onChange(), onError: () => undefined }); this.bridge.start(); }
     handle.on('ended', () => { ctl.notice('info', 'The shared session ended.'); this.drop(); });
     if (branch) { ctl.notice('ok', `Sharing ${name}: everyone runs their own agent`, `Session ${handle.id} in ${this.workspace}.\nEach person joins with their own copy of the project: /share join ${handle.id} (or centcom join, for a watch-only view). /team shows who is working on what; /share activity off keeps your agent's messages private (state, branch and locks are always shared).\n/share invite <email> makes an invite link for one person.`); return; }
@@ -71,7 +75,7 @@ export class ShareSession {
     const st = await this.account.status(); if (!st.signedIn) { ctl.notice('warn', 'Joining needs an account', 'Run `centcom login` in a terminal first.'); return; }
     const { handle } = await this.account.joinMember(input); if (handle.mode !== 'branch') { await handle.leave().catch(() => undefined); ctl.notice('warn', 'That session is a command post', `There the host runs the agent. Watch and ask with: centcom join ${input}`); return; }
     ctl.toast('info', 'Joining…'); if (!(await untilLive(handle))) { await handle.leave().catch(() => undefined); ctl.notice('error', 'Could not join', 'The host did not let this computer in yet (it has to be online to hand out the keys). Try again in a moment.'); return; }
-    this.handle = handle; this.bridge = this.branch(handle); handle.on('ended', () => { ctl.notice('info', 'The shared session ended.'); this.drop(); });
+    this.handle = handle; this.watchNet(handle); this.bridge = this.branch(handle); handle.on('ended', () => { ctl.notice('info', 'The shared session ended.'); this.drop(); });
     ctl.notice('ok', 'You are in the session with your own agent', `Your agent works on ${ctl.state.cwd}. /team shows who is working on what; /share stop leaves.`);
   }
   /** `/team` (also `/share team`): everybody's agents. */
@@ -90,6 +94,22 @@ export class ShareSession {
     const t = this.bridge?.team; if (!this.bridge || !t) return this.needBranch(); const people = t.snapshot().members.filter((m) => !m.you); const n = Number(rest[0]); const to = people[n - 1];
     if (!to) { this.ctl.toast('warn', people.length ? `Hand your work to whom? ${people.map((m, i) => `${i + 1} ${m.name}`).join(', ')}: /share handoff <number> [note]` : 'Nobody else is here.'); return; }
     this.bridge.offerHandoff(to.id, rest.slice(1).join(' ') || undefined); this.ctl.toast('ok', `Offered your work to ${to.name}.`);
+  }
+  /** The inbox client for this account: it polls only while a session is shared; `/inbox` can look at any time. */
+  private inboxClient(): NotificationsClient {
+    return (this.inbox ??= new NotificationsClient({
+      http: this.account.http, clock: { now: () => Date.now(), setTimeout: (f, ms) => { const h = setTimeout(f, ms); h.unref?.(); return h; }, clearTimeout: (h) => clearTimeout(h as unknown as NodeJS.Timeout) }, stateDir: stateDir(defaultDeps()),
+      os: { show: async () => false /* the terminal app does not raise desktop notices: the line above the prompt does the job */ }, active: () => this.lastNet !== 'offline' && this.lastNet !== 'backend-down',
+    }));
+  }
+  /** `/inbox` lists what is unread, in the app's own words; `/inbox read` marks everything read. */
+  private async inboxCommand(sub?: string): Promise<void> {
+    const ctl = this.ctl; const st = await this.account.status(); if (!st.signedIn) { ctl.notice('warn', 'The inbox needs an account', 'Run `centcom login` in a terminal first.'); return; }
+    const inbox = this.inboxClient();
+    if (sub === 'read') { await inbox.markAllRead(); ctl.toast('ok', 'Everything is marked read.'); return; }
+    const lines: string[] = []; let n = 0; for await (const item of inbox.list({ unread: true })) { if (++n > 10) break; const t = renderNotification(item); lines.push(`${n}. ${t.title}: ${t.body}`); }
+    if (!n) { ctl.toast('info', 'Your inbox is empty.'); return; }
+    ctl.notice('info', n > 10 ? 'Inbox (the 10 newest unread)' : `Inbox (${n} unread)`, `${lines.join('\n')}\n/inbox read marks them all read.`);
   }
   private status(): void {
     if (!this.handle || !this.live) return this.need(); const people = this.handle.roster().map((m) => `${m.name || 'Someone'} (${m.role === 'host' ? 'you, host' : m.role === 'editor' ? 'can edit' : 'view only'})`).join(', ');
@@ -111,7 +131,18 @@ export class ShareSession {
     if (run) await b.approve(item); else await b.reject(item); this.ctl.toast('ok', run ? 'Running it.' : 'Declined.');
   }
   private async stop(): Promise<void> { if (!this.handle) return this.need(); const h = this.handle; this.drop(); await h.end().catch(() => h.leave().catch(() => undefined)); this.ctl.notice('info', 'Stopped sharing'); }
-  private drop(): void { this.bridge?.stop(); this.bridge = undefined; this.handle = undefined; this.known.clear(); this.order = []; }
+  /** From the moment a session is live, the link to the hosted service is watched: the sockets first, the status feed as a second opinion. */
+  private watchNet(handle: SessionHandle): void {
+    this.net?.stop(); this.lastNet = undefined; void this.usage?.stop();
+    // usage of this conversation while it is shared is reported (informationally); the service's notices reach the notice line, and their action keys do something
+    this.usage = startUsageReporting({ http: this.account.http, ledger: this.ctl.ledger, localSessionId: this.ctl.state.sessionId, hostedSessionId: handle.id });
+    const inbox = this.inboxClient(); inbox.on('new', (n) => this.ctl.toast('info', `Inbox: ${renderNotification(n).title}`, undefined, { key: `inbox:${n.id}` })); inbox.start();
+    const usage = this.usage; handle.on('notice', (n) => { usage.notice(n as never); this.ctl.showNotice(n as never); });
+    this.ctl.onToastAction((id) => { if (id === 'billing.upgrade') this.ctl.notice('info', 'Upgrade your plan', 'Open https://centcom.dev/billing, or the billing page of your workspace in the web app.'); else if (id === 'update.show') void this.ctl.runCommand('/update'); });
+    const monitor = new NetStateMonitor({ sessions: () => [handle], status: () => this.account.plain.getStatus(), clock: { now: () => Date.now(), setTimeout: (f, ms) => { const h = setTimeout(f, ms); h.unref?.(); return h; }, clearTimeout: (h) => clearTimeout(h as unknown as NodeJS.Timeout) } });
+    monitor.on('change', (s, prev) => { this.lastNet = s; this.ctl.setNet(s, prev); }); this.net = monitor; this.ctl.setNet('online'); monitor.start();
+  }
+  private drop(): void { this.inbox?.stop(); void this.usage?.stop(); this.usage = undefined; this.net?.stop(); this.net = undefined; this.ctl.setNet(undefined); this.bridge?.stop(); this.bridge = undefined; this.handle = undefined; this.known.clear(); this.order = []; }
   /** The app is closing. */
   close(): void { const h = this.handle; this.drop(); void h?.leave().catch(() => undefined); }
 }
