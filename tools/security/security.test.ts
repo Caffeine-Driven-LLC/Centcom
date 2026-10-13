@@ -116,6 +116,21 @@ describe('keystore scan', () => {
   });
 });
 
+describe('keystore scan command (lane C099)', () => {
+  it('takes the long strings of the keychain files as the secrets, finds them in the other folders, and never prints a value', async () => {
+    const { main, secretsIn } = await import('./keystore-cli.js'); const kc = tmp(); const cfg = tmp(); const state = tmp();
+    writeFileSync(join(kc, 'a'), JSON.stringify({ access: 'ACCESS-TOKEN-0123456789abcdef', refresh: 'REFRESH-TOKEN-fedcba9876543210', short: 'x', nested: { k: 'KEY-MATERIAL-aaaaaaaaaaaaaaaa' } })); writeFileSync(join(kc, 'b'), 'plain-secret-text-0123456789');
+    expect(secretsIn(JSON.stringify({ a: 'short', b: ['LONG-STRING-0123456789'] }))).toEqual(['LONG-STRING-0123456789']); expect(secretsIn('plain-secret-text-0123456789')).toHaveLength(1); expect(secretsIn(JSON.stringify({ device_id: 'dev_01JA3Z8K2M5N7P9Q0R1S2T3V4W', refresh: 'REFRESH-TOKEN-fedcba9876543210' }))).toEqual(['REFRESH-TOKEN-fedcba9876543210']); // an id names a thing, it is not a secret expect(secretsIn('tiny')).toEqual([]);
+    writeFileSync(join(cfg, 'config.json'), '{"theme":"dark"}'); writeFileSync(join(state, 'state.json'), '{"first_run":false}'); const lines: string[] = [];
+    expect(main(['--keychain', kc, cfg, state, kc], (l) => lines.push(l))).toBe(0); expect(lines[0]).toMatch(/looked for 4 secret\(s\).*none found/);
+    writeFileSync(join(state, 'oops.log'), 'refresh=REFRESH-TOKEN-fedcba9876543210'); writeFileSync(join(cfg, 'cache.b64'), Buffer.from('x ACCESS-TOKEN-0123456789abcdef y').toString('base64')); lines.length = 0;
+    expect(main(['--keychain', kc, cfg, state], (l) => lines.push(l))).toBe(1); expect(lines.join('\n')).toMatch(/2 found/); expect(lines.join('\n')).not.toContain('REFRESH-TOKEN-fedcba9876543210');
+  });
+  it('an empty keychain or missing arguments is a usage error, not a pass', async () => {
+    const { main } = await import('./keystore-cli.js'); const lines: string[] = []; expect(main(['--keychain', tmp(), tmp()], (l) => lines.push(l))).toBe(2); expect(main([], (l) => lines.push(l))).toBe(2); expect(lines.join(' ')).toMatch(/sign in first/);
+  });
+});
+
 describe('log redaction fuzz', () => {
   it('10 000 random strings seeded with token, key and path patterns leave no secret in the redacted output', () => {
     const secrets = [() => LIVE, () => TESTK, () => JWT, () => `${PEM_LINE}\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----`, () => 'Authorization: Bearer ' + 'abcDEF0123456789abcDEF0123456789', () => '/home/alex/secret-project/src/key.ts'];

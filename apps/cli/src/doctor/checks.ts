@@ -40,4 +40,16 @@ export const clock: DoctorCheck = { id: 'clock', network: true, async run(c) {
     const skew = Math.abs(server - (t0 + (c.now() - t0) / 2)) / 1000; if (skew > 60) return fail(`your clock is ${Math.round(skew)} s off`, 'turn on automatic time in your system settings'); if (skew > 30) return warn(`your clock is ${Math.round(skew)} s off`, 'turn on automatic time in your system settings'); return ok(`clock within ${Math.max(1, Math.round(skew))} s of the service`); }
   catch { return { status: 'skip', summary: 'could not ask the service (offline)' }; }
 } };
-export const ALL_CHECKS: DoctorCheck[] = [node, os, terminal, keychain, git, config, healthz, versionCheck, clock];
+/** The relay speaks WebSocket; a plain GET without the upgrade is answered with 426 (or 400/401/404 by a front end). Any answer under 500 means somebody is there. */
+export const relay: DoctorCheck = { id: 'relay', network: true, async run(c) {
+  if (!c.relayUrl) return { status: 'skip', summary: 'no relay address is set' };
+  try { const r = await c.get(c.relayUrl.replace(/^ws(s?):/i, 'http$1:'), { timeoutMs: NETWORK_TIMEOUT_MS }); return r.status < 500 ? ok('the relay answers') : warn(`the relay answered with an error (${r.status})`, 'try again in a minute; shared sessions need the relay (local and LAN work does not)'); }
+  catch { return { status: 'skip', summary: 'could not reach the relay (offline, or a firewall in the way)' }; }
+} };
+/** Whether the stored sign-in is still good, asked of the service (`GET /v1/me`). Being signed out is fine: only sharing needs an account. */
+export const account: DoctorCheck = { id: 'account', network: true, async run(c) {
+  if (!c.account) return { status: 'skip', summary: 'not checked here' };
+  try { const a = await c.account(); if (a.failed) return warn('signed in, but the service did not accept it (or could not be reached)', 'run: centcom login'); return a.signedIn ? ok(`signed in${a.plan ? ` (${a.plan} plan)` : ''}`) : { status: 'skip', summary: 'not signed in (only sharing needs an account)' }; }
+  catch { return { status: 'skip', summary: 'could not ask the service (offline)' }; }
+} };
+export const ALL_CHECKS: DoctorCheck[] = [node, os, terminal, keychain, git, config, healthz, relay, account, versionCheck, clock];
