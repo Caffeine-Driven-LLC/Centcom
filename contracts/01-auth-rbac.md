@@ -100,7 +100,6 @@ A workspace member's *default* session role: owner/admin/member → `editor`, gu
 | Create/host session | ✓ | ✓ | ✓ | — | — |
 | Join session (as editor) | ✓ | ✓ | ✓ | — | — |
 | Join session (as viewer) | ✓ | ✓ | ✓ | — | ✓ (if invited) |
-| Join one session by a **session invite** (editor or viewer, no workspace membership, no seat) | any signed-in user holding the invite | | | | |
 | Read audit log | ✓ | ✓ | — | — | — |
 | Manage webhooks, API keys | ✓ | ✓ | own keys only | — | — |
 | Delete workspace | ✓ | — | — | — | — |
