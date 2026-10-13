@@ -170,8 +170,8 @@
    "note": "provider detection and commands; gaps: message copy, runtime fs spy, CLI-level hang test, app still uses old detectors"
   },
   "C105": {
-   "pct": 0.1,
-   "note": "login kind shown; no policy table or gate"
+   "pct": 0.8,
+   "note": "2026-10-13: fail-closed gate on every path (new session, handoff, failover, queue approval, auto-approve, guest prompt), host confirmation, async roster guest spend control, runs-on chip and banner states (#172); gaps: gate not wired into the fleet, session and queue code (other lanes), copy sign-off"
   },
   "C002": {
    "pct": 0.6,
@@ -298,8 +298,8 @@
    "note": "notifications client: inbox list/read/read-all with optimistic count, 60 s polling with 60/120/300 s backoff, OS notices (dedupe persisted, quiet hours, opt-in approval bypass), message table render with sanitising, deep-link action parser, preferences with ETag, push calls; gaps: not wired into the TUI/WS notices, not run against the real mock fixtures for all 14 categories, locale packs"
   },
   "C100": {
-   "pct": 0.35,
-   "note": "conformance runner (pnpm conformance: --contract, --json, --out, --strict; report schema, waivers max 60 days, fixture loader) with suites for 13 contracts that pass offline in about 1 s (IDS, ERR, VER, envelope, session events, presence, queue, control, crypto vectors, LAN, telemetry, state map, provider); release-gate aggregator (pnpm release-gate) with checklist; gaps: gate scripts G1-G6 (need the session/queue/billing lanes), suites for PAGE/AUTH/RESUME/DEEPLINK (waived to 2026-12-01), RELEASES/NOTIF suites wait for the update and notification PRs, queue replay host-vs-guest (C076), coverage tooling"
+   "pct": 0.6,
+   "note": "2026-10-13: pnpm gate with G1 built, conformance over client-read contracts, update line needs every scenario (#173); gaps: G2 to G5 not built so G6 fails, PAGE/AUTH/RESUME/DEEPLINK suites waived, G1 never run against a real backend"
   },
   "C099": {
    "pct": 0.7,
@@ -414,8 +414,8 @@
    "note": "merged in #108"
   },
   "C095": {
-   "pct": 0.5,
-   "note": "update on every start: verified self-replace for standalone installs, package-manager command for npm/Homebrew, generated releases page. Missing: release signing keys, published artifacts, the /v1/releases endpoint, channels in practice"
+   "pct": 0.8,
+   "note": "2026-10-13: install detection, 6h schedule, apply with health check and rollback, crash recovery, downgrade rules, too-old screen, signed channel store and mock release server with 12 end-to-end scenarios (#173); gaps: production keys, real release host and backend endpoint, npm package name, no update.check_interval_h key"
   }
  },
  "next": [
