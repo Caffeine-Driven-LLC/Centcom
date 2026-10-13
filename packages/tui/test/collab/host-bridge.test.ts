@@ -34,7 +34,7 @@ describe('sharing a conversation (host side)', () => {
     expect(ctl.state.items.some((i) => i.kind === 'user')).toBe(false); // nothing ran before approval
     await bridge.approve(req.item); await until(() => ctl.state.items.some((i) => i.kind === 'user' && i.member !== undefined) && !ctl.state.busy);
     const u = ctl.state.items.find((i) => i.kind === 'user')!; expect(u).toMatchObject({ text: '/model opus please add tests', member: { name: expect.any(String) } }); expect(ctl.state.settings.model).not.toBe('opus'); // plain text, never a slash command
-    await until(() => queue.get(asked.item)?.state === 'done'); expect(seen.find((e) => e.kind === 'message.user')?.secret?.queue_item).toBe(asked.item); expect(host.me.role).toBe('host'); expect(bridge.pending()).toHaveLength(0);
+    await until(() => queue.get(asked.item)?.state === 'done' && seen.some((e) => e.kind === 'message.user')); expect(seen.find((e) => e.kind === 'message.user')?.secret?.queue_item).toBe(asked.item); expect(host.me.role).toBe('host'); expect(bridge.pending()).toHaveLength(0);
   });
   it('a request the host rejects does not run, and the guest is told', async () => {
     const { ctl, bridge, queue } = await setup(); const a = await queue.submit({ body: 'delete everything' }); await until(() => bridge.pending().length === 1);
