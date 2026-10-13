@@ -1,5 +1,5 @@
 {
- "updated": "2026-10-09",
+ "updated": "2026-10-13",
  "lanes": {
   "C001": {
    "pct": 0.5,
@@ -58,8 +58,8 @@
    "note": "append-only redacted session log with header v2, flush cadence, segments, line cap, lock, index rebuild, retention, engine session map, resumeSession with fresh-with-summary fallback, toSnapshotEvents, app and CLI wired (-c, --resume [id] with picker), old saves migrated; gaps: session.retentionDays/persist config keys, pty-level CLI test"
   },
   "C028": {
-   "pct": 0.9,
-   "note": "model registry (precedence, engine-reported list + aliases, 24 h cache keyed by engine version, turn-boundary switch with one model.changed, rejection keeps previous model), wired into /model and setModel; gaps: /model no-arg still opens the fixed picker, engines do not yet read models.aliases/--model through the registry at spawn; /model lists the models the Codex account reports; /effort offers each model's levels (Claude and Codex)"
+   "pct": 0.95,
+   "note": "model registry (precedence, engine-reported list + aliases, 24 h cache keyed by engine version, turn-boundary switch with one model.changed, rejection keeps previous model), wired into /model and setModel; gaps: /model no-arg still opens the fixed picker, engines do not yet read models.aliases/--model through the registry at spawn; /model lists the models the Codex account reports; /effort offers each model's levels (Claude and Codex); 2026-10-13: both engines in the model list; /model and the desktop Model menu switch between Claude and Codex"
   },
   "C029": {
    "pct": 0.9,
@@ -114,8 +114,8 @@
    "note": "palette core: DP fuzzy matcher with indices, engine (debounce, abort, slow-provider append, fixed group order, recent), list and file providers (git ls-files or walk, 20k cap, sliced scoring), view and live component (60/cols-4 wide, 8 rows + more row, wrap-around keys), palette.* actions; gap: the app still shows its older palette, sessions/skills providers not wired; palette with ranking and click, entries from the command list; /settings and pickers on one picker model"
   },
   "C042": {
-   "pct": 0.75,
-   "note": "state labels with tier for all 64 states, sort (tier, needs you, age), event reducer, rail/overlay FleetPanel with needs-you/waiting, exit outcomes, reverse-video active row, key handling and per-second elapsed tick; gaps: app still uses components/FleetPanel.tsx, memberColor from theme, rail slot wiring; /fleet as a menu: start, list, preview, stop, remove, clean"
+   "pct": 0.8,
+   "note": "state labels with tier for all 64 states, sort (tier, needs you, age), event reducer, rail/overlay FleetPanel with needs-you/waiting, exit outcomes, reverse-video active row, key handling and per-second elapsed tick; gaps: app still uses components/FleetPanel.tsx, memberColor from theme, rail slot wiring; /fleet as a menu: start, list, preview, stop, remove, clean; 2026-10-13: Team section in the desktop session panel: agents, states, branches, open files, conflicts"
   },
   "C044": {
    "pct": 0.8,
@@ -242,12 +242,12 @@
    "note": "HTTP client in @centcom/net: operation table generated from openapi.yaml with a CI drift check; typed call, listPage, paginate, revalidate, getStatus, getJwks; CT-ERR retries with full jitter and a 60 s sleep budget, idempotency keys, single-flight 401 refresh, ETag and If-Match, size guard, tolerant response checks, typed errors; all 93 operations pass against the mock. Gaps: responses are checked with generated shapes (types and required fields), not the C003 Ajv validators; no lane uses the client yet"
   },
   "C052": {
-   "pct": 0.85,
-   "note": "device flow, PKCE, keychain-only token and API-key stores, TokenManager with early refresh, single-flight and cross-process refresh lock, JWT claims, redaction tests; built against the mock backend; gap: no real keychain run (fakes only)"
+   "pct": 0.9,
+   "note": "device flow, PKCE, keychain-only token and API-key stores, TokenManager with early refresh, single-flight and cross-process refresh lock, JWT claims, redaction tests; built against the mock backend; gap: no real keychain run (fakes only); 2026-10-13: device sign-in verified end to end against the local backend, file keychain in dev"
   },
   "C053": {
-   "pct": 0.85,
-   "note": "login (device flow, --no-browser, --api-key-stdin), logout (--revoke-device, offline-safe), whoami, devices list/revoke with confirmation, messages table, wired into main.tsx; gap: pty test skipped without a terminal harness"
+   "pct": 0.9,
+   "note": "login (device flow, --no-browser, --api-key-stdin), logout (--revoke-device, offline-safe), whoami, devices list/revoke with confirmation, messages table, wired into main.tsx; gap: pty test skipped without a terminal harness; 2026-10-13: login, logout and whoami checked in a real terminal against the local backend"
   },
   "C054": {
    "pct": 0.85,
@@ -314,8 +314,8 @@
    "note": "centcom audit list and export: cursor paging (<=200 per request, no offset), filters, RFC 3339 and relative times, sanitised table, exit 4 on no match, export with Idempotency-Key, 2/4/8/10 s polling and 5 minute limit, 0600 download with partial-file cleanup and no overwrite without --force, plan and role messages, no token or signed URL in output; gaps: not wired into main.tsx until the auth lane lands, not run against the mock backend audit data (tests use scripted answers)"
   },
   "C057": {
-   "pct": 0.75,
-   "note": "session client against the mock relay: create/join/leave/end/claim-host/list/share-link REST, a new join token per attempt, host key grants (share_history on/off), rotation on kick and scheduled, guest waiting_for_key and held frames, sign-verify-decrypt before any event, forged server frames and bad frames dropped, TOFU key-changed with held frames and trustDevice, snapshot upload cadence and restore with history fill, 47 event fixtures round-trip; gaps: re-encrypting unsent frames after rotation, chunking over 192 KiB, share-link guests end to end, host hand-over key transfer; contract gaps noted (key.grant frame key, snapshot blob format); adds resumeFrom({ask:false}) and flush() to the C055 channel"
+   "pct": 0.85,
+   "note": "session client against the mock relay: create/join/leave/end/claim-host/list/share-link REST, a new join token per attempt, host key grants (share_history on/off), rotation on kick and scheduled, guest waiting_for_key and held frames, sign-verify-decrypt before any event, forged server frames and bad frames dropped, TOFU key-changed with held frames and trustDevice, snapshot upload cadence and restore with history fill, 47 event fixtures round-trip; gaps: re-encrypting unsent frames after rotation, chunking over 192 KiB, share-link guests end to end, host hand-over key transfer; contract gaps noted (key.grant frame key, snapshot blob format); adds resumeFrom({ask:false}) and flush() to the C055 channel; 2026-10-13: create takes the session mode (command post or branch) and the handle reports it; create/join/list run against the real API"
   },
   "C058": {
    "pct": 0.8,
@@ -334,8 +334,8 @@
    "note": "approval router: request (apr_ id reused as frame id, clear part only the five routing fields, ttl clamped to 10 min, deny on any failure), answer, authorize matrix by live roster (host, delegated approvers, any_editor, owner via supplied set, never viewer or the requester), first decision wins, dedupe and pending() across reconnects, sink with scopes, awaiting/resolved events; session client gains onAny replay; gaps: owner needs workspace roles from outside, not wired to the permission engine or the fleet panel"
   },
   "C062": {
-   "pct": 0.8,
-   "note": "fleet sync: publishers (spawn with plan-limit error, state with map validation, local-only states refused, 2/s per agent and no repeats, exit, encrypted branch.update, conflicts), lock arbitration through the relay with keyed path hashes (grant, deny, release, expire, reconnect re-ask), pure fleet model (replay deterministic, sender owns the agent, unknown states generic), bus bridge; three members on the mock relay incl. a lock clash and a conflict; mock relay gained lock arbitration and an agent limit; gaps: not wired to the real LockClient and fleet panel, state map has 64 names (card says 60)"
+   "pct": 0.9,
+   "note": "fleet sync: publishers (spawn with plan-limit error, state with map validation, local-only states refused, 2/s per agent and no repeats, exit, encrypted branch.update, conflicts), lock arbitration through the relay with keyed path hashes (grant, deny, release, expire, reconnect re-ask), pure fleet model (replay deterministic, sender owns the agent, unknown states generic), bus bridge; three members on the mock relay incl. a lock clash and a conflict; mock relay gained lock arbitration and an agent limit; gaps: not wired to the real LockClient and fleet panel, state map has 64 names (card says 60); 2026-10-13: branch mode now live: publishers wired through the session bridge, TeamModel, locks and conflicts, handoff offers, mode chosen at session creation; checked against a live backend with two accounts (pnpm dev:branch-check)"
   },
   "C063": {
    "pct": 0.75,
@@ -350,12 +350,12 @@
    "note": "transports: RelayTransport, LanTransport (pairing on first connect, token afterwards, fingerprint check), LocalTransport, openTransport, parseJoinTarget, close-code error mapping and a conformance suite that passes for all three; new package @centcom/session; gaps: not used by the session client yet (it still builds the relay link itself), no real discovery-driven connect"
   },
   "C075": {
-   "pct": 0.75,
-   "note": "host session engine over the LAN server: role matrix, queue machine with caps and auto-approval, kick/mute/role/transfer/policy/end, approvals, locks with ttl, roster, file history with snapshots (latest 3), host actions through the loopback link; tested with unit tests and host plus guests over loopback; gaps: no host failover, no payload schema check per kind, the history window and snapshot serving to late joiners are tested only at the persistence level, the agent runner and event bus are not wired"
+   "pct": 0.8,
+   "note": "host session engine over the LAN server: role matrix, queue machine with caps and auto-approval, kick/mute/role/transfer/policy/end, approvals, locks with ttl, roster, file history with snapshots (latest 3), host actions through the loopback link; tested with unit tests and host plus guests over loopback; gaps: no host failover, no payload schema check per kind, the history window and snapshot serving to late joiners are tested only at the persistence level, the agent runner and event bus are not wired; 2026-10-13: HostBridge decides approvals for the owner, and in branch mode every person runs their own agent"
   },
   "C076": {
-   "pct": 0.65,
-   "note": "guest engine: GuestSession over any transport, pure total reducer, ordering and dedupe, key-wait buffer with caps, queue submit/cancel with local gating and idempotent resend, close-code handling, spoofed control frames ignored; tested with fixtures, a property test, a hand-driven transport and the C075 host over loopback; gaps: crypto and signature checks sit behind an injected decoder (not wired to the C057 session client yet), no acks here, no snapshot restore, not tested against the mock relay"
+   "pct": 0.75,
+   "note": "guest engine: GuestSession over any transport, pure total reducer, ordering and dedupe, key-wait buffer with caps, queue submit/cancel with local gating and idempotent resend, close-code handling, spoofed control frames ignored; tested with fixtures, a property test, a hand-driven transport and the C075 host over loopback; gaps: crypto and signature checks sit behind an injected decoder (not wired to the C057 session client yet), no acks here, no snapshot restore, not tested against the mock relay; 2026-10-13: JoinedSession joins a shared session over the real relay, in command post and branch mode"
   },
   "C077": {
    "pct": 1,
@@ -374,8 +374,8 @@
    "note": "merged in #82"
   },
   "C079": {
-   "pct": 0.85,
-   "note": "handoff, failover watching, queue continuity helpers, epoch tracking, pair mode; gaps: not wired into the engines, the C075 engine keeps running items as running"
+   "pct": 0.9,
+   "note": "handoff, failover watching, queue continuity helpers, epoch tracking, pair mode; gaps: not wired into the engines, the C075 engine keeps running items as running; 2026-10-13: agent handoff offers in branch mode (desktop dialog and /share handoff)"
   },
   "C082": {
    "pct": 0.85,
