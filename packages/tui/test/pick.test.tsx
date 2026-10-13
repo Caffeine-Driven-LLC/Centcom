@@ -135,7 +135,8 @@ describe('/spinner', () => {
     const c = make(); c.patch({ busy: true, verb: 'Pondering', items: [{ id: 'u', kind: 'user', text: 'x' } as never] });
     const strip = () => renderToString(React.createElement(LiveStrip, { s: c.state, driver: new MascotDriver({}) as never, width: 60, size: 'off' as const }), { columns: 70 });
     expect(strip()).not.toContain('Working…'); await c.runCommand('/spinner plain'); expect(c.state.settings.spinner).toBe('plain'); const t = strip(); expect(t).toContain('Working…');
-    await c.runCommand('/spinner fun'); expect(strip()).not.toContain('Working…'); // the words come from the spinner module's pools (lane C040) await c.runCommand('/spinner loud'); expect(c.state.toasts.at(-1)!.text).toMatch(/fun or \/spinner plain/);
+    await c.runCommand('/spinner fun'); expect(strip()).not.toContain('Working…'); // the words come from the spinner module's pools (lane C040)
+    await c.runCommand('/spinner loud'); expect(c.state.toasts.at(-1)!.text).toMatch(/fun or \/spinner plain/);
     const run = c.runCommand('/spinner'); await new Promise((r) => setTimeout(r, 0)); expect(c.state.pick!.options.map((o) => o.id)).toEqual(['fun', 'plain']); c.pickKey('down'); c.pickKey('enter'); await run; expect(c.state.settings.spinner).toBe('plain');
   });
 });
