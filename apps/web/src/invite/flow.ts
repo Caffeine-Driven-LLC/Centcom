@@ -1,6 +1,7 @@
 import { failure, errCode, errStatus, type Http } from '../workspace/data.js';
 import type { KeyHolder } from './fragment.js';
 import { isToken } from './deeplink.js';
+import { fragmentOf } from '../session/handoff.js';
 
 export interface Preview { workspace_name: string; inviter_name: string; role: string; expires_at: string; has_key_bundle?: boolean }
 export type PreviewResult = { state: 'ready'; preview: Preview } | { state: 'invalid' } | { state: 'error' };
@@ -11,12 +12,14 @@ export async function previewInvite(http: Http, token: string, signal?: AbortSig
 }
 export const INVALID_TEXT = "This invite isn't valid anymore."; export const HELP_TEXT = 'Ask for a new link.';
 export type Opener = (bundle: unknown, key: Uint8Array) => Promise<void>;
-export type AcceptResult = { state: 'joined'; workspace?: unknown; keyed: boolean } | { state: 'waiting_for_key'; workspace?: unknown } | { state: 'invalid' } | { state: 'signed_out' } | { state: 'error'; retryAfterS?: number };
+export type AcceptResult = { state: 'joined'; workspace?: unknown; keyed: boolean; /** a session invite: the session to open */ session?: string } | { state: 'waiting_for_key'; workspace?: unknown; session?: string } | { state: 'invalid' } | { state: 'signed_out' } | { state: 'error'; retryAfterS?: number };
 /** Accepting needs a click and a signed-in person. After it the key bundle is fetched once (three tries, 500 ms doubling) and opened with the fragment key, which is then zeroed whatever happens. */
-export async function acceptInvite(http: Http, token: string, o: { key: KeyHolder; open: Opener; sleep(ms: number): Promise<void>; signedIn: boolean }): Promise<AcceptResult> {
+export async function acceptInvite(http: Http, token: string, o: { key: KeyHolder; open: Opener; sleep(ms: number): Promise<void>; signedIn: boolean; /** a session invite is opened by the session page, which fetches the key bundle itself (it can be fetched only once) */ handOff?: (h: { session: string; token: string; secret?: string }) => void }): Promise<AcceptResult> {
   try {
     if (!o.signedIn) return { state: 'signed_out' }; if (!isToken(token)) return { state: 'invalid' };
     let workspace: unknown; try { workspace = (await http.call('acceptInvite', { token }, {})).data; } catch (e) { const s = errStatus(e); if (s === 401) return { state: 'signed_out' }; if (s === 404 || s === 410 || s === 409) return { state: 'invalid' }; const f = failure(e); return { state: 'error', retryAfterS: f.retryAfterS }; }
+    const session = (workspace as { session?: unknown } | null)?.session;
+    if (typeof session === 'string' && o.handOff) { const secret = o.key.present ? o.key.use(fragmentOf) : undefined; o.handOff({ session, token, ...(secret ? { secret } : {}) }); return secret ? { state: 'joined', workspace, keyed: true, session } : { state: 'waiting_for_key', workspace, session }; }
     if (!o.key.present) return { state: 'waiting_for_key', workspace };
     for (let i = 0; i < 3; i++) { try { const bundle = (await http.call('getInviteKeyBundle', { token })).data; await o.key.use((k) => o.open(bundle, k)); return { state: 'joined', workspace, keyed: true }; } catch (e) { const s = errStatus(e); if (s === 404 || s === 410) return { state: 'waiting_for_key', workspace }; if (i < 2) await o.sleep(500 * 2 ** i); } }
     return { state: 'waiting_for_key', workspace };
