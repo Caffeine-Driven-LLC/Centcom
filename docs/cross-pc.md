@@ -1,6 +1,6 @@
 # Working together across computers (branch mode): the design
 
-Status: the design, plus the client pieces as they land. Each person runs their **own** agents on their **own** computer, on their own copy of the same project, and all of them are in one shared session: everyone sees who is working on what, files an agent has open are marked, a second agent that is about to touch the same file is warned first, notes and decisions reach the other agents, and work can be handed from one person to another.
+Status: **built in the terminal app and the desktop app** (the session mode needs a backend that stores it, lane B110; without it the apps say so and share as a command post). Not built yet: board-note sync (waits on the `board.*` contract change), a read-only view of a teammate's transcript, nudges. Each person runs their **own** agents on their **own** computer, on their own copy of the same project, and all of them are in one shared session: everyone sees who is working on what, files an agent has open are marked, a second agent that is about to touch the same file is warned first, notes and decisions reach the other agents, and work can be handed from one person to another.
 
 This is "branch mode" in the contracts (`contracts/04-session-events.md`: `*` means "in branch mode the agent's owner emits events for their own agents"). What exists today is the other mode:
 
@@ -85,3 +85,11 @@ The board (`docs/context-sharing.md`) stays per computer. Session-scope notes (a
 ## How it is verified
 
 Unit and integration tests with a fake session handle (no network), and a live script with two fresh accounts, two throwaway homes and mock agents against the local backend: both agents appear in each other's Team view with their states; both touch one file and the second owner is warned before the edit; one agent hands a task to the other; a note added on one computer appears in the other agent's digest.
+
+## Using it
+
+- **Desktop:** Share asks "Only I run the agent" or "Everyone runs their own agent". In a branch session the session panel has a Team section (each agent's state, branch, how far from the base, the files it has open, what it last said, conflicts, handoff offers). "Show the team what my agent says and does" is a switch in the Share dialog.
+- **Terminal:** `/share branch` starts one, `/share invite <email>` makes an invite, the other person runs `centcom` in their own copy of the project and `/share join <invite or session id>`. `/team` shows everyone's agents, `/share activity [on|off]` the privacy switch, `/share handoff <number> [note]` offers your work to someone.
+- **Conflicts:** when a teammate's agent holds a file your agent is changing, you get a notice and your agent is told once, before its next edit (labelled as coming from the session, not from you).
+- **Late joiners** read the agents that were there first from what is re-sent to them (state and branch) and from the session's later frames; a second `agent.spawn` for a known agent is refused by the relay, so it is not repeated, which is why a late joiner may see a teammate's agent as plain "Agent" until the owner's next spawn-bearing event.
+- **Try it:** with the backend stack up (`pnpm dev:up`, `dev:api`, `dev:relay` in the backend repo), run `python3 tools/dev/pty-collab.py` (two accounts, `/share`, join) as a starting point.
