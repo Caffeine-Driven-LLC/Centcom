@@ -47,6 +47,8 @@ export type ClientMsg =
   | { t: 'shareActivity'; on: boolean }
   | { t: 'shareHandoff'; to: string; note?: string }
   | { t: 'shareHandoffAnswer'; id: string; accept: boolean }
+  /** branch mode: open (or, with no agent, close) the read-only view of a teammate's transcript */
+  | { t: 'teamWatch'; agent?: string }
   | { t: 'unshare' }
   | { t: 'shareLink' }
   | { t: 'shareInvite'; email?: string }
@@ -82,6 +84,7 @@ export interface SharingView {
   /** branch mode: this person joined someone else's session and their own agent is in it */ joinedBranch?: boolean;
   /** branch mode: the team sees what this agent says and does */ activity?: boolean;
   /** branch mode: who works on what, live */ team?: import('@centcom/tui').TeamView;
+  /** branch mode: the teammate's agent whose transcript is open (read only): what it said and did, as far as its owner shares it */ watch?: { agent: string; owner: string; name: string; sharing: boolean; lines: import('@centcom/tui').TeamLine[] };
   auto: boolean; members: { id: string; name: string; slot: number; role: 'host' | 'editor' | 'viewer'; online: boolean; you: boolean }[];
   pending: { item: string; from: string; slot: number; text: string }[];
 }

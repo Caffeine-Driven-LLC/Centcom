@@ -18,8 +18,8 @@ export interface CollabOptions {
 export type CollabMsg = Extract<ClientMsg, { t: 'account' | 'login' | 'cancelLogin' | 'logout' | 'team' | 'teamInvite' | 'teamRevoke' | 'teamRole' | 'teamRemove' | 'upgrade' }>;
 export type JoinMsg = Extract<ClientMsg, { t: 'join' | 'joinedAsk' | 'joinedLeave' }>;
 export const isJoinMsg = (m: ClientMsg): m is JoinMsg => m.t === 'join' || m.t === 'joinedAsk' || m.t === 'joinedLeave';
-export type ShareMsg = Extract<ClientMsg, { t: 'share' | 'unshare' | 'shareLink' | 'shareInvite' | 'shareDecide' | 'shareAuto' | 'shareActivity' | 'shareHandoff' | 'shareHandoffAnswer' }>;
-const ACCOUNT = new Set(['account', 'login', 'cancelLogin', 'logout', 'team', 'teamInvite', 'teamRevoke', 'teamRole', 'teamRemove', 'upgrade']); const SHARE = new Set(['share', 'unshare', 'shareLink', 'shareInvite', 'shareDecide', 'shareAuto', 'shareActivity', 'shareHandoff', 'shareHandoffAnswer']);
+export type ShareMsg = Extract<ClientMsg, { t: 'share' | 'unshare' | 'shareLink' | 'shareInvite' | 'shareDecide' | 'shareAuto' | 'shareActivity' | 'shareHandoff' | 'shareHandoffAnswer' | 'teamWatch' }>;
+const ACCOUNT = new Set(['account', 'login', 'cancelLogin', 'logout', 'team', 'teamInvite', 'teamRevoke', 'teamRole', 'teamRemove', 'upgrade']); const SHARE = new Set(['share', 'unshare', 'shareLink', 'shareInvite', 'shareDecide', 'shareAuto', 'shareActivity', 'shareHandoff', 'shareHandoffAnswer', 'teamWatch']);
 export const isCollabMsg = (m: ClientMsg): m is CollabMsg => ACCOUNT.has(m.t);
 export const isShareMsg = (m: ClientMsg): m is ShareMsg => SHARE.has(m.t);
 const view = (s: AccountStatus): AccountView => ({ signedIn: s.signedIn, persisted: s.persisted, api: s.api, ...(s.offline ? { offline: true } : {}), ...(s.me ? { me: s.me } : {}) });
@@ -30,6 +30,12 @@ const why = (e: unknown): string => {
   if (name === 'TransportError' || /fetch failed|ECONNREFUSED|network/i.test(msg)) return 'Could not reach the Centcom server. Check your connection and the server address.';
   return msg && msg.length < 160 ? msg : 'Sign-in did not work. Try again.';
 };
+
+/** The read-only view of a teammate's agent: its transcript as far as its owner shares it. Nothing for an agent that is not a teammate's. */
+function watchOf(team: NonNullable<HostBridge['team']>, agent: string): { watch?: NonNullable<SharingView['watch']> } {
+  for (const m of team.snapshot().members) { if (m.you) continue; const a = m.agents.find((x) => x.id === agent); if (a) return { watch: { agent, owner: m.id, name: m.name, sharing: a.sharing, lines: team.transcript(agent).slice(-120) } }; }
+  return {};
+}
 
 export class CollabService {
   private account?: Promise<Account>; private attempt?: { abort: AbortController; shown: Extract<ServerMsg, { t: 'login'; phase: 'code' }> };
@@ -76,12 +82,12 @@ export class CollabService {
   }
 
   /* ---------------------------------------------------------------- sharing a conversation */
-  private shares = new Map<Workspace, { name: string; handle?: SessionHandle; bridge?: HostBridge; state: SharingView['state']; error?: string; code?: string; link?: SharingView['link']; invite?: SharingView['invite']; hint?: string; workspace?: string; account?: Account; degraded?: boolean; joinedBranch?: boolean; conflict?: { text: string; at: number } }>();
+  private shares = new Map<Workspace, { name: string; handle?: SessionHandle; bridge?: HostBridge; state: SharingView['state']; error?: string; code?: string; link?: SharingView['link']; invite?: SharingView['invite']; hint?: string; workspace?: string; account?: Account; degraded?: boolean; joinedBranch?: boolean; watching?: string; conflict?: { text: string; at: number } }>();
   /** What the screens show for a conversation: undefined when it is not shared. */
   sharingOf(ws: Workspace): SharingView | null {
     const sh = this.shares.get(ws); if (!sh) return null; const h = sh.handle; const me = h?.me.id;
     const br = sh.bridge?.mode === 'branch' ? sh.bridge : undefined;
-    return { state: sh.state, name: sh.name, mode: br ? 'branch' : 'command_post', ...(sh.degraded ? { degraded: true } : {}), ...(sh.joinedBranch ? { joinedBranch: true } : {}), ...(br ? { activity: br.sharingActivity, ...(br.team ? { team: br.team.snapshot() } : {}) } : {}), ...(h ? { sessionId: h.id } : {}), ...(sh.workspace ? { workspace: sh.workspace } : {}), ...(sh.error ? { error: sh.error } : {}), ...(sh.code ? { code: sh.code } : {}), ...(sh.link ? { link: sh.link } : {}), ...(sh.invite ? { invite: sh.invite } : {}), ...(sh.hint ? { hint: sh.hint } : {}),
+    return { state: sh.state, name: sh.name, mode: br ? 'branch' : 'command_post', ...(sh.degraded ? { degraded: true } : {}), ...(sh.joinedBranch ? { joinedBranch: true } : {}), ...(br ? { activity: br.sharingActivity, ...(br.team ? { team: br.team.snapshot() } : {}) } : {}), ...(br?.team && sh.watching ? watchOf(br.team, sh.watching) : {}), ...(h ? { sessionId: h.id } : {}), ...(sh.workspace ? { workspace: sh.workspace } : {}), ...(sh.error ? { error: sh.error } : {}), ...(sh.code ? { code: sh.code } : {}), ...(sh.link ? { link: sh.link } : {}), ...(sh.invite ? { invite: sh.invite } : {}), ...(sh.hint ? { hint: sh.hint } : {}),
       auto: sh.bridge?.autoApproving ?? false,
       members: (h?.roster() ?? []).map((m) => ({ id: m.id, name: m.name || 'Someone', slot: m.slot, role: m.role, online: m.online !== false, you: m.id === me })),
       pending: (sh.bridge?.pending() ?? []).map((p) => ({ item: p.item, from: p.from, slot: p.slot, text: p.text.slice(0, 2000) })) };
@@ -127,6 +133,7 @@ export class CollabService {
       }
       case 'shareDecide': { try { if (m.decision === 'approve') await cur?.bridge?.approve(m.item); else await cur?.bridge?.reject(m.item); } catch { /* the item was already decided or withdrawn */ } this.publish(ws); return; }
       case 'shareAuto': { cur?.bridge?.setAutoApprove(m.on); this.publish(ws); return; }
+      case 'teamWatch': { if (cur) cur.watching = m.agent; this.publish(ws); return; }
       case 'shareActivity': { cur?.bridge?.setShareActivity(m.on); this.publish(ws); return; }
       case 'shareHandoff': { cur?.bridge?.offerHandoff(m.to, m.note); this.publish(ws); return; }
       case 'shareHandoffAnswer': { cur?.bridge?.answerHandoff(m.id, m.accept); this.publish(ws); return; }
