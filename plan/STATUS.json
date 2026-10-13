@@ -278,12 +278,12 @@
    "note": "pairing code, CPace key exchange, host/guest flow with confirmation, attempt limit and ban list, reconnect token, session trust store, fingerprint binding, redaction tests; gap: no real socket run; host server (C072) not built"
   },
   "C097": {
-   "pct": 0.85,
-   "note": "centcom doctor (9 checks in parallel with 3 s network limits, one next step per problem, exit codes 0/1/2, JSON schema, --check, --bundle tar.gz) and local crash reports (redaction corpus of 30, retention of 10, no egress, one error.shown code with telemetry on), centcom crash list/show/delete; gap: doctor does not yet check the relay upgrade or /v1/me, and recent log lines are not yet fed from the app logger"
+   "pct": 1,
+   "note": "merged in #180"
   },
   "C098": {
-   "pct": 0.8,
-   "note": "bench harness (calibration, stats, budgets, baseline compare with normalisation, noise handling, results schema, pnpm bench/bench:compare, baseline-commit check, nightly workflow) with 9 metrics: crypto, envelope, mascot, transcript scroll and layout, version, memory; self-test of the gate passes; gaps: first-prompt, keypress-to-paint, diff, resume and reducer rates, leak check not measured yet; version/memory not gating until the packaged CLI; keypress and startup budgets (docs/perf/BUDGETS.md), idle-cost check"
+   "pct": 1,
+   "note": "merged in #180"
   },
   "C096": {
    "pct": 0.7,
@@ -302,8 +302,8 @@
    "note": "2026-10-13: pnpm gate with G1 built, conformance over client-read contracts, update line needs every scenario (#173); gaps: G2 to G5 not built so G6 fails, PAGE/AUTH/RESUME/DEEPLINK suites waived, G1 never run against a real backend"
   },
   "C099": {
-   "pct": 0.7,
-   "note": "security baseline: pnpm security:check (secret scan, install scripts, exact pinning [waived to 2026-12-31 until C001], lockfile integrity, workflow lint, licence allow-list, audit with 3 retries, fails closed), waivers with issue URL and 90-day expiry, CycloneDX 1.5 SBOM per artifact (pnpm sbom, validated against a schema subset), keystore scan, redaction fuzz, Renovate config, threat model, checklist, review log; ci.yml pinned by SHA; gaps: SBOM not attached to a real release, full CycloneDX schema, keystore scan not yet run after a real login flow (C052 PR), web CSP review, runner env review"
+   "pct": 1,
+   "note": "merged in #180"
   },
   "C069": {
    "pct": 0.8,
