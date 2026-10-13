@@ -975,6 +975,7 @@ export class AppController {
         break;
       }
       case 'effort': await this.effortCommand(arg); break;
+      case 'team': { if (!this.shareHandler) { this.toast('warn', 'No team here. /share branch starts a session where everyone runs their own agent.'); break; } await this.shareHandler('team'); break; }
       case 'share': { if (!this.shareHandler) { this.toast('warn', 'Sharing is not available here. Use the terminal app with an account (centcom login).'); break; } await this.shareHandler(arg); break; }
       case 'model': {
         if (!arg) { await this.openModels(); break; }

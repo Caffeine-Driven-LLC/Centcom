@@ -36,7 +36,10 @@ export type ClientMsg =
   | { t: 'cancelLogin' }
   | { t: 'logout' }
   /** Sharing the shown conversation over the relay (needs a sign-in and a plan with the relay). */
-  | { t: 'share' }
+  | { t: 'share'; mode?: 'command_post' | 'branch' }
+  | { t: 'shareActivity'; on: boolean }
+  | { t: 'shareHandoff'; to: string; note?: string }
+  | { t: 'shareHandoffAnswer'; id: string; accept: boolean }
   | { t: 'unshare' }
   | { t: 'shareLink' }
   | { t: 'shareInvite'; email?: string }
@@ -67,6 +70,10 @@ export interface SharingView {
   /** a view-only link (the key is in its fragment: it is a secret) */ link?: { url: string; expiresAt: string };
   /** an invite link for the workspace */ invite?: { url: string; email?: string };
   /** a note on what could not be done and what to do instead */ hint?: string;
+  /** how the session works: the host runs the agent, or everyone runs their own */ mode?: 'command_post' | 'branch'; /** branch mode was asked for but the server did not offer it, so this is a command post */ degraded?: boolean;
+  /** branch mode: this person joined someone else's session and their own agent is in it */ joinedBranch?: boolean;
+  /** branch mode: the team sees what this agent says and does */ activity?: boolean;
+  /** branch mode: who works on what, live */ team?: import('@centcom/tui').TeamView;
   auto: boolean; members: { id: string; name: string; slot: number; role: 'host' | 'editor' | 'viewer'; online: boolean; you: boolean }[];
   pending: { item: string; from: string; slot: number; text: string }[];
 }

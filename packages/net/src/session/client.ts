@@ -44,6 +44,8 @@ class Lifecycle extends TypedEmitter<LifecycleEvents> { fire<K extends Lifecycle
 const LIFECYCLE = new Set<string>(['state', 'roster', 'key-changed', 'waiting-for-key', 'protocol-warning', 'ended', 'snapshot', 'notice', 'error', 'removed', 'link']);
 export interface SessionHandle {
   readonly id: string; readonly me: MemberInfo; readonly state: SessionState; readonly policy: SessionPolicy;
+  /** How the session works: `command_post` (the host runs the agent) or `branch` (everyone runs their own). A server that does not know about modes always answers `command_post`. */
+  readonly mode: 'command_post' | 'branch';
   roster(): MemberInfo[];
   /** presence frames dropped because they did not verify (best effort, never an error) */
   presenceDropped(): number;
@@ -78,7 +80,7 @@ const FRAME_REFUSALS = new Set<string>(['queue_full', 'queue_item_gone', 'queue_
 const RECENT_EVENTS = 500; const KEY_WAIT_MS = 10_000; const MAX_PENDING = 1000;
 
 class Connection implements SessionHandle {
-  readonly roster_ = new Roster(); me: MemberInfo; private st: SessionState = 'connecting'; policy: SessionPolicy;
+  mode: 'command_post' | 'branch' = 'command_post'; readonly roster_ = new Roster(); me: MemberInfo; private st: SessionState = 'connecting'; policy: SessionPolicy;
   private readonly life = new Lifecycle(); private readonly handlers = new Map<string, Set<(e: DecodedEvent) => void>>(); private readonly any = new Set<(e: DecodedEvent) => void>();
   private relay!: RelayClient; private channel!: ReliableChannel; private codec!: FrameCodec; private host?: HostDuties; private guest!: GuestKeys;
   private chain: Promise<void> = Promise.resolve(); private pending: SequencedFrame[] = []; private pendingKid?: string; private keyWaiters: { kid: string; res: () => void; rej: (e: unknown) => void; timer: unknown }[] = [];
@@ -257,7 +259,7 @@ class Connection implements SessionHandle {
 }
 
 export interface SessionClient {
-  createSession(o: { name: string; workspace: string; policy?: Partial<SessionPolicy> } & SessionOptions): Promise<SessionHandle>;
+  createSession(o: { name: string; workspace: string; policy?: Partial<SessionPolicy>; /** `branch`: every member runs their own agent (needs a server that supports it; check `handle.mode`) */ mode?: 'command_post' | 'branch' } & SessionOptions): Promise<SessionHandle>;
   joinSession(o: { sessionId: string; /** `#k=...` fragment of an invite */ inviteSecret?: string; inviteToken?: string } & SessionOptions): Promise<SessionHandle>;
   claimHost(sessionId: string): Promise<SessionSummary>;
   listSessions(filter?: { workspace?: string; state?: string; mine?: boolean }): AsyncIterable<SessionSummary>;
@@ -273,13 +275,13 @@ export function createSessionClient(d: SessionClientDeps): SessionClient {
   const relayUrl = (v?: string) => d.relayUrl ?? v ?? RELAY_DEFAULT;
   return {
     async createSession(o) {
-      let s: SessionCreated; try { s = await rest.create({ workspace: o.workspace, name: o.name, ...(o.policy ? { policy: o.policy as SessionPolicy } : {}) }); } catch (e) { if (e instanceof CentcomError && (e.code === 'entitlement_required' || e.code === 'payment_required')) throw Object.assign(new SessionError('relay_not_included', 'Your plan does not include hosted sessions. Upgrade to create one.'), { cause: e }); throw e; }
-      const h = new Connection(d, rest, s.id, 'host', s.host_member?.id ?? '', KeyRing.create(new Date((d.clock ?? realClock).now())), false, s.policy ?? {}, o, relayUrl(s.relay_url)); await h.start(); return h;
+      let s: SessionCreated; try { s = await rest.create({ workspace: o.workspace, name: o.name, ...(o.mode ? { mode: o.mode } : {}), ...(o.policy ? { policy: o.policy as SessionPolicy } : {}) }); } catch (e) { if (e instanceof CentcomError && (e.code === 'entitlement_required' || e.code === 'payment_required')) throw Object.assign(new SessionError('relay_not_included', 'Your plan does not include hosted sessions. Upgrade to create one.'), { cause: e }); throw e; }
+      const h = new Connection(d, rest, s.id, 'host', s.host_member?.id ?? '', KeyRing.create(new Date((d.clock ?? realClock).now())), false, s.policy ?? {}, o, relayUrl(s.relay_url)); h.mode = s.mode === 'branch' ? 'branch' : 'command_post'; await h.start(); return h;
     },
     async joinSession(o) {
       const sess = await rest.get(o.sessionId); const ring = await ringFor(o.sessionId);
       if (o.inviteSecret && o.inviteToken) { const bundle = await rest.getKeyBundle(o.inviteToken); for (const k of openInviteBundle(bundle, inviteSecretFromFragment(o.inviteSecret))) if (!ring.get(k.kid)) ring.addEpoch(k.kid, k.key); }
-      const c = new Connection(d, rest, o.sessionId, 'editor', '', ring, false, sess.policy ?? {}, o, relayUrl()); await c.start(); return c;
+      const c = new Connection(d, rest, o.sessionId, 'editor', '', ring, false, sess.policy ?? {}, o, relayUrl()); c.mode = (sess as { mode?: string }).mode === 'branch' ? 'branch' : 'command_post'; await c.start(); return c;
     },
     claimHost: (id) => rest.claimHost(id),
     listSessions: (f) => rest.list(f),

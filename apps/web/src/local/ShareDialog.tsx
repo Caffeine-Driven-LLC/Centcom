@@ -20,24 +20,31 @@ export function ShareButton({ view }: { view: LocalView }): React.JSX.Element | 
 
 /** Sharing the shown conversation: start it, invite people, decide what editors ask for, stop. */
 export function ShareDialog({ view, send }: { view: LocalView; send(m: ClientMsg): void }): React.JSX.Element | null {
-  const [open, setOpen] = useState(false); const [email, setEmail] = useState(''); const sh = view.sharing; const account = view.account;
+  const [open, setOpen] = useState(false); const [email, setEmail] = useState(''); const [mode, setMode] = useState<'command_post' | 'branch'>('command_post'); const sh = view.sharing; const account = view.account;
   useEffect(() => { const f = (): void => { setOpen(true); send({ t: 'account' }); }; window.addEventListener('centcom:share', f); return () => window.removeEventListener('centcom:share', f); }, [send]);
   if (!view.opened) return null;
   const live = sh?.state === 'live';
   return <Dialog open={open} onOpenChange={setOpen} label="Share this session">
     <div className="shr">
-      <h2 className="acct__title">{live ? 'Shared session' : 'Share this session'}</h2>
+      <h2 className="acct__title">{live ? (sh?.joinedBranch ? 'You are in a shared session' : 'Shared session') : 'Share this session'}</h2>
       {!sh || sh.state === 'ended' ? <>
-        <p>Other people can watch this conversation live, and the ones you allow can ask the agent for things. The agent keeps running here, on this computer; nothing is uploaded except what the agent says and does, encrypted so that only the people in the session can read it.</p>
+        <p>Nothing is uploaded except what the agents say and do, encrypted so that only the people in the session can read it. Your agent keeps running on this computer.</p>
+        <fieldset className="shr__modes"><legend className="cc-label">How will you work together?</legend>
+          <label className="shr__mode"><input type="radio" name="share-mode" checked={mode === 'command_post'} onChange={() => setMode('command_post')} /><span><strong>Only I run the agent</strong><small>Others watch it live and ask it for things; you approve what runs.</small></span></label>
+          <label className="shr__mode"><input type="radio" name="share-mode" checked={mode === 'branch'} onChange={() => setMode('branch')} /><span><strong>Everyone runs their own agent</strong><small>Each person works on their own copy of the project with their own agent. You all see who is working on what, and get a warning before two agents change the same file.</small></span></label>
+        </fieldset>
         {sh?.state === 'ended' ? <p className="acct__note">The last session has ended.</p> : null}
         {account && !account.signedIn ? <>
           <p className="acct__note">Sharing needs an account.</p>
           <div className="acct__actions"><Button onClick={() => { setOpen(false); window.dispatchEvent(new Event('centcom:account')); }}>Sign in</Button><Button variant="ghost" onClick={() => setOpen(false)}>Not now</Button></div>
-        </> : <div className="acct__actions"><Button onClick={() => send({ t: 'share' })}>Start sharing</Button><Button variant="ghost" onClick={() => setOpen(false)}>Not now</Button></div>}
+        </> : <div className="acct__actions"><Button onClick={() => send({ t: 'share', mode })}>Start sharing</Button><Button variant="ghost" onClick={() => setOpen(false)}>Not now</Button></div>}
       </> : sh.state === 'starting' ? <p>Starting the session…</p> : sh.state === 'failed' ? <>
         <p className="acct__error" role="alert">{sh.error ?? 'Sharing did not start.'}</p>
-        <div className="acct__actions">{sh.code === 'not_signed_in' ? <Button onClick={() => { setOpen(false); window.dispatchEvent(new Event('centcom:account')); }}>Sign in</Button> : <Button onClick={() => send({ t: 'share' })}>Try again</Button>}<Button variant="ghost" onClick={() => { send({ t: 'unshare' }); setOpen(false); }}>Close</Button></div>
+        <div className="acct__actions">{sh.code === 'not_signed_in' ? <Button onClick={() => { setOpen(false); window.dispatchEvent(new Event('centcom:account')); }}>Sign in</Button> : <Button onClick={() => send({ t: 'share', mode })}>Try again</Button>}<Button variant="ghost" onClick={() => { send({ t: 'unshare' }); setOpen(false); }}>Close</Button></div>
       </> : <>
+        {sh.mode === 'branch' ? <section className="shr__sec"><h3>Everyone runs their own agent</h3>
+          <label className="shr__auto"><input type="checkbox" checked={sh.activity !== false} onChange={(e) => send({ t: 'shareActivity', on: e.target.checked })} />Show the team what my agent says and does</label>
+          <p className="acct__note">{sh.activity !== false ? 'Teammates see my agent\'s messages and tool summaries. Its state, branch and the files it has open are always shared.' : 'Activity is not shared. Teammates still see my agent\'s state, branch and the files it has open.'}</p></section> : null}
         <section className="shr__sec"><h3><Link2 aria-hidden="true" />Join with the session id</h3>
           <p className="acct__note">People in your workspace ({sh.workspace ?? 'yours'}) enter it in Centcom (Join a session, or <code>centcom join</code>). Anyone else needs an invite (below).</p>
           <p className="shr__id"><code>{sh.sessionId}</code><CopyButton text={sh.sessionId ?? ''} label="Copy" /></p></section>
