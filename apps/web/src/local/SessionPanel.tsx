@@ -31,7 +31,7 @@ function Notes({ view, send }: { view: LocalView; send?: ((m: ClientMsg) => void
   const add = (): void => { const t = text.trim(); if (!t || !send) return; send({ t: 'note', type, text: t }); setText(''); };
   return <Section icon={<StickyNote />} title="Shared notes" aside={view.board.notes.length ? String(view.board.notes.length) : undefined}>
     {view.board.notes.length ? <ul className="ps-list">{view.board.notes.slice(0, 8).map((n) => <li key={n.id} className="ps-note-row">
-      <span className="ps-note-row__head"><Badge variant={NOTE_VARIANT[n.type] ?? 'default'}>{n.type}</Badge><span className="ps-note-row__by">{n.person ? 'you' : n.author}</span>
+      <span className="ps-note-row__head"><Badge variant={NOTE_VARIANT[n.type] ?? 'default'}>{n.type}</Badge><span className="ps-note-row__by">{n.shared ? `${n.author}${n.role ? ` (${n.role})` : ''}` : n.person ? 'you' : n.author}</span>
         {send ? <span className="ps-note-row__acts"><button type="button" className="ps-icon" aria-pressed={n.pinned} aria-label={n.pinned ? `Unpin: ${n.text}` : `Pin: ${n.text}`} title={n.pinned ? 'Unpin' : 'Pin (keeps it until you remove it)'} onClick={() => send({ t: 'notePin', id: n.id, pinned: !n.pinned })}><Pin /></button>
           <button type="button" className="ps-icon" aria-label={`Remove: ${n.text}`} title="Take it off the board" onClick={() => send({ t: 'noteRemove', id: n.id })}><X /></button></span> : null}</span>
       <span className="ps-note-row__text">{n.text}</span>
@@ -82,7 +82,7 @@ export function SessionPanel({ view, send, now = Date.now() }: { view: LocalView
       <Button variant="outline" size="sm" onClick={openShare}><UserPlus />{view.sharing?.state === 'live' ? 'Invite more people' : 'Share this session'}</Button>
     </Section>
     {send ? <TeamSection view={view} send={send} /> : null}
-    <Notes view={view} send={send} />
+    <Notes view={view} send={view.sharing?.members.find((m) => m.you)?.role === 'viewer' ? undefined : send} />
     <Section icon={<FileDiff />} title="Files changed" aside={info.files.length ? <><span className="ps-add">+{info.added}</span> <span className="ps-del">−{info.removed}</span></> : undefined}>
       {shown?.diff ? <div className="ps-diff"><Button variant="ghost" size="sm" onClick={() => setOpenFile(null)}>← All files</Button><p className="ps-diff__path" title={shown.path}>{rel(shown.path)}</p><Diff diff={shown.diff} max={60} /></div>
         : info.files.length ? <ul className="ps-list ps-list--tight">{info.files.slice(0, 12).map((f) => <li key={f.path}><button type="button" disabled={!f.diff} className="ps-file" title={f.path} onClick={() => setOpenFile(f.path)}><span className="ps-file__name" data-failed={f.failed}>{rel(f.path)}</span><span className="ps-file__n">{f.added || f.removed ? `+${f.added} −${f.removed}` : `${f.edits}×`}</span></button></li>)}{info.files.length > 12 ? <li className="ps-more">and {info.files.length - 12} more</li> : null}</ul>

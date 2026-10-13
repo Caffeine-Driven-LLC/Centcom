@@ -26,5 +26,14 @@ describe('the team section of the session panel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Decline' })); expect(sent.at(-1)).toEqual({ t: 'shareHandoffAnswer', id: 'h1', accept: false });
     fireEvent.click(screen.getByText('Hand my work to someone')); fireEvent.click(screen.getByRole('button', { name: 'Ana' })); expect(sent.at(-1)).toEqual({ t: 'shareHandoff', to: 'm2' });
   });
+  it("opens a teammate's agent read only: Read asks for it, the lines show who said what, and there is nothing to type in; Close shuts it", () => {
+    const { sent } = ui(sharing()); expect(screen.queryByRole('button', { name: "Read Me's agent" })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: "Read Ana's agent" })); expect(sent.at(-1)).toEqual({ t: 'teamWatch', agent: 'agt_2' }); cleanup();
+    const w = { agent: 'agt_2', owner: 'm2', name: 'Ana', sharing: true, lines: [{ id: '1', kind: 'user' as const, text: 'add a migration', ts: 'x' }, { id: '2', kind: 'assistant' as const, text: 'On it.', ts: 'x' }, { id: '3', kind: 'tool' as const, text: 'pnpm test → 2 failed', ts: 'x', name: 'Bash', status: 'error' }] };
+    const open = ui(sharing({ watch: w })); const region = screen.getByRole('region', { name: "Ana's agent, read only" });
+    expect(region.textContent).toMatch(/add a migration/); expect(region.textContent).toMatch(/On it\./); expect(region.textContent).toMatch(/Bash/); expect(region.textContent).toMatch(/error/); expect(region.querySelector('input, textarea')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: "Read Ana's agent" })); expect(open.sent.at(-1)).toEqual({ t: 'teamWatch' }); fireEvent.click(screen.getAllByRole('button', { name: 'Close' })[0]!); expect(open.sent.at(-1)).toEqual({ t: 'teamWatch' }); cleanup();
+    ui(sharing({ watch: { ...w, sharing: false, lines: [] } })); expect(screen.getByText(/has not shared what their agent says and does/)).toBeTruthy();
+  });
   it('is not there in a command post or when nothing is shared', () => { const a = ui(sharing({ mode: 'command_post' })); expect(a.r.container.textContent).toBe(''); cleanup(); const b = ui(null); expect(b.r.container.textContent).toBe(''); });
 });

@@ -7,7 +7,7 @@ import type { SessionHandle } from '@centcom/net';
 import type { AppController } from '../controller.js';
 import type { Account } from './account.js';
 import { HostBridge, startBranchBridge, untilLive } from './host-bridge.js';
-import { renderTeam } from './team-text.js';
+import { renderTeam, renderTranscript } from './team-text.js';
 
 export class ShareSession {
   private handle?: SessionHandle; private bridge?: HostBridge; private known = new Set<string>(); private order: string[] = []; private workspace = '';
@@ -31,6 +31,7 @@ export class ShareSession {
         case 'branch': return await this.start('branch');
         case 'join': return await this.joinBranch(rest[0]);
         case 'team': return this.team();
+        case 'watch': return this.watch(rest.join(' '));
         case 'activity': { if (!this.bridge || this.bridge.mode !== 'branch') return this.needBranch(); const on = rest[0] ? rest[0] === 'on' : !this.bridge.sharingActivity; this.bridge.setShareActivity(on); ctl.toast('info', on ? 'The team sees what your agent says and does.' : 'Your agent\'s messages are not shared. State, branch and locks still are.'); return; }
         case 'handoff': return this.handoff(rest);
         case 'status': return this.status();
@@ -74,6 +75,16 @@ export class ShareSession {
     ctl.notice('ok', 'You are in the session with your own agent', `Your agent works on ${ctl.state.cwd}. /team shows who is working on what; /share stop leaves.`);
   }
   /** `/team` (also `/share team`): everybody's agents. */
+  /** `/watch [number|name]`: read-only view of a teammate's transcript, as far as they share their agent's activity. */
+  watch(who: string): void {
+    const t = this.bridge?.team; if (!t) { this.ctl.toast('warn', "No team yet. In a session where everyone runs their own agent (/share branch), /watch shows a teammate's agent."); return; }
+    const others = t.snapshot().members.filter((m) => !m.you && m.agents.length); if (!others.length) { this.ctl.toast('info', 'Nobody else has an agent here yet.'); return; }
+    const q = who.trim().toLowerCase(); const n = Number(q); const m = q ? (Number.isInteger(n) && n >= 1 ? others[n - 1] : others.find((x) => x.name.toLowerCase().startsWith(q))) : others.length === 1 ? others[0] : undefined;
+    if (!m) { this.ctl.toast('warn', `Whose agent? ${others.map((x, i) => `${i + 1} ${x.name}`).join(', ')}: /watch <number or name>`); return; }
+    const a = m.agents.filter((x) => !x.exit).at(-1) ?? m.agents.at(-1)!; const text = renderTranscript(t.transcript(a.id), m.name);
+    if (!text) { this.ctl.notice('info', `${m.name}'s agent`, a.sharing === false ? `${m.name} has not shared what their agent says and does (they can turn it on with /share activity on).` : 'Nothing to show yet.'); return; }
+    this.ctl.notice('info', `${m.name}'s agent (read only)`, text);
+  }
   team(): void { const t = this.bridge?.team; if (!t) { this.ctl.toast('warn', 'No team yet. In a session where everyone runs their own agent (/share branch), /team shows who is working on what.'); return; } this.ctl.notice('info', 'Team', renderTeam(t.snapshot())); }
   private handoff(rest: string[]): void {
     const t = this.bridge?.team; if (!this.bridge || !t) return this.needBranch(); const people = t.snapshot().members.filter((m) => !m.you); const n = Number(rest[0]); const to = people[n - 1];

@@ -1,4 +1,4 @@
-import { AlertTriangle, GitBranch, Lock, Send, Users } from 'lucide-react';
+import { AlertTriangle, Eye, GitBranch, Lock, Send, Users } from 'lucide-react';
 import React from 'react';
 import { Avatar, Badge, Button } from '../ui/shadcn/index.js';
 import type { LocalView } from './model.js';
@@ -7,6 +7,16 @@ import './shell.css';
 
 const STATE: Record<string, string> = { thinking: 'working', 'awaiting-approval': 'waiting for its owner', idle: 'idle', exited: 'left', crash: 'crashed', away: 'away' };
 const how = (p?: string, label?: string): string => (p === 'anthropic' ? 'Claude Code' : p === 'openai' ? 'Codex' : label ?? 'Agent');
+
+/** A teammate's agent, read only: what its owner asked, what it said, which tools ran. There is no box to type in: this view cannot send anything to their agent. */
+function Transcript({ watch, close }: { watch: NonNullable<NonNullable<LocalView['sharing']>['watch']>; close(): void }): React.JSX.Element {
+  return <div className="ps-watch" role="region" aria-label={`${watch.name}'s agent, read only`}>
+    <div className="ps-watch__head"><strong>{watch.name}'s agent</strong><Badge>read only</Badge><Button variant="ghost" size="sm" onClick={close}>Close</Button></div>
+    {watch.lines.length === 0 ? <p className="ps-note">{watch.sharing ? 'Nothing yet.' : `${watch.name} has not shared what their agent says and does.`}</p> : <ol className="ps-watch__lines" aria-live="polite">{watch.lines.map((l) => <li key={l.id} className={`ps-watch__line ps-watch__line--${l.kind}`}>
+      {l.kind === 'user' ? <><span className="ps-watch__who">{watch.name}</span> {l.text}</> : l.kind === 'tool' ? <><span className="ps-watch__who">{l.name || 'tool'}</span> {l.text}{l.status && l.status !== 'ok' ? <Badge variant={l.status === 'running' ? 'default' : 'warning'}>{l.status}</Badge> : null}</> : l.text}
+    </li>)}</ol>}
+  </div>;
+}
 
 /** Branch mode: everybody's agents, live: state, branch, how far from the base, the files each has open, and what it last said. */
 export function TeamSection({ view, send }: { view: LocalView; send(m: ClientMsg): void }): React.JSX.Element | null {
@@ -22,8 +32,10 @@ export function TeamSection({ view, send }: { view: LocalView; send(m: ClientMsg
         {a.branch ? <p className="ps-tagent__line"><GitBranch aria-hidden="true" />{a.branch}{a.ahead !== undefined || a.behind !== undefined ? ` · ${a.ahead ?? 0} ahead, ${a.behind ?? 0} behind${a.dirty ? ', changes' : ''}` : ''}</p> : null}
         {a.locks.length ? <p className="ps-tagent__line"><Lock aria-hidden="true" />{a.locks.map((l) => l.path ?? 'a file').join(', ')}</p> : null}
         {a.lastSaid ? <p className="ps-tagent__said">{a.lastSaid}</p> : !a.exit && !a.sharing ? <p className="ps-note">Activity not shared.</p> : null}
+        {!m.you ? <Button variant="outline" size="sm" aria-label={`Read ${m.name}'s agent`} aria-pressed={sh.watch?.agent === a.id} onClick={() => send({ t: 'teamWatch', ...(sh.watch?.agent === a.id ? {} : { agent: a.id }) })}><Eye aria-hidden="true" />{sh.watch?.agent === a.id ? 'Close' : 'Read'}</Button> : null}
       </div>)}
     </li>)}</ul>
+    {sh.watch ? <Transcript watch={sh.watch} close={() => send({ t: 'teamWatch' })} /> : null}
     {team.hints.map((h) => <p key={h} className="ps-note">{h}</p>)}
     {team.handoffs.filter((h) => h.state === 'offered').map((h) => { const me = team.members.find((m) => m.you); const mine = h.to === me?.id; const from = team.members.find((m) => m.id === h.from)?.name ?? 'Someone'; return <div key={h.id} className="ps-handoff"><Send aria-hidden="true" /><span>{mine ? `${from} offers you their work${h.note ? `: ${h.note}` : ''}` : `Work offered to ${team.members.find((m) => m.id === h.to)?.name ?? 'someone'}`}</span>{mine ? <span className="shr__btns"><Button size="sm" onClick={() => send({ t: 'shareHandoffAnswer', id: h.id, accept: true })}>Accept</Button><Button size="sm" variant="ghost" onClick={() => send({ t: 'shareHandoffAnswer', id: h.id, accept: false })}>Decline</Button></span> : null}</div>; })}
     {others.length ? <details className="ps-handoffpick"><summary>Hand my work to someone</summary><div className="ps-handoffpick__row">{others.map((m) => <Button key={m.id} variant="outline" size="sm" onClick={() => send({ t: 'shareHandoff', to: m.id })}>{m.name}</Button>)}</div></details> : null}

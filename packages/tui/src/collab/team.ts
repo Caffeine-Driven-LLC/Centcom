@@ -18,17 +18,23 @@ export interface TeamAgent {
 export interface TeamMember { id: string; name: string; role: string; slot: number; online: boolean; you: boolean; agents: TeamAgent[] }
 export interface TeamConflict { id: string; agents: string[]; hmacs: string[]; paths: string[]; at: string }
 export interface TeamHandoff { id: string; from: string; to: string; agent: string; note?: string; state: 'offered' | 'accepted' | 'declined'; at: string }
+/** One line of a teammate's transcript, as they chose to share it (the activity switch). Text is cleaned of terminal control codes. */
+export interface TeamLine { id: string; kind: 'user' | 'assistant' | 'tool' | 'system'; text: string; ts: string; /** tools: running, ok, error, denied, canceled */ status?: string; name?: string; level?: string; done?: boolean }
 export interface TeamView { members: TeamMember[]; conflicts: TeamConflict[]; handoffs: TeamHandoff[]; hints: string[] }
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
-const SAID_MAX = 160;
+const SAID_MAX = 160; const LINES_MAX = 300; const LINE_CHARS = 6000;
+/** Text from another computer reaches a terminal and an agent-free screen: escape sequences and control codes are removed (new lines and tabs are kept). */
+const ESC_SEQ = new RegExp('\\u001b\\[[0-9;?]*[ -\\/]*[@-~]|\\u001b\\][^\\u0007\\u001b]*(?:\\u0007|\\u001b\\\\)?|\\u001b[@-Z\\\\-_]', 'g');
+const CTRL_KEEP_NL = new RegExp('[\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f\\u2028\\u2029\\u200b-\\u200f\\u202a-\\u202e\\u2066-\\u2069]', 'g');
+export const safeText = (s: string, max = LINE_CHARS): string => { const t = s.replace(ESC_SEQ, '').replace(CTRL_KEEP_NL, ' '); return t.length > max ? t.slice(0, max - 1) + '…' : t; };
 const clip = (s: string): string => { const t = s.replace(/\s+/g, ' ').trim(); return t.length > SAID_MAX ? t.slice(0, SAID_MAX - 1) + '…' : t; };
 const DEFAULT_LOCK_MS = 300_000;
 
 export class TeamModel {
   private agents = new Map<string, TeamAgent>(); private roster: MemberInfo[] = []; private me = ''; private conflicts_ = new Map<string, TeamConflict>(); private handoffs_ = new Map<string, TeamHandoff>();
-  private said = new Map<string, string>(); private fns = new Set<() => void>(); private dirty = true; private snap: TeamView = { members: [], conflicts: [], handoffs: [], hints: [] };
+  private said = new Map<string, string>(); private lines_ = new Map<string, TeamLine[]>(); private fns = new Set<() => void>(); private dirty = true; private snap: TeamView = { members: [], conflicts: [], handoffs: [], hints: [] };
   constructor(private readonly o: { now?: () => number } = {}) {}
   private now = (): number => (this.o.now ?? Date.now)();
 
@@ -50,9 +56,10 @@ export class TeamModel {
         case 'agent.handoff': return this.handoff(e);
         case 'approval.request': return this.update(e, (a) => { a.waiting = { approval: str(e.p?.['approval_id']), risk: str(e.p?.['risk']) || 'medium' }; });
         case 'approval.decision': { const id = str(e.p?.['approval_id']); for (const a of this.agents.values()) if (a.waiting?.approval === id && this.mayAct(e.from, a)) { delete a.waiting; this.changed(); } return; }
-        case 'message.user': return this.message(e, str(e.secret?.['text']), true);
-        case 'message.assistant.delta': return this.message(e, str(e.secret?.['delta']), false);
-        case 'message.assistant.done': { const a = this.agents.get(str(e.secret?.['agent_id'])); if (a && this.mayAct(e.from, a)) this.said.delete(str(e.secret?.['message_id'])); return; }
+        case 'message.user': this.addLine(e, 'user'); return this.message(e, str(e.secret?.['text']), true);
+        case 'tool.request': case 'tool.result': case 'message.system': this.addLine(e, e.kind === 'message.system' ? 'system' : 'tool'); return;
+        case 'message.assistant.delta': this.addLine(e, 'assistant'); return this.message(e, str(e.secret?.['delta']), false);
+        case 'message.assistant.done': { this.addLine(e, 'assistant', true); const a = this.agents.get(str(e.secret?.['agent_id'])); if (a && this.mayAct(e.from, a)) this.said.delete(str(e.secret?.['message_id'])); return; }
         default: return;
       }
     } catch { /* a malformed frame is ignored */ }
@@ -97,6 +104,25 @@ export class TeamModel {
     if (user) { a.lastSaid = `${this.nameOf(a.owner)}: ${clip(text)}`; this.changed(); return; }
     const mid = str(e.secret?.['message_id']); const cur = (this.said.get(mid) ?? '') + text; this.said.set(mid, cur.slice(-2000)); a.lastSaid = clip(cur.slice(-SAID_MAX * 3)); this.changed();
   }
+  /** Keeps what a member's agent said and did, for the read-only view of their transcript. Only the agent's owner (or the host) can add to it. */
+  private addLine(e: DecodedEvent, kind: TeamLine['kind'], done = false): void {
+    const s = e.secret ?? {}; const agent = str(s['agent_id']) || str(e.p?.['agent_id']);
+    const a = agent ? this.agents.get(agent) : [...this.agents.values()].find((x) => x.owner === e.from && !x.exit); if (!a || !this.mayAct(e.from, a)) return;
+    const list = this.lines_.get(a.id) ?? []; this.lines_.set(a.id, list); const push = (l: TeamLine): void => { list.push(l); if (list.length > LINES_MAX) list.splice(0, list.length - LINES_MAX); };
+    if (kind === 'user') { const text = safeText(str(s['text'])); if (text) push({ id: e.id, kind, text, ts: e.ts }); }
+    else if (kind === 'assistant') {
+      const mid = str(s['message_id']); if (!mid) return; let l = list.find((x) => x.id === mid);
+      if (done) { if (l) l.done = true; this.changed(); return; }
+      const d = str(s['delta']); if (!d) return; if (!l) { l = { id: mid, kind, text: '', ts: e.ts }; push(l); } l.text = safeText(l.text + d);
+    } else if (kind === 'tool') {
+      const tid = str(s['tool_id']); if (!tid) return; const id = `tool:${tid}`; let l = list.find((x) => x.id === id);
+      if (e.kind === 'tool.request') { if (!l) push({ id, kind, text: safeText(str(s['input_summary']), 400), ts: e.ts, status: 'running', name: safeText(str(s['name']), 60) }); }
+      else { if (!l) { l = { id, kind, text: '', ts: e.ts, name: 'tool' }; push(l); } l.status = str(s['status']) || 'ok'; const sum = safeText(str(s['summary']), 400); if (sum) l.text = l.text ? `${l.text} → ${sum}` : sum; }
+    } else { const text = safeText(str(s['text']), 2000); if (text) push({ id: e.id, kind, text, ts: e.ts, level: str(s['level']) || 'info' }); }
+    this.changed();
+  }
+  /** What a member's agent said and did, oldest first, as far as its owner shares it (empty when nothing is shared). */
+  transcript(agent: string): TeamLine[] { return (this.lines_.get(agent) ?? []).map((l) => ({ ...l })); }
   private nameOf(member: string): string { return this.roster.find((m) => m.id === member)?.name || 'Someone'; }
 
   /** The members, each with their agents; locks past their time are not shown. */

@@ -1,4 +1,15 @@
-import type { TeamView } from './team.js';
+import type { TeamLine, TeamView } from './team.js';
+
+/** A teammate's transcript as plain lines, read only: what they asked, what their agent said and which tools ran. */
+export function renderTranscript(lines: TeamLine[], who: string, last = 40): string {
+  if (!lines.length) return '';
+  return lines.slice(-last).map((l) => {
+    if (l.kind === 'user') return `${who}: ${l.text}`;
+    if (l.kind === 'assistant') return `agent: ${l.text}`;
+    if (l.kind === 'tool') return `  · ${l.name || 'tool'}${l.text ? ` ${l.text}` : ''}${l.status && l.status !== 'ok' ? ` [${l.status}]` : ''}`;
+    return `${l.level === 'error' ? '!' : l.level === 'warn' ? '~' : '-'} ${l.text}`;
+  }).join('\n');
+}
 
 const STATE: Record<string, string> = { thinking: 'working', 'awaiting-approval': 'waiting for its owner', idle: 'idle', exited: 'left', crash: 'crashed', away: 'away' };
 /** The team as plain lines (the terminal's /team and the notice that comes with a conflict). */

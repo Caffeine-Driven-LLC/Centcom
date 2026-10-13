@@ -33,6 +33,17 @@ describe('choosing how to work together in the terminal', { timeout: 30_000 }, (
     await ana.handleCommand('activity off'); expect(a.state.toasts.at(-1)!.text).toMatch(/not shared/);
     await ana.handleCommand('stop'); expect(ana.live).toBe(false);
   });
+  it('/watch shows a teammate\'s transcript read only, and says so when they do not share their agent\'s activity', async () => {
+    const r = await rig(); cleanup.push(() => r.stop()); const a = await agent('/tmp/ana'); const b = await agent('/tmp/bob'); let sid = '';
+    const ana = new ShareSession(a, account(r.host, { serverMode: 'branch' })); const bob = new ShareSession(b, account(r.guest, { serverMode: 'branch', joinTo: () => sid })); cleanup.push(() => ana.close(), () => bob.close());
+    await ana.handleCommand('branch'); sid = (notices(a).at(-1)!.detail ?? '').match(/ses_\w+/)![0]; await bob.handleCommand(`join ${sid}`);
+    await b.submit('build the importer'); await until(() => !b.state.busy);
+    await until(() => { ana.watch('guest'); return /Guest: build the importer[\s\S]*agent: /.test(notices(a).at(-1)!.detail ?? ''); }, 8000);
+    const shown = notices(a).at(-1)!; expect(shown.text).toBe("Guest's agent (read only)"); expect(shown.detail).toMatch(/agent: /);
+    await bob.handleCommand('activity off'); await ana.handleCommand('activity off'); await a.submit('private work'); await until(() => !a.state.busy);
+    await new Promise((res) => setTimeout(res, 300)); bob.watch('1'); const hidden = notices(b).at(-1)!; expect(hidden.detail ?? '').not.toContain('private work');
+    ana.watch('nobody'); expect(a.state.toasts.at(-1)!.text).toMatch(/Whose agent/);
+  });
   it('joining a command-post session with /share join points to centcom join and leaves', async () => {
     const r = await rig(); cleanup.push(() => r.stop()); const host = await r.host.client.createSession({ name: 'cp', workspace: WS }); r.host.handle = host; cleanup.push(() => host.leave().catch(() => undefined));
     const b = await agent('/tmp/bob'); const bob = new ShareSession(b, account(r.guest, { joinTo: () => host.id })); cleanup.push(() => bob.close()); await bob.handleCommand(`join ${host.id}`);

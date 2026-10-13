@@ -17,7 +17,8 @@ export class Workspace {
 
   private constructor(readonly dir: string, ctl: AppController, private cc: ClientConfig, readonly which: 'claude-code' | 'codex', readonly demo: boolean, private board?: Board) {
     this.ctl = ctl;
-    this.unsub = ctl.store.subscribe(() => this.push());
+    const offStore = ctl.store.subscribe(() => this.push()); const offBoard = board?.subscribe(() => { this.push(); }); // a note a teammate sends changes the board without touching the conversation
+    this.unsub = () => { offStore(); offBoard?.(); };
   }
 
   static async open(dir: string, demo: boolean, which: 'claude-code' | 'codex' = 'claude-code', resume?: string): Promise<Workspace> {
@@ -59,7 +60,7 @@ export class Workspace {
   /** The context board as the screen shows it: newest first, at most 30. */
   notes(): { enabled: boolean; notes: BoardNote[] } {
     if (!this.board) return { enabled: false, notes: [] };
-    return { enabled: true, notes: this.board.list().slice(-30).reverse().map((e) => ({ id: e.id, type: e.type, text: e.text, author: e.author.name, person: e.author.kind === 'person', pinned: e.pinned, ts: e.ts, files: e.refs.files.slice(0, 5) })) };
+    return { enabled: true, notes: this.board.list().slice(-30).reverse().map((e) => ({ id: e.id, type: e.type, text: e.text, author: e.author.name, person: e.author.kind === 'person', ...(e.shared ? { shared: true } : {}), ...(e.author.role ? { role: e.author.role } : {}), pinned: e.pinned, ts: e.ts, files: e.refs.files.slice(0, 5) })) };
   }
   pinNote(id: string, pinned: boolean): void { this.board?.pin(id, pinned); this.lastBoard = ''; this.push(); }
   removeNote(id: string): void { this.board?.retract(id); this.lastBoard = ''; this.push(); }

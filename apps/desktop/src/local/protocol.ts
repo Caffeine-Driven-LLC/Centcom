@@ -47,6 +47,8 @@ export type ClientMsg =
   | { t: 'shareActivity'; on: boolean }
   | { t: 'shareHandoff'; to: string; note?: string }
   | { t: 'shareHandoffAnswer'; id: string; accept: boolean }
+  /** branch mode: open (or, with no agent, close) the read-only view of a teammate's transcript */
+  | { t: 'teamWatch'; agent?: string }
   | { t: 'unshare' }
   | { t: 'shareLink' }
   | { t: 'shareInvite'; email?: string }
@@ -66,7 +68,7 @@ export type WebState = Omit<AppState, 'items' | 'approvals' | 'input' | 'cursor'
 export interface RunningSession { dir: string; engine: 'claude-code' | 'codex'; demo: boolean; busy: boolean; /** Approvals waiting for a person. */ waiting: number; /** What the first waiting approval asks for. */ ask?: string }
 
 /** One entry of the context board (docs/context-sharing.md), as the screen needs it. */
-export interface BoardNote { id: string; type: string; text: string; author: string; person: boolean; pinned: boolean; ts: number; files: string[] }
+export interface BoardNote { id: string; type: string; text: string; author: string; person: boolean; /** the role of a teammate who wrote it (host, editor); set only for notes that came from the shared session */ role?: string; /** it came from another person in the shared session */ shared?: boolean; pinned: boolean; ts: number; files: string[] }
 
 /** The signed-in person, as the screens show them. */
 export interface TeamViewMsg { workspace: { id: string; name: string | null }; plan: string; status: string; seats: { used: number; max: number | null }; relayAccess: boolean; myRole: string; canManage: boolean; members: { id: string; name: string; email?: string; role: string; you: boolean }[]; invites: { id: string; email: string | null; role: string; expiresAt: string }[] }
@@ -82,6 +84,7 @@ export interface SharingView {
   /** branch mode: this person joined someone else's session and their own agent is in it */ joinedBranch?: boolean;
   /** branch mode: the team sees what this agent says and does */ activity?: boolean;
   /** branch mode: who works on what, live */ team?: import('@centcom/tui').TeamView;
+  /** branch mode: the teammate's agent whose transcript is open (read only): what it said and did, as far as its owner shares it */ watch?: { agent: string; owner: string; name: string; sharing: boolean; lines: import('@centcom/tui').TeamLine[] };
   auto: boolean; members: { id: string; name: string; slot: number; role: 'host' | 'editor' | 'viewer'; online: boolean; you: boolean }[];
   pending: { item: string; from: string; slot: number; text: string }[];
 }
