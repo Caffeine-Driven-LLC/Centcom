@@ -1,6 +1,6 @@
 # Working together across computers (branch mode): the design
 
-Status: **built in the terminal app and the desktop app** (the session mode needs a backend that stores it, lane B110; without it the apps say so and share as a command post). Not built yet: board-note sync (waits on the `board.*` contract change), a read-only view of a teammate's transcript, nudges. Each person runs their **own** agents on their **own** computer, on their own copy of the same project, and all of them are in one shared session: everyone sees who is working on what, files an agent has open are marked, a second agent that is about to touch the same file is warned first, notes and decisions reach the other agents, and work can be handed from one person to another.
+Status: **built in the terminal app and the desktop app** (the session mode needs a backend that stores it, lane B110; without it the apps say so and share as a command post). Board notes between people are built (see below). Not built yet: a read-only view of a teammate's transcript, nudges. Each person runs their **own** agents on their **own** computer, on their own copy of the same project, and all of them are in one shared session: everyone sees who is working on what, files an agent has open are marked, a second agent that is about to touch the same file is warned first, notes and decisions reach the other agents, and work can be handed from one person to another.
 
 This is "branch mode" in the contracts (`contracts/04-session-events.md`: `*` means "in branch mode the agent's owner emits events for their own agents"). What exists today is the other mode:
 
@@ -28,7 +28,7 @@ Every frame is end-to-end encrypted with the session key. The relay reads only t
 | `approval.request` / `approval.decision` | the owner, for their own agent | id, risk, expiry, decision | summary, command, cwd |
 | `agent.handoff` | the sender, accepted by the receiver | handoff id, agent, `to`, op | note |
 | `presence.update` | any member | status, activity, `agent_count` | |
-| `board.note` / `board.pin` / `board.remove` | host and editors | note id, type | text, file references (**needs a contract change**, see `docs/context-board-sync.md`) |
+| `board.note` / `board.pin` / `board.remove` | host and editors | note id, type | text, file references (built: `docs/context-board-sync.md`) |
 
 ## What is shared and what is not
 

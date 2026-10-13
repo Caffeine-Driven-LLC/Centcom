@@ -17,6 +17,7 @@ import type { AppController } from '../controller.js';
 import type { Item } from '../state/model.js';
 import { gitBranchInfo, type BranchProbe } from './git-info.js';
 import { TeamModel } from './team.js';
+import { BoardSync } from './board-sync.js';
 
 export interface HostBridgeOptions {
   /** run editors' requests without asking the host */ autoApprove?: boolean;
@@ -36,6 +37,7 @@ const RISKS = new Set(['low', 'medium', 'high']);
 export class HostBridge {
   readonly queue: QueueClient;
   /** branch mode: who is working on what, built from the session */ readonly team?: TeamModel;
+  /** branch mode: shared notes, when the context board is on */ private boardSync?: BoardSync;
   readonly mode: 'command_post' | 'branch'; private shareActivity: boolean; private offLink?: () => void; private offAny?: () => void; private offLockEvents?: () => void; private lastBranchAt = 0; private wasWaiting = false; private branchTimer?: ReturnType<typeof setTimeout>;
   private readonly ids = newIdGenerator({ now: () => Date.now(), random: (n) => crypto.getRandomValues(new Uint8Array(n)) });
   private readonly mapped = new Map<string, string>(); private seen = new Set<string>(); private sentLen = new Map<string, number>(); private deltaIndex = new Map<string, number>(); private doneSent = new Set<string>();
@@ -57,7 +59,7 @@ export class HostBridge {
     this.emit('agent.spawn', { p: { agent_id: this.agent(), owner: this.handle.me.id, mode: this.mode, runs_on: this.handle.me.id, provider: this.ctl.state.engineId === 'codex' ? 'openai' : this.ctl.state.engineId === 'claude-code' ? 'anthropic' : 'other' }, secret: { label: this.ctl.state.engineLabel, ...(this.mode === 'branch' ? { worktree: this.ctl.state.cwd } : {}) } });
     if (this.mode === 'command_post') { this.emitActivity('message.system', { secret: { level: 'info', text: 'This conversation is now shared.' } }); void this.pump(); } else this.startBranch();
   }
-  stop(): void { if (this.mode === 'branch' && !this.stopped) this.emit('agent.exit', { p: { agent_id: this.agent(), outcome: 'ok' } }); this.offAny?.(); this.offLink?.(); if (this.mode === 'branch') { this.ctl.setTeamDigest(undefined); this.ctl.setRemoteAgentNamer(undefined); } if (this.branchTimer) clearTimeout(this.branchTimer); for (const t of this.reannounceTimers) clearTimeout(t); this.stopped = true; this.offStore?.(); this.offTurn?.(); this.queue.dispose(); if (this.flushTimer) clearTimeout(this.flushTimer); if (this.stateTimer) clearTimeout(this.stateTimer); for (const w of this.busyWaiters.splice(0)) w(); for (const f of [...this.stoppers]) f(); }
+  stop(): void { if (this.mode === 'branch' && !this.stopped) this.emit('agent.exit', { p: { agent_id: this.agent(), outcome: 'ok' } }); this.offAny?.(); this.offLink?.(); this.boardSync?.stop(); if (this.mode === 'branch') { this.ctl.setTeamDigest(undefined); this.ctl.setRemoteAgentNamer(undefined); } if (this.branchTimer) clearTimeout(this.branchTimer); for (const t of this.reannounceTimers) clearTimeout(t); this.stopped = true; this.offStore?.(); this.offTurn?.(); this.queue.dispose(); if (this.flushTimer) clearTimeout(this.flushTimer); if (this.stateTimer) clearTimeout(this.stateTimer); for (const w of this.busyWaiters.splice(0)) w(); for (const f of [...this.stoppers]) f(); }
 
   setAutoApprove(on: boolean): void { this.autoApprove = on; void this.pump(); this.o.onChange?.(); }
   get autoApproving(): boolean { return this.autoApprove; }
@@ -119,7 +121,9 @@ export class HostBridge {
 
   /* ---------------------------------------------------------------- branch mode */
   private startBranch(): void {
-    const team = this.team!; this.offAny = this.handle.onAny((e) => { if (!this.handle.roster().length || !team.snapshot().members.some((m) => m.id === e.from)) team.setRoster(this.handle.roster(), this.handle.me.id); /* the roster may have filled in after this was set up */ team.apply(e); this.onTeamEvent(e); }, { replay: true });
+    const team = this.team!;
+    const board = this.ctl.board; if (board) { this.boardSync = new BoardSync({ board, me: this.handle.me.id, myRole: () => this.handle.me.role, roster: () => this.handle.roster(), emit: (kind, body) => this.emit(kind, body), newId: () => this.ids.next('msg'), onChange: () => this.o.onChange?.() }); this.boardSync.start(); }
+    this.offAny = this.handle.onAny((e) => { this.boardSync?.onEvent(e); if (!this.handle.roster().length || !team.snapshot().members.some((m) => m.id === e.from)) team.setRoster(this.handle.roster(), this.handle.me.id); /* the roster may have filled in after this was set up */ team.apply(e); this.onTeamEvent(e); }, { replay: true });
     let known = new Set(this.handle.roster().map((m) => m.id));
     const offRoster = this.handle.on('roster', () => { team.setRoster(this.handle.roster(), this.handle.me.id); this.o.onChange?.(); const fresh = this.handle.roster().filter((m) => !known.has(m.id)); known = new Set(this.handle.roster().map((m) => m.id)); if (fresh.length) this.reannounce(); }); const prev = this.offAny; this.offAny = () => { prev(); offRoster(); };
     const poll = setInterval(() => { if (this.stopped) return; const now = this.handle.roster().map((m) => m.id); const fresh = now.filter((id) => !known.has(id)); if (fresh.length) { known = new Set(now); team.setRoster(this.handle.roster(), this.handle.me.id); this.reannounce(); } }, 1500); poll.unref?.(); { const prev0 = this.offAny; this.offAny = () => { prev0(); clearInterval(poll); }; }
@@ -141,7 +145,7 @@ export class HostBridge {
   private reannounceTimers: ReturnType<typeof setTimeout>[] = [];
   private reannounce(): void {
     if (this.reannounceTimers.length || this.stopped) return; // a joiner has no keys for the first moments (the host hands them out), so it is sent a few times
-    for (const ms of [1200, 4500, 11_000]) { const t = setTimeout(() => { this.reannounceTimers = this.reannounceTimers.filter((x) => x !== t); if (this.stopped) return; this.lastState = undefined; this.wantState = undefined; this.setState(this.ctl.state.busy ? 'thinking' : 'idle'); void this.publishBranch(true); }, ms); t.unref?.(); this.reannounceTimers.push(t); }
+    for (const ms of [1200, 4500, 11_000]) { const t = setTimeout(() => { this.reannounceTimers = this.reannounceTimers.filter((x) => x !== t); if (this.stopped) return; this.lastState = undefined; this.wantState = undefined; this.setState(this.ctl.state.busy ? 'thinking' : 'idle'); void this.publishBranch(true); if (ms === 4500) this.boardSync?.resend(); }, ms); t.unref?.(); this.reannounceTimers.push(t); }
   }
   /** A teammate's lock reaches this runtime's lock client, which warns when a local agent is changing the same file. */
   private onTeamEvent(e: { kind: string; from: string; ts?: string; p?: Record<string, unknown> }): void {

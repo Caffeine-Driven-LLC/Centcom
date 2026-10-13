@@ -95,6 +95,12 @@ describe('shared notes', () => {
     fireEvent.click(screen.getByLabelText('Pin: The CI cache is stale')); fireEvent.click(screen.getByLabelText('Unpin: Use pnpm')); fireEvent.click(screen.getByLabelText('Remove: Use pnpm'));
     expect(sent).toEqual([{ t: 'notePin', id: 'n1', pinned: true }, { t: 'notePin', id: 'n2', pinned: false }, { t: 'noteRemove', id: 'n2' }]);
   });
+  it('shows who in the session wrote a note (name and role); a viewer reads it and cannot add, pin or remove', () => {
+    const shared = note({ id: 'msg_1', type: 'decision', text: 'Do not touch the migrations', author: 'Ana', person: true, shared: true, role: 'host' });
+    const sent: unknown[] = []; const v = { ...withBoard(true, [shared]), sharing: { state: 'live', name: 'p', mode: 'branch', auto: false, members: [{ id: 'm1', name: 'Bob', slot: 1, role: 'viewer', online: true, you: true }], pending: [] } } as never;
+    render(<SessionPanel view={v} send={(m) => sent.push(m)} />); expect(screen.getByText('Ana (host)')).toBeTruthy(); expect(screen.getByText('Do not touch the migrations')).toBeTruthy();
+    expect(screen.queryByLabelText('Note for every agent')).toBeNull(); expect(screen.queryByLabelText('Pin: Do not touch the migrations')).toBeNull(); expect(sent).toEqual([]);
+  });
   it('adds a note of the chosen kind and clears the box', () => {
     const sent: unknown[] = []; render(<SessionPanel view={withBoard(true, [])} send={(m) => sent.push(m)} />);
     expect(screen.getByText(/Nothing yet/)).toBeTruthy(); expect((screen.getByRole('button', { name: 'Add' }) as HTMLButtonElement).disabled).toBe(true);

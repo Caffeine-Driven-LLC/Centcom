@@ -1,4 +1,6 @@
-# Shared notes between people: the proposal (the contract change is drafted in plan/adr/0003; not built in the apps yet)
+# Shared notes between people: built in branch mode (contract events `board.note`, `board.pin`, `board.remove`)
+
+Status: built in the terminal app (`/note`, `/board`) and the desktop app (the Shared notes panel). A note a host or editor adds goes to everyone's board with the author's name and role; pinned notes are always in each agent's digest; a viewer reads and cannot add. A person who joins later reads the notes from the history, and the sender also sends its live notes (newest ten) once more a few seconds after somebody joins; a receiver that already has a note (same author, kind and text) keeps one copy. Checked live with `python3 tools/dev/pty-board.py`. The text below is the original proposal.
 
 The board (docs/context-sharing.md, phase 1) lives on one computer. This page is the concrete proposal for phase 3, **session scope**: notes travelling between the people of a shared session. It is a proposal because `contracts/04-session-events.md` has no event kind for it, and contracts are changed by a human merge, not by a client PR. Until then the board stays local and the Shared notes panel says nothing about other people.
 
