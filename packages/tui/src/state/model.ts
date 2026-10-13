@@ -17,7 +17,8 @@ export type Item =
   | { kind: 'tool'; id: string; toolId: string; agentId: string; name: string; summary: string; risk: Risk; status: 'running' | 'ok' | 'error' | 'denied' | 'canceled'; result?: string; diff?: string; approval?: 'pending' | 'approved' | 'denied'; path?: string; command?: string; startedAt: number }
   | { kind: 'notice'; id: string; level: 'info' | 'warn' | 'error' | 'ok'; text: string; detail?: string };
 
-export interface Toast { id: string; level: 'info' | 'ok' | 'warn' | 'error'; text: string; until: number }
+export type { Toast } from '../toast/controller.js';
+import type { Toast } from '../toast/controller.js';
 
 export interface PendingApproval { req: ApprovalRequest; agentName: string; color: CentoColor; resolve: (d: ApprovalDecision) => void; confirmHigh: boolean; /** When the engine declines it by itself (ms since the epoch). */ expiresAt?: number }
 

@@ -25,6 +25,7 @@ import { LIBRARY_DIR, MASTER_DIR, discover, injection, librarySkills, masterSkil
 import { MascotDriver, bakedByCategory, bakedCategories, getBaked, type CentoColor } from '@centcom/mascot';
 import type { AgentEngine, ApprovalDecision, ApprovalRequest, EngineQuestion, EngineSession, QuestionGate, NormalisedEvent, PermissionGate, PermissionMode } from '@centcom/agent';
 import { Store } from './state/store.js';
+import { createToastController, type ToastController, type ToastInput } from './toast/controller.js';
 import { initialSettings, isBusyState, stateToMini, type AgentView, type AppState, type Item, type Mode, type PendingApproval, type Settings } from './state/model.js';
 import { COMMANDS } from './state/commands.js';
 import { emptyText } from './onboarding/copy.js';
@@ -116,7 +117,9 @@ export class AppController {
   private verbs: VerbRotator;
   private sessionRules = new Set<string>();
   private ghostTimers: NodeJS.Timeout[] = [];
-  private toastTimers = new Map<string, NodeJS.Timeout>();
+  /** The notice line above the prompt (lane C044): one at a time, a queue behind it, repeats counted, problems kept until dismissed. */
+  readonly toasts: ToastController = createToastController({ clock: { now: () => Date.now(), setTimeout: (f, ms) => { const h = setTimeout(f, ms); h.unref?.(); return h; }, clearTimeout: (h) => clearTimeout(h as NodeJS.Timeout) } });
+  private toastActionHandler?: (id: string) => void;
   private verbTimer?: NodeJS.Timeout;
   private readonly me = 'agt_you';
   readonly night: NightCycle; private nightSending = false;
@@ -132,6 +135,7 @@ export class AppController {
       busy: false, verb: this.verbs.next(), limits: [], cwd: o.cwd, branch: o.branch ?? '', engineId: o.engine.id, engineLabel: o.engine.label, demo: o.demo, fleet: true, tasks: [], tasksOpen: true,
       slashSel: 0, palette: { query: '', sel: 0 }, gallery: { cat: 0, idx: 0, color: 0, query: '' }, version: o.version, sessionId: newId('ses'), sessions: [], night: initialNight(),
     });
+    this.toasts.subscribe(() => this.syncToasts());
     this.driver = new MascotDriver({ reducedMotion: settings.reducedMotion, color: settings.color });
     this.night = this.makeNight();
     const clock = { now: () => Date.now(), setTimeout: (f: () => void, ms: number) => { const t = setTimeout(f, ms); t.unref?.(); return t; }, clearTimeout: (h: never) => clearTimeout(h as NodeJS.Timeout) };
@@ -276,7 +280,7 @@ export class AppController {
   stop() {
     this.stopped = true; this.persist(); this.o.sessions?.close(); void this.o.ledger?.flush().catch(() => undefined);
     this.driver.stop(); this.ghostTimers.forEach(clearTimeout); if (this.verbTimer) clearInterval(this.verbTimer);
-    this.toastTimers.forEach(clearTimeout);
+    for (let i = 0; i < 100 && this.toasts.current(); i++) this.toasts.dismiss();
     for (const a of this.state.approvals) a.resolve({ decision: 'deny', scope: 'once', reason: 'exit' });
     void this.session?.stop();
     void this.stopFleet();
@@ -1172,7 +1176,7 @@ export class AppController {
     }
   }
   /** Esc twice within 600 ms while idle opens the checkpoint list. */
-  escIdle() { if (this.pendingAnswer) { this.cancelQuestions(); return; } const now = Date.now(); if (now - this.lastEsc < 600) { this.lastEsc = 0; void this.rewindCommand(''); } else this.lastEsc = now; }
+  escIdle() { if (this.dismissToast()) return; if (this.pendingAnswer) { this.cancelQuestions(); return; } const now = Date.now(); if (now - this.lastEsc < 600) { this.lastEsc = 0; void this.rewindCommand(''); } else this.lastEsc = now; }
 
   /* ------------------------------------------------------------------ permissions */
   private async permissionsCommand(arg: string) {
@@ -1251,13 +1255,18 @@ export class AppController {
     if (r.ok) this.notice('info', 'Asked the agent to compact its context.'); else this.toast('warn', r.reason === 'unsupported' ? `${this.o.engine.label} has no compact command Centcom can use.` : r.reason === 'busy' ? 'Wait until the agent is idle, then /compact.' : r.reason === 'failed' ? 'The compact request did not go through. Try again in a minute.' : 'The agent is not running.');
   }
 
-  /** A short message over the corner of the screen. Said again while still showing, it stays instead of stacking; problems stay longer than good news. */
-  toast(level: 'info' | 'ok' | 'warn' | 'error', text: string, ms = level === 'error' ? 7000 : level === 'warn' ? 5000 : 3800) {
-    const same = this.state.toasts.find((t) => t.level === level && t.text === text); const id = same?.id ?? nid('toast');
-    if (same) { const old = this.toastTimers.get(id); if (old) clearTimeout(old); this.set((s) => ({ toasts: s.toasts.map((t) => (t.id === id ? { ...t, until: Date.now() + ms } : t)) })); }
-    else this.set((s) => ({ toasts: [...s.toasts.slice(-2), { id, level, text, until: Date.now() + ms }] }));
-    this.toastTimers.set(id, setTimeout(() => { this.set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })); this.toastTimers.delete(id); }, ms));
+  /** A short message above the prompt. Said again while showing, it counts (x2) instead of stacking; an error stays until it is dismissed (ctrl+y or Esc). */
+  toast(level: 'info' | 'ok' | 'warn' | 'error', text: string, ms?: number, extra: Pick<ToastInput, 'key' | 'actions'> = {}) {
+    this.toasts.show({ level: level === 'ok' ? 'success' : level, text, key: extra.key ?? `${level}:${text}`, ...(extra.actions ? { actions: extra.actions } : {}), ...(ms !== undefined ? { ttlMs: ms } : {}) }); this.syncToasts();
   }
+  /** `state.toasts`: the showing notice and the queue, oldest first (`ctl.toasts.current()` is the one on screen). */
+  private syncToasts() { const cur = this.toasts.current(); const next = cur ? [cur, ...this.toasts.pending()].map((t) => ({ ...t })).sort((a, b) => Number(a.id.slice(6)) - Number(b.id.slice(6))) : []; if (next.length || this.store.get().toasts.length) this.store.set({ toasts: next }); }
+  /** Dismiss the notice that is showing; false when there was none. */
+  dismissToast(): boolean { if (!this.toasts.current()) return false; this.toasts.dismiss(); this.syncToasts(); return true; }
+  /** What a toast's action key does (for example "update"): set by the host app. */
+  onToastAction(f: (id: string) => void) { this.toastActionHandler = f; }
+  /** The action key of the showing toast, if the key is one of its actions. */
+  toastKey(key: string): boolean { const t = this.toasts.current(); const a = t?.actions?.find((x) => x.key === key); if (!t || !a) return false; this.toastActionHandler?.(a.id); this.toasts.dismiss(t.id); this.syncToasts(); return true; }
   notice(level: 'info' | 'warn' | 'error' | 'ok', text: string, detail?: string) { this.addItem({ kind: 'notice', id: nid('n'), level, text, ...(detail ? { detail } : {}) }); }
 
   /* ------------------------------------------------------------------ demo teammates */

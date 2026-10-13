@@ -7,7 +7,8 @@ import { AppController } from '../src/controller.js';
 import { ThemeCtx } from '../src/components/ui.js';
 import { Header } from '../src/components/Header.js';
 import { StatusLine } from '../src/components/StatusLine.js';
-import { Approval } from '../src/components/Approval.js';
+import { PermissionPrompt, approvalFromPending } from '../src/permission/index.js';
+const Approval = ({ a, width }: { a: never; width: number; confirming?: boolean }) => <PermissionPrompt request={approvalFromPending(a, { engine: 'claude-code' })} canDecide onDecide={() => undefined} cols={width + 2} />;
 import { Prompt, SlashPopup, slashMatches } from '../src/components/Prompt.js';
 import { Toasts } from '../src/components/Toasts.js';
 import { MultiSelect } from '../src/pick/MultiSelect.js';
@@ -56,7 +57,7 @@ describe('the answers of a permission prompt stay readable on every width', () =
   for (const risk of ['medium', 'high'] as const) for (const w of [60, 64, 70, 78, 80, 100, 140]) {
     it(`${risk} risk at ${w} columns shows whole [y] yes and [n] no${risk === 'medium' ? ' (and the session and always answers)' : ''}`, () => {
       const out = strip(renderToString(<ThemeCtx.Provider value={createTheme('dark', 'truecolor')}><Approval a={approval(risk)} width={w} confirming={false} /></ThemeCtx.Provider>, { columns: w }));
-      expect(out).toContain('[y] yes'); expect(out).toContain('[n] no'); if (risk === 'medium') { expect(out).toContain('[s] session'); expect(out).toContain('[a] always'); expect(out).not.toMatch(/\[[ysan]\] \S*…/); }
+      expect(out).toContain('[y] yes'); expect(out).toContain('[n] no'); if (risk === 'medium') { expect(out).toContain('[s] this session'); expect(out).toContain('[a] always'); expect(out).not.toMatch(/\[[ysan]\] \S*…/); }
     });
   }
 });
@@ -83,7 +84,7 @@ describe('the permission dialog carries the answers (the strip above it no longe
   it('a destructive request offers only yes and no; others also offer this session and always', () => {
     const show = (risk: 'medium' | 'high') => renderToString(<ThemeCtx.Provider value={createTheme('dark', 'truecolor')}><Approval a={approval(risk)} width={80} confirming={false} /></ThemeCtx.Provider>, { columns: 80 }).replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '');
     const high = show('high'); expect(high).toContain('[y] yes'); expect(high).toContain('[n] no'); expect(high).not.toContain('always'); expect(high).not.toContain('[s]');
-    const mid = show('medium'); expect(mid).toContain('[s] session'); expect(mid).toContain('[a] always');
+    const mid = show('medium'); expect(mid).toContain('[s] this session'); expect(mid).toContain('[a] always');
   });
 });
 

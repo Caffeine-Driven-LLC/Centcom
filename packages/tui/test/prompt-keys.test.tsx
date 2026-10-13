@@ -97,7 +97,7 @@ describe('mouse clicks', () => {
     const a = t.ctl.decide(req('1', 'medium')); await wait(330); await t.click('[n]'); expect(await a).toMatchObject({ decision: 'deny' });
     const b = t.ctl.decide(req('2', 'medium')); await wait(330); await t.click('[y]'); expect(await b).toMatchObject({ decision: 'approve', scope: 'once' });
     const c = t.ctl.decide(req('3', 'medium')); await wait(330); await t.click('[a]'); expect(await c).toMatchObject({ decision: 'approve' }); expect((await c).scope).not.toBe('once');
-    const d = t.ctl.decide(req('4', 'high')); await wait(330); await t.click('[y]'); expect(t.ctl.state.approvals).toHaveLength(1); await t.click('[y]'); expect(await d).toMatchObject({ decision: 'approve' }); // a destructive one needs a second click
+    const d = t.ctl.decide(req('4', 'high')); await wait(330); await t.click('[y]'); expect(t.ctl.state.approvals).toHaveLength(1); await t.click('[Enter]'); expect(await d).toMatchObject({ decision: 'approve' }); // a destructive one asks again: y, then Enter
   });
   it('clicking a command in the / menu runs it, or fills it in when it needs an argument', async () => {
     const t = await mount(); const sent: string[] = []; t.ctl.submit = (async (x: string) => { sent.push(x); }) as never;
@@ -178,17 +178,37 @@ describe('approval: countdown and session scope', () => {
     const b = t.ctl.decide(req('2', 'medium', 'pnpm build')); await wait(330); await t.click('[s]'); expect(await b).toMatchObject({ decision: 'approve', scope: 'session' });
     const c = t.ctl.decide(req('3', 'high', 'rm -rf build')); await wait(330); await t.send('s'); expect(t.ctl.state.approvals).toHaveLength(1); await t.send('n'); await c;
   });
-  it('the countdown formats as m:ss and the prompt shows it once the engine gave a deadline', async () => {
-    const { countdown, Approval } = await import('../src/components/Approval.js'); const React = (await import('react')).default; const { renderToString } = await import('ink');
-    expect(countdown(598_000)).toBe('9:58'); expect(countdown(5_000)).toBe('0:05'); expect(countdown(0)).toBe('0:00'); expect(countdown(7_500_000)).toBe('2h 05m');
-    const mk = (expiresAt?: number) => ({ req: { approval_id: 'a', agent_id: 'me', tool_id: 't', tool: 'Bash', summary: 'x', risk: 'medium', command: 'npm test' }, agentName: 'you', color: 'violet', resolve() {}, confirmHigh: false, expiresAt } as never);
-    const show = (a: unknown) => renderToString(React.createElement(Approval, { a: a as never, width: 80, confirming: false }), { columns: 80 });
-    expect(show(mk(Date.now() + 120_000))).toMatch(/Declines on its own in 1:5\d|Declines on its own in 2:00/); expect(show(mk())).not.toContain('Declines on its own');
+  it('the prompt shows the time left once the engine gave a deadline, and a diff under the command', async () => {
+    const { approvalFromPending, promptRows, diffLines, countdown } = await import('../src/permission/index.js');
+    expect(countdown(598_000)).toBe('9:58'); expect(countdown(5_000)).toBe('0:05'); expect(countdown(0)).toBe('0:00');
+    const mk = (expiresAt?: number, diff?: string) => approvalFromPending({ req: { approval_id: 'a', agent_id: 'me', tool: 'Edit', summary: 'x', risk: 'medium', path: 'src/a.ts', ...(diff ? { diff } : {}) }, agentName: 'you', expiresAt }, { engine: 'claude-code' });
+    const show = (v: ReturnType<typeof mk>) => promptRows(v, { width: 76, canDecide: true, onEdit: false, remainingMs: Date.parse(v.expiresAt) - Date.now(), phase: 'active', diff: diffLines(v.diff, 76) }).map((r) => r.map((x) => x.t).join('')).join('\n');
+    expect(show(mk(Date.now() + 120_000))).toMatch(/expires in (1:5\d|2:00)/);
+    const withDiff = show(mk(undefined, '--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1,2 +1,2 @@\n keep\n-old line\n+new line\n')); expect(withDiff).toContain('old line'); expect(withDiff).toContain('new line');
   });
   it('the policy prompter stamps each approval with when it expires', async () => {
     const c = new AppController({ engine: new DemoEngine({ speed: 100 }), demo: true, cwd: '/tmp', version: 't', skills: [], approvalTimeoutMs: 90_000 });
     const ac = new AbortController(); void c.promptApproval({ approval_id: 'p1', agent_id: c.state.activeAgent, tool: 'Bash', summary: 'x', command: 'ls', risk: 'medium' } as never, ac.signal);
     const e = c.state.approvals[0]!.expiresAt!; expect(e - Date.now()).toBeGreaterThan(88_000); expect(e - Date.now()).toBeLessThanOrEqual(90_000); ac.abort(); c.stop();
+  });
+});
+
+describe('the permission prompt and the notice line in the app (lanes C037, C038, C044)', () => {
+  const edit = { approval_id: 'e1', agent_id: 'me', tool_id: 'te1', tool: 'Edit', summary: 'edit', risk: 'medium', path: 'src/a.ts', diff: '--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1,3 +1,3 @@\n keep\n-const old = 1;\n+const next = 2;\n tail\n' } as never;
+  it('an edit shows its numbered diff under the path, and the answers stay on screen', async () => {
+    const t = await mount(); const a = t.ctl.decide(edit); await t.until(() => t.frame().includes('const next = 2'));
+    const f = t.frame(); expect(f).toContain('Allow Cento to edit a file?'); expect(f).toContain('src/a.ts'); expect(f).toContain('const old = 1'); expect(f).toContain('[y] yes'); expect(f).toContain('[n] no');
+    await wait(330); await t.send('n'); expect(await a).toMatchObject({ decision: 'deny' }); await t.until(() => !t.frame().includes('Allow Cento'));
+  });
+  it('a destructive command is drawn with a heavy border and needs y, then Enter; any other key backs out', async () => {
+    const t = await mount(); const b = t.ctl.decide({ approval_id: 'd1', agent_id: 'me', tool_id: 'td1', tool: 'Bash', summary: 'x', risk: 'high', command: 'rm -rf build' } as never);
+    await t.until(() => t.frame().includes('rm -rf build')); expect(t.frame()).toContain('┏'); await wait(330);
+    await t.send('y'); expect(t.ctl.state.approvals).toHaveLength(1); await t.until(() => t.frame().includes('[Enter] confirm')); await t.send('x'); expect(t.ctl.state.approvals).toHaveLength(1);
+    await t.send('y'); await t.send('\r'); expect(await b).toMatchObject({ decision: 'approve', scope: 'once' });
+  });
+  it('a notice shows above the prompt; Esc dismisses it before it clears the text, and an error stays until then', async () => {
+    const t = await mount(); await t.send('draft'); t.ctl.toast('error', 'Something broke'); await t.until(() => t.frame().includes('Something broke'));
+    await wait(120); await t.send('\x1b', 80); expect(t.text()).toBe('draft'); await t.until(() => !t.frame().includes('Something broke'));
   });
 });
 

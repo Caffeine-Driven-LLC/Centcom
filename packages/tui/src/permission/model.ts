@@ -28,3 +28,13 @@ export function visibleText(s: string): string {
 /** Order for a queue: soonest to expire first. */
 export const byExpiry = (a: ApprovalView, b: ApprovalView): number => Date.parse(a.expiresAt) - Date.parse(b.expiresAt);
 export const countdown = (ms: number): string => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+
+/** What the app's own approval queue holds, as the view the prompt shows. A destructive one allows only a single yes (it asks twice). */
+export function approvalFromPending(a: { req: { approval_id: string; agent_id: string; tool: string; summary: string; command?: string; cwd?: string; path?: string; risk: 'low' | 'medium' | 'high'; diff?: string }; agentName: string; expiresAt?: number }, ctx: { engine: ApprovalView['engine']; branch?: string; now?: () => number }): ApprovalView {
+  const r = a.req; const mine = a.agentName === 'you'; const verb = VERB[r.tool] ?? (r.command ? 'run' : r.path ? 'edit' : 'use');
+  const account = mine ? 'runs on your account' : `runs on ${a.agentName}'s account`; const farFuture = (ctx.now?.() ?? Date.now()) + 24 * 3600_000;
+  return { approvalId: r.approval_id, agentId: r.agent_id, agentLabel: 'Cento', ownerName: mine ? 'you' : a.agentName, ownerSlot: 0, engine: ctx.engine, provider: ctx.engine === 'codex' ? 'openai' : 'anthropic', runsOn: mine ? 'you' : a.agentName, accountLine: account,
+    risk: r.risk, destructive: r.risk === 'high', editable: false, allowedScopes: r.risk === 'high' ? ['once'] : ['once', 'session', 'always'], expiresAt: new Date(a.expiresAt ?? farFuture).toISOString(), approver: 'host',
+    title: verb === 'run' ? 'Allow Cento to run a command?' : verb === 'edit' ? (r.tool === 'Write' ? 'Allow Cento to create a file?' : 'Allow Cento to edit a file?') : `Allow Cento to use ${r.tool}?`,
+    ...(r.command ? { command: r.command } : r.path ? { path: r.path } : { command: r.summary }), ...(r.cwd ? { directory: r.cwd } : {}), ...(ctx.branch ? { branch: ctx.branch } : {}), ...(r.diff ? { diff: r.diff } : {}) };
+}

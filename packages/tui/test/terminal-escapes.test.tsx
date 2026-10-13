@@ -5,7 +5,7 @@ import { Rich } from '../src/components/ui.js';
 import { sp } from '../src/util/text.js';
 import { Transcript } from '../src/components/Transcript.js';
 import { TranscriptLayout } from '../src/transcript/layout.js';
-import { Approval } from '../src/components/Approval.js';
+import { PermissionPrompt, approvalFromPending } from '../src/permission/index.js';
 
 /** Text from the agent, a tool or a file may carry terminal control sequences (clear screen, set the title, write the clipboard with OSC 52). None may reach the terminal; only the app's own colours may. */
 const EVIL = 'hello \x1b[2J\x1b[H\x1b]0;pwned\x07\x1b]52;c;QUJD\x07 world';
@@ -19,7 +19,7 @@ describe('hostile text never reaches the terminal as control sequences', () => {
   it('a diff whose file content carries escapes, and a permission prompt for a hostile command or path', () => {
     const items = [{ id: 'e', kind: 'tool', name: 'Edit', status: 'ok', summary: 'x', diff: `--- a/f\n+++ b/f\n@@ -1 +1 @@\n-old ${EVIL}\n+new ${EVIL}\n` }] as never[];
     expect(nonStyleEscapes(renderToString(<Transcript layout={new TranscriptLayout().update(items, 70)} items={items} width={70} height={16} scroll={0} />, { columns: 80 }))).toEqual([]);
-    const a = { req: { approval_id: 'a', agent_id: 'me', tool_id: 't', tool: 'Bash', summary: EVIL, risk: 'medium', command: `echo ${EVIL}`, path: undefined }, agentName: 'you', color: 'violet', resolve() {}, confirmHigh: false } as never;
-    expect(nonStyleEscapes(renderToString(<Approval a={a} width={80} confirming={false} />, { columns: 80 }))).toEqual([]);
+    const a = approvalFromPending({ req: { approval_id: 'a', agent_id: 'me', tool: 'Bash', summary: EVIL, risk: 'medium', command: `echo ${EVIL}`, cwd: `/tmp/${EVIL}`, diff: `--- a/f\n+++ b/f\n@@ -1 +1 @@\n-old ${EVIL}\n+new ${EVIL}\n` }, agentName: 'you' }, { engine: 'claude-code', branch: EVIL });
+    expect(nonStyleEscapes(renderToString(<PermissionPrompt request={a} canDecide onDecide={() => undefined} cols={80} />, { columns: 80 }))).toEqual([]);
   });
 });

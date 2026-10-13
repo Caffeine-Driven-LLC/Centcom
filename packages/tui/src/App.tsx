@@ -10,7 +10,7 @@ import { actions as allActions, createDispatcher, defaultKeymap, fromInk, HelpSc
 import { Header } from './components/Header.js';
 import { Welcome } from './components/Welcome.js';
 import { LiveStrip, LARGE_H } from './components/LiveStrip.js';
-import { Approval, approvalHeight } from './components/Approval.js';
+import { PermissionPrompt, permissionHeight, approvalFromPending } from './permission/index.js';
 import { Prompt, SlashPopup, promptRows, slashMatches } from './components/Prompt.js';
 import { StatusLine } from './components/StatusLine.js';
 import { FleetPanel, FLEET_W } from './components/FleetPanel.js';
@@ -35,12 +35,9 @@ export function App({ ctl, tier, keys }: AppProps) {
   const theme = useMemo(() => createTheme(s.settings.theme, tier), [s.settings.theme, tier]);
   const keymap = useMemo(() => keys?.keymap ?? defaultKeymap(allActions()), [keys]); const focusRef = useRef<KeyContext[]>(['prompt']);
   const dispatcher = useMemo(() => createDispatcher({ keymap, focus: () => focusRef.current, clock: { now: () => Date.now() } }), [keymap]);
-  const [confirming, setConfirming] = useState(false);
   const pending = s.approvals[0];
-  useEffect(() => { setConfirming(false); }, [pending?.req.approval_id]);
-  /** A new approval ignores answers for 300 ms: a key you were typing for something else must not approve a command you have not seen. */
-  const shown = useRef<{ id?: string; at: number }>({ at: 0 }); if (pending?.req.approval_id !== shown.current.id) shown.current = { id: pending?.req.approval_id, at: Date.now() };
-  const approvalGrace = () => !!pending && Date.now() - shown.current.at < 300;
+  /** The permission question as the prompt shows it. The prompt owns its keys: a new one ignores answers for 300 ms, a destructive one asks twice (y, then Enter), and one that is not answered in time declines itself. */
+  const approvalView = useMemo(() => (pending ? approvalFromPending(pending, { engine: s.engineId === 'codex' ? 'codex' : 'claude-code', branch: s.branch || undefined }) : undefined), [pending?.req.approval_id, s.engineId, s.branch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ---- layout ---- */
   const showFleet = s.fleet && s.agents.length > 1 && cols >= 110 && s.mode === 'chat'; // a solo session has no fleet panel; it appears when others join
@@ -61,7 +58,7 @@ export function App({ ctl, tier, keys }: AppProps) {
   const maxDiff = Math.max(3, Math.min(10, rows - 20));
   const showTasks = s.tasksOpen && s.tasks.length > 0 && !pending && s.mode === 'chat';
   const tasksH = showTasks ? Math.min(s.tasks.length, rows >= 34 ? 10 : 5) + 1 + (s.tasks.length > (rows >= 34 ? 10 : 5) ? 1 : 0) : 0;
-  const bottomH = pending ? approvalHeight(pending, mainW, maxDiff) : promptH + popupH + tasksH;
+  const bottomH = approvalView ? permissionHeight(approvalView, { cols: mainW, canDecide: true, maxDiff }) : promptH + popupH + tasksH;
   const bodyH = Math.max(3, rows - 2 - stripH - bottomH);
   const layout = useTranscriptLayout(s.items, mainW - 2, s.settings.density === 'compact');
   const total = layout.total;
@@ -135,18 +132,9 @@ export function App({ ctl, tier, keys }: AppProps) {
     wake(); // any key brings the animation back to full speed
     if (key.ctrl && input === 'c') { if (sel && !pending && (s.mode === 'chat' || s.mode === 'night')) { ctl.copy(ed.selectedText(s.input, s.cursor, s.anchor)); ctl.patch({ anchor: undefined }); return; } ctl.ctrlC(); return; }
     /* approvals */
-    if (pending) {
-      focusRef.current = ['permission']; const high = pending.req.risk === 'high'; const step = fromInk(input, key);
-      if (approvalGrace()) return;
-      if (confirming) { if (key.return) ctl.answerApproval('approve'); else if (step && dispatcher.handle(step).kind === 'action' && key.escape) ctl.answerApproval('deny'); return; }
-      const d = step ? dispatcher.handle(step) : { kind: 'none' as const };
-      if (d.kind === 'action') {
-        if (d.action === 'approval.deny') { ctl.answerApproval('deny'); return; }
-        if (d.action === 'approval.approve') { if (high) setConfirming(true); else ctl.answerApproval('approve'); return; }
-        if (d.action === 'approval.always' && !high) { ctl.answerApproval('approve', 'always'); return; }
-        if (d.action === 'approval.session' && !high) { ctl.answerApproval('approve', 'session'); return; }
-        if (d.action === 'transcript.page_up') { setScroll(s.scroll + Math.floor(bodyH / 2)); return; } if (d.action === 'transcript.page_down') { setScroll(s.scroll - Math.floor(bodyH / 2)); return; }
-      }
+    if (pending) { // the prompt reads the answer keys itself; the transcript still scrolls
+      focusRef.current = ['permission']; const step = fromInk(input, key); const d = step ? dispatcher.handle(step) : { kind: 'none' as const };
+      if (d.kind === 'action') { if (d.action === 'transcript.page_up') setScroll(s.scroll + Math.floor(bodyH / 2)); else if (d.action === 'transcript.page_down') setScroll(s.scroll - Math.floor(bodyH / 2)); }
       return;
     }
     /* overlays */
@@ -186,7 +174,8 @@ export function App({ ctl, tier, keys }: AppProps) {
         case 'palette.open': ctl.patch({ mode: 'palette', palette: { query: '', sel: 0 } }); return;
         case 'models.open': void ctl.openModels(); return;
         case 'mode.cycle': ctl.cycleMode(); return;
-        case 'agent.interrupt': if (s.busy) void ctl.interrupt(); else if (s.input) ctl.setInputUndoable('', 0); else ctl.escIdle(); return;
+        case 'agent.interrupt': if (s.busy) void ctl.interrupt(); else if (ctl.dismissToast()) { /* the notice goes first */ } else if (s.input) ctl.setInputUndoable('', 0); else ctl.escIdle(); return;
+        case 'toast.dismiss': ctl.dismissToast(); return;
         case 'tasks.toggle': ctl.patch({ tasksOpen: !s.tasksOpen }); return;
         case 'night.toggle': ctl.openNight(); return;
         case 'history.search': void ctl.historyPick(); return;
@@ -210,6 +199,7 @@ export function App({ ctl, tier, keys }: AppProps) {
       if (key.upArrow) { ctl.patch({ mention: { ...s.mention!, sel: (s.mention!.sel + mentions.length - 1) % mentions.length } }); return; }
       if (key.downArrow) { ctl.patch({ mention: { ...s.mention!, sel: (s.mention!.sel + 1) % mentions.length } }); return; }
     }
+    if (!s.input && !key.ctrl && !key.meta && input.length === 1 && ctl.toastKey(input)) return; // a notice with a key, such as [u] update
     if (key.end && !s.input) { setScroll(0); return; }
     if (key.return) {
       if (matches.length) {
@@ -280,7 +270,7 @@ export function App({ ctl, tier, keys }: AppProps) {
                       : <Box paddingX={1}><Transcript layout={layout} items={s.items} width={mainW - 2} height={bodyH} scroll={s.scroll} unseen={unseen} /></Box>}
             </Box>
             {stripH > 0 ? <Box paddingX={1} height={stripH}><LiveStrip s={s} driver={ctl.driver} width={mainW - 2} size={stripSize as 'large' | 'small' | 'off'} calm={calm} /></Box> : null}
-            {pending ? <Approval a={pending} width={mainW} confirming={confirming} maxDiff={maxDiff} onChoose={(c) => { if (approvalGrace()) return; if (c === 'no') ctl.answerApproval('deny'); else if (c === 'always') { if (pending.req.risk !== 'high') ctl.answerApproval('approve', 'always'); } else if (c === 'session') { if (pending.req.risk !== 'high') ctl.answerApproval('approve', 'session'); } else if (pending.req.risk === 'high' && !confirming) setConfirming(true); else ctl.answerApproval('approve'); }} /> : (
+            {approvalView ? <PermissionPrompt request={approvalView} canDecide cols={mainW} maxDiff={maxDiff} onDecide={(d) => { if (ctl.state.approvals[0]?.req.approval_id === d.approvalId) ctl.answerApproval(d.decision, d.scope); }} /> : (
               <>
                 {showTasks ? <Box paddingX={1} height={tasksH}><TaskList items={s.tasks} maxRows={rows >= 34 ? 10 : 5} width={mainW - 2} unicode={tier !== 'none'} /></Box> : null}
                 {mentions.length && !matches.length ? <MentionPopup items={mentions.slice(0, 6)} sel={s.mention!.sel} width={mainW} onPick={(p) => { const e = ed.completeMention({ text: s.input, cursor: s.cursor }, mentionNow!, p); ctl.setInputUndoable(e.text, e.cursor); ctl.clearMentions(); }} /> : null}
@@ -292,7 +282,7 @@ export function App({ ctl, tier, keys }: AppProps) {
           {showFleet ? <Box marginLeft={1}><FleetPanel s={s} width={FLEET_W} height={bodyH + stripH + bottomH} /></Box> : null}
         </Box>
         <StatusLine s={s} width={cols} />
-        <Box position="absolute" marginTop={1} width={cols}><Toasts toasts={s.toasts} width={cols - 1} /></Box>
+        <Box position="absolute" marginTop={1} width={cols}><Toasts toasts={s.toasts} showing={ctl.toasts.current()?.id} width={cols - 1} unicode={tier !== 'none'} /></Box>
       </Box>
       </ClickContext.Provider>
     </ThemeCtx.Provider>
