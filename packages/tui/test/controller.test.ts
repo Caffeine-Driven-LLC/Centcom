@@ -92,3 +92,12 @@ describe('the per-turn time limit (lane C030)', () => {
     await c.start(); await c.submit('go'); await wait(100); const t0 = Date.now(); c.stop(); expect(Date.now() - t0).toBeLessThan(500); expect(c.state.toasts.some((t) => /ran longer/.test(t.text))).toBe(false);
   });
 });
+
+describe('/skills loaded (lane C020)', () => {
+  const started = (skills?: string[]) => ({ v: 1, seq: 1, ts: new Date().toISOString(), agent_id: 'a', type: 'session.started', engine: 'fake', engine_session_id: 's', model: 'm', tools: [], mcp_servers: [], capabilities: [], login_kind: 'unknown', ...(skills ? { skills } : {}) }) as never;
+  it('lists what the engine itself said it loaded; says so when it did not say', async () => {
+    const c = make(); await c.runCommand('/skills loaded'); expect(c.state.toasts.at(-1)!.text).toMatch(/did not say which skills it loaded/);
+    c.apply(started(['code-review', 'subtype'])); await c.runCommand('/skills loaded'); const n = c.state.items.filter((i) => i.kind === 'notice').at(-1) as { text: string; detail?: string }; expect(n.text).toMatch(/loaded 2 skills$/); expect(n.detail).toBe('code-review, subtype');
+    c.apply(started([])); await c.runCommand('/skills loaded'); expect((c.state.items.filter((i) => i.kind === 'notice').at(-1) as { detail?: string }).detail).toBe('none'); c.stop();
+  });
+});

@@ -21,3 +21,20 @@ describe('centcom skills', () => {
   });
   it('bad usage is exit 2 with a hint', async () => { const r = rig(); expect(await runSkills([], r.io)).toBe(2); expect(await runSkills(['install', '--scope', 'galaxy'], r.io)).toBe(2); expect(await runSkills(['install', '--engine', 'gemini'], r.io)).toBe(2); expect(r.err.length).toBe(3); });
 });
+
+describe('a skill file you edited (lane C020)', () => {
+  const edited = async (r: ReturnType<typeof rig>) => { await runSkills(['install', '--engine', 'claude', '--yes'], r.io); const f = join(r.cwd, '.claude', 'skills', 'code-review', 'SKILL.md'); writeFileSync(f, readFileSync(f, 'utf8') + '\nmy own rule\n'); r.out.length = 0; return f; };
+  it('with --yes alone it is left alone and named', async () => {
+    const r = rig(); const f = await edited(r); expect(await runSkills(['update', '--engine', 'claude', '--yes'], r.io)).toBe(0); expect(readFileSync(f, 'utf8')).toContain('my own rule'); expect(r.out.join('\n')).toMatch(/left alone 1 you edited/); expect(r.out.join('\n')).toContain('left alone: ');
+  });
+  it('asked one file at a time: yes replaces that one, no keeps it', async () => {
+    const yes = rig(['y', 'y']); const f = await edited(yes); expect(await runSkills(['update', '--engine', 'claude'], yes.io)).toBe(0); expect(readFileSync(f, 'utf8')).not.toContain('my own rule'); expect(yes.out.join('\n')).not.toMatch(/left alone: /);
+    const no = rig(['y', 'n']); const g = await edited(no); expect(await runSkills(['update', '--engine', 'claude'], no.io)).toBe(0); expect(readFileSync(g, 'utf8')).toContain('my own rule'); expect(no.out.join('\n')).toMatch(/left alone: /);
+  });
+  it('--overwrite says yes to every edited file, without asking; remove asks before deleting an edited one', async () => {
+    const a = rig(); const f = await edited(a); expect(await runSkills(['update', '--engine', 'claude', '--yes', '--overwrite'], a.io)).toBe(0); expect(readFileSync(f, 'utf8')).not.toContain('my own rule');
+    const keep = rig(['y', 'n']); const g = await edited(keep); await runSkills(['remove', '--engine', 'claude'], keep.io); expect(existsSync(g)).toBe(true);
+    const gone = rig(['y', 'y']); const h = await edited(gone); await runSkills(['remove', '--engine', 'claude'], gone.io); expect(existsSync(h)).toBe(false);
+  });
+});
+
