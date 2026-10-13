@@ -155,7 +155,9 @@ export class AppController {
   get state() { return this.store.get(); }
   /** The display name of an agent ("you" for the main one). */
   agentName(id: string) { return this.state.agents.find((a) => a.id === id)?.name ?? this.remoteName?.(id) ?? 'an agent'; }
-  private remoteName?: (id: string) => string | undefined;
+  private remoteName?: (id: string) => string | undefined; private teamDigest?: () => string[]; private teamTold = new Set<string>();
+  /** A branch-mode session tells the agent, once, what a teammate's agent holds that it is changing. */
+  setTeamDigest(fn: (() => string[]) | undefined): void { this.teamDigest = fn; this.teamTold.clear(); }
   /** A shared session in branch mode names the teammates' agents ("Ana's agent"). */
   setRemoteAgentNamer(fn: ((id: string) => string | undefined) | undefined): void { this.remoteName = fn; }
   private set(p: Partial<AppState> | ((s: AppState) => Partial<AppState>)) { this.store.set((st) => { const q = typeof p === 'function' ? p(st) : p; if (q.input === '') { this.pastes.clear(); /* an empty prompt has no chips left */ this.undoStack = []; this.redoStack = []; } return 'input' in q && !('anchor' in q) ? { ...q, anchor: undefined } : q; }); } // a new prompt text drops any selection
@@ -519,6 +521,7 @@ export class AppController {
       }
     }
     { const d = this.o.board?.digest({ id: this.me, name: 'you' }); if (d) { outgoing = d.text + outgoing; this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: `${d.count} note${d.count === 1 ? '' : 's'} from other agents went along with this message`, detail: d.lines.join('\n') }); } } // the transcript shows what the agent was told
+    { const lines = (this.teamDigest?.() ?? []).filter((l) => !this.teamTold.has(l)); if (lines.length) { for (const l of lines) this.teamTold.add(l); const safe = lines.map((l) => l.replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, 200)); outgoing = `[Centcom team notice, from the session, not from the user: ${safe.join(' ')} Pick other files or tell the user before editing them.]\n\n` + outgoing; this.addItem({ kind: 'notice', id: nid('n'), level: 'warn', text: 'A teammate\'s agent is working on a file yours is changing', detail: safe.join('\n') }); } } // a conflict reaches the agent once, before it edits again
     await this.checkpointBefore(text);
     this.pastes.clear(); // the chips are spent
     if (!this.session && !this.stopped) { try { this.starting ??= this.startEngine(this.deadToken).then(() => { this.deadToken = undefined; }).finally(() => { this.starting = undefined; }); await this.starting; } catch (e) { this.addItem({ kind: 'notice', id: nid('n'), level: 'error', text: `Could not start ${this.o.engine.label} again`, detail: String((e as Error).message ?? e) }); this.set({ busy: false }); return; } }

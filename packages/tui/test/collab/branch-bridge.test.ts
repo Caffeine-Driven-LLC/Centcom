@@ -15,11 +15,11 @@ const clock = { now: () => Date.now(), setTimeout: (f: () => void, ms: number) =
 /** One person's side: their own controller (their own agent), a lock client and a branch bridge on their end of the session. */
 async function person(handle: SessionHandle, branch: string, o: { shareActivity?: boolean } = {}) {
   const ctl = new AppController({ engine: new FakeEngine({ script: {} }) as never, demo: false, cwd: '/tmp', version: 't', skills: [] }); await ctl.start(); cleanup.push(() => ctl.stop());
-  const hub: LockHub = createLockHub(); const conflicts: { agents: string[]; hmacs: string[] }[] = [];
+  const hub: LockHub = createLockHub(); const conflicts: { agents: string[]; hmacs: string[] }[] = []; const errors: string[] = [];
   const locks = createLockClient({ root: mkdtempSync(join(tmpdir(), 'cc-locks-')), fs: nodeLockFs, clock, bus: createAgentBus({ onError: () => undefined }), config: { mode: 'warn', defaultTtlMs: 60_000 }, transport: hub.transport, pathMac: (p) => hub.pathMac(p) ?? '', wireId: hub.wireId, onConflictDetected: hub.onConflict }); hub.client = locks; cleanup.push(() => locks.dispose());
-  const bridge = new HostBridge(ctl, handle, { mode: 'branch', flushMs: 5, locks: hub, shareActivity: o.shareActivity, branchProbe: async () => ({ branch, head: 'abc1234', ahead: 1, behind: 0, dirty: true }), onConflict: (c) => conflicts.push(c) }); bridge.start(); cleanup.push(() => bridge.stop());
+  const bridge = new HostBridge(ctl, handle, { mode: 'branch', flushMs: 5, locks: hub, shareActivity: o.shareActivity, branchProbe: async () => ({ branch, head: 'abc1234', ahead: 1, behind: 0, dirty: true }), onConflict: (c) => conflicts.push(c), onError: (e) => errors.push(String(e)) }); bridge.start(); cleanup.push(() => bridge.stop());
   const agent = ctl.state.agents.find((a) => a.mine)!.id;
-  return { ctl, bridge, locks, hub, conflicts, agent };
+  return { ctl, bridge, locks, hub, conflicts, errors, agent };
 }
 async function setup() {
   const r = await rig(); cleanup.push(() => r.stop());
@@ -59,6 +59,12 @@ describe('branch mode: each person runs their own agent in one session', { timeo
     const named = b.ctl.agentName(agentsOf(b, host.me.id)[0]!.id); expect(named).toMatch(/agent$/);
     await a.locks.release('src/db.ts', a.agent as never); await until(() => (agentsOf(b, host.me.id)[0]?.locks.length ?? 1) === 0, 8000);
     void guest;
+  });
+  it('after a conflict the local agent is told once, with the teammate named, in its next message', async () => {
+    const { host, a, b, agentsOf } = await setup(); await until(() => agentsOf(b, host.me.id).length === 1, 8000); await a.locks.acquire('src/db.ts', { agentId: a.agent as never }); await until(() => agentsOf(b, host.me.id)[0]?.locks.length === 1, 8000);
+    await b.locks.acquire('src/db.ts', { agentId: b.agent as never });     await until(() => b.bridge.team!.snapshot().conflicts.length === 1 && b.bridge.team!.digestFor(b.bridge.team!.snapshot().members.find((m) => m.you)!.id).length === 1, 8000);
+    await b.ctl.submit('edit db'); await until(() => !b.ctl.state.busy); const told = b.ctl.state.items.filter((i) => i.kind === 'notice' && /teammate's agent is working on a file/.test((i as { text: string }).text)); expect(told).toHaveLength(1); expect((told[0] as { detail?: string }).detail).toMatch(/agent has /);
+    await b.ctl.submit('edit again'); await until(() => !b.ctl.state.busy); expect(b.ctl.state.items.filter((i) => i.kind === 'notice' && /teammate's agent is working on a file/.test((i as { text: string }).text))).toHaveLength(1); // not repeated
   });
   it('an agent that leaves the session says so and its locks go', async () => {
     const { host, guest, a, b, agentsOf } = await setup(); await until(() => agentsOf(b, host.me.id).length === 1, 8000); await a.locks.acquire('x.ts', { agentId: a.agent as never }); await until(() => agentsOf(b, host.me.id)[0]?.locks.length === 1, 8000);
