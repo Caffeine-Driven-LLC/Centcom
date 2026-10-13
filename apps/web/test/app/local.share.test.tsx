@@ -17,7 +17,8 @@ describe('the share button and dialog', () => {
     const out = reduceLocal(base(), { t: 'account', account: { signedIn: false, persisted: true, api: 'http://x' } });
     const a = ui(out); await open(); expect(screen.getByText('Sharing needs an account.')).toBeTruthy(); expect(a.sent.some((m) => m.t === 'account')).toBe(true); cleanup();
     const inn = reduceLocal(base(), { t: 'account', account: { signedIn: true, persisted: true, api: 'http://x', me: { id: 'u', name: 'Alice', email: 'a@x.test', plan: 'team' } } }); const b = ui(inn); await open();
-    fireEvent.click(screen.getByRole('button', { name: 'Start sharing' })); expect(b.sent.at(-1)).toEqual({ t: 'share' });
+    fireEvent.click(screen.getByRole('button', { name: 'Start sharing' })); expect(b.sent.at(-1)).toEqual({ t: 'share', mode: 'command_post' });
+    fireEvent.click(screen.getByLabelText(/Everyone runs their own agent/)); fireEvent.click(screen.getByRole('button', { name: 'Start sharing' })); expect(b.sent.at(-1)).toEqual({ t: 'share', mode: 'branch' });
   });
   it('shows who is in a live session, lets the host decide what editors asked, make a link and stop', async () => {
     const v = reduceLocal(base(), { t: 'sharing', sharing: live }); const { sent } = ui(v); expect(screen.getByRole('button', { name: /Shared · 1/ })).toBeTruthy(); await open();
@@ -28,6 +29,14 @@ describe('the share button and dialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Make a link' })); expect(sent.at(-1)).toEqual({ t: 'shareLink' });
     fireEvent.change(screen.getByLabelText('E-mail address'), { target: { value: 'bob@x.test' } }); fireEvent.click(screen.getByRole('button', { name: 'Invite' })); expect(sent.at(-1)).toEqual({ t: 'shareInvite', email: 'bob@x.test' });
     fireEvent.click(screen.getByRole('button', { name: 'Stop sharing' })); expect(sent.at(-1)).toEqual({ t: 'unshare' });
+  });
+  it('in a branch-mode session it says so, and lets the person stop showing what their agent says and does', async () => {
+    const v = reduceLocal(base(), { t: 'sharing', sharing: { ...live, mode: 'branch', activity: true } }); const { sent } = ui(v); await open();
+    expect(screen.getByText('Everyone runs their own agent')).toBeTruthy(); fireEvent.click(screen.getByLabelText(/Show the team what my agent says/)); expect(sent.at(-1)).toEqual({ t: 'shareActivity', on: false });
+  });
+  it('says so when branch mode was asked for and the server did not offer it', async () => {
+    const v = reduceLocal(base(), { t: 'sharing', sharing: { ...live, mode: 'command_post', degraded: true, hint: 'This server does not support "everyone runs their own agent" yet, so the session works as a command post.' } }); ui(v); await open();
+    expect(screen.getByText(/does not support "everyone runs their own agent" yet/)).toBeTruthy();
   });
   it('says why sharing failed (a plan without the relay) and has no button in the demo', async () => {
     const v = reduceLocal(base(), { t: 'sharing', sharing: { state: 'failed', name: 'p', auto: false, members: [], pending: [], code: 'entitlement_required', error: 'Your plan does not include sharing over the internet. Upgrade to Pro or Team to share a session.' } }); ui(v); await open();

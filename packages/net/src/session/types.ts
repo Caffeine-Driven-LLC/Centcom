@@ -6,7 +6,8 @@ export type Role = 'host' | 'editor' | 'viewer';
 export interface SessionPolicy { auto_approve?: 'ask' | 'trusted' | 'everyone'; auto_failover?: boolean; locked?: boolean; queue_limit?: number; share_history?: boolean }
 export interface DeviceKeysInfo { device: string; x25519: string; ed25519: string; fingerprint?: string; revoked?: boolean }
 export interface MemberInfo { id: string; role: Role; slot: number; name?: string; device?: string; keys?: DeviceKeysInfo; /** set when the device's keys differ from the ones trusted before */ keyChanged?: boolean; online?: boolean }
-export interface SessionSummary { id: string; name: string; state: string; host: string; workspace: string; region: string; policy: SessionPolicy; created_at: string; member_count?: number; ended_at?: string | null }
+export type SessionMode = 'command_post' | 'branch';
+export interface SessionSummary { mode?: SessionMode; id: string; name: string; state: string; host: string; workspace: string; region: string; policy: SessionPolicy; created_at: string; member_count?: number; ended_at?: string | null }
 export type EventP<_K extends EventKind = EventKind> = Record<string, unknown>;
 export type EventSecret<_K extends EventKind = EventKind> = Record<string, unknown>;
 export interface DecodedEvent<K extends string = string> { kind: K; seq: number; id: string; from: string; ts: string; p?: Record<string, unknown>; secret?: Record<string, unknown>; verified: true }

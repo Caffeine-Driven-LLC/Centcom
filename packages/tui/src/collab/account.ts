@@ -5,6 +5,7 @@
  * Nothing here is needed to work locally: a person who never signs in never touches it.
  * Must not: print or return a token; start a network call before a method is called.
  */
+import type { SessionHandle } from '@centcom/net';
 import { hostname } from 'node:os';
 import { join } from 'node:path';
 import { defaultDeps, loadConfig, stateDir } from '@centcom/config';
@@ -112,6 +113,16 @@ export class Account {
     return { joined: new JoinedSession(await sessions.joinSession({ sessionId })), how: target.kind };
   }
 
+  /**
+   * Joins a session as a member (an invite link, a token or a session id) and hands back the raw handle, for the caller that decides what
+   * to do with it: a branch-mode session runs this person's own agent in it; a command post is read through `JoinedSession`.
+   */
+  async joinMember(input: string): Promise<{ handle: SessionHandle; how: 'invite' | 'session' }> {
+    const target = parseJoinTarget(input); if (!target || target.kind === 'watch') throw Object.assign(new Error('That does not look like a session id or an invite link.'), { code: 'bad_target' });
+    const sessions = await this.sessions(); let sessionId = target.kind === 'session' ? target.id : '';
+    if (target.kind === 'invite') { const r = await this.acceptInvite(target.token); if (!r.session) throw Object.assign(new Error('That invite is not for a session. Ask for a session link.'), { code: 'bad_target' }); sessionId = r.session; }
+    return { handle: await sessions.joinSession({ sessionId }), how: target.kind };
+  }
   /** The workspaces this person is in (a session is created in one). */
   async workspaces(): Promise<{ id: string; name: string }[]> { const r = (await this.http.call('listWorkspaces', {})).data as unknown as { data?: { id: string; name: string }[] }; return (r.data ?? []).map((w) => ({ id: w.id, name: w.name })); }
 }

@@ -17,6 +17,7 @@ export interface LockDeps {
   /** False once an agent has stopped: its locks are then no longer renewed. */ agentRunning?(agentId: AgentId): boolean;
   /** From the session roster: events from agents that are not members are ignored. */ isMember?(agentId: string): boolean;
   /** Called once per new conflict with the `conflict.detected` clear payload. */ onConflictDetected?(p: PConflictDetected): void;
+  /** The id other members know an agent by (local ids need not be wire ids). Applied to the `agent_id` of every event this client sends. */ wireId?: (agentId: string) => string;
   log?: { debug(m: string, c?: Record<string, unknown>): void; warn(m: string, c?: Record<string, unknown>): void }; waitMs?: number;
 }
 export type LockResult = { ok: true; heldBy?: AgentId } | { ok: false; reason: 'held'; heldBy: AgentId; expiresAt: string } | { ok: false; reason: 'timeout' };
