@@ -11,7 +11,7 @@ async function setup(signedIn = true) {
   const r = await rig(); cleanup.push(() => r.stop());
   const ctl = new AppController({ engine: new FakeEngine({ script: {} }) as never, demo: false, cwd: '/tmp/proj', version: 't', skills: [] }); await ctl.start(); cleanup.push(() => ctl.stop());
   const invites: string[] = [];
-  const account = { status: async () => ({ signedIn, persisted: true, api: 'x', me: { id: 'u', name: 'A', email: 'a@x', plan: 'team', workspace: { id: WS, name: 'ws' } } }), sessions: async () => r.host.client, workspaces: async () => [{ id: WS, name: 'ws' }],
+  const account = { plain: { getStatus: async () => ({ status: 'ok' }) }, status: async () => ({ signedIn, persisted: true, api: 'x', me: { id: 'u', name: 'A', email: 'a@x', plan: 'team', workspace: { id: WS, name: 'ws' } } }), sessions: async () => r.host.client, workspaces: async () => [{ id: WS, name: 'ws' }],
     inviteToSession: async (_id: string, o: { email?: string }) => { invites.push(o.email ?? ''); return { url: 'https://centcom.dev/i/' + 'A'.repeat(30), token: 'A'.repeat(30) }; } } as unknown as Account;
   const share = new ShareSession(ctl, account); cleanup.push(() => share.close()); return { r, ctl, share, invites };
 }

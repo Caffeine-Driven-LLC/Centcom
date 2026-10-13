@@ -33,6 +33,7 @@ export interface AppState {
   history: string[]; histIdx: number | null; draft: string;
   scroll: number;
   toasts: Toast[];
+  /** The link to the hosted service while a session is shared (lane C063); undefined when nothing is shared. */ net?: 'online' | 'reconnecting' | 'offline' | 'degraded' | 'backend-down';
   approvals: PendingApproval[];
   settings: Settings;
   busy: boolean; turnStartedAt?: number; verb: string;

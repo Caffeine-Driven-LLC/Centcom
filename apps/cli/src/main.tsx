@@ -14,6 +14,7 @@ import type { FlatFlags } from '@centcom/config';
 import { createAppLogger } from '@centcom/net';
 import type { CentoColor } from '@centcom/mascot';
 import { buildPrompt, parseStreamInput, readStdin, runPrint } from './print/index.js';
+import { startRemoteFlags, watchEngineFlag, type RemoteFlags } from './remote-flags.js';
 import { chooseSession, pickSession } from './commands/resume.js';
 import { runProviderCli } from './commands/provider/cli.js';
 import { makeMemoryFiles, runMemoryCli } from './commands/memory/cli.js';
@@ -64,9 +65,9 @@ function cliFlags(): FlatFlags {
   return f;
 }
 
-async function pickEngine(preferred: 'claude-code' | 'codex' = 'claude-code'): Promise<{ engine: AgentEngine; demo: boolean; note: string }> {
+async function pickEngine(preferred: 'claude-code' | 'codex' = 'claude-code', flags?: RemoteFlags): Promise<{ engine: AgentEngine; demo: boolean; note: string }> {
   const explicit = arg('--engine') === 'codex' || arg('--engine') === 'claude-code' ? (arg('--engine') as 'codex' | 'claude-code') : undefined;
-  const pick = await chooseEngine({ demo: has('--demo') || arg('--engine') === 'demo', explicit, preferred, installed: (e) => isInstalled(e === 'codex' ? process.env.CENTCOM_CODEX_BIN || 'codex' : 'claude') });
+  const pick = await chooseEngine({ demo: has('--demo') || arg('--engine') === 'demo', explicit, preferred, installed: (e) => isInstalled(e === 'codex' ? process.env.CENTCOM_CODEX_BIN || 'codex' : 'claude'), blocked: (e) => !!flags?.blocked(e) });
   const engine: AgentEngine = pick.engine === 'demo' ? new DemoEngine({ speed: 1 }) : pick.engine === 'codex' ? new CodexEngine() : new ClaudeCodeEngine();
   return { engine, demo: pick.engine === 'demo', note: pick.note };
 }
@@ -130,7 +131,7 @@ async function main() {
     const pc = await ClientConfig.load(cwd, cliFlags());
     for (const w of pc.warnings) process.stderr.write('centcom: settings: ' + w + '\n');
     const eng = arg('--engine'); if (eng && !['claude-code', 'codex', 'demo'].includes(eng)) usage('--engine must be claude-code or codex');
-    const { engine, demo, note } = await pickEngine(pc.cfg.client.engine);
+    const pflags = process.env.CENTCOM_NO_REMOTE_FLAGS || has('--demo') ? undefined : startRemoteFlags({ baseUrl: pc.cfg.api.base_url, version: VERSION }); const { engine, demo, note } = await pickEngine(pc.cfg.client.engine, pflags); pflags?.stop();
     if (demo && !has('--demo') && eng !== 'demo') { process.stderr.write((note || 'No coding agent is installed.') + '\n'); process.exit(4); } // scripts get a clear failure, never the demo agent
     let br = ''; try { br = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { /* not a repo */ }
     const fmt = (arg('--output-format') ?? 'text') as 'text' | 'json' | 'stream-json';
@@ -152,7 +153,8 @@ async function main() {
   const a11y = resolveA11yMode({ env: process.env, flags: { screenReader: has('--screen-reader') }, config: { screenReader: cc.cfg.a11y.screen_reader, reducedMotion: cc.cfg.ui.reduced_motion } });
   // theme "auto": ask the terminal for its background colour (150 ms at most, nothing is written without a terminal) so a light terminal gets Paper instead of Graphite. The question goes out now and is answered while the agent is looked for.
   const bgAnswer = cc.cfg.ui.theme === 'auto' && !a11y.screenReader ? queryBackground({ out: process.stdout, inp: process.stdin }) : undefined;
-  const { engine, demo, note } = await pickEngine(cc.cfg.client.engine);
+  const rflags = process.env.CENTCOM_NO_REMOTE_FLAGS || has('--demo') ? undefined : startRemoteFlags({ baseUrl: cc.cfg.api.base_url, version: VERSION }); // kill switches only; answered from what was fetched last time, never waited for
+  const { engine, demo, note } = await pickEngine(cc.cfg.client.engine, rflags);
   const [hasClaude, hasCodex] = demo ? [false, false] : await Promise.all([isInstalled('claude'), isInstalled(process.env.CENTCOM_CODEX_BIN || 'codex')]); // both installed: the model list can switch between them
   let branch = ''; try { branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { /* not a git repo */ }
   const dangerous = has('--dangerously-skip-permissions') || has('--yolo');
@@ -213,6 +215,7 @@ async function main() {
     startUpdateCheck({ client, method, version: VERSION, channel: cc.cfg.update.channel, channelChosen: cc.cfg.update.channel !== 'stable', platform: process.platform, check: cc.cfg.update.check && !demo, auto: cc.cfg.update.auto, env: process.env, fs: nodeFs, runner: nodeRunner, cachePath: pathJoin(stateDir(defaultDeps()), 'update-check.json'), now: () => Date.now(), rng: Math.random, sessionsLive: () => !!share?.live, say: (level, text, detail) => { logger.info('update', { text }); ctl.notice(level, text, detail); } });
   }
   if (note) ctl.notice('warn', note);
+  if (rflags) { const off = watchEngineFlag(rflags, engine.id, (t) => ctl.notice('warn', t)); process.on('exit', () => { off(); rflags.stop(); }); }
   for (const w of rt.warnings) ctl.notice('warn', w);
   if (firstRunNote) ctl.notice('warn', firstRunNote);
   for (const w of cc.warnings) { ctl.notice('warn', 'Settings: ' + w); process.stderr.write('centcom: settings: ' + w + '\n'); }

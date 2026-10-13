@@ -7,6 +7,8 @@ import { formatCost, formatReset, formatTokens, fit, lineWidth, sp, type Line } 
 
 const lvl = (p: number): 'text.muted' | 'status.warning' | 'status.danger' => (p >= 90 ? 'status.danger' : p >= 70 ? 'status.warning' : 'text.muted');
 const bar = (p: number) => { const n = Math.round(Math.max(0, Math.min(100, p)) / 20); return '█'.repeat(n) + '░'.repeat(5 - n); };
+/** Words, not colour alone: the chip names the state. */
+const NET_CHIP: Record<NonNullable<AppState['net']>, string> = { online: '', reconnecting: '↻ reconnecting', offline: '○ offline', degraded: '! service slow', 'backend-down': '✗ service down' };
 const WIN: Record<string, string> = { five_hour: 'session', seven_day: 'week' };
 
 const MODE: Record<string, [string, 'accent.hover' | 'status.warning' | 'status.info' | 'status.danger']> = {
@@ -23,6 +25,7 @@ function StatusLineImpl({ s, width }: { s: AppState; width: number }) {
   const fields: { key: string; line: Line }[] = [
     { key: 'mode', line: [sp('» ', { c: mc }), sp(mode, { c: mc })] },
     ...(s.night.running || s.night.armed || s.night.tasks.length ? [{ key: 'night', line: (() => { const c = nightCounts(s.night); const t = s.night.running ? `night ${c.done + c.failed}/${c.total}` : c.queued ? `night · ${c.queued} queued` : 'night ready'; return [sp('◐ ', { c: s.night.running ? 'signal' : 'accent.hover', b: true }), sp(t, { c: s.night.running ? 'signal' : 'accent.hover', b: s.night.running })] as Line; })() }] : []),
+    ...(s.net && s.net !== 'online' ? [{ key: 'net', line: [sp(NET_CHIP[s.net], { c: s.net === 'degraded' ? 'status.info' : 'status.warning', b: true })] as Line }] : []),
     { key: 'state', line: s.busy ? [sp('● ', { c: 'signal' }), sp(me.state.replace(/-/g, ' '), { c: 'text.secondary' })] : [sp('○ ', { c: 'text.muted' }), sp('idle', { c: 'text.muted' })] },
     ...(need ? [{ key: 'need', line: [sp(`${need} need${need === 1 ? 's' : ''} you`, { c: 'status.warning', b: true })] }] : []),
     ...(me.ctxPct !== undefined ? [gauge('ctx', 'context', me.ctxPct, me.ctxTokens && me.ctxWindow ? `${formatTokens(me.ctxTokens)}/${formatTokens(me.ctxWindow)}` : '')] : []),

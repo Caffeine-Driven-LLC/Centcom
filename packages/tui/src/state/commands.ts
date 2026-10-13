@@ -15,6 +15,7 @@ export const COMMANDS: SlashCommand[] = [
   { name: 'demo', args: '[fix|search|delete|compact|ask|error|limit]', desc: 'Run a scripted demo story' },
   { name: 'team', desc: 'Who is working on what in a shared session where everyone runs their own agent' },
   { name: 'watch', args: '[number|name]', desc: "Read what a teammate's agent says and does (read only, as far as they share it)" },
+  { name: 'inbox', args: '[read]', desc: 'Notifications from your workspace (read marks them all read)' },
   { name: 'share', args: '[branch|join <id>|invite <email>|link|status|stop|run <n>|no <n>|auto|activity|handoff <n>]', desc: 'Share this conversation: invite people, watch-only link, who may run what' },
   { name: 'model', args: '[name]', desc: 'Pick the model, Claude or Codex (ctrl+o)' },
   { name: 'effort', args: '[low|medium|high|xhigh|max|default]', desc: 'How hard the agent thinks (pick from a list with no argument)' },

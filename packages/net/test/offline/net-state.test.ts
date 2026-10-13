@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NetStateMonitor, OfflineError, cachedForDisplay, requireOnline, toMascotState, type LinkSource, type NetState } from '../../src/index.js';
+import { NetStateMonitor, OfflineError, feedKind, cachedForDisplay, requireOnline, toMascotState, type LinkSource, type NetState } from '../../src/index.js';
 import { ManualClock } from '../session/rig.js';
 
 type Link = 'online' | 'reconnecting' | 'offline';
@@ -26,4 +26,13 @@ describe('hosted-only actions (acceptance 5, 9)', () => {
     const t0 = Date.now(); await expect(requireOnline(() => new Promise(() => undefined), { timeoutMs: 100 })).rejects.toBeInstanceOf(OfflineError); expect(Date.now() - t0).toBeLessThan(500); await expect(requireOnline(async () => { throw new Error('real failure'); })).rejects.toThrow('real failure');
   });
   it('cached entitlements may be shown for 24 hours and are marked stale after that', () => { const t = Date.UTC(2026, 9, 7); expect(cachedForDisplay(t, t + 23 * 3_600_000)).toEqual({ usable: true, stale: false }); expect(cachedForDisplay(t, t + 24 * 3_600_000 + 1)).toEqual({ usable: true, stale: true }); });
+});
+
+describe('the status feed in the contract words (found by running against the real backend)', () => {
+  it('operational and the older ok are fine; degraded and partial_outage are partial; major_outage is down; an unknown word is not an outage', () => {
+    expect(['operational', 'ok'].map(feedKind)).toEqual(['ok', 'ok']); expect(['degraded', 'partial_outage'].map(feedKind)).toEqual(['partial', 'partial']); expect(['major_outage', 'maintenance'].map(feedKind)).toEqual(['down', 'down']); expect(feedKind('something-new')).toBe('ok');
+  });
+  it('a monitor fed the real feed stays online on operational, shows degraded on degraded and backend-down on major_outage', async () => {
+    for (const [word, want] of [['operational', 'online'], ['degraded', 'degraded'], ['major_outage', 'backend-down']] as const) { const { m } = mk(async () => ({ status: word })); m.start(); for (let i = 0; i < 5; i++) await Promise.resolve(); expect(m.current(), word).toBe(want); m.stop(); }
+  });
 });
