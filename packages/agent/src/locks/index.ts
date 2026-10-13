@@ -4,3 +4,4 @@ export * from './path.js';
 export * from './client.js';
 export * from './gate.js';
 export * from './fs.js';
+export * from './hub.js';

@@ -57,6 +57,8 @@ export interface ControllerOptions {
   history?: string[]; onHistory?: (h: string[]) => void;
   /** Called when a remembered setting or panel changes (the config layer decides what to write). */
   onPrefs?: (p: { settings: Settings; fleet: boolean }) => void;
+  /** Where a shared session plugs into this runtime's file locks (set by the runtime; absent in the demo). */
+  lockHub?: import('@centcom/agent').LockHub;
   /** Agents the conversation can be moved to from the model list (the installed ones other than `engine`). A model of another agent switches to it. */
   engines?: Partial<Record<'claude-code' | 'codex', () => AgentEngine>>;
   /** Called after a switch to another agent, to remember it as the one to start with next time. */
@@ -148,9 +150,14 @@ export class AppController {
       engine: { capabilities: () => this.o.engine.capabilities(), start: (so) => this.o.engine.start({ ...this.startOptions(so.resume?.engine_session_id), ...so }) } });
   }
 
+  /** The file-lock hub of this runtime: a shared session attaches to it to publish and receive locks. */
+  get lockHub() { return this.o.lockHub; }
   get state() { return this.store.get(); }
   /** The display name of an agent ("you" for the main one). */
-  agentName(id: string) { return this.state.agents.find((a) => a.id === id)?.name ?? 'an agent'; }
+  agentName(id: string) { return this.state.agents.find((a) => a.id === id)?.name ?? this.remoteName?.(id) ?? 'an agent'; }
+  private remoteName?: (id: string) => string | undefined;
+  /** A shared session in branch mode names the teammates' agents ("Ana's agent"). */
+  setRemoteAgentNamer(fn: ((id: string) => string | undefined) | undefined): void { this.remoteName = fn; }
   private set(p: Partial<AppState> | ((s: AppState) => Partial<AppState>)) { this.store.set((st) => { const q = typeof p === 'function' ? p(st) : p; if (q.input === '') { this.pastes.clear(); /* an empty prompt has no chips left */ this.undoStack = []; this.redoStack = []; } return 'input' in q && !('anchor' in q) ? { ...q, anchor: undefined } : q; }); } // a new prompt text drops any selection
   /** UI-level state changes (input buffer, scroll, mode, overlay selections). */
   private undoing = false; // set while the undo machinery itself changes the prompt

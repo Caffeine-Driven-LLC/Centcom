@@ -2,7 +2,7 @@
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { ClaudeCodeEngine, CodexEngine, FileTrustStore, createBoard, createRecorder, type Board, type Recorder, createLedger, parseClaudeRule, createLockClient, nodeLockFs, toolKind, type NormalisedEvent, createAgentBus, createFleetManager, createPermissionEngine, createPermissionGate, createRiskClassifier, createRuleStore, createRunner, createWorktreeManager, nodeGit, nodePermFs, nodeWtFs, type AgentEngine, type EngineId, type PermissionEngine, type PermissionMode, type PolicyMode } from '@centcom/agent';
+import { ClaudeCodeEngine, CodexEngine, FileTrustStore, createBoard, createRecorder, type Board, type Recorder, createLedger, parseClaudeRule, createLockClient, createLockHub, nodeLockFs, toolKind, type NormalisedEvent, createAgentBus, createFleetManager, createPermissionEngine, createPermissionGate, createRiskClassifier, createRuleStore, createRunner, createWorktreeManager, nodeGit, nodePermFs, nodeWtFs, type AgentEngine, type EngineId, type PermissionEngine, type PermissionMode, type PolicyMode } from '@centcom/agent';
 import { newIdGenerator } from '@centcom/protocol';
 import { userInfo } from 'node:os';
 import { defaultDeps, userConfigPath } from '@centcom/config';
@@ -38,7 +38,7 @@ export async function buildRuntime(o: RuntimeOptions): Promise<Runtime> {
   await rules.loadUser().catch(() => warnings.push('Your saved permission rules could not be read, so none are used.'));
   const proj = await rules.loadProject(o.cwd).catch(() => ({ loaded: false, needsTrust: false })); if (proj.needsTrust) warnings.push('This project has its own permission rules file. It is not used until you type /trust rules.');
   warnings.push(...rules.warnings());
-  let fleet: ControllerOptions['fleet']; const observers: NonNullable<ControllerOptions['observers']> = [];
+  const lockHub = createLockHub(); let fleet: ControllerOptions['fleet']; const observers: NonNullable<ControllerOptions['observers']> = [];
   // the context board: what agents learn and decide is put there (by what Centcom sees them do) and handed to the others with their next prompt
   const roots = new Map<string, string>(); let board: Board | undefined; let recorder: Recorder | undefined;
   const relIn = (id: string, p: string): string | undefined => { const root = roots.get(id) ?? o.cwd; const rel = isAbsolute(p) ? relative(root, p) : p; return !rel || rel.startsWith('..') || isAbsolute(rel) ? undefined : rel.split('\\').join('/'); };
@@ -58,7 +58,7 @@ export async function buildRuntime(o: RuntimeOptions): Promise<Runtime> {
     const worktrees = createWorktreeManager({ git: nodeGit, fs: nodeWtFs, bus, clock, log: quiet });
     const manager = createFleetManager({ runner, worktrees, entitlements: { maxParallelAgents: () => o.maxParallel ?? 8 }, bus, ids, clock, log: quiet });
     // advisory file locks: two agents changing the same file (each in its own worktree) are told, because their branches will conflict
-    const locks = createLockClient({ root: o.cwd, fs: nodeLockFs, clock, bus, config: { mode: 'warn', defaultTtlMs: 120_000 } });
+    const locks = createLockClient({ root: o.cwd, fs: nodeLockFs, clock, bus, config: { mode: 'warn', defaultTtlMs: 120_000 }, transport: lockHub.transport, pathMac: (p) => lockHub.pathMac(p) ?? '', wireId: lockHub.wireId, onConflictDetected: lockHub.onConflict }); lockHub.client = locks;
     const touch = (agentId: string, ev: NormalisedEvent, root: string) => {
       if (ev.type === 'turn.done' && agentId === 'agt_you') { void locks.releaseAll(agentId as never).catch(() => undefined); return; }
       if (ev.type !== 'tool.requested' || !ev.path || !['edit', 'create', 'delete'].includes(toolKind(ev.name))) return;
@@ -72,7 +72,7 @@ export async function buildRuntime(o: RuntimeOptions): Promise<Runtime> {
   const ledgerBus = createAgentBus({ onError: () => undefined }); const ids = newIdGenerator({ now: () => Date.now(), random: (n) => new Uint8Array(randomBytes(n)) });
   const ledger = createLedger({ clock, ids: { next: () => ids.next('use') }, bus: ledgerBus, fs: o.demo ? memoryFs() : { read: async (p) => { try { return (await import('node:fs/promises')).readFile(p, 'utf8'); } catch { return undefined; } }, writeAtomic: async (p, t) => { const fsp = await import('node:fs/promises'); await fsp.mkdir(dirname(p), { recursive: true }); const tmp = `${p}.${randomBytes(4).toString('hex')}.tmp`; await fsp.writeFile(tmp, t, { mode: 0o600 }); await fsp.rename(tmp, p); } }, outboxPath: join(o.stateDir ?? join(home, '.centcom'), 'usage', 'outbox.jsonl'), config: { sessionUsd: o.sessionUsd || undefined } });
   await ledger.ready().catch(() => undefined);
-  return { options: { approvalTimeoutMs: o.approvalTimeoutMs, ledger, ledgerBus, policy: { engine, root: o.cwd }, ...(o.checkpoints === false ? {} : { checkpoints: {} }), ...(fleet ? { fleet } : {}), ...(fleet || board ? { observers } : {}), ...(board ? { board } : {}) }, bind: (c) => { ctl = c; }, warnings };
+  return { options: { approvalTimeoutMs: o.approvalTimeoutMs, ledger, ledgerBus, policy: { engine, root: o.cwd }, ...(o.checkpoints === false ? {} : { checkpoints: {} }), ...(fleet ? { fleet } : {}), ...(fleet || board ? { observers } : {}), ...(board ? { board } : {}), ...(fleet ? { lockHub } : {}) }, bind: (c) => { ctl = c; }, warnings };
 }
 const MODE_MAP: Record<PermissionMode, PolicyMode> = { default: 'ask', acceptEdits: 'accept-edits', plan: 'plan', bypassPermissions: 'bypass' };
 /** The demo keeps its usage in memory. */

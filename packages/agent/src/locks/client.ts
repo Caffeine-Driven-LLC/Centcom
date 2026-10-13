@@ -29,9 +29,10 @@ export function createLockClient(d: LockDeps): LockClient {
   function enqueue(p: { clear: FileLockPayload; secret: { path: string } }) { queue.push(p); if (queue.length > QUEUE_MAX) queue.shift(); }
   function publish(action: FileLockPayload['action'], key: string, agentId: string, ttlMs?: number) {
     if (!d.transport) return; const mac = macOf(key); if (!mac) { if (!warnedMac) { warnedMac = true; d.log?.warn('no path key available: lock events are not shared'); } return; }
-    const clear: FileLockPayload = { action, path_hmac: mac, agent_id: agentId, ...(ttlMs !== undefined ? { ttl_ms: Math.min(MAX_TTL, Math.max(MIN_WIRE_TTL, ttlMs)) } : {}) };
+    const clear: FileLockPayload = { action, path_hmac: mac, agent_id: wire(agentId), ...(ttlMs !== undefined ? { ttl_ms: Math.min(MAX_TTL, Math.max(MIN_WIRE_TTL, ttlMs)) } : {}) };
     try { assertWritableEventPayload('file.lock', clear); } catch { d.log?.debug('lock event not valid, not sent'); return; } send({ clear, secret: { path: key } });
   }
+  const wire = (id: string): string => { try { return d.wireId ? d.wireId(id) : id; } catch { return id; } };
   const live = (h: Held) => h.expiresAt > now();
   const holders = (key: string) => (local.get(key) ?? []).filter(live);
   function remoteHolder(key: string): Remote | undefined { const mac = macOf(key); if (!mac) return undefined; for (const r of remote.get(mac)?.values() ?? []) if (r.expiresAt > now()) return r; return undefined; }
@@ -40,7 +41,7 @@ export function createLockClient(d: LockDeps): LockClient {
     const id = `${mac}|${local_.agentId}|${remoteAgent}`; if (seenConflicts.has(id)) return; seenConflicts.add(id);
     d.bus.emit('lock:conflict', { agent_id: local_.agentId, other_agent_id: remoteAgent as AgentId, path: local_.key }); d.onConflictDetected?.(payload({ agentIds: [local_.agentId, remoteAgent as AgentId], path_hmac: mac }));
   }
-  function payload(c: LockConflict): PConflictDetected { const p: PConflictDetected = { agent_ids: [...c.agentIds], path_hmacs: [c.path_hmac] }; assertWritableEventPayload('conflict.detected', p); return p; }
+  function payload(c: LockConflict): PConflictDetected { const p: PConflictDetected = { agent_ids: c.agentIds.map((a) => (localAgents.has(a) ? wire(a) : a)), path_hmacs: [c.path_hmac] }; assertWritableEventPayload('conflict.detected', p); return p; }
 
   async function fileClaim(key: string, agentId: AgentId, expiresAt: number): Promise<{ owned: boolean; other?: { agent: string; expiresAt: number } }> {
     if (!(await ensureDir())) return { owned: false }; const path = api.join(dir, lockName(key)); const text = JSON.stringify({ v: 1, pid, agent_id: agentId, expires_at: iso(expiresAt) });
