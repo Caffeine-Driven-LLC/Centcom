@@ -57,7 +57,7 @@ export class HostBridge {
     this.emit('agent.spawn', { p: { agent_id: this.agent(), owner: this.handle.me.id, mode: this.mode, runs_on: this.handle.me.id, provider: this.ctl.state.engineId === 'codex' ? 'openai' : this.ctl.state.engineId === 'claude-code' ? 'anthropic' : 'other' }, secret: { label: this.ctl.state.engineLabel, ...(this.mode === 'branch' ? { worktree: this.ctl.state.cwd } : {}) } });
     if (this.mode === 'command_post') { this.emitActivity('message.system', { secret: { level: 'info', text: 'This conversation is now shared.' } }); void this.pump(); } else this.startBranch();
   }
-  stop(): void { if (this.mode === 'branch' && !this.stopped) this.emit('agent.exit', { p: { agent_id: this.agent(), outcome: 'ok' } }); this.offAny?.(); this.offLink?.(); if (this.mode === 'branch') { this.ctl.setTeamDigest(undefined); this.ctl.setRemoteAgentNamer(undefined); } if (this.branchTimer) clearTimeout(this.branchTimer); this.stopped = true; this.offStore?.(); this.offTurn?.(); this.queue.dispose(); if (this.flushTimer) clearTimeout(this.flushTimer); if (this.stateTimer) clearTimeout(this.stateTimer); for (const w of this.busyWaiters.splice(0)) w(); for (const f of [...this.stoppers]) f(); }
+  stop(): void { if (this.mode === 'branch' && !this.stopped) this.emit('agent.exit', { p: { agent_id: this.agent(), outcome: 'ok' } }); this.offAny?.(); this.offLink?.(); if (this.mode === 'branch') { this.ctl.setTeamDigest(undefined); this.ctl.setRemoteAgentNamer(undefined); } if (this.branchTimer) clearTimeout(this.branchTimer); for (const t of this.reannounceTimers) clearTimeout(t); this.stopped = true; this.offStore?.(); this.offTurn?.(); this.queue.dispose(); if (this.flushTimer) clearTimeout(this.flushTimer); if (this.stateTimer) clearTimeout(this.stateTimer); for (const w of this.busyWaiters.splice(0)) w(); for (const f of [...this.stoppers]) f(); }
 
   setAutoApprove(on: boolean): void { this.autoApprove = on; void this.pump(); this.o.onChange?.(); }
   get autoApproving(): boolean { return this.autoApprove; }
@@ -119,8 +119,10 @@ export class HostBridge {
 
   /* ---------------------------------------------------------------- branch mode */
   private startBranch(): void {
-    const team = this.team!; this.offAny = this.handle.onAny((e) => { team.apply(e); this.onTeamEvent(e); }, { replay: true });
-    const offRoster = this.handle.on('roster', () => { team.setRoster(this.handle.roster(), this.handle.me.id); this.o.onChange?.(); }); const prev = this.offAny; this.offAny = () => { prev(); offRoster(); };
+    const team = this.team!; this.offAny = this.handle.onAny((e) => { if (!this.handle.roster().length || !team.snapshot().members.some((m) => m.id === e.from)) team.setRoster(this.handle.roster(), this.handle.me.id); /* the roster may have filled in after this was set up */ team.apply(e); this.onTeamEvent(e); }, { replay: true });
+    let known = new Set(this.handle.roster().map((m) => m.id));
+    const offRoster = this.handle.on('roster', () => { team.setRoster(this.handle.roster(), this.handle.me.id); this.o.onChange?.(); const fresh = this.handle.roster().filter((m) => !known.has(m.id)); known = new Set(this.handle.roster().map((m) => m.id)); if (fresh.length) this.reannounce(); }); const prev = this.offAny; this.offAny = () => { prev(); offRoster(); };
+    const poll = setInterval(() => { if (this.stopped) return; const now = this.handle.roster().map((m) => m.id); const fresh = now.filter((id) => !known.has(id)); if (fresh.length) { known = new Set(now); team.setRoster(this.handle.roster(), this.handle.me.id); this.reannounce(); } }, 1500); poll.unref?.(); { const prev0 = this.offAny; this.offAny = () => { prev0(); clearInterval(poll); }; }
     const offTeam = team.subscribe(() => this.o.onChange?.()); const prev2 = this.offAny; this.offAny = () => { prev2(); offTeam(); };
     this.ctl.setTeamDigest(() => team.digestFor(this.handle.me.id));
     this.ctl.setRemoteAgentNamer?.((id) => { for (const m of team.snapshot().members) if (m.agents.some((a) => a.id === id)) return `${m.you ? 'Your' : m.name + "'s"} agent`; return undefined; });
@@ -133,6 +135,13 @@ export class HostBridge {
       this.offLink = hub.attach(link);
     }
     void this.publishBranch(true);
+    for (const ms of [0, 2500, 7000]) { const t = setTimeout(() => { if (!this.stopped) void this.handle.history.fetch(0).catch(() => undefined); }, ms); t.unref?.(); } // a joiner reads who was here before them (again a little later, when the senders' keys are known)
+  }
+  /** Somebody joined: they read what was announced before they came from the session's history; what is current (state, branch) is sent again for them. A second `agent.spawn` for a known agent would be refused by the relay, so it is not repeated. */
+  private reannounceTimers: ReturnType<typeof setTimeout>[] = [];
+  private reannounce(): void {
+    if (this.reannounceTimers.length || this.stopped) return; // a joiner has no keys for the first moments (the host hands them out), so it is sent a few times
+    for (const ms of [1200, 4500, 11_000]) { const t = setTimeout(() => { this.reannounceTimers = this.reannounceTimers.filter((x) => x !== t); if (this.stopped) return; this.lastState = undefined; this.wantState = undefined; this.setState(this.ctl.state.busy ? 'thinking' : 'idle'); void this.publishBranch(true); }, ms); t.unref?.(); this.reannounceTimers.push(t); }
   }
   /** A teammate's lock reaches this runtime's lock client, which warns when a local agent is changing the same file. */
   private onTeamEvent(e: { kind: string; from: string; ts?: string; p?: Record<string, unknown> }): void {

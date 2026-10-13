@@ -65,13 +65,18 @@ export class TeamModel {
     const s = e.secret; if (s) { if (str(s['label'])) a.label = str(s['label']); if (str(s['model'])) a.model = str(s['model']); if (str(s['branch'])) a.branch = str(s['branch']); }
     this.agents.set(id, a); this.changed();
   }
-  private update(e: DecodedEvent, fn: (a: TeamAgent) => void): void { const a = this.agents.get(str(e.p?.['agent_id'])); if (!a || !this.mayAct(e.from, a)) return; fn(a); this.changed(); }
+  /** The agent a frame is about. One whose `agent.spawn` was missed (this person joined later) is entered when its own sender speaks for it, with what is not known left out: the spawn only says provider and label. */
+  private agentFor(id: string, from: string, ts: string, mode: 'command_post' | 'branch' = 'branch'): TeamAgent | undefined {
+    if (!id) return undefined; const a = this.agents.get(id); if (a) return a; if (!this.roster.some((m) => m.id === from)) return undefined;
+    const n: TeamAgent = { id, owner: from, mode, state: 'idle', since: ts, locks: [], sharing: false }; this.agents.set(id, n); return n;
+  }
+  private update(e: DecodedEvent, fn: (a: TeamAgent) => void): void { const a = this.agentFor(str(e.p?.['agent_id']), e.from, e.ts); if (!a || !this.mayAct(e.from, a)) return; fn(a); this.changed(); }
   private branch(e: DecodedEvent): void {
-    const s = e.secret; const a = this.agents.get(str(s?.['agent_id'])); if (!a || !s || !this.mayAct(e.from, a)) return;
+    const s = e.secret; const a = s ? this.agentFor(str(s['agent_id']), e.from, e.ts) : undefined; if (!a || !s || !this.mayAct(e.from, a)) return;
     a.branch = str(s['branch']) || a.branch; a.head = str(s['head']) || a.head; const ah = num(s['ahead']); const be = num(s['behind']); if (ah !== undefined) a.ahead = ah; if (be !== undefined) a.behind = be; if (typeof s['dirty'] === 'boolean') a.dirty = s['dirty']; this.changed();
   }
   private lock(e: DecodedEvent): void {
-    const a = this.agents.get(str(e.p?.['agent_id'])); const hmac = str(e.p?.['path_hmac']); if (!a || !hmac || !this.mayAct(e.from, a)) return; const action = str(e.p?.['action']);
+    const a = this.agentFor(str(e.p?.['agent_id']), e.from, e.ts); const hmac = str(e.p?.['path_hmac']); if (!a || !hmac || !this.mayAct(e.from, a)) return; const action = str(e.p?.['action']);
     a.locks = a.locks.filter((l) => l.hmac !== hmac);
     // the receiver's clock from receipt: a sender's timestamp is never used (replayed history converges because releases replay too)
     if (action === 'acquire') { const ttl = num(e.p?.['ttl_ms']) ?? DEFAULT_LOCK_MS; const path = str(e.secret?.['path']); a.locks.push({ hmac, ...(path ? { path } : {}), until: this.now() + ttl }); }

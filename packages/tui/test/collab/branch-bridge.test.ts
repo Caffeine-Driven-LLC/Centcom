@@ -66,6 +66,12 @@ describe('branch mode: each person runs their own agent in one session', { timeo
     await b.ctl.submit('edit db'); await until(() => !b.ctl.state.busy); const told = b.ctl.state.items.filter((i) => i.kind === 'notice' && /teammate's agent is working on a file/.test((i as { text: string }).text)); expect(told).toHaveLength(1); expect((told[0] as { detail?: string }).detail).toMatch(/agent has /);
     await b.ctl.submit('edit again'); await until(() => !b.ctl.state.busy); expect(b.ctl.state.items.filter((i) => i.kind === 'notice' && /teammate's agent is working on a file/.test((i as { text: string }).text))).toHaveLength(1); // not repeated
   });
+  it('someone who joins later still sees the agents that were there first', async () => {
+    const r = await rig(); cleanup.push(() => r.stop()); const host = await r.host.client.createSession({ name: 'late', workspace: WS }); r.host.handle = host; cleanup.push(() => host.leave().catch(() => undefined));
+    const a = await person(host, 'ana/db'); await new Promise((x) => setTimeout(x, 800));
+    const guest = await r.guest.client.joinSession({ sessionId: host.id }); r.guest.handle = guest; cleanup.push(() => guest.leave().catch(() => undefined)); await until(() => guest.state === 'live', 8000);
+    const b = await person(guest, 'bob/ui'); await until(() => (b.bridge.team!.snapshot().members.find((m) => m.id === host.me.id)?.agents.length ?? 0) === 1, 12000); void a;
+  });
   it('an agent that leaves the session says so and its locks go', async () => {
     const { host, guest, a, b, agentsOf } = await setup(); await until(() => agentsOf(b, host.me.id).length === 1, 8000); await a.locks.acquire('x.ts', { agentId: a.agent as never }); await until(() => agentsOf(b, host.me.id)[0]?.locks.length === 1, 8000);
     a.bridge.stop(); await until(() => agentsOf(b, host.me.id)[0]?.state === 'exited', 8000); expect(agentsOf(b, host.me.id)[0]?.locks).toEqual([]); void guest;

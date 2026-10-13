@@ -8,7 +8,7 @@ const git = (cwd: string, args: string[]): Promise<string | undefined> => new Pr
 
 /** The branch of `cwd`, its short head, whether the tree has changes, and ahead/behind against its upstream (or the default branch when there is no upstream). */
 export const gitBranchInfo: BranchProbe = async (cwd) => {
-  const branch = await git(cwd, ['rev-parse', '--abbrev-ref', 'HEAD']); if (!branch) return undefined;
+  const branch = (await git(cwd, ['rev-parse', '--abbrev-ref', 'HEAD'])) ?? (await git(cwd, ['symbolic-ref', '--short', 'HEAD'])); if (!branch) return undefined; // a new repository with no commit yet has a branch name but no HEAD to resolve
   const head = (await git(cwd, ['rev-parse', '--short', 'HEAD'])) ?? ''; const status = (await git(cwd, ['status', '--porcelain'])) ?? '';
   let base = await git(cwd, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}']);
   if (!base) { for (const c of ['origin/main', 'origin/master', 'main', 'master']) { if (c !== branch && (await git(cwd, ['rev-parse', '--verify', '--quiet', c]))) { base = c; break; } } }
