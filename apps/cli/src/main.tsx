@@ -65,6 +65,11 @@ function cliFlags(): FlatFlags {
   return f;
 }
 
+/** What `centcom doctor` asks about the sign-in: the stored account, as the service sees it. Made only when the check runs. */
+function doctorAccount(): () => Promise<{ signedIn: boolean; plan?: string; failed?: boolean }> {
+  return async () => { const a = await Account.create({ app: 'centcom-cli', version: VERSION }); const st = await a.status(); return { signedIn: st.signedIn, ...(st.me?.plan ? { plan: st.me.plan } : {}), ...(st.offline ? { failed: true } : {}) }; };
+}
+
 async function pickEngine(preferred: 'claude-code' | 'codex' = 'claude-code', flags?: RemoteFlags): Promise<{ engine: AgentEngine; demo: boolean; note: string }> {
   const explicit = arg('--engine') === 'codex' || arg('--engine') === 'claude-code' ? (arg('--engine') as 'codex' | 'claude-code') : undefined;
   const pick = await chooseEngine({ demo: has('--demo') || arg('--engine') === 'demo', explicit, preferred, installed: (e) => isInstalled(e === 'codex' ? process.env.CENTCOM_CODEX_BIN || 'codex' : 'claude'), blocked: (e) => !!flags?.blocked(e) });
@@ -95,7 +100,7 @@ async function main() {
   if (process.argv[2] === 'link') await done(await runLink(process.argv.slice(3), { out: (l) => console.log(l), err: (l) => console.error(l), confirm: async (q) => { if (!process.stdin.isTTY || !process.stdout.isTTY) return false; return isYes(await ttyAsk(q)); }, open: async (url) => { const o = openerFor(process.platform); return (await runDetached(o.cmd, o.args(url))) === 0; } }));
   if (process.argv[2] === 'install-handler') await done(await runInstallHandler(process.argv.slice(3), { platform: process.platform, home: homedir(), exe: await startCommand() }, { out: (l) => console.log(l), err: (l) => console.error(l) }));
   if (process.argv[2] === 'crash') await done(runCrash(process.argv.slice(3), crashes, { out: (l) => console.log(l), err: (l) => console.error(l) }));
-  if (process.argv[2] === 'doctor') await done(await runDoctor(process.argv.slice(3), realDoctorContext({ version: VERSION, contract: CONTRACT_VERSION, apiBase: cfg0?.api.base_url ?? 'https://api.centcom.dev', stateDir: stateDir(defaultDeps()) }), { out: (l) => console.log(l), err: (l) => console.error(l) }, { crashes }));
+  if (process.argv[2] === 'doctor') await done(await runDoctor(process.argv.slice(3), realDoctorContext({ version: VERSION, contract: CONTRACT_VERSION, apiBase: cfg0?.api.base_url ?? 'https://api.centcom.dev', stateDir: stateDir(defaultDeps()), relayUrl: process.env.CENTCOM_RELAY_URL || cfg0?.relay.url, account: doctorAccount() }), { out: (l) => console.log(l), err: (l) => console.error(l) }, { crashes }));
   if (process.argv[2] === 'provider') await done(await runProviderCli(process.argv.slice(3)));
   if (process.argv[2] === 'skills') await done(await runSkills(process.argv.slice(3), { out: (l) => console.log(l), err: (l) => console.error(l), ask: ttyAsk, cwd: process.cwd() }));
   if (process.argv[2] === 'update') {
@@ -177,7 +182,7 @@ async function main() {
     else if ('pick' in c) { resumeId = await pickSession(c.pick, { input: process.stdin, output: process.stdout }); if (!resumeId) process.exit(0); }
     else resumeId = c.id;
   }
-  const ctl = new AppController({ ...rt.options, turnTimeoutS: cc.cfg.agent.turn_timeout_s || undefined, views: appViews(process.cwd(), { doctor: () => realDoctorContext({ version: VERSION, contract: CONTRACT_VERSION, apiBase: cc.cfg.api.base_url, stateDir: stateDir(defaultDeps()) }) }),
+  const ctl = new AppController({ ...rt.options, turnTimeoutS: cc.cfg.agent.turn_timeout_s || undefined, views: appViews(process.cwd(), { doctor: () => realDoctorContext({ version: VERSION, contract: CONTRACT_VERSION, apiBase: cc.cfg.api.base_url, stateDir: stateDir(defaultDeps()), relayUrl: process.env.CENTCOM_RELAY_URL || cc.cfg.relay.url, account: doctorAccount() }) }),
     engine, demo, engines: demo ? undefined : { ...(hasClaude ? { 'claude-code': () => new ClaudeCodeEngine() } : {}), ...(hasCodex ? { codex: () => new CodexEngine() } : {}) }, onEngine: (id) => cc.set('client.engine', id), cwd: process.cwd(), branch, version: VERSION, permissionMode: mode, dangerous: dangerous || mode === 'bypassPermissions', ghosts: has('--demo-team'),
     logger, settings, external: (task) => { pendingExternal = task; instance?.unmount(); }, bell: () => { try { process.stdout.write('\x07'); } catch { /* no terminal */ } }, ...cc.options({ ...initialSettings(), ...settings }, { saveHistory: !has('--no-save') }),
     sessions: sessionStore, night: demo ? undefined : { dir: pathJoin(homedir(), '.centcom', 'night') },

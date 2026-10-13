@@ -17,6 +17,25 @@ function ctx(o: Partial<DoctorContext> & { replies?: Record<string, Reply | 'fai
 }
 const one = async (id: string, c: DoctorContext) => (await runChecks(c, { only: [id] })).checks[0]!;
 
+describe('relay and account checks (lane C097)', () => {
+  const withRelay = (k: Reply | 'fail' | 'hang' | undefined, relayUrl: string | undefined = 'wss://relay.test/v1/ws') => ctx({ relayUrl, replies: k ? { 'https://relay.test/v1/ws': k } as never : {} });
+  it('relay: an answer under 500 (426 is what a relay says to a plain GET) passes; a 5xx warns; no address and no network skip', async () => {
+    const seen: string[] = []; const c = ctx({ relayUrl: 'wss://relay.test/v1/ws', get: async (u: string) => { seen.push(u); return { status: 426, headers: {} }; } } as never); expect(await one('relay', c)).toMatchObject({ status: 'pass', summary: 'the relay answers' }); expect(seen).toEqual(['https://relay.test/v1/ws']); // wss becomes https, ws becomes http
+    expect((await one('relay', ctx({ relayUrl: 'ws://localhost:8088/v1/ws', get: async (u: string) => { seen.push(u); return { status: 400, headers: {} }; } } as never))).status).toBe('pass'); expect(seen.at(-1)).toBe('http://localhost:8088/v1/ws');
+    expect(await one('relay', ctx({ relayUrl: 'wss://relay.test/v1/ws', get: async () => ({ status: 503, headers: {} }) } as never))).toMatchObject({ status: 'warn', next_step: expect.stringContaining('local and LAN') });
+    expect((await one('relay', ctx({ relayUrl: 'wss://relay.test/v1/ws', get: async () => { throw new Error('offline'); } } as never))).status).toBe('skip'); expect((await one('relay', ctx())).status).toBe('skip'); void withRelay;
+  });
+  it('account: signed in passes with the plan; signed out is fine (skip); a sign-in the service does not accept warns with one step; a throw skips', async () => {
+    expect(await one('account', ctx({ account: async () => ({ signedIn: true, plan: 'team' }) } as never))).toMatchObject({ status: 'pass', summary: 'signed in (team plan)' });
+    expect(await one('account', ctx({ account: async () => ({ signedIn: false }) } as never))).toMatchObject({ status: 'skip', summary: expect.stringContaining('only sharing needs an account') });
+    expect(await one('account', ctx({ account: async () => ({ signedIn: true, failed: true }) } as never))).toMatchObject({ status: 'warn', next_step: 'run: centcom login' });
+    expect((await one('account', ctx({ account: async () => { throw new Error('x'); } } as never))).status).toBe('skip'); expect((await one('account', ctx())).status).toBe('skip');
+  });
+  it('they are part of the run, in parallel with the rest, and a report with them still validates against the schema', async () => {
+    const r = await runChecks(ctx({ relayUrl: 'wss://relay.test/v1/ws', account: async () => ({ signedIn: false }) } as never)); expect(r.checks.map((c) => c.id)).toEqual(expect.arrayContaining(['relay', 'account'])); expect(new Ajv().validate(REPORT_SCHEMA, r)).toBe(true); expect(exitCodeOf(r)).toBeLessThanOrEqual(1);
+  });
+});
+
 describe('each check with pass, warn and fail injected', () => {
   it('node and terminal', async () => { expect((await one('node', ctx())).status).toBe('pass'); expect(await one('node', ctx({ node: 'v20.11.0' }))).toMatchObject({ status: 'fail', next_step: expect.stringContaining('Node 22') }); expect((await one('terminal', ctx({ term: { tier: 'truecolor', unicode: true, cols: 70, rows: 20, isTTY: true } })))).toMatchObject({ status: 'warn' }); expect((await one('terminal', ctx({ term: { tier: 'truecolor', unicode: true, cols: 80, rows: 24, isTTY: false } }))).status).toBe('skip'); expect((await one('terminal', ctx({ term: { tier: 'none', unicode: true, cols: 100, rows: 30, isTTY: true } }))).status).toBe('warn'); });
   it('keychain: a round trip passes and leaves nothing; failure says what to install on Linux', async () => {

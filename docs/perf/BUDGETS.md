@@ -25,9 +25,12 @@ Run `pnpm bench` (all) or `pnpm bench --fast` (the pull request subset). `--filt
 | `prompt.keypress.paint` | 50 ms | no | a key to the first byte of the new frame, in a real Ink render of the whole app with 60 messages (full set only) |
 | `session.save.1k` | 25 ms | no | saving a conversation of 1,000 messages; it runs about every 600 ms while the agent writes |
 | `cli.start.bundle` | 400 ms | no | `centcom --version` through the compiled bundle with V8's code cache, as `bin/centcom` runs it (full set only) |
+| `diff.paint.5k` | 300 ms | yes | first paint of a 5,000-line diff: parse and lay out every row (full set only) |
+| `guest.reducer.rate` | 20,000 frames/s (minimum) | yes | the guest reducer on a busy session: messages, answer deltas, tools, agent states (full set only) |
+| `resume.replay.5k` | 1.5 s | yes | 5,000 buffered frames arriving newest first are put in order and reduced to a state (full set only) |
 | `memory.transcript.10k` | 300 MB RSS | no | the harness alone is about 300 MB; gates when measured in the packaged CLI |
 
-Not measured here yet (they need lanes that are not in `main` yet): the 5,000-line diff view, resume replay of 5,000 frames, the guest reducer rate and the 10,000-delta leak check. The web budgets come from the web build report.
+Not measured here yet: the 10,000-delta leak check (it needs the garbage collector to be exposed, which the harness does not start with) and the first interactive prompt of the packaged CLI. The web budgets come from the web build report.
 
 ## CI
 
