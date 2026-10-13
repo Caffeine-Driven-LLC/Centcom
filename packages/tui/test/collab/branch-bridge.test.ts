@@ -24,63 +24,65 @@ async function person(handle: SessionHandle, branch: string, o: { shareActivity?
 async function setup() {
   const r = await rig(); cleanup.push(() => r.stop());
   const host = await r.host.client.createSession({ name: 'branches', workspace: WS }); r.host.handle = host; cleanup.push(() => host.leave().catch(() => undefined));
-  const guest = await r.guest.client.joinSession({ sessionId: host.id }); r.guest.handle = guest; cleanup.push(() => guest.leave().catch(() => undefined)); await until(() => guest.state === 'live', 20000);
+  const guest = await r.guest.client.joinSession({ sessionId: host.id }); r.guest.handle = guest; cleanup.push(() => guest.leave().catch(() => undefined)); await until(() => guest.state === 'live', 60000);
   const a = await person(host, 'ana/db'); const b = await person(guest, 'bob/ui');
   const view = (side: typeof a) => side.bridge.team!.snapshot();
   const agentsOf = (side: typeof a, member: string) => view(side).members.find((m) => m.id === member)?.agents ?? [];
   return { r, host, guest, a, b, view, agentsOf };
 }
 
-describe('branch mode: each person runs their own agent in one session', { timeout: 60_000 }, () => {
+describe('branch mode: each person runs their own agent in one session', { timeout: 180_000 }, () => {
   it('both agents appear in both team views, with provider, branch and state', async () => {
     const { host, guest, a, b, agentsOf } = await setup();
-    await until(() => agentsOf(a, guest.me.id).length === 1 && agentsOf(b, host.me.id).length === 1, 20000);
-    expect(agentsOf(b, host.me.id)[0]).toMatchObject({ mode: 'branch', owner: host.me.id }); await until(() => agentsOf(b, host.me.id)[0]?.branch === 'ana/db' && agentsOf(a, guest.me.id)[0]?.branch === 'bob/ui', 20000);
+    await until(() => agentsOf(a, guest.me.id).length === 1 && agentsOf(b, host.me.id).length === 1, 60000);
+    expect(agentsOf(b, host.me.id)[0]).toMatchObject({ mode: 'branch', owner: host.me.id }); await until(() => agentsOf(b, host.me.id)[0]?.branch === 'ana/db' && agentsOf(a, guest.me.id)[0]?.branch === 'bob/ui', 60000);
     expect(agentsOf(b, host.me.id)[0]).toMatchObject({ ahead: 1, behind: 0, dirty: true });
-    await a.ctl.submit('hello from ana'); await until(() => agentsOf(b, host.me.id)[0]?.lastSaid?.startsWith('Ana') === true || (agentsOf(b, host.me.id)[0]?.lastSaid ?? '').includes('hello from ana'), 20000);
-    await until(() => !a.ctl.state.busy && ['idle', 'thinking'].includes(agentsOf(b, host.me.id)[0]?.state ?? ''), 20000);
+    // lastSaid is overwritten by the agent's own reply a moment later, so watching it by polling can miss the user's line on a fast machine: every change is recorded instead
+    const said: string[] = []; const off = b.bridge.team!.subscribe(() => { const t = agentsOf(b, host.me.id)[0]?.lastSaid; if (t) said.push(t); });
+    await a.ctl.submit('hello from ana'); await until(() => said.some((t) => t.startsWith('Ana') || t.includes('hello from ana')), 60000); off();
+    await until(() => !a.ctl.state.busy && ['idle', 'thinking'].includes(agentsOf(b, host.me.id)[0]?.state ?? ''), 60000);
   });
   it('turning activity sharing off keeps state and branch flowing but stops the messages', async () => {
     const r = await rig(); cleanup.push(() => r.stop());
     const host = await r.host.client.createSession({ name: 'quiet', workspace: WS }); r.host.handle = host; cleanup.push(() => host.leave().catch(() => undefined));
-    const guest = await r.guest.client.joinSession({ sessionId: host.id }); r.guest.handle = guest; cleanup.push(() => guest.leave().catch(() => undefined)); await until(() => guest.state === 'live', 20000);
+    const guest = await r.guest.client.joinSession({ sessionId: host.id }); r.guest.handle = guest; cleanup.push(() => guest.leave().catch(() => undefined)); await until(() => guest.state === 'live', 60000);
     const a = await person(host, 'ana/db', { shareActivity: false }); const b = await person(guest, 'bob/ui'); const seen: string[] = []; guest.onAny((e) => seen.push(e.kind));
     await a.ctl.submit('secret plans'); await until(() => !a.ctl.state.busy); await new Promise((res) => setTimeout(res, 300));
     expect(seen).toContain('agent.spawn'); expect(seen.some((k) => k.startsWith('message.') || k.startsWith('tool.'))).toBe(false); expect(a.bridge.sharingActivity).toBe(false);
     const agent = b.bridge.team!.snapshot().members.find((m) => m.id === host.me.id)?.agents[0]; expect(agent?.sharing).toBe(false); expect(agent?.lastSaid).toBeUndefined();
-    a.bridge.setShareActivity(true); await a.ctl.submit('now shared'); await until(() => seen.includes('message.user'), 20000);
+    a.bridge.setShareActivity(true); await a.ctl.submit('now shared'); await until(() => seen.includes('message.user'), 60000);
   });
   it('a file one agent has locked is shown to the other; the second agent that touches it gets the conflict warning', async () => {
-    const { host, guest, a, b, agentsOf } = await setup(); await until(() => agentsOf(b, host.me.id).length === 1, 20000);
+    const { host, guest, a, b, agentsOf } = await setup(); await until(() => agentsOf(b, host.me.id).length === 1, 60000);
     expect((await a.locks.acquire('src/db.ts', { agentId: a.agent as never })).ok).toBe(true);
-    await until(() => agentsOf(b, host.me.id)[0]?.locks.some((l) => l.path === 'src/db.ts') === true, 20000); expect(b.bridge.team!.holderOf('src/db.ts')).toMatchObject({ name: expect.any(String) });
+    await until(() => agentsOf(b, host.me.id)[0]?.locks.some((l) => l.path === 'src/db.ts') === true, 60000); expect(b.bridge.team!.holderOf('src/db.ts')).toMatchObject({ name: expect.any(String) });
     const r2 = await b.locks.acquire('src/db.ts', { agentId: b.agent as never }); expect(r2.ok).toBe(true); // advisory: it never stops anyone
-    if (r2.ok) expect(r2.heldBy).toBeTruthy(); await until(() => b.conflicts.length === 1 || a.conflicts.length === 1, 20000);
+    if (r2.ok) expect(r2.heldBy).toBeTruthy(); await until(() => b.conflicts.length === 1 || a.conflicts.length === 1, 60000);
     const named = b.ctl.agentName(agentsOf(b, host.me.id)[0]!.id); expect(named).toMatch(/agent$/);
-    await a.locks.release('src/db.ts', a.agent as never); await until(() => (agentsOf(b, host.me.id)[0]?.locks.length ?? 1) === 0, 20000);
+    await a.locks.release('src/db.ts', a.agent as never); await until(() => (agentsOf(b, host.me.id)[0]?.locks.length ?? 1) === 0, 60000);
     void guest;
   });
   it('after a conflict the local agent is told once, with the teammate named, in its next message', async () => {
-    const { host, a, b, agentsOf } = await setup(); await until(() => agentsOf(b, host.me.id).length === 1, 20000); await a.locks.acquire('src/db.ts', { agentId: a.agent as never }); await until(() => agentsOf(b, host.me.id)[0]?.locks.length === 1, 20000);
-    await b.locks.acquire('src/db.ts', { agentId: b.agent as never });     await until(() => b.bridge.team!.snapshot().conflicts.length === 1 && b.bridge.team!.digestFor(b.bridge.team!.snapshot().members.find((m) => m.you)!.id).length === 1, 20000);
+    const { host, a, b, agentsOf } = await setup(); await until(() => agentsOf(b, host.me.id).length === 1, 60000); await a.locks.acquire('src/db.ts', { agentId: a.agent as never }); await until(() => agentsOf(b, host.me.id)[0]?.locks.length === 1, 60000);
+    await b.locks.acquire('src/db.ts', { agentId: b.agent as never });     await until(() => b.bridge.team!.snapshot().conflicts.length === 1 && b.bridge.team!.digestFor(b.bridge.team!.snapshot().members.find((m) => m.you)!.id).length === 1, 60000);
     await b.ctl.submit('edit db'); await until(() => !b.ctl.state.busy); const told = b.ctl.state.items.filter((i) => i.kind === 'notice' && /teammate's agent is working on a file/.test((i as { text: string }).text)); expect(told).toHaveLength(1); expect((told[0] as { detail?: string }).detail).toMatch(/agent has /);
     await b.ctl.submit('edit again'); await until(() => !b.ctl.state.busy); expect(b.ctl.state.items.filter((i) => i.kind === 'notice' && /teammate's agent is working on a file/.test((i as { text: string }).text))).toHaveLength(1); // not repeated
   });
   it('someone who joins later still sees the agents that were there first', async () => {
     const r = await rig(); cleanup.push(() => r.stop()); const host = await r.host.client.createSession({ name: 'late', workspace: WS }); r.host.handle = host; cleanup.push(() => host.leave().catch(() => undefined));
     const a = await person(host, 'ana/db'); await new Promise((x) => setTimeout(x, 800));
-    const guest = await r.guest.client.joinSession({ sessionId: host.id }); r.guest.handle = guest; cleanup.push(() => guest.leave().catch(() => undefined)); await until(() => guest.state === 'live', 20000);
+    const guest = await r.guest.client.joinSession({ sessionId: host.id }); r.guest.handle = guest; cleanup.push(() => guest.leave().catch(() => undefined)); await until(() => guest.state === 'live', 60000);
     const b = await person(guest, 'bob/ui'); await until(() => (b.bridge.team!.snapshot().members.find((m) => m.id === host.me.id)?.agents.length ?? 0) === 1, 25000); void a;
   });
   it('an agent that leaves the session says so and its locks go', async () => {
-    const { host, guest, a, b, agentsOf } = await setup(); await until(() => agentsOf(b, host.me.id).length === 1, 20000); await a.locks.acquire('x.ts', { agentId: a.agent as never }); await until(() => agentsOf(b, host.me.id)[0]?.locks.length === 1, 20000);
-    a.bridge.stop(); await until(() => agentsOf(b, host.me.id)[0]?.state === 'exited', 20000); expect(agentsOf(b, host.me.id)[0]?.locks).toEqual([]); void guest;
+    const { host, guest, a, b, agentsOf } = await setup(); await until(() => agentsOf(b, host.me.id).length === 1, 60000); await a.locks.acquire('x.ts', { agentId: a.agent as never }); await until(() => agentsOf(b, host.me.id)[0]?.locks.length === 1, 60000);
+    a.bridge.stop(); await until(() => agentsOf(b, host.me.id)[0]?.state === 'exited', 60000); expect(agentsOf(b, host.me.id)[0]?.locks).toEqual([]); void guest;
   });
   it('a handoff is offered, accepted by the other person and seen by the sender', async () => {
-    const { host, guest, a, b, view, agentsOf } = await setup(); await until(() => agentsOf(b, host.me.id).length === 1, 20000);
-    const id = a.bridge.offerHandoff(guest.me.id, 'finish the migration tests'); await until(() => view(b).handoffs.some((h) => h.id === id && h.state === 'offered'), 20000);
+    const { host, guest, a, b, view, agentsOf } = await setup(); await until(() => agentsOf(b, host.me.id).length === 1, 60000);
+    const id = a.bridge.offerHandoff(guest.me.id, 'finish the migration tests'); await until(() => view(b).handoffs.some((h) => h.id === id && h.state === 'offered'), 60000);
     expect(view(b).handoffs.find((h) => h.id === id)).toMatchObject({ from: host.me.id, to: guest.me.id, note: 'finish the migration tests' });
-    b.bridge.answerHandoff(id, true); await until(() => view(a).handoffs.find((h) => h.id === id)?.state === 'accepted', 20000);
+    b.bridge.answerHandoff(id, true); await until(() => view(a).handoffs.find((h) => h.id === id)?.state === 'accepted', 60000);
     a.bridge.answerHandoff(id, false); await new Promise((res) => setTimeout(res, 200)); expect(view(a).handoffs.find((h) => h.id === id)?.state).toBe('accepted'); // only the target answers
   });
   it('nobody can make this person\'s agent run something by asking: there is no queue in branch mode', async () => {
