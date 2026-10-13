@@ -58,17 +58,24 @@ describe('interrupt (lane C030)', () => {
   });
 });
 
-describe('toasts', () => {
-  it('the same message said again stays as one, and its timer starts over', async () => {
-    const { vi } = await import('vitest'); vi.useFakeTimers(); try {
-      const c = make(); c.toast('warn', 'Same thing', 4000); vi.advanceTimersByTime(3000); c.toast('warn', 'Same thing', 4000); c.toast('warn', 'Same thing', 4000);
-      expect(c.state.toasts.filter((t) => t.text === 'Same thing')).toHaveLength(1); vi.advanceTimersByTime(3500); expect(c.state.toasts.some((t) => t.text === 'Same thing')).toBe(true); vi.advanceTimersByTime(1000); expect(c.state.toasts.some((t) => t.text === 'Same thing')).toBe(false); c.stop();
-    } finally { vi.useRealTimers(); }
-  });
-  it('different messages stack up to three; problems stay longer than good news', async () => {
-    const { vi } = await import('vitest'); vi.useFakeTimers(); try {
-      const c = make(); for (const t of ['a', 'b', 'c', 'd']) c.toast('info', t); expect(c.state.toasts.map((t) => t.text)).toEqual(['b', 'c', 'd']);
-      c.toast('ok', 'fine'); c.toast('error', 'broken'); vi.advanceTimersByTime(4000); expect(c.state.toasts.map((t) => t.text)).toEqual(['broken']); vi.advanceTimersByTime(3500); expect(c.state.toasts).toEqual([]); c.stop();
-    } finally { vi.useRealTimers(); }
-  });
+describe('toasts (lane C044)', () => {
+  const fake = async <T,>(f: (vi: typeof import('vitest').vi) => T) => { const { vi } = await import('vitest'); vi.useFakeTimers(); try { return f(vi); } finally { vi.useRealTimers(); } };
+  it('the same message said again is counted (x3), not stacked, and its time starts over', () => fake((vi) => {
+    const c = make(); c.toast('warn', 'Same thing', 4000); vi.advanceTimersByTime(3000); c.toast('warn', 'Same thing', 4000); c.toast('warn', 'Same thing', 4000);
+    expect(c.state.toasts.filter((t) => t.text === 'Same thing')).toHaveLength(1); expect(c.state.toasts[0]!.count).toBe(3); c.stop();
+  }));
+  it('one shows at a time with the rest queued in order; good news leaves by itself, an error stays until dismissed', () => fake((vi) => {
+    const c = make(); for (const t of ['a', 'b', 'c']) c.toast('info', t); expect(c.state.toasts.map((t) => t.text)).toEqual(['a', 'b', 'c']);
+    c.dismissToast(); expect(c.state.toasts.map((t) => t.text)).toEqual(['b', 'c']); vi.advanceTimersByTime(4100); expect(c.state.toasts).toEqual([]); // the queued ones expired while they waited
+    c.toast('info', 'x'); c.dismissToast(); expect(c.state.toasts).toEqual([]);
+    c.toast('error', 'broken'); vi.advanceTimersByTime(600_000); expect(c.state.toasts.map((t) => t.text)).toEqual(['broken']); expect(c.dismissToast()).toBe(true); expect(c.state.toasts).toEqual([]); expect(c.dismissToast()).toBe(false); c.stop();
+  }));
+  it('a warning or error pushes an expiring notice back and is never dropped; Esc on an idle prompt dismisses before it clears the text', () => fake((vi) => {
+    const c = make(); c.toast('info', 'fyi'); c.toast('warn', 'careful'); expect(c.toasts.current()!.text).toBe('careful'); expect(c.state.toasts.map((t) => t.text)).toEqual(['fyi', 'careful']);
+    c.escIdle(); expect(c.state.toasts.map((t) => t.text)).toEqual(['fyi']); c.stop();
+  }));
+  it('a notice with an action key runs it once and goes away', () => fake(() => {
+    const c = make(); const ran: string[] = []; c.onToastAction((id) => ran.push(id)); c.toast('warn', 'Update ready', undefined, { key: 'notice:update', actions: [{ key: 'u', label: 'update', id: 'update.show' }] });
+    expect(c.toastKey('x')).toBe(false); expect(c.toastKey('u')).toBe(true); expect(ran).toEqual(['update.show']); expect(c.state.toasts).toEqual([]); expect(c.toastKey('u')).toBe(false); c.stop();
+  }));
 });

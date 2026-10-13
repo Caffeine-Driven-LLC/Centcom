@@ -30,7 +30,7 @@ const invariants = (ctl: AppController, trail: string[]) => {
   expect(s.scroll, ctx()).toBeGreaterThanOrEqual(0); expect(Number.isFinite(s.scroll), ctx()).toBe(true);
   if (s.mode === 'pick') { expect(s.pick, ctx()).toBeDefined(); expect(s.pick!.sel, ctx()).toBeGreaterThanOrEqual(0); expect(s.pick!.sel, ctx()).toBeLessThan(Math.max(1, s.pick!.options.length)); for (const id of s.pick!.checked) expect(s.pick!.options.some((o) => o.id === id), ctx()).toBe(true); }
   if (s.mode !== 'pick') expect(s.pick === undefined || s.pick !== null, ctx()).toBe(true);
-  expect(s.approvals.length, ctx()).toBeLessThan(10); expect(s.toasts.length, ctx()).toBeLessThanOrEqual(3);
+  expect(s.approvals.length, ctx()).toBeLessThan(10); expect(s.toasts.length, ctx()).toBeLessThanOrEqual(20); // one shows, the rest wait in a queue of at most 20
   if (s.mention) expect(s.mention.sel, ctx()).toBeGreaterThanOrEqual(0);
 };
 describe('random input never breaks the app', () => {

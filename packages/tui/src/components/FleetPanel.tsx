@@ -4,16 +4,15 @@ import { miniRows } from '@centcom/mascot';
 import { PixelView, Rich, useTheme, useTick, useCol, sameUnlessTyping } from './ui.js';
 import { formatCost, sp, truncate, type Line } from '../util/text.js';
 import type { AppState, AgentView } from '../state/model.js';
+import { priorityTier, stateLabel, type Tone } from '../fleet/labels.js';
 
-const WORD: Record<string, [string, 'signal' | 'status.warning' | 'status.danger' | 'status.success' | 'text.muted']> = {
-  idle: ['idle', 'text.muted'], thinking: ['thinking', 'signal'], 'thinking-hard': ['thinking hard', 'signal'], planning: ['planning', 'signal'], streaming: ['replying', 'signal'],
-  'reading-file': ['reading', 'signal'], 'editing-file': ['editing', 'signal'], 'creating-file': ['creating', 'signal'], 'running-command': ['running', 'signal'], 'tool-running': ['working', 'signal'], searching: ['searching', 'signal'],
-  'awaiting-approval': ['needs you', 'status.warning'], 'asking-question': ['has a question', 'status.warning'], success: ['done', 'status.success'], error: ['error', 'status.danger'], compacting: ['compacting', 'signal'], 'prompt-received': ['starting', 'signal'], denied: ['declined', 'status.warning'], approved: ['approved', 'status.success'],
-};
+/** The words and their order come from the fleet module's table (lane C042), the same one the rail and the web board use. */
+const TONE: Record<Tone, 'signal' | 'status.warning' | 'status.danger' | 'status.success' | 'text.muted'> = { work: 'signal', human: 'status.warning', good: 'status.success', bad: 'status.danger', muted: 'text.muted' };
 
 export const FLEET_W = 30;
 
-function order(a: AgentView, b: AgentView) { const need = (x: AgentView) => (x.state === 'awaiting-approval' || x.state === 'asking-question' ? 0 : x.busy ? 1 : 2); return need(a) - need(b); }
+/** Most urgent first (errors, then what needs you, then work, then idle); a stable sort keeps the join order inside a tier. */
+export function order(a: AgentView, b: AgentView) { return priorityTier(a.state) - priorityTier(b.state); }
 
 export const FleetPanel = React.memo(FleetPanelImpl, sameUnlessTyping as never) as typeof FleetPanelImpl;
 function FleetPanelImpl({ s, width, height }: { s: AppState; width: number; height: number }) {
@@ -28,11 +27,11 @@ function FleetPanelImpl({ s, width, height }: { s: AppState; width: number; heig
       <Rich line={[sp('FLEET', { c: 'text.muted', b: true }), sp(`  ${s.agents.length} agent${s.agents.length === 1 ? '' : 's'}`, { c: 'text.muted' })]} />
       <Box height={1} />
       {agents.slice(0, fit).map((a) => {
-        const [word, wc] = WORD[a.state] ?? [a.state.replace(/-/g, ' '), 'text.muted' as const];
+        const l = stateLabel(a.state); const word = `${l.glyph} ${l.word}`; const wc = TONE[l.tone];
         const active = a.id === s.activeAgent;
         const lines: Line[] = [
           [sp(a.name, { b: true, c: 'text.primary' }), sp(active ? ' ◂' : '', { c: 'signal' })],
-          [sp(word, { c: wc, b: a.state === 'awaiting-approval' })],
+          [sp(word, { c: wc, b: l.tone === 'human' })],
           [sp(truncate(a.branch || a.engine, width - 16), { c: 'text.muted' })],
           [sp(a.cost ? formatCost(a.cost) : '', { c: 'text.muted' })],
         ];
