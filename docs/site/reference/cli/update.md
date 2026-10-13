@@ -4,7 +4,7 @@
 Looks for a newer release on your channel, shows what it will do and asks first. Exit codes: 0 up to date or updated, 1 failed or cancelled, 2 bad options, 10 an update is available (with --check), 11 verification failed, 12 this install cannot update itself (it shows the command to run).
 
 ```
-centcom update [--check] [--channel stable|beta|nightly] [--yes] [--allow-downgrade] [--rollback] [--json]
+centcom update [--check] [--channel <name>] [--yes] [--rollback]
 ```
 
 ## Options

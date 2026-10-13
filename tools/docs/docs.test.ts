@@ -31,7 +31,7 @@ describe('commands in the docs (lane C096)', () => {
   const page = (body: string) => ({ 'docs/site/guide/x.md': '```sh\n' + body + '\n```' });
   it('the install page and every other page use commands that exist', () => { const live = Object.fromEntries(['guide/install.md', 'guide/troubleshooting.md', 'guide/terminal-app.md'].map((f) => [f, readFileSync(join(ROOT, 'docs/site', f), 'utf8')])); expect(commandProblems(live)).toEqual([]); });
   it('a renamed command, an unknown flag and a flag of the wrong command are found; placeholders, npm lines and prose are not', () => {
-    expect(commandProblems(page('centcom --version\ncentcom doctor\ncentcom doctor --json\ncentcom provider status\ncentcom resume <id>\nnpm install --global centcom\ncentcom -p "fix it"'))).toEqual([]);
+    expect(commandProblems(page('centcom --version\ncentcom doctor\ncentcom doctor --json\ncentcom provider status\ncentcom keys <command>\nnpm install --global centcom\ncentcom -p "fix it"'))).toEqual([]);
     expect(commandProblems(page('centcom docter')).map((p) => p.what)).toEqual(['"centcom docter": docter is not a command']); expect(commandProblems(page('centcom --no-such')).map((p) => p.what)).toEqual(['"centcom --no-such": --no-such is not a flag of centcom']);
     expect(commandProblems(page('centcom doctor --bundle')).map((p) => p.what)).toEqual([]); expect(commandProblems(page('centcom doctor --turbo')).map((p) => p.what)).toEqual(['"centcom doctor --turbo": --turbo is not a flag of centcom doctor']);
   });

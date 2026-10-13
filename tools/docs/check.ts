@@ -41,7 +41,7 @@ export function commandProblems(pages: Record<string, string>): Problem[] {
     const first = tokens[0]; if (!first) continue;
     if (first.startsWith('-')) { if (!flags.has(first.split('=')[0]!)) out.push({ where: file, what: `"${line}": ${first} is not a flag of centcom` }); }
     else if (!names.has(first) && !(COMMANDS[0]!.flags.some((f) => f.arg !== undefined) && tokens.length >= 1 && false)) out.push({ where: file, what: `"${line}": ${first} is not a command` });
-    else { const cmd = COMMANDS.find((c) => c.name === first); if (cmd) for (const t of tokens.slice(1).filter((x) => x.startsWith('--'))) if (!cmd.flags.some((f) => f.flag.split(/,\s*/).includes(t.split('=')[0]!)) && !['--help', '--json', '--yes', '--force'].includes(t)) out.push({ where: file, what: `"${line}": ${t} is not a flag of centcom ${first}` }); }
+    else { const cmd = COMMANDS.find((c) => c.name === first); if (cmd) for (const t of tokens.slice(1).filter((x) => x.startsWith('--'))) if (!cmd.flags.some((f) => f.flag.split(/,\s*/).includes(t.split('=')[0]!)) && !(cmd.usage.match(/--[a-z][a-z-]*/g) ?? []).includes(t.split('=')[0]!) && !['--help', '--json', '--yes', '--force'].includes(t)) out.push({ where: file, what: `"${line}": ${t} is not a flag of centcom ${first}` }); }
   }
   return out;
 }
