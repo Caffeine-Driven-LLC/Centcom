@@ -8302,6 +8302,8 @@ components:
           format: date-time
         member_count:
           type: integer
+        mode:
+          $ref: '#/components/schemas/SessionMode'
       required:
       - id
       - workspace
@@ -8311,6 +8313,13 @@ components:
       - policy
       - region
       - created_at
+    SessionMode:
+      type: string
+      enum:
+      - command_post
+      - branch
+      default: command_post
+      description: 'command_post: the host runs the agents and members send requests through the queue. branch: every member runs their own agents and emits their own events. Fixed when the session is created.'
     SessionCreate:
       type: object
       properties:
@@ -8326,6 +8335,8 @@ components:
           $ref: '#/components/schemas/SessionPolicy'
         region_preference:
           type: string
+        mode:
+          $ref: '#/components/schemas/SessionMode'
       required:
       - workspace
       - name

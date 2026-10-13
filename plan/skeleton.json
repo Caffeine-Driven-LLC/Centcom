@@ -1315,6 +1315,35 @@
         "B075",
         "B107"
       ]
+    },
+    {
+      "id": "B110",
+      "title": "Branch sessions: choose the session mode at creation and make the relay apply it",
+      "plan": "backend",
+      "phase": "P6 Platform",
+      "size": "M",
+      "role": "platform",
+      "depends_on": [
+        "B038",
+        "B053",
+        "B054",
+        "B057",
+        "B061"
+      ]
+    },
+    {
+      "id": "B111",
+      "title": "Shared board notes in the relay: board.note, board.pin and board.remove",
+      "plan": "backend",
+      "phase": "P6 Platform",
+      "size": "M",
+      "role": "platform",
+      "depends_on": [
+        "B041",
+        "B043",
+        "B057",
+        "B110"
+      ]
     }
   ],
   "client": [

@@ -20,7 +20,7 @@ backend   scaffold  ·······················build the serv
 | **M2** LAN multiplayer (free tier) | Two machines on the same Wi-Fi share one command post with no backend and no account: pair with a code, queue prompts, host approves, everything end-to-end encrypted. | 17 / 0 | 59 / 0 | G3 (LAN variant against the client simulator) |
 | **M3** Accounts and relay | Sign in to Centcom, create a hosted session, and work together from anywhere through the relay, with resume after a dropped connection. | 3 / 47 | 9 / 145 | G1, G2, G3 |
 | **M4** Teams and money | Workspaces with members and roles, invites, plans and checkout, entitlements, quotas, notifications, and the first web screens. | 11 / 25 | 33 / 63 | G4 |
-| **M5** Fleet and polish | Branch-mode fleets across people, file locks, webhooks, audit log, updates, flags and telemetry, and the rest of the web app. | 14 / 17 | 36 / 47 | G5 |
+| **M5** Fleet and polish | Branch-mode fleets across people, file locks, webhooks, audit log, updates, flags and telemetry, and the rest of the web app. | 14 / 19 | 36 / 53 | G5 |
 | **M6** Launch | Production readiness: infrastructure, load and chaos tests, security review, installers, docs, accessibility, and both conformance suites green. | 8 / 6 | 26 / 22 | G6 |
 | **Later** After launch | Useful but not needed for launch. | 1 / 2 | 1 / 4 | - |
 
@@ -37,7 +37,7 @@ Rough calendar time to reach a milestone, per side, from the lane sizes: `weeks 
 | M4 | client | 236 | 32 | 30 wk | 20 wk | 15 wk |
 | M4 | backend | 240 | 44 | 30 wk | 20 wk | 15 wk |
 | M6 | client | 298 | 37 | 37 wk | 25 wk | 19 wk |
-| M6 | backend | 309 | 49 | 39 wk | 26 wk | 19 wk |
+| M6 | backend | 315 | 49 | 39 wk | 26 wk | 20 wk |
 
 
 ## M0 · Contracts and scaffolding
@@ -306,7 +306,7 @@ Branch-mode fleets across people, file locks, webhooks, audit log, updates, flag
   - Webhooks deliver with retries and signatures
   - Audit export works
   - Auto-update verifies signatures and rolls out by channel
-- **Effort:** client 36 person-days (longest chain 9 d) · backend 47 person-days (longest chain 16 d)
+- **Effort:** client 36 person-days (longest chain 9 d) · backend 53 person-days (longest chain 16 d)
 
 **Client lanes (14):**
 
@@ -325,7 +325,7 @@ Branch-mode fleets across people, file locks, webhooks, audit log, updates, flag
 - [C092](client/C092.md) Web accessibility and i18n framework (M)
 - [C093](client/C093.md) Web end-to-end tests with Playwright against the mock backend (M)
 
-**Backend lanes (17):**
+**Backend lanes (19):**
 
 - [B057](backend/B057.md) Agent registry (ids, owners, modes, states) (M)
 - [B058](backend/B058.md) Agent state validation against the state-map contract (S)
@@ -344,6 +344,8 @@ Branch-mode fleets across people, file locks, webhooks, audit log, updates, flag
 - [B106](backend/B106.md) Collaboration wiring: metering, purge, relay delivery and the remaining API modules (L)
 - [B107](backend/B107.md) History, snapshots, usage and preferences on the API, over the dev object store (M)
 - [B109](backend/B109.md) The worker process: usage counters, expiry sweeps and workspace purge (M)
+- [B110](backend/B110.md) Branch sessions: choose the session mode at creation and make the relay apply it (M)
+- [B111](backend/B111.md) Shared board notes in the relay: board.note, board.pin and board.remove (M)
 
 ## M6 · Launch
 

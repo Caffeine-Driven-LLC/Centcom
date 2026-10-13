@@ -711,6 +711,74 @@
         "text"
       ]
     },
+    "p_board_note": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "decision",
+            "warning",
+            "finding"
+          ]
+        },
+        "supersedes": {
+          "type": "string",
+          "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$"
+        }
+      },
+      "required": [
+        "type"
+      ]
+    },
+    "s_board_note": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 280
+        },
+        "refs": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "text"
+      ]
+    },
+    "p_board_pin": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "note": {
+          "type": "string",
+          "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "pinned": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "note",
+        "pinned"
+      ]
+    },
+    "p_board_remove": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "note": {
+          "type": "string",
+          "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$"
+        }
+      },
+      "required": [
+        "note"
+      ]
+    },
     "p_key_grant": {
       "type": "object",
       "additionalProperties": true,
@@ -1816,6 +1884,95 @@
           "required": [
             "p"
           ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "board.note"
+          },
+          "t": {
+            "const": "event"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p",
+          "ct"
+        ],
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_board_note"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "board.pin"
+          },
+          "t": {
+            "const": "event"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p"
+        ],
+        "not": {
+          "required": [
+            "ct"
+          ]
+        },
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_board_pin"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "k": {
+            "const": "board.remove"
+          },
+          "t": {
+            "const": "event"
+          }
+        },
+        "required": [
+          "k",
+          "t"
+        ]
+      },
+      "then": {
+        "required": [
+          "p"
+        ],
+        "not": {
+          "required": [
+            "ct"
+          ]
+        },
+        "properties": {
+          "p": {
+            "$ref": "#/$defs/p_board_remove"
+          }
         }
       }
     },

@@ -1,0 +1,73 @@
+{
+  "id": "B111",
+  "title": "Shared board notes in the relay: board.note, board.pin and board.remove",
+  "plan": "backend",
+  "phase": "P6 Platform",
+  "size": "M",
+  "role": "platform",
+  "depends_on": [
+    "B041",
+    "B043",
+    "B057",
+    "B110"
+  ],
+  "goal": "Agents on different computers share what they learn: the relay accepts, validates, rate-limits, sequences and stores the three board event kinds of the shared context board, so every member's agents can receive each other's decisions, warnings and findings and a late joiner gets them from history.",
+  "scope_in": [
+    "Kind policy (B043): `board.note` and `board.pin` from the host and editors, `board.remove` from the host or the author of the note; a viewer sending any of them is `forbidden`; a muted member's are dropped like other events.",
+    "A relay stage (`apps/relay/src/board/`, order beside B057): validates the clear part against the schema (`type`, `supersedes`, `note`, `pinned`), keeps a small table of the session's notes (note id = the `msg_` id of the `board.note` frame, author, type, pinned, removed, sequence) so it can refuse a `board.pin` or `board.remove` naming an unknown or already removed note (`invalid_frame`) and a `board.remove` from anyone but the host or the author (`forbidden`), and a `supersedes` that names a note by someone else (unless host).",
+    "Limits: at most 20 `board.note` per member per hour and 500 live notes per session; over the limit the frame is refused `frame_rate_exceeded` with a detail naming the limit and is not sequenced (a sliding window in Redis, like B057's state limiter); metrics `relay_board_notes_total{type}`, `relay_board_refused_total{reason}`.",
+    "Persistence: table `board_note` (migration), cascading with its session; history and replay carry the sequenced frames as for every kind; the purge removes the rows with the session; never any text or refs (those stay in `ct`).",
+    "`tools/dev/branch-check-board.ts`, run by `pnpm dev:branch-check` (B110): two members exchange notes, pin and remove, with the refusals above, the rate limit and a late joiner reading the notes from history."
+  ],
+  "scope_out": [
+    "Reading the encrypted text or refs (the relay cannot).",
+    "The client's board and its digests (client lanes).",
+    "Erasing a removed note's frame from history (the frame is ciphertext; removal is a display rule)."
+  ],
+  "implements": [
+    "CT-WS-SESSION-EVENTS"
+  ],
+  "consumes": [
+    "CT-WS-ENVELOPE",
+    "CT-RBAC",
+    "CT-ERR"
+  ],
+  "build_against": "B110's branch-check against the dev stack; the B010 testkit containers for the tests.",
+  "deliverables": [
+    "apps/relay/src/board/",
+    "apps/relay/src/rooms/kind-policy.ts",
+    "packages/db/migrations/20260102005400_board_notes.sql",
+    "apps/relay/test/board/",
+    "tools/dev/branch-check-board.ts",
+    "docs/board-notes.md"
+  ],
+  "interfaces": [
+    "Frames `board.note`, `board.pin`, `board.remove` as in contracts/04-session-events.md.",
+    "`ctx.board` (the module's store: `noteOf(sid, note)`, `liveCount(sid)`, `purge(sid)`)."
+  ],
+  "acceptance": [
+    "A host or editor `board.note` is sequenced and fanned out to every member including viewers; a viewer's is `forbidden`.",
+    "The 21st note by one member within an hour is refused `frame_rate_exceeded` and not sequenced; the 501st live note of a session likewise.",
+    "`board.pin` naming an unknown note is `invalid_frame`; by a viewer `forbidden`; by a host or editor it is sequenced.",
+    "`board.remove` by the author or the host is sequenced; by another editor `forbidden`; naming a removed note `invalid_frame`.",
+    "A late joiner receives the board events from history in order; the board rows are gone after the session's purge.",
+    "A frame whose `p` fails the schema is `invalid_frame`; the relay never logs or stores `ct`."
+  ],
+  "tests": [
+    "board.stage.test.ts (roles, validation, unknown and removed notes).",
+    "board.limits.test.ts (per member per hour and per session).",
+    "board.postgres.test.ts (rows, cascade, purge).",
+    "dev:branch-check board steps."
+  ],
+  "guardrails": [
+    "MUST read only `p`, never `ct`.",
+    "MUST NOT put note text, refs or paths in logs, metrics labels or the table.",
+    "MUST keep sequencing unchanged: refusals happen before sequencing and consume no sequence number."
+  ],
+  "failure_modes": [
+    "Redis down -> the rate limit fails closed for `board.note` (503) while `board.pin` and `board.remove` go on.",
+    "The note table cannot be read -> pin and remove are refused `service_unavailable` rather than accepted blind."
+  ],
+  "unblocks_gate": "G5",
+  "notes": "The relay half of plan/adr/0003. The contract rows are in contracts/04-session-events.md (generated from tools/plan/gen_events.py)."
+}
