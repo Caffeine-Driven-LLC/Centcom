@@ -69,6 +69,7 @@ Frames stamped by the server carry `from: "srv"` (the literal string). Clients a
 | `control.mute.until` | at most 7 days after the frame `ts` (longer is clamped) |
 | `presence.cursor` `ct` | ≤ 4 KiB |
 | reactions | ≤ 20 per member per target frame; comments ≤ 200 per target frame |
+| `board.note` | ≤ 20 per member per hour; ≤ 500 live notes per session; text ≤ 280 characters; the relay clamps and refuses more with `frame_rate_exceeded` |
 | `queue.reject` / auto-approve reason | auto-approval is recorded in the audit event (actor `srv`, reason = policy), not on the frame |
 | `sys.slow_down.p` | `{for_ms, reason: "rate" \| "outbound"}` |
 | `sys.notice` levels | `usage_warning`→`warn`, `quota_reached`→`error`, `plan_changed`→`info`, `member_limit_near`→`warn`, `maintenance_soon`→`warn`, `client_update_available`→`info`, `history_retention_changed`→`info` |

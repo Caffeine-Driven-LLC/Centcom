@@ -1,8 +1,8 @@
-# Backend plan · 109 lanes (B001-B109)
+# Backend plan · 111 lanes (B001-B111)
 
 Repo: `Centcom-backend` · Rules: [`plan/GUIDELINES.md`](../GUIDELINES.md) · Format: [`plan/LANE_CARD_SPEC.md`](../LANE_CARD_SPEC.md) · Connection points: [`contracts/`](../../contracts/index.json)
 
-- **109 lanes**: 27 small (≤1 d), 62 medium (≤3 d), 20 large (≤5 d) · 313 person-days of work in total
+- **111 lanes**: 27 small (≤1 d), 64 medium (≤3 d), 20 large (≤5 d) · 319 person-days of work in total
 - **15 dependency layers** · critical path **49 days** (see [`GRAPH.md`](../GRAPH.md)) · parallelism in layer 1: 1 lanes can start on day one
 - Every lane card is independent: it names its inputs (contracts), outputs (deliverables), and how to build with no counterpart (`build_against`).
 - **No lane in this plan depends on a lane in the other plan.** The two sides meet only at contract IDs.
@@ -140,6 +140,8 @@ Repo: `Centcom-backend` · Rules: [`plan/GUIDELINES.md`](../GUIDELINES.md) · Fo
 | [B090](B090.md) | Data retention and purge jobs | M5 | M | data | B008, B055 | - | G6 |
 | [B106](B106.md) | Collaboration wiring: metering, purge, relay delivery and the remaining API modules | M5 | L | platform | B055, B056, B063, B065, B069, B074, B075, B076, B081, B090, B103 | CT-API-USAGE, CT-API-NOTIFY, CT-API-BILLING | G4 |
 | [B109](B109.md) | The worker process: usage counters, expiry sweeps and workspace purge | M5 | M | platform | B027, B029, B053, B068, B075, B107 | CT-API-USAGE, CT-API-WORKSPACES | G5 |
+| [B110](B110.md) | Branch sessions: choose the session mode at creation and make the relay apply it | M5 | M | platform | B038, B053, B054, B057, B061 | CT-API-SESSIONS, CT-WS-SESSION-EVENTS | G5 |
+| [B111](B111.md) | Shared board notes in the relay: board.note, board.pin and board.remove | M5 | M | platform | B041, B043, B057, B110 | CT-WS-SESSION-EVENTS | G5 |
 
 ### P7 Ops
 

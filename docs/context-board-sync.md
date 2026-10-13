@@ -1,4 +1,4 @@
-# Shared notes between people: the proposal (not built: needs a contract decision)
+# Shared notes between people: the proposal (the contract change is drafted in plan/adr/0003; not built in the apps yet)
 
 The board (docs/context-sharing.md, phase 1) lives on one computer. This page is the concrete proposal for phase 3, **session scope**: notes travelling between the people of a shared session. It is a proposal because `contracts/04-session-events.md` has no event kind for it, and contracts are changed by a human merge, not by a client PR. Until then the board stays local and the Shared notes panel says nothing about other people.
 
@@ -12,11 +12,11 @@ The board (docs/context-sharing.md, phase 1) lives on one computer. This page is
 
 | kind           | class   | routing | who may send               | fields (clear)                                                        | secret                                   |
 | -------------- | ------- | ------- | -------------------------- | --------------------------------------------------------------------- | ---------------------------------------- |
-| `board.note`   | `event` | hybrid  | host, editor               | `note` (id), `type` (`decision`, `warning`, `finding`), `supersedes`? | `text` (at most 280 characters), `refs`? |
-| `board.pin`    | `event` | clear   | host, editor               | `note`, `pinned`                                                      | none                                     |
-| `board.remove` | `event` | clear   | host, or the note's author | `note`                                                                | none                                     |
+| `board.note`   | `event` | hybrid  | host, editor               | `type` (`decision`, `warning`, `finding`), `supersedes`? | `text` (at most 280 characters), `refs`? |
+| `board.pin`    | `event` | clear   | host, editor               | `target`, `pinned`                                                    | none                                     |
+| `board.remove` | `event` | clear   | host, or the note's author | `target`                                                              | none                                     |
 
-The text and the file references are encrypted like every other work content (the backend never sees them). `note` ids are ULIDs made by the sender; `board.pin` and `board.remove` name them. Late joiners read the notes from history or from the snapshot, like the transcript.
+The text and the file references are encrypted like every other work content (the backend never sees them). A note's id is the `msg_` id of its `board.note` frame; `board.pin` and `board.remove` name it in `target` (not `note`: the relay's privacy stage strips a clear `note` from every kind). Late joiners read the notes from history or from the snapshot, like the transcript.
 
 ## Who may do what
 

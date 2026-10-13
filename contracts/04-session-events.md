@@ -43,6 +43,9 @@ Allowed: frame type/kind, ids, timestamps, sizes, queue item ids/states/position
 | `diff.share` | `event` | encrypted | host, editor* | yes | — | `agent_id`, `files`, `blob`? |
 | `reaction` | `event` | clear | host, editor, viewer | yes | `target`, `code`, `op` | — |
 | `comment.add` | `event` | encrypted | host, editor, viewer | yes | — | `target`, `text` |
+| `board.note` | `event` | hybrid | host, editor | yes | `type`, `supersedes`? | `text`, `refs`? |
+| `board.pin` | `event` | clear | host, editor | yes | `target`, `pinned` | — |
+| `board.remove` | `event` | clear | host, or the note's author | yes | `target` | — |
 | `key.grant` | `event` | hybrid | host, editor (key holders) | yes | `to_device`, `kids` | `grants` |
 | `queue.submit` | `queue` | hybrid | editor (host may also) | yes | `item`, `size`, `kind` | `body`, `attachments`? |
 | `queue.cancel` | `queue` | clear | the submitter | yes | `item` | — |
@@ -92,6 +95,9 @@ Allowed: frame type/kind, ids, timestamps, sizes, queue item ids/states/position
 - **`diff.share`**: A diff shared for review.
 - **`reaction`**: Emoji-style reaction to a frame. Codes map to pixel animations in the client.
 - **`comment.add`**: A comment attached to a frame.
+- **`board.note`**: A note on the shared context board (docs/context-sharing.md, session scope). The note id is the `msg_` id of this frame; `board.pin` and `board.remove` name it in `target`. `type` is clear so the relay can count and filter; `text` (1 to 280 characters) and the optional `refs` (`{files[], commands[]}`) are encrypted. A viewer cannot send it. Rate: 20 per member per hour and at most 500 live notes per session (the relay refuses more with `frame_rate_exceeded`). `supersedes` names an earlier note of the same author or the host that this one replaces.
+- **`board.pin`**: Pin or unpin a board note. A pinned note is always in the digest of every agent of the session.
+- **`board.remove`**: Retract a board note (named in `target`). Receivers drop it from their boards and digests; history keeps the original frame (it is encrypted, so the removal is a display rule, not erasure).
 - **`key.grant`**: Sealed session-key grant for one device (CT-CRYPTO §4). `p.kids` says which epochs; the sealed keys are in `ct`.
 - **`queue.submit`**: Add an item to the command-post queue. `id` of the frame is the queue item id (que_).
 - **`queue.cancel`**: Submitter withdraws a queued item.
@@ -165,6 +171,7 @@ Frames stamped by the server carry `from: "srv"` (the literal string). Clients a
 | `control.mute.until` | at most 7 days after the frame `ts` (longer is clamped) |
 | `presence.cursor` `ct` | ≤ 4 KiB |
 | reactions | ≤ 20 per member per target frame; comments ≤ 200 per target frame |
+| `board.note` | ≤ 20 per member per hour; ≤ 500 live notes per session; text ≤ 280 characters; the relay clamps and refuses more with `frame_rate_exceeded` |
 | `queue.reject` / auto-approve reason | auto-approval is recorded in the audit event (actor `srv`, reason = policy), not on the frame |
 | `sys.slow_down.p` | `{for_ms, reason: "rate" \| "outbound"}` |
 | `sys.notice` levels | `usage_warning`→`warn`, `quota_reached`→`error`, `plan_changed`→`info`, `member_limit_near`→`warn`, `maintenance_soon`→`warn`, `client_update_available`→`info`, `history_retention_changed`→`info` |

@@ -2001,13 +2001,21 @@ export interface components {
             /** Format: date-time */
             ended_at?: string | null;
             member_count?: number;
+            mode?: components["schemas"]["SessionMode"];
         };
+        /**
+         * @description command_post: the host runs the agents and members send requests through the queue. branch: every member runs their own agents and emits their own events. Fixed when the session is created.
+         * @default command_post
+         * @enum {string}
+         */
+        SessionMode: "command_post" | "branch";
         SessionCreate: {
             workspace: components["schemas"]["WorkspaceId"];
             name: string;
             project?: components["schemas"]["ProjectId"];
             policy?: components["schemas"]["SessionPolicy"];
             region_preference?: string;
+            mode?: components["schemas"]["SessionMode"];
         };
         SessionCreated: components["schemas"]["Session"] & {
             /** @description Region the client should connect to */
