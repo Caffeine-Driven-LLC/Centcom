@@ -1,14 +1,16 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { Box } from 'ink';
 import { miniRows, type MascotDriver } from '@centcom/mascot';
 import { PixelView, Rich, useMascotFrame, useTheme, useTick, sameUnlessTyping } from './ui.js';
-import { SPINNER } from '../util/verbs.js';
+import { createVerbPicker, isSeriousState, nextVerbDelayMs, plainVerb, spinnerLine, FRAME_MS, type VerbPicker } from '../spinner/index.js';
 import { formatCost, formatElapsed, formatTokens, sp, truncate, truncateMiddle, type Line } from '../util/text.js';
 import type { AppState } from '../state/model.js';
 
 export const LARGE_H = 8, LARGE_W = 26;
 
-function infoLines(s: AppState, spin: string, width: number, now: number): Line[] {
+/** What the working line says: the glyph, the verb and the parenthesis (lane C040). */
+export interface WorkLine { glyph: string; verb: string; meta: string }
+function infoLines(s: AppState, work: WorkLine, width: number, now: number): Line[] {
   const me = s.agents.find((a) => a.mine)!;
   const running = [...s.items].reverse().find((i) => i.kind === 'tool' && i.status === 'running');
   const lastNotice = [...s.items].reverse().find((i) => i.kind === 'notice');
@@ -17,13 +19,9 @@ function infoLines(s: AppState, spin: string, width: number, now: number): Line[
     return [[sp('? ', { c: 'status.warning', b: true }), sp('Waiting for you', { c: 'status.warning', b: true }), ...(s.approvals.length > 1 ? [sp(`  +${s.approvals.length - 1} more`, { c: 'text.muted' })] : [])], [sp(truncate(a.req.summary, width), { c: 'text.secondary' })]]; // the keys are in the dialog below
   }
   if (s.busy) {
-    const elapsed = s.turnStartedAt ? formatElapsed(now - s.turnStartedAt) : '';
-    const tok = me.inTok + me.outTok;
     const act = running && running.kind === 'tool' ? `${running.name} ${running.path ?? running.command ?? running.summary}` : '';
-    const verb = s.settings.reducedMotion || s.settings.spinner === 'plain' ? 'Working…' : s.verb;
     return [
-      [sp(spin + ' ', { c: 'signal', b: true }), sp(truncate(verb, width - 3), { c: 'text.secondary' })],
-      [sp([elapsed, tok ? `↑ ${formatTokens(tok)} tokens` : '', 'esc to interrupt'].filter(Boolean).join('  ·  '), { c: 'text.muted' })],
+      [sp(work.glyph + ' ', { c: 'signal', b: true }), sp(work.verb, { c: 'text.secondary' }), ...(work.meta ? [sp('   ' + work.meta, { c: 'text.muted' })] : [])],
       ...(act ? [[sp('▸ ', { c: 'text.muted' }), sp(truncateMiddle(act, width - 3), { c: 'text.secondary' })] as Line] : []),
     ];
   }
@@ -42,18 +40,24 @@ function LiveStripImpl({ s, driver, width, size, calm = 1 }: { s: AppState; driv
   const theme = useTheme();
   const f = useMascotFrame(driver);
   const spinning = s.busy && !s.settings.reducedMotion;
-  const tick = useTick(120, spinning);
+  const tick = useTick(FRAME_MS, spinning); void tick;
   const slow = useTick(500 * calm, size === 'small' && !s.settings.reducedMotion);
-  const spin = spinning ? SPINNER[tick % SPINNER.length]! : '…';
+  const me0 = s.agents.find((a) => a.mine)!; const plain = s.settings.reducedMotion || s.settings.spinner === 'plain';
+  const picker = useRef<VerbPicker | undefined>(undefined); picker.current ??= createVerbPicker({ rng: Math.random }); const verbAt = useRef<{ verb: string; until: number; key: string } | undefined>(undefined);
+  const t0 = Date.now(); const elapsedMs = s.turnStartedAt ? Math.max(0, t0 - s.turnStartedAt) : 0; const serious = isSeriousState(me0.state); const kind = `${me0.state}:${plain}:${width < 60}`;
+  if (s.busy && (!verbAt.current || verbAt.current.key !== kind || t0 >= verbAt.current.until)) { // a new line every 3 to 6 seconds, at once when the state changes; plain words where a joke would be wrong
+    const verb = plain ? 'Working…' : serious ? plainVerb(me0.state) : picker.current.next({ state: me0.state, elapsedMs, width, serious }); verbAt.current = { verb, until: t0 + nextVerbDelayMs(Math.random), key: kind };
+  }
+  const work = spinnerLine({ elapsedMs, verb: verbAt.current?.verb ?? 'Working…', tokens: me0.inTok + me0.outTok || undefined, interruptible: true, width: Math.max(10, width - (size === 'large' ? LARGE_W : size === 'small' ? 10 : 0) - 2), motion: s.settings.reducedMotion ? 'reduced' : 'full', still: !spinning });
   const me = s.agents.find((a) => a.mine)!;
   const now = Date.now();
   if (size === 'off') {
-    const l = infoLines(s, spin, width - 2, now)[0]!;
+    const l = infoLines(s, work, width - 2, now)[0]!;
     return <Box height={1}><Rich line={l} /></Box>;
   }
   const small = size === 'small';
   const boxW = small ? 10 : LARGE_W; const boxH = small ? 4 : LARGE_H;
-  const info = infoLines(s, spin, Math.max(10, width - boxW - 2), now);
+  const info = infoLines(s, work, Math.max(10, width - boxW - 2), now);
   return (
     <Box height={boxH} width={width}>
       {small ? <PixelView rows={miniRows(me.mini, s.settings.color, slow)} tier={theme.tier} width={boxW} height={boxH} /> : <PixelView rows={f.rows} tier={theme.tier} width={boxW} height={boxH} />}

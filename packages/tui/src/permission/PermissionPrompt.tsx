@@ -17,7 +17,7 @@ export function promptRows(v: ApprovalView, o: { width: number; canDecide: boole
   if (o.diff?.length) rows.push(...o.diff);
   if (v.directory) rows.push([sp(truncate(`in ${visibleText(v.directory)}${v.branch ? ` (${visibleText(v.branch)})` : ''}`, inner), { c: 'text.secondary' })]);
   rows.push([sp(truncate(`${v.engine} · ${v.provider} · ${v.accountLine}`, inner), { c: 'text.muted' }), sp(`   ${v.risk} risk`, { c: risk, b: true })]);
-  rows.push([sp(`${v.agentLabel} · ${v.ownerName}`, { c: 'text.muted' }), sp(o.phase === 'expired' ? '   Expired' : `   expires in ${countdown(o.remainingMs)}`, { c: 'text.muted' })]); rows.push([]);
+  rows.push([sp(`${v.agentLabel} · ${v.ownerName}`, { c: 'text.muted' }), ...(o.phase === 'expired' ? [sp('   Expired', { c: 'text.muted' })] : Number.isFinite(o.remainingMs) ? [sp(`   expires in ${countdown(o.remainingMs)}`, { c: 'text.muted' })] : [])]); rows.push([]);
   if (!o.canDecide) rows.push([sp(`Waiting for ${o.hostName ?? v.ownerName} to decide.`, { c: 'text.muted' })]);
   else if (o.phase === 'confirming') rows.push([sp(o.message ?? 'Type y then Enter to confirm.', { c: 'status.danger', b: true })]);
   else if (o.phase !== 'expired') { const k: Line = []; const add = (key: string, label: string) => { if (k.length) k.push(sp('  ', {})); k.push(sp(`[${key}]`, { c: 'accent.hover', b: true }), sp(' ' + label, { c: 'text.secondary' })); }; if (v.allowedScopes.includes('once')) add('y', 'yes'); if (v.allowedScopes.includes('session')) add('s', 'this session'); if (v.allowedScopes.includes('always')) add('a', 'always'); add('n', 'no'); if (v.editable && o.onEdit) add('e', 'edit'); rows.push(k); }

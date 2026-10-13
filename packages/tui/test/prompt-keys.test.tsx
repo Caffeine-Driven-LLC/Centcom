@@ -183,7 +183,7 @@ describe('approval: countdown and session scope', () => {
     expect(countdown(598_000)).toBe('9:58'); expect(countdown(5_000)).toBe('0:05'); expect(countdown(0)).toBe('0:00');
     const mk = (expiresAt?: number, diff?: string) => approvalFromPending({ req: { approval_id: 'a', agent_id: 'me', tool: 'Edit', summary: 'x', risk: 'medium', path: 'src/a.ts', ...(diff ? { diff } : {}) }, agentName: 'you', expiresAt }, { engine: 'claude-code' });
     const show = (v: ReturnType<typeof mk>) => promptRows(v, { width: 76, canDecide: true, onEdit: false, remainingMs: Date.parse(v.expiresAt) - Date.now(), phase: 'active', diff: diffLines(v.diff, 76) }).map((r) => r.map((x) => x.t).join('')).join('\n');
-    expect(show(mk(Date.now() + 120_000))).toMatch(/expires in (1:5\d|2:00)/);
+    expect(show(mk(Date.now() + 120_000))).toMatch(/expires in (1:5\d|2:00)/); expect(show(mk())).not.toContain('expires in');
     const withDiff = show(mk(undefined, '--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1,2 +1,2 @@\n keep\n-old line\n+new line\n')); expect(withDiff).toContain('old line'); expect(withDiff).toContain('new line');
   });
   it('the policy prompter stamps each approval with when it expires', async () => {
@@ -209,6 +209,15 @@ describe('the permission prompt and the notice line in the app (lanes C037, C038
   it('a notice shows above the prompt; Esc dismisses it before it clears the text, and an error stays until then', async () => {
     const t = await mount(); await t.send('draft'); t.ctl.toast('error', 'Something broke'); await t.until(() => t.frame().includes('Something broke'));
     await wait(120); await t.send('\x1b', 80); expect(t.text()).toBe('draft'); await t.until(() => !t.frame().includes('Something broke'));
+  });
+});
+
+describe('the working line (lane C040)', () => {
+  const FRAMES = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏';
+  it('shows the braille glyph, a verb and the interrupt hint while the agent works; plain words when the spinner is set to plain', async () => {
+    const t = await mount(); await t.send('do something'); await t.send('\r'); await t.until(() => t.ctl.state.busy && /esc to interrupt/.test(t.frame()));
+    const line = t.frame().split('\n').find((l) => /esc to interrupt/.test(l))!; expect([...FRAMES].some((g) => line.includes(g))).toBe(true); expect(line).toMatch(/\(.*esc to interrupt.*\)/);
+    t.ctl.patch({ settings: { ...t.ctl.state.settings, spinner: 'plain' } }); await t.until(() => /Working…/.test(t.frame()));
   });
 });
 

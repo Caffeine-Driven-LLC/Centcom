@@ -6,7 +6,7 @@ export type Phase = 'active' | 'confirming' | 'editing' | 'expired' | 'done';
 export interface MachineState { phase: Phase; message?: string; remainingMs: number }
 export interface Machine { key(k: string): void; tick(): MachineState; state(): MachineState; setEdited(cmd: string): void }
 export function createPromptMachine(d: { view: ApprovalView; canDecide: boolean; now: () => number; onDecide: (x: ApprovalDecisionInput) => void; onEdit?: (cmd: string) => void }): Machine {
-  const shown = d.now(); const expires = Date.parse(d.view.expiresAt); let phase: Phase = 'active'; let confirmAt = 0; let pending: Scope | undefined; let message: string | undefined;
+  const shown = d.now(); const expires = Date.parse(d.view.expiresAt) || Infinity; let phase: Phase = 'active'; let confirmAt = 0; let pending: Scope | undefined; let message: string | undefined;
   const risky = d.view.risk === 'high' || d.view.destructive; const send = (x: Omit<ApprovalDecisionInput, 'approvalId'>) => { if (phase === 'done' || phase === 'expired') return; phase = 'done'; d.onDecide({ approvalId: d.view.approvalId, ...x }); };
   const state = (): MachineState => ({ phase, message, remainingMs: Math.max(0, expires - d.now()) });
   function tick(): MachineState {
