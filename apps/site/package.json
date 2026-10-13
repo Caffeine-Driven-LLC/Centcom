@@ -1,0 +1,10 @@
+{
+  "name": "@centcom/site",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Centcom's public marketing website: static HTML and CSS built with Vite. No scripts in the pages, no tracking, no cookies, no external requests.",
+  "devDependencies": {
+    "vite": "^7.0.0"
+  }
+}

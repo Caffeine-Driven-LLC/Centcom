@@ -1,0 +1,41 @@
+{
+  "_comment": "The only place plans, prices and limits are written for the site. Limits are copied from the backend seed (Centcom-backend packages/db/migrations/20260102001500_plans_entitlements.sql, table plan_limits); the server is the source of truth and a human must re-check them before launch. No price is defined anywhere in the plan, contracts or backend code, so every paid price is TBD: status \"tbd\" has no amount. When a price is decided set status to \"known\" with amountMinor (integer minor units, CT-IDS: 1900 = 19.00) and currency USD or EUR.",
+  "currencies": ["USD", "EUR"],
+  "period": "month",
+  "limitsSource": "Centcom-backend plan_limits seed (migration 20260102001500)",
+  "limitLabels": {
+    "relay_access": "Hosted sessions through the relay",
+    "max_seats": "Seats",
+    "max_session_members": "People in one session",
+    "max_concurrent_sessions": "Hosted sessions at once",
+    "max_parallel_agents": "Agents running in parallel",
+    "history_days": "Session history (days)",
+    "hosted_minutes_month": "Hosted minutes per month",
+    "audit_log_days": "Audit log (days)",
+    "webhooks_max": "Webhooks",
+    "api_keys_max": "API keys"
+  },
+  "plans": [
+    {
+      "id": "free",
+      "name": "Free",
+      "tagline": "Work alone or on your own network. Always free.",
+      "price": { "status": "free" },
+      "limits": { "relay_access": false, "max_seats": 1, "max_session_members": 8, "max_concurrent_sessions": 0, "max_parallel_agents": 4, "history_days": 0, "hosted_minutes_month": 0, "audit_log_days": 0, "webhooks_max": 0, "api_keys_max": 1 }
+    },
+    {
+      "id": "pro",
+      "name": "Pro",
+      "tagline": "Hosted sessions for one person and a few guests.",
+      "price": { "status": "tbd" },
+      "limits": { "relay_access": true, "max_seats": 1, "max_session_members": 4, "max_concurrent_sessions": 2, "max_parallel_agents": 8, "history_days": 7, "hosted_minutes_month": 6000, "audit_log_days": 0, "webhooks_max": 2, "api_keys_max": 5 }
+    },
+    {
+      "id": "team",
+      "name": "Team",
+      "tagline": "A shared workspace for a team and its agents.",
+      "price": { "status": "tbd" },
+      "limits": { "relay_access": true, "max_seats": 5, "max_session_members": 12, "max_concurrent_sessions": 10, "max_parallel_agents": 16, "history_days": 30, "hosted_minutes_month": 30000, "audit_log_days": 90, "webhooks_max": 20, "api_keys_max": 50 }
+    }
+  ]
+}

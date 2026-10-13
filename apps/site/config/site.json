@@ -1,0 +1,11 @@
+{
+  "_comment": "Site-wide facts in one place. A value of null is TBD and the pages say so; nothing here is a guess.",
+  "name": "Centcom",
+  "tagline": "Command many hands.",
+  "domain": null,
+  "repoUrl": "https://github.com/Caffeine-Driven-LLC/Centcom",
+  "docsUrl": "https://github.com/Caffeine-Driven-LLC/Centcom/tree/main/docs/site",
+  "contactEmail": null,
+  "operator": "Caffeine Driven LLC",
+  "hostedWebAppUrl": null
+}

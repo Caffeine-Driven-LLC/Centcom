@@ -1,0 +1,17 @@
+{
+  "_comment": "Read by the download page. Nothing is published yet, so every artifact is planned. To publish: set version, then per platform set status to \"available\" and fill url (https) and sha256 (64 hex). The page and the tests need no other change.",
+  "version": null,
+  "channel": "stable",
+  "platforms": [
+    { "id": "linux-x64", "os": "Linux", "arch": "x64", "format": "AppImage", "status": "planned", "url": null, "sha256": null },
+    { "id": "linux-arm64", "os": "Linux", "arch": "arm64", "format": "AppImage", "status": "planned", "url": null, "sha256": null },
+    { "id": "macos-arm64", "os": "macOS", "arch": "Apple silicon", "format": "dmg", "status": "planned", "url": null, "sha256": null },
+    { "id": "macos-x64", "os": "macOS", "arch": "Intel", "format": "dmg", "status": "planned", "url": null, "sha256": null },
+    { "id": "windows-x64", "os": "Windows", "arch": "x64", "format": "installer", "status": "planned", "url": null, "sha256": null }
+  ],
+  "cli": {
+    "requires": "Node 22 or newer",
+    "npm": "npm install --global centcom",
+    "note": "The install guide documents the npm package. Standalone binaries and Homebrew are planned."
+  }
+}
