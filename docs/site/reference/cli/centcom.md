@@ -13,6 +13,7 @@ centcom [options] | centcom -p "task"
 - `--output-format <text|json|stream-json>`: what -p prints (default text)
 - `--input-format <text|stream-json>`: with -p: stream-json reads one user message per line from standard input and runs them as turns of one conversation
 - `--engine <claude-code|codex|demo>`: choose the agent engine (default: claude-code if installed)
+- `--no-alt-screen`: draw in the normal screen instead of the alternate one: the last picture stays in your scrollback
 - `--demo`: scripted demo agent (no login, no model)
 - `--demo-team`: with --demo: also show two pretend teammates
 - `-c, --continue`: continue the most recent conversation in this folder

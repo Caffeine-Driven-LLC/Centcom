@@ -9,6 +9,7 @@ export const COMMANDS: CommandMeta[] = [
       { flag: '--output-format', arg: '<text|json|stream-json>', description: 'what -p prints (default text)' },
       { flag: '--input-format', arg: '<text|stream-json>', description: 'with -p: stream-json reads one user message per line from standard input and runs them as turns of one conversation' },
       { flag: '--engine', arg: '<claude-code|codex|demo>', description: 'choose the agent engine (default: claude-code if installed)' },
+      { flag: '--no-alt-screen', description: 'draw in the normal screen instead of the alternate one: the last picture stays in your scrollback' },
       { flag: '--demo', description: 'scripted demo agent (no login, no model)' },
       { flag: '--demo-team', description: 'with --demo: also show two pretend teammates' },
       { flag: '-c, --continue', description: 'continue the most recent conversation in this folder' },

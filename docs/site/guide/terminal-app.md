@@ -101,6 +101,10 @@ The status line says when the connection to the service is not fine (`↻ reconn
 
 If the service switches an agent off (a kill switch), Centcom does not start it: it uses the other one, or the demo, and says so. Running work is never stopped. `CENTCOM_NO_REMOTE_FLAGS=1` stops Centcom from asking for these switches.
 
+## Drawing in the normal screen
+
+`centcom --no-alt-screen` draws in the normal screen instead of the alternate one, so the last picture stays in your terminal's scrollback (useful for screen recordings and tmux copy mode).
+
 ## Approvals
 
 A new approval ignores keys for a third of a second so a key you were typing cannot approve something you have not read. It shows how long is left before it is declined on its own (`agent.approval_timeout_ms`, ten minutes by default). `s` allows it for this session only.
