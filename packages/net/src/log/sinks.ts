@@ -15,7 +15,7 @@ export interface LogFs {
   mkdir(dir: string, mode: number): void; append(path: string, data: string, mode: number): Promise<void>; size(path: string): number; rename(from: string, to: string): void; remove(path: string): void; exists(path: string): boolean;
 }
 
-export interface FileSinkOptions { dir: string; maxBytes: number; maxFiles: number; fs: LogFs; file?: string; onUnavailable?: (reason: string) => void }
+export interface FileSinkOptions { dir: string; maxBytes: number; maxFiles: number; fs: LogFs; file?: string; onUnavailable?: (reason: string) => void; /** For the time on the `log.dropped` note (default: the real clock). */ clock?: () => number }
 
 /** Rotating file sink: centcom.log, centcom.log.1, ... Writes are queued and never block the caller; errors drop records and are counted. */
 export function createFileSink(o: FileSinkOptions): Sink {
@@ -36,7 +36,7 @@ export function createFileSink(o: FileSinkOptions): Sink {
             try { size = o.fs.exists(base) ? o.fs.size(base) : 0; } catch { /* keep the counter */ }
             if (size > 0 && size + len > o.maxBytes) rotate();
           }
-          if (dropped > 0) { const note = JSON.stringify({ ts: new Date().toISOString(), level: 'warn', msg: 'log.dropped', count: dropped }) + '\n'; await o.fs.append(base, note, 0o600); size += Buffer.byteLength(note); dropped = 0; }
+          if (dropped > 0) { const note = JSON.stringify({ ts: new Date(o.clock?.() ?? Date.now()).toISOString(), level: 'warn', msg: 'log.dropped', count: dropped }) + '\n'; await o.fs.append(base, note, 0o600); size += Buffer.byteLength(note); dropped = 0; }
           await o.fs.append(base, data, 0o600); size += len;
         } catch { dropped++; } // disk full or unwritable: drop, count, and say so when it works again
       });

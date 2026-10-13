@@ -1,29 +1,26 @@
 /** What this terminal can do, decided once at startup from the environment and the two streams (a pure function: no process.env here). */
+import { detectColorTier } from '@centcom/theme';
 export type ColorTier = 'truecolor' | '256' | '16' | 'none';
 export interface TermCaps {
   tier: ColorTier; unicode: boolean; isTTY: boolean; cols: number; rows: number; halfBlock: boolean; hyperlinks: boolean; bracketedPaste: boolean;
-  mascotEnv: 'on' | 'off' | 'auto'; reduceMotionEnv: boolean; spinnerEnv: 'fun' | 'plain' | 'auto'; themeEnv: 'dark' | 'light' | 'auto';
+  mascotEnv: 'on' | 'off' | 'auto'; reduceMotionEnv: boolean; spinnerEnv: 'fun' | 'plain' | 'auto'; themeEnv: 'dark' | 'light' | 'hc' | 'auto';
   /** Env values that were not understood (and ignored). Never thrown. */
   warnings: string[];
 }
 type Out = { isTTY?: boolean; columns?: number; rows?: number }; type Inp = { isTTY?: boolean };
 
-/** `NO_COLOR` set to anything but empty wins over every other signal. */
-function tierOf(env: NodeJS.ProcessEnv, tty: boolean): ColorTier {
-  if (env.NO_COLOR) return 'none'; if (!tty || env.TERM === 'dumb') return 'none';
-  if (/^(truecolor|24bit)$/i.test(env.COLORTERM ?? '')) return 'truecolor';
-  if (/256color/i.test(env.TERM ?? '')) return '256'; return '16';
-}
+/** One answer for the colour depth, shared with the theme package: `NO_COLOR` set to anything but empty wins, then a flag (`--colors`, `ui.color`), then COLORTERM, the terminal programs known to do truecolor, and TERM. */
+const tierOf = (env: NodeJS.ProcessEnv, tty: boolean, flag?: string): ColorTier => detectColorTier({ env, isTTY: tty, flag });
 const utf8 = (env: NodeJS.ProcessEnv) => { if (env.TERM === 'linux') return false; const l = env.LC_ALL || env.LC_CTYPE || env.LANG || ''; return /utf-?8/i.test(l); };
 function pick<T extends string>(name: string, v: string | undefined, ok: readonly T[], fallback: T, warnings: string[]): T {
   if (v === undefined || v === '') return fallback; const x = v.toLowerCase() as T; if (ok.includes(x)) return x; warnings.push(`${name}=${v} is not one of ${ok.join(', ')}; using ${fallback}.`); return fallback;
 }
 
-export function detectCapabilities(env: NodeJS.ProcessEnv, out: Out, inp?: Inp): TermCaps {
-  const warnings: string[] = []; const isTTY = !!out.isTTY && inp?.isTTY !== false; const tier = tierOf(env, !!out.isTTY); const unicode = utf8(env);
+export function detectCapabilities(env: NodeJS.ProcessEnv, out: Out, inp?: Inp, o: { /** the colour setting from the config or the command line (`never`, `16`, `256`, `truecolor`); undefined or `auto`: decide from the terminal */ colorFlag?: string } = {}): TermCaps {
+  const warnings: string[] = []; const isTTY = !!out.isTTY && inp?.isTTY !== false; const tier = tierOf(env, !!out.isTTY, o.colorFlag === 'auto' ? undefined : o.colorFlag); const unicode = utf8(env);
   const mascotEnv = pick('CENTO_MASCOT', env.CENTO_MASCOT, ['on', 'off'] as const, 'auto' as 'on' | 'off' | 'auto', warnings);
   const spinnerEnv = pick('CENTO_SPINNER', env.CENTO_SPINNER, ['fun', 'plain'] as const, 'auto' as 'fun' | 'plain' | 'auto', warnings);
-  const themeEnv = pick('CENTO_THEME', env.CENTO_THEME, ['dark', 'light', 'auto'] as const, 'auto', warnings);
+  const themeEnv = pick('CENTO_THEME', env.CENTO_THEME, ['dark', 'light', 'hc', 'auto'] as const, 'auto', warnings);
   let reduceMotionEnv = false; if (env.CENTO_REDUCE_MOTION !== undefined && env.CENTO_REDUCE_MOTION !== '') { if (/^(1|true|on|yes)$/i.test(env.CENTO_REDUCE_MOTION)) reduceMotionEnv = true; else if (!/^(0|false|off|no)$/i.test(env.CENTO_REDUCE_MOTION)) warnings.push(`CENTO_REDUCE_MOTION=${env.CENTO_REDUCE_MOTION} is not 1 or 0; ignored.`); }
   return Object.freeze({ tier, unicode, isTTY, cols: out.columns ?? 80, rows: out.rows ?? 24, halfBlock: unicode && tier !== 'none', hyperlinks: isTTY && tier !== 'none' && env.TERM !== 'linux' && !/^(dumb|screen)$/.test(env.TERM ?? ''), bracketedPaste: isTTY && env.TERM !== 'dumb' && env.TERM !== 'linux', mascotEnv, reduceMotionEnv, spinnerEnv, themeEnv, warnings });
 }

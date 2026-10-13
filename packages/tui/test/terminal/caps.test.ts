@@ -18,6 +18,19 @@ describe('colour tier', () => {
     [{ NO_COLOR: '1', TERM: 'xterm-256color' }, notTty, 'none'], [{ COLORTERM: 'yes' }, tty(), '16'],
   ])('%j gives %s', (env, out, want) => { expect(T(env as NodeJS.ProcessEnv, out as never).tier).toBe(want); });
 });
+describe('colour tier: the same answer as the theme package, with the setting on top (lane C031)', () => {
+  const T = detectCapabilities;
+  it('terminal programs known to do truecolor are believed even without COLORTERM', () => {
+    expect(T({ TERM_PROGRAM: 'vscode', TERM: 'xterm-256color' }, tty()).tier).toBe('truecolor'); expect(T({ TERM_PROGRAM: 'iTerm.app' }, tty()).tier).toBe('truecolor'); expect(T({ WT_SESSION: 'x' }, tty()).tier).toBe('truecolor'); expect(T({ TERM: 'xterm-kitty' }, tty()).tier).toBe('truecolor'); expect(T({ TERM: 'alacritty' }, tty()).tier).toBe('truecolor');
+  });
+  it('the colour setting (ui.color or --colors) wins over the terminal, except that NO_COLOR and a pipe still win over it; auto means decide from the terminal', () => {
+    expect(T({ COLORTERM: 'truecolor' }, tty(), undefined, { colorFlag: '16' }).tier).toBe('16'); expect(T({ TERM: 'xterm' }, tty(), undefined, { colorFlag: '256' }).tier).toBe('256'); expect(T({ COLORTERM: 'truecolor' }, tty(), undefined, { colorFlag: 'never' }).tier).toBe('none');
+    expect(T({ COLORTERM: 'truecolor' }, tty(), undefined, { colorFlag: 'auto' }).tier).toBe('truecolor'); expect(T({ NO_COLOR: '1' }, tty(), undefined, { colorFlag: 'auto' }).tier).toBe('none'); expect(T({ COLORTERM: 'truecolor' }, notTty, undefined, { colorFlag: 'auto' }).tier).toBe('none');
+  });
+  it('a CENTO_* value that is not understood is reported in the warnings and ignored, so the app can say so', () => {
+    const c = T({ CENTO_THEME: 'neon', CENTO_MASCOT: 'sometimes', CENTO_SPINNER: 'loud', CENTO_REDUCE_MOTION: 'maybe', COLORTERM: 'truecolor' }, tty()); expect(c.warnings).toHaveLength(4); expect(c).toMatchObject({ themeEnv: 'auto', mascotEnv: 'auto', spinnerEnv: 'auto', reduceMotionEnv: false });
+  });
+});
 describe('unicode and half blocks', () => {
   it('follows the locale and TERM=linux', () => {
     expect(detectCapabilities({ ...U, COLORTERM: 'truecolor' }, tty())).toMatchObject({ unicode: true, halfBlock: true });

@@ -54,6 +54,11 @@ def starts_and_restores_on_quit():
     t.close(); return ok and b'\x1b[?1049l' in t.raw and b'\x1b[?1000l' in t.raw and b'\x1b[23;0t' in t.raw, 'alternate screen, mouse reporting and the saved title all come back'
 
 @check
+def no_alt_screen_stays_in_the_normal_screen():
+    t = Term([BIN, '--demo', '--no-alt-screen'], rows=28, cols=100); t.pump(4.5); ok = b'\x1b[?1049h' not in t.raw and b'\x1b[?1000h' in t.raw; t.mark(); t.send('/quit\r', 1.5)
+    t.close(); return ok and b'\x1b[?1049l' not in t.raw and b'\x1b[?1000l' in t.raw, '--no-alt-screen never switches screens, and still gives the mouse and the title back'
+
+@check
 def kill_restores_the_terminal():
     for sig in (signal.SIGTERM, signal.SIGHUP):
         t = start(); t.mark(); os.kill(t.pid, sig); t.pump(1.2)

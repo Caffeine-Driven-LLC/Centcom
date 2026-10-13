@@ -2,10 +2,9 @@
 import React from 'react';
 import { execFileSync } from 'node:child_process';
 import { render } from 'ink';
-import { detectColorTier } from '@centcom/theme';
-import { ClaudeCodeEngine, CodexEngine, DemoEngine, detectClaude, detectCodex, isInstalled, type AgentEngine, type PermissionMode } from '@centcom/agent';
+import { ClaudeCodeEngine, CodexEngine, DemoEngine, createProviderDetector, makeWhich, runProbe, detectClaude, detectCodex, isInstalled, type AgentEngine, type PermissionMode } from '@centcom/agent';
 import { chooseEngine } from './engine-pick.js';
-import { Account, ShareSession, App, AppController, ClientConfig, FirstRun, SessionStore, TITLE_POP, TITLE_PUSH, resolveA11yMode, runLinear, queryBackground, buildRuntime, initialSettings, isFirstRun, markFirstRunDone, settingsFromConfig } from '@centcom/tui';
+import { Account, ShareSession, App, AppController, ClientConfig, FirstRun, SessionStore, TITLE_POP, TITLE_PUSH, resolveA11yMode, runLinear, queryBackground, detectCapabilities, buildRuntime, initialSettings, isFirstRun, markFirstRunDone, settingsFromConfig } from '@centcom/tui';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename as pathBase, join as pathJoin, resolve as pathResolve } from 'node:path';
 import { homedir } from 'node:os';
@@ -15,6 +14,7 @@ import { createAppLogger } from '@centcom/net';
 import type { CentoColor } from '@centcom/mascot';
 import { buildPrompt, parseStreamInput, readStdin, runPrint } from './print/index.js';
 import { startRemoteFlags, watchEngineFlag, type RemoteFlags } from './remote-flags.js';
+import { providerPreflight } from './preflight.js';
 import { chooseSession, pickSession } from './commands/resume.js';
 import { runProviderCli } from './commands/provider/cli.js';
 import { makeMemoryFiles, runMemoryCli } from './commands/memory/cli.js';
@@ -149,7 +149,7 @@ async function main() {
   if (!process.stdin.isTTY || !process.stdout.isTTY) { console.error('Centcom needs an interactive terminal. Try `centcom --help`.'); process.exit(2); }
 
   const cc = await ClientConfig.load(process.cwd(), cliFlags());
-  const tier = detectColorTier({ env: process.env, isTTY: true, flag: cc.cfg.ui.color === 'auto' ? undefined : cc.cfg.ui.color });
+  const caps = detectCapabilities(process.env, process.stdout, process.stdin, { colorFlag: cc.cfg.ui.color }); const tier = caps.tier; // one place decides colour depth, Unicode and the CENTO_* switches; what it did not understand is said below
   const a11y = resolveA11yMode({ env: process.env, flags: { screenReader: has('--screen-reader') }, config: { screenReader: cc.cfg.a11y.screen_reader, reducedMotion: cc.cfg.ui.reduced_motion } });
   // theme "auto": ask the terminal for its background colour (150 ms at most, nothing is written without a terminal) so a light terminal gets Paper instead of Graphite. The question goes out now and is answered while the agent is looked for.
   const bgAnswer = cc.cfg.ui.theme === 'auto' && !a11y.screenReader ? queryBackground({ out: process.stdout, inp: process.stdin }) : undefined;
@@ -191,7 +191,8 @@ async function main() {
   });
   let titlePushed = false; // the tab title is saved once, when the app first sets it, and put back when the terminal is given back
   if (!a11y.screenReader) { process.stdout.write(TITLE_PUSH); titlePushed = true; } // the old title is saved always (the title can be switched on later) and comes back on exit
-  if (!a11y.screenReader) process.stdout.write('\x1b[?1049h\x1b[2J\x1b[H'); // alternate screen: the transcript never pollutes scrollback (a screen reader gets plain appended lines instead)
+  const altScreen = !a11y.screenReader && !has('--no-alt-screen'); // --no-alt-screen: draw in the normal screen, so the last picture stays in the scrollback (screen recordings, tmux copy mode)
+  if (altScreen) process.stdout.write('\x1b[?1049h\x1b[2J\x1b[H'); // alternate screen: the transcript never pollutes scrollback (a screen reader gets plain appended lines instead)
   // the one-time welcome, before anything else (never in print mode or without a terminal)
   const firstRunFile = pathJoin(stateDir({ env: process.env, homedir: homedir() }), 'state.json'); let firstRunNote: string | undefined;
   if (!a11y.screenReader && !has('--demo') && await isFirstRun({ stateFile: firstRunFile })) {
@@ -199,7 +200,7 @@ async function main() {
     const r = await markFirstRunDone({ stateFile: firstRunFile }); if (!r.ok) firstRunNote = r.message; process.stdout.write('\x1b[2J\x1b[H');
   }
   /** Put the terminal back as it was: out of the alternate screen, mouse reporting off, cursor shown. Safe to call twice. */
-  const leave = () => { if (a11y.screenReader) return; /* plain-text mode never wrote a control code, so it takes none back */ try { process.stdout.write('\x1b[?1000l\x1b[?1006l\x1b[?25h\x1b[?1049l' + (titlePushed ? TITLE_POP : '')); titlePushed = false; } catch { /* the terminal is gone */ } };
+  const leave = () => { if (a11y.screenReader) return; /* plain-text mode never wrote a control code, so it takes none back */ try { process.stdout.write('\x1b[?1000l\x1b[?1006l\x1b[?25h' + (altScreen ? '\x1b[?1049l' : '') + (titlePushed ? TITLE_POP : '')); titlePushed = false; } catch { /* the terminal is gone */ } };
   process.on('exit', leave);
   for (const [sig, code] of [['SIGTERM', 143], ['SIGHUP', 129]] as const) process.on(sig, () => { leave(); process.exit(code); }); // `kill` and a closing window must not leave your shell in the alternate screen with the mouse captured
   rt.bind(ctl);
@@ -216,10 +217,13 @@ async function main() {
   }
   if (note) ctl.notice('warn', note);
   if (rflags) { const off = watchEngineFlag(rflags, engine.id, (t) => ctl.notice('warn', t)); process.on('exit', () => { off(); rflags.stop(); }); }
+  if (!demo && (engine.id === 'claude-code' || engine.id === 'codex')) void providerPreflight(engine.id, { detector: createProviderDetector({ run: runProbe, which: makeWhich(), clock: { now: () => Date.now(), setTimeout: (f: () => void, ms: number) => setTimeout(f, ms), clearTimeout: (h: unknown) => clearTimeout(h as NodeJS.Timeout) } as never }), notice: (level, text, detail) => ctl.notice(level, text, detail) }); // in the background: a tool that is signed out or too old is said now, not on the first message
+  for (const w of caps.warnings) ctl.notice('warn', 'Environment: ' + w);
   for (const w of rt.warnings) ctl.notice('warn', w);
   if (firstRunNote) ctl.notice('warn', firstRunNote);
-  for (const w of cc.warnings) { ctl.notice('warn', 'Settings: ' + w); process.stderr.write('centcom: settings: ' + w + '\n'); }
-  cc.onWarn = (w) => ctl.notice('warn', 'Settings: ' + w);
+  const sayOnce = (w: string) => !/^invalid_env: CENTO_/.test(w); // a CENTO_* switch that was not understood is already said, in words, from the terminal check above
+  for (const w of cc.warnings.filter(sayOnce)) { ctl.notice('warn', 'Settings: ' + w); process.stderr.write('centcom: settings: ' + w + '\n'); }
+  cc.onWarn = (w) => { if (sayOnce(w)) ctl.notice('warn', 'Settings: ' + w); };
   if (mode === 'bypassPermissions') ctl.notice('warn', 'Dangerously skip permissions is ON', 'Cento will run commands and edit files without asking. Use /mode default to turn approvals back on.');
   const keys = resolvedKeys(); if (keys.warnings.length) ctl.notice('warn', `Some of your key bindings were skipped (${keys.warnings.length}). Press ? to see why.`);
   // A resize: once it settles, forget what Ink thinks is on screen, clear it and draw the whole frame again. Ink only wipes on a narrower window (by moving the cursor up), which leaves stale rows or borders when the window grows or its height changes.
@@ -235,9 +239,9 @@ async function main() {
       if (firstPass) { firstPass = false; if (cc.cfg.ui.restore_prompt) setTimeout(() => { void ctl.offerRestore(); }, 200); } // a small yes/no popup once the first screen is up
       instance = render(<App ctl={ctl} tier={tier} keys={keys} />, { exitOnCtrlC: false, patchConsole: false, maxFps: 30, incrementalRendering: !process.env.CENTCOM_FULL_RENDER });
       await instance.waitUntilExit(); const task = pendingExternal; pendingExternal = undefined; if (!task) break;
-      process.stdout.write('\x1b[?1000l\x1b[?1006l\x1b[?25h\x1b[?1049l'); // the screen is the shell's again
+      process.stdout.write('\x1b[?1000l\x1b[?1006l\x1b[?25h' + (altScreen ? '\x1b[?1049l' : '')); // the screen is the shell's again
       if (task.kind === 'editor') task.done(editInEditor(task.text)); else { for (;;) { await stopUntilContinued(); if (await becomesForeground()) break; } } // `bg` wakes the job without the terminal: it goes back to sleep until `fg` (a moment is allowed for the shell to hand the terminal over)
-      process.stdout.write('\x1b[?1049h\x1b[2J\x1b[H');
+      if (altScreen) process.stdout.write('\x1b[?1049h\x1b[2J\x1b[H');
     }
   }
   ctl.stop(); await ctl.stopFleet(); cc.flush();
