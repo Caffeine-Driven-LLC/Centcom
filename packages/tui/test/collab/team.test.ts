@@ -55,5 +55,9 @@ describe('the team view', () => {
     t.apply(ev('agent.state', 'mem_STRANGER', { agent_id: 'agt_S', state: 'thinking', since: 'x' })); expect(t.snapshot().members.flatMap((m) => m.agents).some((a) => a.id === 'agt_S')).toBe(false);
     t.apply(spawn(ANA, 'agt_L')); expect(t.snapshot().members.find((m) => m.id === ANA)?.agents[0]).toMatchObject({ provider: 'anthropic', label: 'Claude Code', branch: 'ana/db' }); // the spawn fills in what was missing
   });
+  it('a member cannot take an agent id before its real spawn arrives', () => {
+    const t = new TeamModel(); t.setRoster(roster(), ME); t.apply(ev('agent.state', ME, { agent_id: 'agt_Z', state: 'thinking', since: 'x' })); t.apply(spawn(ANA, 'agt_Z'));
+    expect(t.snapshot().members.find((m) => m.id === ANA)?.agents.map((a) => a.id)).toEqual(['agt_Z']); expect(t.snapshot().members.find((m) => m.id === ME)?.agents ?? []).toEqual([]);
+  });
   it('malformed frames do nothing', () => { const t = new TeamModel(); t.setRoster(roster(), ME); for (const k of ['agent.spawn', 'agent.state', 'file.lock', 'branch.update', 'conflict.detected', 'agent.handoff']) t.apply({ kind: k, from: ANA, seq: 1, id: 'x', ts: 'x', verified: true } as DecodedEvent); expect(t.snapshot().members.flatMap((m) => m.agents)).toEqual([]); });
 });

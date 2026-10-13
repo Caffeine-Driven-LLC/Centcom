@@ -57,9 +57,10 @@ export class TeamModel {
       }
     } catch { /* a malformed frame is ignored */ }
   }
+  private implicit = new Set<string>();
   private spawn(e: DecodedEvent): void {
     const id = str(e.p?.['agent_id']); const owner = str(e.p?.['owner']); if (!id || !owner) return; if (e.from !== owner && this.role(e.from) !== 'host') return;
-    const old = this.agents.get(id); if (old && old.owner !== owner) return;
+    let old = this.agents.get(id); if (old && old.owner !== owner) { if (!this.implicit.has(id)) return; old = undefined; } this.implicit.delete(id); // an agent entered from someone's later frames gives way to its real spawn
     const provider = str(e.p?.['provider']); const mode = e.p?.['mode'] === 'branch' ? 'branch' : 'command_post';
     const a: TeamAgent = { ...(old ?? { id, owner, state: 'idle', since: e.ts, locks: [], sharing: false }), id, owner, mode, ...(provider === 'anthropic' || provider === 'openai' || provider === 'other' ? { provider } : {}) };
     const s = e.secret; if (s) { if (str(s['label'])) a.label = str(s['label']); if (str(s['model'])) a.model = str(s['model']); if (str(s['branch'])) a.branch = str(s['branch']); }
@@ -68,7 +69,7 @@ export class TeamModel {
   /** The agent a frame is about. One whose `agent.spawn` was missed (this person joined later) is entered when its own sender speaks for it, with what is not known left out: the spawn only says provider and label. */
   private agentFor(id: string, from: string, ts: string, mode: 'command_post' | 'branch' = 'branch'): TeamAgent | undefined {
     if (!id) return undefined; const a = this.agents.get(id); if (a) return a; if (!this.roster.some((m) => m.id === from)) return undefined;
-    const n: TeamAgent = { id, owner: from, mode, state: 'idle', since: ts, locks: [], sharing: false }; this.agents.set(id, n); return n;
+    const n: TeamAgent = { id, owner: from, mode, state: 'idle', since: ts, locks: [], sharing: false }; this.agents.set(id, n); this.implicit.add(id); return n;
   }
   private update(e: DecodedEvent, fn: (a: TeamAgent) => void): void { const a = this.agentFor(str(e.p?.['agent_id']), e.from, e.ts); if (!a || !this.mayAct(e.from, a)) return; fn(a); this.changed(); }
   private branch(e: DecodedEvent): void {
