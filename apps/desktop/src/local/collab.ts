@@ -3,7 +3,7 @@
  * that follow, hosting a session over the relay and joining one. A person who never signs in never starts any of it: local sessions do not
  * need the server.
  */
-import { Account, HostBridge, JoinedSession, type AccountStatus } from '@centcom/tui';
+import { Account, HostBridge, JoinedSession, Team, teamWhy, type AccountStatus } from '@centcom/tui';
 import type { SessionHandle } from '@centcom/net';
 import type { Workspace } from './workspace.js';
 import type { AccountView, ClientMsg, JoinedView, ServerMsg, SharingView } from './protocol.js';
@@ -15,11 +15,11 @@ export interface CollabOptions {
   /** A seam for tests: the account to use. */ makeAccount?: () => Promise<Account>;
   /** Tells the windows that show `ws`. */ toViewers?(ws: Workspace, m: ServerMsg): void;
 }
-export type CollabMsg = Extract<ClientMsg, { t: 'account' | 'login' | 'cancelLogin' | 'logout' }>;
+export type CollabMsg = Extract<ClientMsg, { t: 'account' | 'login' | 'cancelLogin' | 'logout' | 'team' | 'teamInvite' | 'teamRevoke' | 'teamRole' | 'teamRemove' | 'upgrade' }>;
 export type JoinMsg = Extract<ClientMsg, { t: 'join' | 'joinedAsk' | 'joinedLeave' }>;
 export const isJoinMsg = (m: ClientMsg): m is JoinMsg => m.t === 'join' || m.t === 'joinedAsk' || m.t === 'joinedLeave';
 export type ShareMsg = Extract<ClientMsg, { t: 'share' | 'unshare' | 'shareLink' | 'shareInvite' | 'shareDecide' | 'shareAuto' }>;
-const ACCOUNT = new Set(['account', 'login', 'cancelLogin', 'logout']); const SHARE = new Set(['share', 'unshare', 'shareLink', 'shareInvite', 'shareDecide', 'shareAuto']);
+const ACCOUNT = new Set(['account', 'login', 'cancelLogin', 'logout', 'team', 'teamInvite', 'teamRevoke', 'teamRole', 'teamRemove', 'upgrade']); const SHARE = new Set(['share', 'unshare', 'shareLink', 'shareInvite', 'shareDecide', 'shareAuto']);
 export const isCollabMsg = (m: ClientMsg): m is CollabMsg => ACCOUNT.has(m.t);
 export const isShareMsg = (m: ClientMsg): m is ShareMsg => SHARE.has(m.t);
 const view = (s: AccountStatus): AccountView => ({ signedIn: s.signedIn, persisted: s.persisted, api: s.api, ...(s.offline ? { offline: true } : {}), ...(s.me ? { me: s.me } : {}) });
@@ -37,7 +37,25 @@ export class CollabService {
   /** The account, built on first use (reading the configuration and the keychain happens only for someone who asks). */
   getAccount(): Promise<Account> { this.account ??= (this.o.makeAccount ?? (() => Account.create({ app: 'centcom-desktop', version: this.o.version })))(); return this.account; }
 
+  /** The Team panel's calls: every one reloads the panel afterwards, and a failure is a sentence, never a stack. */
+  private async team(m: CollabMsg, send: (m: ServerMsg) => void): Promise<void> {
+    try {
+      const a = await this.getAccount(); const st = await a.status(); if (!st.signedIn || !st.me) { send({ t: 'team', error: 'Sign in to see your team.' }); return; }
+      const team = new Team({ http: a.http, baseUrl: a.baseUrl, me: st.me, ...(process.env['CENTCOM_BILLING_URL'] ? { billingUrl: process.env['CENTCOM_BILLING_URL'] } : {}) });
+      if (m.t === 'upgrade') { send({ t: 'upgrade', url: await team.upgradeUrl() }); return; }
+      let done: string | undefined; let link: string | undefined;
+      try {
+        if (m.t === 'teamInvite') { const r = await team.invite(m.email, m.role); done = `Invited ${r.email} as ${m.role}.`; link = r.url; }
+        else if (m.t === 'teamRevoke') { await team.revoke(m.invite); done = 'Invite revoked.'; }
+        else if (m.t === 'teamRole') { await team.setRole(m.member, m.role); done = `Role changed to ${m.role}.`; }
+        else if (m.t === 'teamRemove') { await team.remove(m.member); done = 'Removed from the workspace.'; }
+      } catch (e) { send({ t: 'team', team: await team.load().catch(() => undefined), error: teamWhy(e) }); return; }
+      send({ t: 'team', team: await team.load(), ...(done ? { done } : {}), ...(link ? { link } : {}) });
+    } catch (e) { send({ t: 'team', error: teamWhy(e) }); }
+  }
+
   async handle(m: CollabMsg, send: (m: ServerMsg) => void): Promise<void> {
+    if (m.t === 'team' || m.t === 'teamInvite' || m.t === 'teamRevoke' || m.t === 'teamRole' || m.t === 'teamRemove' || m.t === 'upgrade') { await this.team(m, send); return; }
     switch (m.t) {
       case 'account': { try { send({ t: 'account', account: view(await (await this.getAccount()).status()) }); } catch { send({ t: 'account', account: { signedIn: false, persisted: false, api: '' } }); } return; }
       case 'login': {
