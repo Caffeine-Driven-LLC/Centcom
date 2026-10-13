@@ -40,6 +40,10 @@ export function sanitise(raw: unknown): ClientMsg | undefined {
     case 'shareInvite': { const e = str(m.email, 254); return { t, ...(e && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) ? { email: e } : {}) } as ClientMsg; }
     case 'shareDecide': { const item = str(m.item, 80); return item && /^que_[0-9A-Za-z]+$/.test(item) ? { t, item, decision: m.decision === 'approve' ? 'approve' : 'reject' } : undefined; }
     case 'shareAuto': return { t, on: m.on === true } as ClientMsg;
+    case 'shareActivity': return { t, on: m.on === true } as ClientMsg;
+    case 'shareHandoff': { const to = str(m.to, 80); const note = str(m.note, 2000); return to ? { t, to, ...(note ? { note } : {}) } as ClientMsg : undefined; }
+    case 'shareHandoffAnswer': { const id = str(m.id, 80); return id ? { t, id, accept: m.accept === true } as ClientMsg : undefined; }
+    case 'teamWatch': { const agent = str(m.agent, 80); return { t, ...(agent ? { agent } : {}) } as ClientMsg; }
     case 'join': { const input = str(m.input, 2048); return input?.trim() ? { t, input: input.trim() } : undefined; }
     case 'joinedAsk': { const text = str(m.text, 60_000); return text?.trim() ? { t, text } : undefined; }
     case 'joinedLeave': return { t } as ClientMsg;

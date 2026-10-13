@@ -152,6 +152,13 @@
 .ps-tagent__head { display: flex; align-items: center; gap: var(--space-2); }
 .ps-tagent__line { display: flex; align-items: center; gap: 6px; margin: 4px 0 0; color: var(--text-secondary); }
 .ps-tagent__line svg { width: 13px; height: 13px; flex: none; }
+.ps-watch { margin-top: 10px; border: 1px solid var(--border-subtle); border-radius: 8px; padding: 8px 10px; max-height: 320px; overflow: auto; }
+.ps-watch__head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.ps-watch__head .cc-btn:last-child { margin-left: auto; }
+.ps-watch__lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.ps-watch__line { overflow-wrap: anywhere; white-space: pre-wrap; color: var(--text-primary); }
+.ps-watch__line--tool, .ps-watch__line--system { color: var(--text-secondary); font-size: 0.92em; }
+.ps-watch__who { font-weight: 600; margin-right: 4px; }
 .ps-tagent__said { margin: 6px 0 0; color: var(--text-primary); overflow-wrap: anywhere; }
 .ps-tagent[data-state='awaiting-approval'] { border-color: var(--status-warning); }
 .ps-tagent[data-state='crash'] { border-color: var(--status-danger); }
