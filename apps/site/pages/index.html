@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Centcom: people and coding agents, working together</title>
+  <meta name="description" content="Centcom is one place where people and their coding agents work together. Terminal-first multiplayer for your own Claude Code and Codex, on one computer or across many." />
+  <meta name="color-scheme" content="dark light" />
+  <link rel="icon" href="cento.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<!--@include nav-->
+<main id="main">
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <p class="eyebrow">{{site.tagline}}</p>
+        <h1>One place where people and their coding agents work together.</h1>
+        <p class="lead">Centcom is terminal-first multiplayer for your own Claude Code and Codex. Run agents, share a session, see who is working on what, and stay in charge of what gets approved. Your credentials never leave the tools that own them.</p>
+        <p class="actions"><a class="btn" href="download.html">Get Centcom</a> <a class="btn btn-quiet" href="how-it-works.html">How it works</a></p>
+      </div>
+      <img class="mascot" src="cento.svg" width="192" height="192" alt="Cento, the Centcom octopus: eight arms, a brain in every one." />
+    </div>
+  </section>
+
+  <section class="wrap" aria-labelledby="modes">
+    <h2 id="modes">Two ways to work together</h2>
+    <p class="muted">Pick one when you start a session. Both use the same session, the same queue and the same approvals.</p>
+    <div class="grid two">
+      <article class="card">
+        <p><span class="tag tag-now">Available now</span></p>
+        <h3>Command post</h3>
+        <p>One computer, the host, runs the agents. Everyone else sends requests to a shared queue and watches. The host approves what the agent may run. Good for pairing, reviews and live help.</p>
+      </article>
+      <article class="card">
+        <p><span class="tag tag-early">Early</span></p>
+        <h3>Branch mode</h3>
+        <p>Everyone runs their own agents on their own copy of the project. The session shows who is working on what, marks files an agent has open, and warns an agent before it touches a file someone else is editing. Work can be handed from one person to another.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="wrap" aria-labelledby="across">
+    <h2 id="across">Across computers, not just across the desk</h2>
+    <p>On the same network, sessions are found and joined with a pairing code: no account, no server, no cost. Further apart, hosted sessions go through an encrypted relay. Everything is encrypted on your computer first with keys the relay never has, so teammates in another city see the same session you do. <a href="how-it-works.html#privacy">What the relay can and cannot see</a>.</p>
+  </section>
+
+  <section class="wrap" aria-labelledby="surfaces">
+    <h2 id="surfaces">Use it where you already work</h2>
+    <div class="grid three">
+      <article class="card">
+        <p><span class="tag tag-now">Available now</span></p>
+        <h3>Command line</h3>
+        <p>The full terminal app: chat with the agent, approve tools, share and join sessions. Needs Node 22 or newer.</p>
+      </article>
+      <article class="card">
+        <p><span class="tag tag-early">In development</span></p>
+        <h3>Desktop app</h3>
+        <p>A window around the same screens: running sessions in a sidebar, a session panel with people, shared notes and changed files, and search on Ctrl or Cmd+K. Installers are planned; today it runs from source.</p>
+      </article>
+      <article class="card">
+        <p><span class="tag tag-early">Early</span></p>
+        <h3>Hosted web app</h3>
+        <p>The same screens in a browser, for joining a session as a guest and managing your workspace and plan. The public address is not decided yet.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="wrap" aria-labelledby="trust">
+    <h2 id="trust">Built to be trusted</h2>
+    <ul class="ticks">
+      <li><strong>Your own agents.</strong> Centcom drives the Claude Code and Codex you already have. It never reads, stores or sends their credentials.</li>
+      <li><strong>You approve.</strong> The owner of an agent approves its tools, on their own computer.</li>
+      <li><strong>End-to-end encrypted.</strong> The relay carries sessions it cannot read.</li>
+      <li><strong>Free where it is local.</strong> Working alone or on your own network is always free.</li>
+      <li><strong>No tracking.</strong> This site has no analytics and no cookies; the app's telemetry is off unless you turn it on.</li>
+    </ul>
+    <p class="actions"><a class="btn" href="pricing.html">See plans</a> <a class="btn btn-quiet" href="docs.html">Read the docs</a></p>
+  </section>
+</main>
+<!--@include footer-->
+</body>
+</html>

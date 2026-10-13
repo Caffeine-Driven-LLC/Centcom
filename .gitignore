@@ -24,3 +24,4 @@ apps/desktop/dist
 # Playwright
 test-results/
 playwright-report/
+apps/site/dist

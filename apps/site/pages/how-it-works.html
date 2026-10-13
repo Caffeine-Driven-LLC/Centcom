@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>How Centcom works</title>
+  <meta name="description" content="Start a session, share it, and work with other people and their agents: command post or branch mode, on your network or through an end-to-end encrypted relay." />
+  <meta name="color-scheme" content="dark light" />
+  <link rel="icon" href="cento.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<!--@include nav-->
+<main id="main">
+  <div class="wrap prose">
+    <p class="eyebrow">How it works</p>
+    <h1>From one agent to a whole room of them</h1>
+    <p class="lead">A session is a working room: one host, several people, any number of agents. This page walks through starting one and what everyone in it can see and do.</p>
+
+    <h2 id="steps">Four steps</h2>
+    <ol class="steps">
+      <li><strong>Install and start.</strong> Make sure <code>claude</code> or <code>codex</code> works on its own, then run <code>centcom</code> in a project folder. No account is needed for this.</li>
+      <li><strong>Work as usual.</strong> Type what you want done. When the agent wants to run a command or change a file, Centcom asks first.</li>
+      <li><strong>Share the session.</strong> Start sharing and Centcom shows a pairing code. On the same network people find it with <code>centcom lan scan</code>; further away a hosted session needs a plan.</li>
+      <li><strong>Join.</strong> Others join with the code or a link, from the terminal, the desktop app or the browser.</li>
+    </ol>
+
+    <h2 id="modes">Command post and branch mode</h2>
+    <div class="table-wrap" tabindex="0" role="region" aria-label="Command post compared with branch mode">
+    <table>
+      <caption>The host picks one when the session starts</caption>
+      <thead><tr><th scope="col"></th><th scope="col">Command post</th><th scope="col">Branch mode</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Who runs agents</th><td data-label="Command post">The host, on the host's computer</td><td data-label="Branch mode">Every member, on their own computer</td></tr>
+        <tr><th scope="row">What others do</th><td data-label="Command post">Ask the host's agent through a shared queue, and watch it</td><td data-label="Branch mode">Run their own agent, see each other's, get warned about conflicts</td></tr>
+        <tr><th scope="row">Approvals</th><td data-label="Command post">The host approves everything</td><td data-label="Branch mode">Each owner approves their own agent's tools</td></tr>
+        <tr><th scope="row">The code</th><td data-label="Command post">One working tree, the host's</td><td data-label="Branch mode">One working tree per person, joined with git branches and merges</td></tr>
+        <tr><th scope="row">Context</th><td data-label="Command post">One agent's context</td><td data-label="Branch mode">Each agent's own, plus shared notes on a board</td></tr>
+        <tr><th scope="row">Status</th><td data-label="Command post">Available now</td><td data-label="Branch mode">Early: built in the terminal and desktop apps; hosted storage of the mode is still being finished</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h2 id="together">What the team sees in branch mode</h2>
+    <ul>
+      <li>That an agent exists, and whether it is working, waiting for approval or idle.</li>
+      <li>Which branch it is on and how far it is ahead of or behind the base.</li>
+      <li>Which files it has open. A second agent about to touch the same file is warned first.</li>
+      <li>Shared notes and decisions, which reach every agent with its next message.</li>
+      <li>An agent's activity too, while its owner has sharing switched on. The owner can turn it off at any time.</li>
+    </ul>
+    <p>Files' contents, diffs, private notes, environment variables and secrets are never shared. A teammate sees code only if its owner puts it in a message that is shared.</p>
+
+    <h2 id="privacy">What the relay can and cannot see</h2>
+    <p>Every frame of a hosted session is encrypted with a key the relay never has. The relay reads only a small, unencrypted part of each frame: ids, states, counts and keyed hashes of lock paths. Work content, such as code, file paths, branch names, model names and message text, stays inside the encrypted part. The exact lists are in the <a href="docs.html">documentation</a>.</p>
+    <p>Working alone or on your own network never touches the relay or any server, and is never limited by a plan.</p>
+
+    <p class="actions"><a class="btn" href="download.html">Get Centcom</a> <a class="btn btn-quiet" href="pricing.html">Plans and limits</a></p>
+  </div>
+</main>
+<!--@include footer-->
+</body>
+</html>
