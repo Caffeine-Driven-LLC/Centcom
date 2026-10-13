@@ -12,7 +12,7 @@ import { HostBridge, startBranchBridge, untilLive } from './host-bridge.js';
 import { renderTeam, renderTranscript } from './team-text.js';
 
 export class ShareSession {
-  private handle?: SessionHandle; private bridge?: HostBridge; private net?: NetStateMonitor; private lastNet?: NetState; private usage?: UsageLink; private inbox?: NotificationsClient; private known = new Set<string>(); private order: string[] = []; private workspace = '';
+  private handle?: SessionHandle; private bridge?: HostBridge; private net?: NetStateMonitor; private lastNet?: NetState; private usage?: UsageLink; private inbox?: NotificationsClient; private offInbox?: () => void; private known = new Set<string>(); private order: string[] = []; private workspace = '';
   constructor(private readonly ctl: AppController, private readonly account: Account) {}
   get live(): boolean { return !!this.handle && this.handle.state !== 'ended'; }
 
@@ -136,13 +136,13 @@ export class ShareSession {
     this.net?.stop(); this.lastNet = undefined; void this.usage?.stop();
     // usage of this conversation while it is shared is reported (informationally); the service's notices reach the notice line, and their action keys do something
     this.usage = startUsageReporting({ http: this.account.http, ledger: this.ctl.ledger, localSessionId: this.ctl.state.sessionId, hostedSessionId: handle.id });
-    const inbox = this.inboxClient(); inbox.on('new', (n) => this.ctl.toast('info', `Inbox: ${renderNotification(n).title}`, undefined, { key: `inbox:${n.id}` })); inbox.start();
+    const inbox = this.inboxClient(); this.offInbox?.(); this.offInbox = inbox.on('new', (n) => this.ctl.toast('info', `Inbox: ${renderNotification(n).title}`, undefined, { key: `inbox:${n.id}` })); inbox.start();
     const usage = this.usage; handle.on('notice', (n) => { usage.notice(n as never); this.ctl.showNotice(n as never); });
     this.ctl.onToastAction((id) => { if (id === 'billing.upgrade') this.ctl.notice('info', 'Upgrade your plan', 'Open https://centcom.dev/billing, or the billing page of your workspace in the web app.'); else if (id === 'update.show') void this.ctl.runCommand('/update'); });
     const monitor = new NetStateMonitor({ sessions: () => [handle], status: () => this.account.plain.getStatus(), clock: { now: () => Date.now(), setTimeout: (f, ms) => { const h = setTimeout(f, ms); h.unref?.(); return h; }, clearTimeout: (h) => clearTimeout(h as unknown as NodeJS.Timeout) } });
     monitor.on('change', (s, prev) => { this.lastNet = s; this.ctl.setNet(s, prev); }); this.net = monitor; this.ctl.setNet('online'); monitor.start();
   }
-  private drop(): void { this.inbox?.stop(); void this.usage?.stop(); this.usage = undefined; this.net?.stop(); this.net = undefined; this.ctl.setNet(undefined); this.bridge?.stop(); this.bridge = undefined; this.handle = undefined; this.known.clear(); this.order = []; }
+  private drop(): void { this.offInbox?.(); this.offInbox = undefined; this.inbox?.stop(); void this.usage?.stop(); this.usage = undefined; this.net?.stop(); this.net = undefined; this.ctl.setNet(undefined); this.bridge?.stop(); this.bridge = undefined; this.handle = undefined; this.known.clear(); this.order = []; }
   /** The app is closing. */
   close(): void { const h = this.handle; this.drop(); void h?.leave().catch(() => undefined); }
 }
