@@ -44,8 +44,8 @@ Allowed: frame type/kind, ids, timestamps, sizes, queue item ids/states/position
 | `reaction` | `event` | clear | host, editor, viewer | yes | `target`, `code`, `op` | — |
 | `comment.add` | `event` | encrypted | host, editor, viewer | yes | — | `target`, `text` |
 | `board.note` | `event` | hybrid | host, editor | yes | `type`, `supersedes`? | `text`, `refs`? |
-| `board.pin` | `event` | clear | host, editor | yes | `note`, `pinned` | — |
-| `board.remove` | `event` | clear | host, or the note's author | yes | `note` | — |
+| `board.pin` | `event` | clear | host, editor | yes | `target`, `pinned` | — |
+| `board.remove` | `event` | clear | host, or the note's author | yes | `target` | — |
 | `key.grant` | `event` | hybrid | host, editor (key holders) | yes | `to_device`, `kids` | `grants` |
 | `queue.submit` | `queue` | hybrid | editor (host may also) | yes | `item`, `size`, `kind` | `body`, `attachments`? |
 | `queue.cancel` | `queue` | clear | the submitter | yes | `item` | — |
@@ -95,9 +95,9 @@ Allowed: frame type/kind, ids, timestamps, sizes, queue item ids/states/position
 - **`diff.share`**: A diff shared for review.
 - **`reaction`**: Emoji-style reaction to a frame. Codes map to pixel animations in the client.
 - **`comment.add`**: A comment attached to a frame.
-- **`board.note`**: A note on the shared context board (docs/context-sharing.md, session scope). The note id is the `msg_` id of this frame; `board.pin` and `board.remove` name it. `type` is clear so the relay can count and filter; `text` (1 to 280 characters) and the optional `refs` (`{files[], commands[]}`) are encrypted. A viewer cannot send it. Rate: 20 per member per hour and at most 500 live notes per session (the relay refuses more with `frame_rate_exceeded`). `supersedes` names an earlier note of the same author or the host that this one replaces.
+- **`board.note`**: A note on the shared context board (docs/context-sharing.md, session scope). The note id is the `msg_` id of this frame; `board.pin` and `board.remove` name it in `target`. `type` is clear so the relay can count and filter; `text` (1 to 280 characters) and the optional `refs` (`{files[], commands[]}`) are encrypted. A viewer cannot send it. Rate: 20 per member per hour and at most 500 live notes per session (the relay refuses more with `frame_rate_exceeded`). `supersedes` names an earlier note of the same author or the host that this one replaces.
 - **`board.pin`**: Pin or unpin a board note. A pinned note is always in the digest of every agent of the session.
-- **`board.remove`**: Retract a board note. Receivers drop it from their boards and digests; history keeps the original frame (it is encrypted, so the removal is a display rule, not erasure).
+- **`board.remove`**: Retract a board note (named in `target`). Receivers drop it from their boards and digests; history keeps the original frame (it is encrypted, so the removal is a display rule, not erasure).
 - **`key.grant`**: Sealed session-key grant for one device (CT-CRYPTO §4). `p.kids` says which epochs; the sealed keys are in `ct`.
 - **`queue.submit`**: Add an item to the command-post queue. `id` of the frame is the queue item id (que_).
 - **`queue.cancel`**: Submitter withdraws a queued item.

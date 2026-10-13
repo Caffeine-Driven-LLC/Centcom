@@ -11,7 +11,7 @@ Separately, agents on different computers need to share what they learn (decisio
 
 ## Decision
 1. `POST /v1/sessions` accepts `mode`: `command_post` (default) or `branch`; `Session.mode` returns it; it cannot change after creation. Existing sessions are command posts.
-2. Three new additive event kinds: `board.note` (hybrid: `type` and `supersedes` clear, `text` and `refs` encrypted), `board.pin` and `board.remove` (clear). The note id is the `msg_` id of the `board.note` frame, so no new id prefix. Host and editors may add and pin; the host or the note's author may remove; viewers send none of them. Limits: 20 notes per member per hour, 500 live notes per session, text at most 280 characters; over the limit the relay refuses with `frame_rate_exceeded`.
+2. Three new additive event kinds: `board.note` (hybrid: `type` and `supersedes` clear, `text` and `refs` encrypted), `board.pin` and `board.remove` (clear; they name the note in `target`, not `note`: the relay's privacy stage treats a clear `note` as encrypted free text and removes it from every kind). The note id is the `msg_` id of the `board.note` frame, so no new id prefix. Host and editors may add and pin; the host or the note's author may remove; viewers send none of them. Limits: 20 notes per member per hour, 500 live notes per session, text at most 280 characters; over the limit the relay refuses with `frame_rate_exceeded`.
 
 ## Alternatives considered
 - A new id prefix for notes: touches CT-IDS in both repos for no gain.

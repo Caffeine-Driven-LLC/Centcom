@@ -753,7 +753,7 @@
       "type": "object",
       "additionalProperties": true,
       "properties": {
-        "note": {
+        "target": {
           "type": "string",
           "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$"
         },
@@ -762,7 +762,7 @@
         }
       },
       "required": [
-        "note",
+        "target",
         "pinned"
       ]
     },
@@ -770,13 +770,13 @@
       "type": "object",
       "additionalProperties": true,
       "properties": {
-        "note": {
+        "target": {
           "type": "string",
           "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$"
         }
       },
       "required": [
-        "note"
+        "target"
       ]
     },
     "p_key_grant": {
