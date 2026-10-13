@@ -146,8 +146,8 @@
    "note": "hosted web shell beside the local app: router, theme, 17 primitives, frame, CSP, budgets; gaps: no Tailwind, Silkscreen font, axe and Lighthouse runs"
   },
   "C083": {
-   "pct": 0.7,
-   "note": "session page: windowed transcript, safe Markdown, approvals, queue strip, composer, close-code screens, browser engine from the net session client in a lazy chunk; gaps: device-key registration, invite and roster wiring, no browser traces or real-browser crypto vectors"
+   "pct": 0.85,
+   "note": "2026-10-13: roster, presence, cursor layer and the watch link now work in the web app, found by running it against the live backend; gaps: joining members cannot get the session key yet (web sign-in registers no device key), no real-browser traces"
   },
   "C086": {
    "pct": 0.85,
@@ -386,16 +386,16 @@
    "note": "fleet board on the shared reducer: priority order, words and glyphs, filters, compact table, keys, mascot cap; gaps: inspector panel, colour-blind screenshots"
   },
   "C085": {
-   "pct": 0.8,
-   "note": "roster store, presence publisher, cursor fade and expiry, avatar stack, roster dialog, announcements; gaps: pixel-arrow drawing over code views, enter and leave motion"
+   "pct": 0.9,
+   "note": "2026-10-13: roster dialog, join and leave announcements, presence publishing, pixel-arrow cursor layer, avatar motion (#167); gap: nudge has no event yet"
   },
   "C087": {
    "pct": 0.85,
    "note": "workspace pages: rbac mirror from the contract, members, invites, settings with ETag, destructive confirmations, 429 countdown; gaps: link-invite options, axe run"
   },
   "C088": {
-   "pct": 0.8,
-   "note": "invite and share-link pages, deep-link parser, fragment key handling, key bundle flow; gaps: sealed-box opening is a seam for C056, the CT-DEEPLINK fragment question"
+   "pct": 0.9,
+   "note": "2026-10-13: watch link /g/<token> works end to end for a guest with no account (#168); gaps: sealed-box opening for C056, host Invite button disabled on the web"
   },
   "C089": {
    "pct": 0.85,
@@ -406,8 +406,8 @@
    "note": "inbox, preferences matrix, push registration, account, appearance, devices; gaps: missing-session follow, axe run"
   },
   "C092": {
-   "pct": 0.8,
-   "note": "typed message table, plurals, pseudo-locale, error and state words, focus and shortcut helpers, reduced motion, structural a11y check; gaps: axe-core (licence), eslint rule, forced-colour browser run"
+   "pct": 0.9,
+   "note": "2026-10-13: language chosen at app start, raw words in markup held at a baseline by a test, accessibility checklist (#169); gaps: axe-core, jsx-a11y, forced-colours and 320px browser runs"
   },
   "C093": {
    "pct": 1,
