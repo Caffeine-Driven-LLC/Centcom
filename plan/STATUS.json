@@ -70,8 +70,8 @@
    "note": "merged in #177"
   },
   "C031": {
-   "pct": 0.8,
-   "note": "terminal capability module (tier matrix, unicode, half-block, hyperlink/paste flags, typed CENTO_* env with warnings, OSC 11 background query with 150 ms bound, layout class, mascotAllowed, debounced watchSize) with 32 tests; gap: app start-up and theme still use the older detectColorTier, not yet switched over; background-colour query with a 150 ms limit; colour tiers exercised in the conformance tests"
+   "pct": 1,
+   "note": "merged in #179"
   },
   "C032": {
    "pct": 0.85,
@@ -82,8 +82,8 @@
    "note": "Cento component with per-frame durations, frame cache, hero/mini sizes (8x14 and 2x6), 256-colour and ASCII fallbacks, recolouring, animation budget of 6; gaps: no golden files against play.py, app still draws through PixelView"
   },
   "C034": {
-   "pct": 0.9,
-   "note": "Shell frame (header/scrollback/toast/prompt/footer, 100-col rail, overlay, too-small state), renderApp with debounced resize, alt-screen guard for exit/SIGINT/SIGTERM/uncaught error, action registry with focus stack, grapheme-aware text helpers; gaps: App.tsx not moved onto the Shell, --no-alt-screen/config not wired, no lint rule for raw Text; resize repaints the whole frame, small-terminal layouts (pickers, help, overlays), width tests, tab title and terminal restore on every exit path"
+   "pct": 1,
+   "note": "merged in #179"
   },
   "C035": {
    "pct": 0.95,
@@ -166,8 +166,8 @@
    "note": "codex app-server engine tested against a protocol-faithful fake; no real turn yet. Real-Codex checklist: docs/codex-verification.md, recorder: tools/codex/record.ts; verified on a real Codex (codex-cli 0.161.0): a real turn, questions (needs the default_mode_request_user_input flag, passed per process), /effort, models, cancel. Not tried live: secret and multi-question requests"
   },
   "C104": {
-   "pct": 0.85,
-   "note": "provider detection and commands; gaps: message copy, runtime fs spy, CLI-level hang test, app still uses old detectors"
+   "pct": 1,
+   "note": "merged in #179"
   },
   "C105": {
    "pct": 0.8,
@@ -190,8 +190,8 @@
    "note": "protocol package complete in practice; gaps: exit 2 on bad contract input, unknown-keyword rejection, --contracts flag"
   },
   "C005": {
-   "pct": 0.85,
-   "note": "redacting logger and file sink; gaps: redaction table size, real-fs sink test, injected clock in sink"
+   "pct": 1,
+   "note": "merged in #179"
   },
   "C007": {
    "pct": 0.95,
