@@ -175,7 +175,9 @@ async function main() {
   let instance: ReturnType<typeof render> | undefined;
   const rt = await buildRuntime({ cwd: process.cwd(), engineId: engine.id, demo, board: cc.cfg.context.board, digestTokens: cc.cfg.context.digest_tokens, dangerous: dangerous || mode === 'bypassPermissions', checkpoints: !has('--no-checkpoints'), approvalTimeoutMs: cc.cfg.agent.approval_timeout_ms, sessionUsd: cfg0?.budget?.session_usd || undefined, stateDir: stateDir(defaultDeps()) });
   // --continue / --resume [id]: decided before the screen starts, so a wrong id is one line and exit 1
-  const sessionStore = has('--no-save') ? undefined : new SessionStore(); let resumeId: string | undefined;
+  const persist = !has('--no-save') && cc.cfg.session.persist; // --no-save or session.persist=false: nothing of the conversation or the prompt history is kept
+  const sessionStore = persist ? new SessionStore(undefined, { retentionDays: cc.cfg.session.retention_days }) : undefined; let resumeId: string | undefined;
+  if (sessionStore) void sessionStore.prune().then((n) => { if (n) logger.info('sessions.pruned', { removed: n }); }); // old conversations go in the background, never holding the start
   if (sessionStore && (has('-c') || has('--continue') || has('--resume'))) {
     const c = chooseSession(sessionStore, { cwd: process.cwd(), continue: has('-c') || has('--continue'), resume: has('--resume'), id: arg('--resume') });
     if ('exit' in c) { if (c.message) process.stderr.write(c.message + '\n'); if (c.exit) process.exit(c.exit); }
@@ -184,7 +186,7 @@ async function main() {
   }
   const ctl = new AppController({ ...rt.options, turnTimeoutS: cc.cfg.agent.turn_timeout_s || undefined, views: appViews(process.cwd(), { doctor: () => realDoctorContext({ version: VERSION, contract: CONTRACT_VERSION, apiBase: cc.cfg.api.base_url, stateDir: stateDir(defaultDeps()), relayUrl: process.env.CENTCOM_RELAY_URL || cc.cfg.relay.url, account: doctorAccount() }) }),
     engine, demo, engines: demo ? undefined : { ...(hasClaude ? { 'claude-code': () => new ClaudeCodeEngine() } : {}), ...(hasCodex ? { codex: () => new CodexEngine() } : {}) }, onEngine: (id) => cc.set('client.engine', id), cwd: process.cwd(), branch, version: VERSION, permissionMode: mode, dangerous: dangerous || mode === 'bypassPermissions', ghosts: has('--demo-team'),
-    logger, settings, external: (task) => { pendingExternal = task; instance?.unmount(); }, bell: () => { try { process.stdout.write('\x07'); } catch { /* no terminal */ } }, ...cc.options({ ...initialSettings(), ...settings }, { saveHistory: !has('--no-save') }),
+    logger, settings, external: (task) => { pendingExternal = task; instance?.unmount(); }, bell: () => { try { process.stdout.write('\x07'); } catch { /* no terminal */ } }, ...cc.options({ ...initialSettings(), ...settings }, { saveHistory: persist }),
     sessions: sessionStore, night: demo ? undefined : { dir: pathJoin(homedir(), '.centcom', 'night') },
     modelCache: { read: async (f) => { try { return await readFile(pathJoin(stateDir(defaultDeps()), f), 'utf8'); } catch { return undefined; } }, write: async (f, t) => { const d = stateDir(defaultDeps()); await mkdir(d, { recursive: true, mode: 0o700 }); await writeFile(pathJoin(d, f), t, { mode: 0o600 }); } },
     resume: resumeId,

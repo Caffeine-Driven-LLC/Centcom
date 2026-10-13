@@ -53,6 +53,46 @@ def starts_and_restores_on_quit():
     t = start(); ok = b'\x1b[?1049h' in t.raw and b'\x1b[?1000h' in t.raw and b'\x1b[22;0t' in t.raw; t.mark(); t.send('/quit\r', 1.5)
     t.close(); return ok and b'\x1b[?1049l' in t.raw and b'\x1b[?1000l' in t.raw and b'\x1b[23;0t' in t.raw, 'alternate screen, mouse reporting and the saved title all come back'
 
+def _saved(home):
+    out = []
+    for root, _d, files in os.walk(home):
+        out += [os.path.join(root, f) for f in files if f == 'log.jsonl']
+    return out
+
+@check
+def conversations_are_saved_unless_persist_is_off():
+    home = tempfile.mkdtemp(prefix='centcom-persist-'); on = Term([BIN, '--demo'], home=home); on.pump(4.0); on.send('hello there\r', 3.0); on.send('/quit\r', 1.5); on.close(); saved = _saved(home)
+    home2 = tempfile.mkdtemp(prefix='centcom-nopersist-'); os.makedirs(home2 + '/c/centcom', exist_ok=True); open(home2 + '/c/centcom/config.json', 'w').write('{"session":{"persist":false}}')
+    off = Term([BIN, '--demo'], home=home2); off.pump(4.0); off.send('hello there\r', 3.0); off.send('/quit\r', 1.5); off.close(); kept = _saved(home2)
+    shutil.rmtree(home, ignore_errors=True); shutil.rmtree(home2, ignore_errors=True)
+    return bool(saved) and not kept, f'a conversation is saved by default ({len(saved)} log) and nothing is saved with session.persist=false ({len(kept)} logs)'
+
+@check
+def old_conversations_are_deleted_at_start():
+    import time, json
+    home = tempfile.mkdtemp(prefix='centcom-retain-'); first = Term([BIN, '--demo'], home=home); first.pump(4.0); first.send('keep me\r', 3.0); first.send('/quit\r', 1.5); first.close()
+    logs = _saved(home); ok = bool(logs); d = os.path.dirname(logs[0]) if logs else ''
+    if ok:
+        old = time.time() - 60 * 86400
+        for root, _dd, files in os.walk(d):
+            for f in files: os.utime(os.path.join(root, f), (old, old))
+        idx = [os.path.join(root, f) for root, _dd, files in os.walk(home) for f in files if f in ('index.json', 'index.jsonl')]
+        for f in idx:
+            t = open(f).read()
+            if f.endswith('.json'):
+                try:
+                    j = json.loads(t)
+                    def age(v):
+                        if isinstance(v, dict):
+                            return {k: ('2026-08-01T00:00:00.000Z' if k in ('updated_at', 'created_at') else age(x)) for k, x in v.items()}
+                        if isinstance(v, list): return [age(x) for x in v]
+                        return v
+                    open(f, 'w').write(json.dumps(age(j)))
+                except Exception: pass
+    second = Term([BIN, '--demo'], home=home); second.pump(5.0); second.send('/quit\r', 1.5); second.close(); still = [l for l in _saved(home) if os.path.dirname(l) == d]  # the new run makes its own (empty) conversation; the old one must be gone
+    shutil.rmtree(home, ignore_errors=True)
+    return ok and not still, f'a conversation older than 30 days is deleted when Centcom starts ({len(still)} of the old one left)'
+
 @check
 def no_alt_screen_stays_in_the_normal_screen():
     t = Term([BIN, '--demo', '--no-alt-screen'], rows=28, cols=100); t.pump(4.5); ok = b'\x1b[?1049h' not in t.raw and b'\x1b[?1000h' in t.raw; t.mark(); t.send('/quit\r', 1.5)

@@ -32,10 +32,25 @@ export function flagProblems(help: string): Problem[] {
 export function envProblems(page: string, sources: string): Problem[] { return [...ENV_VARS.filter((v) => page.includes(`\`${v.name}\``) && !sources.includes(v.name)).map((v) => ({ where: 'docs/site/reference/env.md', what: `${v.name} is documented but does not exist in the code` })), ...ENV_VARS.filter((v) => sources.includes(v.name) && !page.includes(`\`${v.name}\``)).map((v) => ({ where: 'docs/site/reference/env.md', what: `${v.name} exists in the code but is not documented` }))]; }
 export function privacyProblems(page: string): Problem[] { return [...RELAY_VISIBLE, ...RELAY_NEVER, TRAFFIC_NOTE].filter((x) => !page.includes(x)).map((x) => ({ where: 'docs/site/guide/privacy-relay.md', what: `missing: ${x.slice(0, 50)}` })); }
 
+/** Every `centcom ...` line in a shell block of the docs names a command, flag or help topic that exists (so a command that was renamed cannot stay in the install page). */
+export function commandProblems(pages: Record<string, string>): Problem[] {
+  const names = new Set<string>(['help', ...COMMANDS.map((c) => c.name)]); const flags = new Set<string>(COMMANDS.flatMap((c) => c.flags.flatMap((f) => f.flag.split(/,\s*/).map((x) => x.trim()))));
+  const out: Problem[] = [];
+  for (const [file, text] of Object.entries(pages)) for (const m of text.matchAll(/```(?:sh|bash|shell|console)\n([\s\S]*?)```/g)) for (const raw of m[1]!.split('\n')) {
+    const line = raw.trim().replace(/^\$\s*/, ''); if (!/^centcom(\s|$)/.test(line)) continue; const tokens = line.split(/\s+/).slice(1).filter((t) => !t.startsWith('<') && !t.startsWith('['));
+    const first = tokens[0]; if (!first) continue;
+    if (first.startsWith('-')) { if (!flags.has(first.split('=')[0]!)) out.push({ where: file, what: `"${line}": ${first} is not a flag of centcom` }); }
+    else if (!names.has(first) && !(COMMANDS[0]!.flags.some((f) => f.arg !== undefined) && tokens.length >= 1 && false)) out.push({ where: file, what: `"${line}": ${first} is not a command` });
+    else { const cmd = COMMANDS.find((c) => c.name === first); if (cmd) for (const t of tokens.slice(1).filter((x) => x.startsWith('--'))) if (!cmd.flags.some((f) => f.flag.split(/,\s*/).includes(t.split('=')[0]!)) && !['--help', '--json', '--yes', '--force'].includes(t)) out.push({ where: file, what: `"${line}": ${t} is not a flag of centcom ${first}` }); }
+  }
+  return out;
+}
+
 export function all(): Problem[] {
   const out: Problem[] = generatedDrift().map((p) => ({ where: p, what: 'is out of date (run pnpm docs:gen)' }));
   out.push(...flagProblems(topHelp('0.0.0')));
   out.push(...envProblems(readFileSync(join(SITE, 'reference/env.md'), 'utf8'), sourcesText()));
+  out.push(...commandProblems(Object.fromEntries(walk(SITE).filter((f) => f.endsWith('.md')).map((f) => [relative(ROOT, f), readFileSync(f, 'utf8')]))));
   out.push(...privacyProblems(readFileSync(join(SITE, 'guide/privacy-relay.md'), 'utf8'))); out.push(...linkProblems(walk(SITE).filter((f) => f.endsWith('.md'))));
   const priv = readFileSync(join(SITE, 'guide/privacy.md'), 'utf8'); if (!priv.includes('privacy-relay.md')) out.push({ where: 'docs/site/guide/privacy.md', what: 'does not include the generated relay list' });
   return out;

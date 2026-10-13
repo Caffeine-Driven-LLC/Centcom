@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { COMMANDS, helpFor, renderHelp, renderTopic, topHelp } from '../../apps/cli/src/help/index.js';
 import { ENV_VARS, RELAY_NEVER, RELAY_VISIBLE, TRAFFIC_NOTE } from '../../apps/cli/src/help/topics.js';
-import { all, anchorsOf, envProblems, flagProblems, linkProblems, privacyProblems, slug } from './check.js';
+import { all, anchorsOf, commandProblems, envProblems, flagProblems, linkProblems, privacyProblems, slug } from './check.js';
 import { check, generated, manPage, referencePage, version } from './gen-cli-reference.js';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url)); 
@@ -24,6 +24,16 @@ describe('drift checks', () => {
   it('environment variables: a documented one that the code lacks, and one in the code that is not documented, are both reported', () => {
     expect(envProblems('| `NO_COLOR` |', 'process.env.NO_COLOR').map((p) => p.what)).toEqual([]); expect(envProblems('| `NO_COLOR` | `CENTO_THEME` |', 'NO_COLOR').map((p) => p.what)).toEqual(['CENTO_THEME is documented but does not exist in the code']); expect(envProblems('', 'DO_NOT_TRACK').map((p) => p.what)).toEqual(['DO_NOT_TRACK exists in the code but is not documented']);
     const live = readFileSync(join(ROOT, 'docs/site/reference/env.md'), 'utf8'); for (const v of ['NO_COLOR', 'DO_NOT_TRACK', 'CENTCOM_TELEMETRY', 'CENTCOM_CONFIG_DIR', 'CENTCOM_API_URL']) expect(live).toContain(`\`${v}\``); expect(ENV_VARS.length).toBeGreaterThan(8);
+  });
+});
+
+describe('commands in the docs (lane C096)', () => {
+  const page = (body: string) => ({ 'docs/site/guide/x.md': '```sh\n' + body + '\n```' });
+  it('the install page and every other page use commands that exist', () => { const live = Object.fromEntries(['guide/install.md', 'guide/troubleshooting.md', 'guide/terminal-app.md'].map((f) => [f, readFileSync(join(ROOT, 'docs/site', f), 'utf8')])); expect(commandProblems(live)).toEqual([]); });
+  it('a renamed command, an unknown flag and a flag of the wrong command are found; placeholders, npm lines and prose are not', () => {
+    expect(commandProblems(page('centcom --version\ncentcom doctor\ncentcom doctor --json\ncentcom provider status\ncentcom resume <id>\nnpm install --global centcom\ncentcom -p "fix it"'))).toEqual([]);
+    expect(commandProblems(page('centcom docter')).map((p) => p.what)).toEqual(['"centcom docter": docter is not a command']); expect(commandProblems(page('centcom --no-such')).map((p) => p.what)).toEqual(['"centcom --no-such": --no-such is not a flag of centcom']);
+    expect(commandProblems(page('centcom doctor --bundle')).map((p) => p.what)).toEqual([]); expect(commandProblems(page('centcom doctor --turbo')).map((p) => p.what)).toEqual(['"centcom doctor --turbo": --turbo is not a flag of centcom doctor']);
   });
 });
 

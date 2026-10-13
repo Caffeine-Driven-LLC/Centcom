@@ -108,3 +108,17 @@ describe('the restore popup at start', () => {
     const b = await rig(); const rb = b.c.offerRestore(); await tick(); expect(b.c.pickHotkey('n')).toBe(true); await rb; expect(b.c.state.items).toEqual([]); expect(b.c.pickHotkey('y')).toBe(false); b.c.stop(); b.sessions.close(); // nothing is open any more
   });
 });
+
+describe('retention (lane C026)', () => {
+  const DAY = 86_400_000; const clockAt = (t: number) => ({ now: () => t, setTimeout: () => 0 as never, clearTimeout: () => undefined });
+  it('conversations not touched for session.retention_days are deleted when the app starts; newer ones stay; nothing else changes', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cc-ret-')); const now = Date.UTC(2026, 9, 14, 12); const old = new SessionStore(dir, { clock: clockAt(now - 40 * DAY) }); old.save(meta(A, '/p', 1), [user('old one')]); old.close();
+    const fresh = new SessionStore(dir, { clock: clockAt(now - 2 * DAY) }); fresh.save(meta(B, '/p', 2), [user('recent one')]); fresh.close();
+    const st = new SessionStore(dir, { retentionDays: 30, clock: clockAt(now) }); expect(st.list('/p').map((m) => m.id).sort()).toEqual([A, B]); expect(await st.prune()).toBe(1); expect(st.list('/p').map((m) => m.id)).toEqual([B]); expect(st.load(B)!.items[0]).toMatchObject({ text: 'recent one' }); expect(await st.prune()).toBe(0); st.close();
+  });
+  it('a shorter retention keeps less; never prune what is open elsewhere is the store\'s own rule and prune never throws', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cc-ret-')); const now = Date.UTC(2026, 9, 14, 12); const w = new SessionStore(dir, { clock: clockAt(now - 10 * DAY) }); w.save(meta(A, '/p', 1), [user('ten days')]); w.close();
+    expect(await new SessionStore(dir, { retentionDays: 30, clock: clockAt(now) }).prune()).toBe(0); expect(await new SessionStore(dir, { retentionDays: 7, clock: clockAt(now) }).prune()).toBe(1);
+  });
+});
+

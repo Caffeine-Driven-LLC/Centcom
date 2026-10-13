@@ -37,7 +37,10 @@ export const titleFrom = (items: Item[]): string => {
 export class SessionStore {
   private store: PersistStore; private handles = new Map<string, SessionHandle>(); private blocked = new Set<string>();
   readonly dir: string;
-  constructor(dataDir = stateDir({ env: process.env, homedir: homedir() })) { this.store = createSessionStore({ dataDir }); this.dir = this.store.dir; this.migrate(); }
+  constructor(dataDir = stateDir({ env: process.env, homedir: homedir() }), o: { /** `session.retention_days` (default 30) */ retentionDays?: number; /** for tests */ clock?: { now(): number; setTimeout(f: () => void, ms: number): unknown; clearTimeout(h: unknown): void } } = {}) { this.store = createSessionStore({ dataDir, ...(o.retentionDays ? { retentionDays: o.retentionDays } : {}), ...(o.clock ? { clock: o.clock } : {}) }); this.now = () => (o.clock ? o.clock.now() : Date.now()); this.dir = this.store.dir; this.migrate(); }
+  private now: () => number;
+  /** Deletes the conversations that were not touched for `retentionDays` (never one that another Centcom has open). Said how many. */
+  async prune(): Promise<number> { try { return (await this.store.prune(new Date(this.now()))).removed; } catch { return 0; } }
 
   private handle(id: string, cwd: string): SessionHandle | undefined {
     if (!SESSION_ID.test(id) || this.blocked.has(id)) return undefined; let h = this.handles.get(id); if (h) return h;

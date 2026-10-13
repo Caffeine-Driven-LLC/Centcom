@@ -58,6 +58,10 @@ Notes are plain text, at most 280 characters, with secrets removed and angle bra
 
 When you start Centcom in a folder you have worked in before, a small popup asks **"Restore your last session?"** with the title, size and age of that conversation. Press `y` (or Enter on "Yes") and it comes back and the agent continues it; press `n` or Esc and you get a fresh session, and the old one stays saved (`/resume` brings it back later). It does not ask when you chose a session yourself (`--continue`, `--resume`), in the demo, in print mode, or when the folder has nothing saved. Turn it off with the setting `ui.restore_prompt` (`false`).
 
+Saved conversations are deleted when they have not been touched for `session.retention_days` (30 by default); this is checked each time Centcom starts, and a conversation that another Centcom has open is never deleted. `session.persist` set to `false` (or `--no-save`) keeps nothing: no conversations and no prompt history.
+
+`/skills loaded` shows the skills the agent itself says it loaded for this session (Claude Code lists them when it starts). `centcom skills update` asks about each skill file you edited, one at a time, and leaves it alone unless you say yes (`--overwrite` says yes to all of them).
+
 ## The palette (`ctrl+k`)
 
 Type a few letters of anything: commands (`thm hc` finds `/theme hc`), project files (a pick adds `@path` to your prompt), saved conversations (a pick resumes it) and skills. With nothing typed it shows the commands people use most.

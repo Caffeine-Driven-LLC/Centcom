@@ -16,6 +16,7 @@
 - [devices](./devices.md): computers signed in to your account
 - [join](./join.md): join a shared session
 - [lan](./lan.md): find sessions on this network
+- [update](./update.md): look for a newer Centcom and bring it in
 - [doctor](./doctor.md): check this computer
 - [crash](./crash.md): crash reports on this computer
 - [link](./link.md): open a centcom:// link (the system runs this)
