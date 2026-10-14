@@ -150,7 +150,7 @@
 .ps-team .ps-member:first-child { border-top: 0; }
 .ps-tagent { margin: var(--space-1) 0 var(--space-2) var(--space-6); padding: var(--space-2) var(--space-3); background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--r-md); font-size: 12.5px; }
 .ps-tagent__head { display: flex; align-items: center; gap: var(--space-2); }
-.ps-tagent__line { display: flex; align-items: center; gap: 6px; margin: 4px 0 0; color: var(--text-secondary); }
+.ps-tagent__line { display: flex; align-items: center; gap: 6px; margin: 4px 0 0; color: var(--text-secondary); min-width: 0; overflow-wrap: anywhere; }
 .ps-tagent__line svg { width: 13px; height: 13px; flex: none; }
 .ps-watch { margin-top: 10px; border: 1px solid var(--border-subtle); border-radius: 8px; padding: 8px 10px; max-height: 320px; overflow: auto; }
 .ps-watch__head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }

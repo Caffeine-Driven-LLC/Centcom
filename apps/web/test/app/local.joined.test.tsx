@@ -29,6 +29,10 @@ describe('somebody else\'s session', () => {
     pane({ state: 'failed', people: [], entries: [], asked: [], error: 'That invite is no longer valid. Ask for a new one.' }); expect(screen.getByRole('alert').textContent).toMatch(/no longer valid/); cleanup();
     pane(j({ state: 'ended' })); expect(screen.getByRole('status').textContent).toMatch(/ended/);
   });
+  it('the ask box sits in the styled composer, the people list in the side panel, and an approval with no status shows no "(undefined)"', () => {
+    const { container } = render(<JoinedPane view={withJoined(j({ entries: [{ id: 'a1', kind: 'approval', text: 'Run npm test?' }] }))} send={() => undefined} />);
+    expect(container.querySelector('.lc-composer-box textarea.lc-composer')).toBeTruthy(); expect(container.querySelector('aside.lc-side .ps-sec__title')?.textContent).toBe('People'); expect(container.textContent).not.toMatch(/undefined/); expect(container.textContent).toMatch(/Run npm test\?/);
+  });
   it('the join dialog sends what was pasted', async () => {
     const sent: ClientMsg[] = []; render(<JoinDialog view={emptyView()} send={(m) => sent.push(m)} />); fireEvent(window, new Event('centcom:join')); void openJoin;
     const input = await screen.findByLabelText('Link or session id'); fireEvent.change(input, { target: { value: ' https://centcom.dev/i/abc ' } }); fireEvent.click(screen.getByRole('button', { name: /Join/ })); expect(sent.at(-1)).toEqual({ t: 'join', input: 'https://centcom.dev/i/abc' });
