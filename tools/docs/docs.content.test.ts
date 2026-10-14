@@ -46,7 +46,7 @@ describe('spell check and claims', () => {
   it('finds a known misspelling in prose but not in code, and rejects claims the contracts do not make', () => {
     const list = loadList('teh->the\n# c\nenviroment->environment\n');
     expect(spellProblems({ a: 'This is teh page.\n\n```sh\nteh\n```\n\n`enviroment` and [x](./teh.md)' }, list).map((p) => p.what)).toEqual(['"teh" is a misspelling of "the"']);
-    expect(spellProblems({ a: 'It is zero-knowledge and 100% secure. Key cen_live_abcdefghijklmnop1234.' }, list).length).toBe(3);
+    expect(spellProblems({ a: 'It is zero-knowledge and 100% secure. Key cen_live_abcdefghijklmnop1234.' }, list).length).toBe(3); // centcom-synthetic-secret (a made-up key for the claims check)
     expect(spellProblems({ a: 'Use cen_live_… as a placeholder and ses_01JA… too.' }, list)).toEqual([]);
     expect(() => loadList('nonsense')).toThrow(/bad line/);
   });
