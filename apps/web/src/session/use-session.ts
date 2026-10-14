@@ -7,9 +7,17 @@ export type Loader = () => Promise<{ connectSession(o: ConnectOptions): Promise<
 export interface SessionApi {
   state: GuestState; error?: string; connection?: SessionConnection;
   submit(body: string): Promise<void>; cancel(item: string): Promise<void>;
-  host?: { approve(item: string): Promise<void>; reject(item: string, code: string): Promise<void>; reorder(order: string[]): Promise<void>; drop(item: string): Promise<void>; decide(approvalId: string, decision: 'approve' | 'deny'): Promise<void> };
+  host?: { approve(item: string): Promise<void>; reject(item: string, code: RejectCode): Promise<void>; reorder(order: string[]): Promise<void>; drop(item: string): Promise<void>; decide(approvalId: string, decision: 'approve' | 'deny'): Promise<void> };
 }
-const ids = (): string => `que_${Date.now().toString(32).toUpperCase().padStart(8, '0')}${Math.random().toString(32).slice(2, 20).toUpperCase().padEnd(18, '0')}`.slice(0, 30);
+const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+/** `que_` + 26 characters of the Crockford alphabet (time, then randomness), the shape the contract requires. The old generator used JavaScript's base 32, which has the letters I, L, O and U that the contract leaves out, so nearly every id was invalid. */
+export function newQueueId(now: number = Date.now(), rand: (n: number) => Uint8Array = (n) => crypto.getRandomValues(new Uint8Array(n))): string {
+  let t = ''; let n = now; for (let i = 0; i < 10; i++) { t = CROCKFORD[n % 32]! + t; n = Math.floor(n / 32); }
+  let tail = ''; for (const b of rand(16)) tail += CROCKFORD[b % 32]!; // 256 is a multiple of 32: no bias
+  return `que_${t}${tail}`;
+}
+const ids = newQueueId;
+export type RejectCode = 'not_now' | 'off_topic' | 'unsafe' | 'duplicate' | 'other';
 /** Connects when the page opens (the engine and its crypto are fetched then, not before), keeps the guest state, and offers the actions the role allows. A new ticket is fetched by the engine for every connect attempt; nothing here sees one. */
 export function useSession(o: ConnectOptions, load: Loader = loadEngine): SessionApi {
   const [state, setState] = useState<GuestState>(() => initialGuestState({ member: '' })); const [error, setError] = useState<string>(); const conn = useRef<SessionConnection | undefined>(undefined);
@@ -20,6 +28,6 @@ export function useSession(o: ConnectOptions, load: Loader = loadEngine): Sessio
     return { state, error, connection: conn.current,
       submit: async (body) => { if (state.me.role === 'viewer' || state.me.muted) throw new Error('forbidden'); const c = conn.current; if (!c) throw new Error('not connected'); await c.handle.sendEvent('queue.submit', { p: (info) => ({ item: ids(), size: info.ctBytes, kind: 'message' }), secret: { body } }); },
       cancel: (item) => send('queue.cancel', { p: { item } }),
-      ...(isHost ? { host: { approve: (item: string) => send('queue.approve', { p: { item } }), reject: (item: string, code: string) => send('queue.reject', { p: { item, code } }), reorder: (order: string[]) => send('queue.reorder', { p: { order } }), drop: (item: string) => send('queue.drop', { p: { item } }), decide: (approvalId: string, decision: 'approve' | 'deny') => send('approval.decision', { p: { approval_id: approvalId, decision, scope: 'once' } }) } } : {}) };
+      ...(isHost ? { host: { approve: (item: string) => send('queue.approve', { p: { item } }), reject: (item: string, code: RejectCode) => send('queue.reject', { p: { item, code } }), reorder: (order: string[]) => send('queue.reorder', { p: { order } }), drop: (item: string) => send('queue.drop', { p: { item } }), decide: (approvalId: string, decision: 'approve' | 'deny') => send('approval.decision', { p: { approval_id: approvalId, decision, scope: 'once' } }) } } : {}) };
   }, [state, error]);
 }
