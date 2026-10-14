@@ -5,3 +5,5 @@ export * from './trust.js';
 export { createRunner } from './runner.js';
 export { Subscriber } from './subscribers.js';
 export * from './ipc.js';
+export * from './preflight.js';
+export * from './log.js';

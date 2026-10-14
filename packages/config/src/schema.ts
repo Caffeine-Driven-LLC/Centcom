@@ -34,6 +34,7 @@ export const SCHEMA = {
   'session.persist': { kind: 'boolean', default: true, doc: 'Save conversations and your prompt history on this computer (off is the same as --no-save)' },
   'session.retention_days': { kind: 'number', default: 30, min: 1, max: 3650, doc: 'Delete saved conversations that were not touched for this many days (checked each time Centcom starts)' },
   'agent.turn_timeout_s': { kind: 'number', default: 0, min: 0, max: 86400, project: true, doc: 'Stop a turn that runs longer than this many seconds (0 means no limit)' },
+  'agent.engine_unsupported_ok': { kind: 'boolean', default: false, doc: 'Run a Claude Code whose version is outside the range Centcom has been checked against (otherwise the turn stops and says which versions work)' },
   'agent.approval_timeout_ms': { kind: 'number', default: 600000, min: 1000, max: 86400000, project: true, doc: 'How long an approval waits before it is declined' },
   // what the client remembers between sessions (never secrets; "skip permissions" is deliberately not storable)
   'client.engine': { kind: 'enum', default: 'claude-code', enum: ['claude-code', 'codex'], doc: 'Last agent you used' },

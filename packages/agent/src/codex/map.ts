@@ -55,6 +55,8 @@ export class CodexMapper {
   private deltaIndex = new Map<string, number>();
   private changes = new Map<string, J[]>();
   private reasoningStarted = new Set<string>();
+  /** Messages that have had text but no `text.done` yet, with the text so far: a turn that ends (an interrupt, an error) closes them. */
+  private openText = new Map<string, string>();
 
   /** Called with the params of a notification; returns zero or more events. */
   notification(method: string, p: J): EventBody[] {
@@ -62,7 +64,7 @@ export class CodexMapper {
       case 'turn/plan/updated': { const plan = Array.isArray(p.plan) ? p.plan : []; return [{ type: 'tasks.updated', tasks: plan.slice(0, 200).map((x: J, i: number) => ({ id: String(i + 1), text: String(x.step ?? ''), status: x.status === 'inProgress' || x.status === 'in_progress' ? 'in_progress' : x.status === 'completed' ? 'completed' : 'pending' })) }]; }
       case 'item/started': return this.itemStarted(p.item ?? {});
       case 'item/completed': return this.itemCompleted(p.item ?? {});
-      case 'item/agentMessage/delta': { const i = this.deltaIndex.get(p.itemId) ?? 0; this.deltaIndex.set(p.itemId, i + 1); return [{ type: 'text.delta', message_id: p.itemId, index: i, text: String(p.delta ?? '') }]; }
+      case 'item/agentMessage/delta': { const i = this.deltaIndex.get(p.itemId) ?? 0; this.deltaIndex.set(p.itemId, i + 1); this.openText.set(p.itemId, (this.openText.get(p.itemId) ?? '') + String(p.delta ?? '')); return [{ type: 'text.delta', message_id: p.itemId, index: i, text: String(p.delta ?? '') }]; }
       case 'item/reasoning/textDelta': case 'item/reasoning/summaryTextDelta': return [{ type: 'thinking.delta', message_id: p.itemId, text: String(p.delta ?? '') }];
       case 'item/fileChange/patchUpdated': if (Array.isArray(p.changes)) this.changes.set(p.itemId, p.changes); return [];
       case 'thread/tokenUsage/updated': {
@@ -76,6 +78,7 @@ export class CodexMapper {
       }
       case 'turn/completed': {
         const t = p.turn ?? {}; const out: EventBody[] = [];
+        for (const [id, text] of this.openText) out.push({ type: 'text.done', message_id: id, text }); this.openText.clear(); // an interrupted answer is kept, and closed
         if (t.status === 'failed' && t.error) out.push({ type: 'error', code: errorCodeFromInfo(t.error.codexErrorInfo, String(t.error.message ?? '')), tool_message: String(t.error.message ?? 'The turn failed'), fatal: true });
         out.push({ type: 'status', state: t.status === 'failed' ? 'error' : 'idle' });
         out.push({ type: 'turn.done', outcome: t.status === 'completed' ? 'ok' : t.status === 'interrupted' ? 'canceled' : 'error', ...(t.status ? { stop_reason: String(t.status) } : {}) });
@@ -115,7 +118,7 @@ export class CodexMapper {
   private itemCompleted(it: J): EventBody[] {
     const status = (s: string): 'ok' | 'error' | 'denied' => (s === 'completed' ? 'ok' : s === 'declined' ? 'denied' : 'error');
     switch (it.type) {
-      case 'agentMessage': return [{ type: 'text.done', message_id: it.id, text: String(it.text ?? '') }];
+      case 'agentMessage': this.openText.delete(it.id); return [{ type: 'text.done', message_id: it.id, text: String(it.text ?? '') }];
       case 'commandExecution': {
         const st = it.status === 'completed' && it.exitCode && it.exitCode !== 0 ? 'error' : status(it.status);
         const out = String(it.aggregatedOutput ?? '');

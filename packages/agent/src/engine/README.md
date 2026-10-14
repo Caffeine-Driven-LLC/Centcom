@@ -15,6 +15,6 @@ No vendor SDK and no `child_process` in this folder (a test enforces it).
 ## Known gaps
 - The stalled-consumer buffer (coalescing deltas under a 1000 event cap) is not built here; the runner's subscriber queue drops old deltas instead.
 - `validator` requires `session.started` before text, tools and approvals, but allows `turn.started`, `status` and errors before it (the real engines emit those first).
-- The real adapters (Claude, Codex) do not yet close open messages and tools on interrupt the way the validator demands; that belongs to C102/C103.
+- Both adapters now close open messages and tools when a turn ends by an interrupt (Claude's parser, and Codex's mapper at `turn/completed`); the recorded Codex traffic is run through the validator in `codex.recorded.test.ts`. The tool results of the Codex recordings are left out of that check, because the engine pairs them with its approval requests, which the frame logs do not carry.
 
 There are two fake engines with different purposes: testkit's `FakeEngine` (C013) drives the runner with scripted behaviour, while `createFakeEngine` here replays recorded transcripts to prove engine conformance (validator, wire mapping, golden output). Moving this into testkit, or a `@centcom/agent/testing` subpath, is a possible follow-up.

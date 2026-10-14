@@ -2,7 +2,7 @@
 import React from 'react';
 import { execFileSync } from 'node:child_process';
 import { render } from 'ink';
-import { ClaudeCodeEngine, CodexEngine, DemoEngine, createProviderDetector, makeWhich, runProbe, detectClaude, detectCodex, isInstalled, type AgentEngine, type PermissionMode } from '@centcom/agent';
+import { ClaudeCodeEngine, CodexEngine, DemoEngine, claudeVersionProbe, createProviderDetector, makeWhich, runProbe, detectClaude, detectCodex, isInstalled, type AgentEngine, type PermissionMode } from '@centcom/agent';
 import { chooseEngine } from './engine-pick.js';
 import { Account, ShareSession, App, AppController, ClientConfig, FirstRun, SessionStore, TITLE_POP, TITLE_PUSH, resolveA11yMode, runLinear, queryBackground, detectCapabilities, buildRuntime, initialSettings, isFirstRun, markFirstRunDone, settingsFromConfig } from '@centcom/tui';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -70,10 +70,12 @@ function doctorAccount(): () => Promise<{ signedIn: boolean; plan?: string; fail
   return async () => { const a = await Account.create({ app: 'centcom-cli', version: VERSION }); const st = await a.status(); return { signedIn: st.signedIn, ...(st.me?.plan ? { plan: st.me.plan } : {}), ...(st.offline ? { failed: true } : {}) }; };
 }
 
-async function pickEngine(preferred: 'claude-code' | 'codex' = 'claude-code', flags?: RemoteFlags): Promise<{ engine: AgentEngine; demo: boolean; note: string }> {
+/** The Claude Code engine as this app starts it: it reads `claude --version` before the first turn and refuses a version outside the checked range, unless `agent.engine_unsupported_ok` says otherwise. */
+const claudeEngine = (unsupportedOk = false): ClaudeCodeEngine => new ClaudeCodeEngine({ versionProbe: claudeVersionProbe(), unsupportedOk });
+async function pickEngine(preferred: 'claude-code' | 'codex' = 'claude-code', flags?: RemoteFlags, unsupportedOk = false): Promise<{ engine: AgentEngine; demo: boolean; note: string }> {
   const explicit = arg('--engine') === 'codex' || arg('--engine') === 'claude-code' ? (arg('--engine') as 'codex' | 'claude-code') : undefined;
   const pick = await chooseEngine({ demo: has('--demo') || arg('--engine') === 'demo', explicit, preferred, installed: (e) => isInstalled(e === 'codex' ? process.env.CENTCOM_CODEX_BIN || 'codex' : 'claude'), blocked: (e) => !!flags?.blocked(e) });
-  const engine: AgentEngine = pick.engine === 'demo' ? new DemoEngine({ speed: 1 }) : pick.engine === 'codex' ? new CodexEngine() : new ClaudeCodeEngine();
+  const engine: AgentEngine = pick.engine === 'demo' ? new DemoEngine({ speed: 1 }) : pick.engine === 'codex' ? new CodexEngine() : claudeEngine(unsupportedOk);
   return { engine, demo: pick.engine === 'demo', note: pick.note };
 }
 
@@ -136,7 +138,7 @@ async function main() {
     const pc = await ClientConfig.load(cwd, cliFlags());
     for (const w of pc.warnings) process.stderr.write('centcom: settings: ' + w + '\n');
     const eng = arg('--engine'); if (eng && !['claude-code', 'codex', 'demo'].includes(eng)) usage('--engine must be claude-code or codex');
-    const pflags = process.env.CENTCOM_NO_REMOTE_FLAGS || has('--demo') ? undefined : startRemoteFlags({ baseUrl: pc.cfg.api.base_url, version: VERSION }); const { engine, demo, note } = await pickEngine(pc.cfg.client.engine, pflags); pflags?.stop();
+    const pflags = process.env.CENTCOM_NO_REMOTE_FLAGS || has('--demo') ? undefined : startRemoteFlags({ baseUrl: pc.cfg.api.base_url, version: VERSION }); const { engine, demo, note } = await pickEngine(pc.cfg.client.engine, pflags, pc.cfg.agent.engine_unsupported_ok); pflags?.stop();
     if (demo && !has('--demo') && eng !== 'demo') { process.stderr.write((note || 'No coding agent is installed.') + '\n'); process.exit(4); } // scripts get a clear failure, never the demo agent
     let br = ''; try { br = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { /* not a repo */ }
     const fmt = (arg('--output-format') ?? 'text') as 'text' | 'json' | 'stream-json';
@@ -159,7 +161,7 @@ async function main() {
   // theme "auto": ask the terminal for its background colour (150 ms at most, nothing is written without a terminal) so a light terminal gets Paper instead of Graphite. The question goes out now and is answered while the agent is looked for.
   const bgAnswer = cc.cfg.ui.theme === 'auto' && !a11y.screenReader ? queryBackground({ out: process.stdout, inp: process.stdin }) : undefined;
   const rflags = process.env.CENTCOM_NO_REMOTE_FLAGS || has('--demo') ? undefined : startRemoteFlags({ baseUrl: cc.cfg.api.base_url, version: VERSION }); // kill switches only; answered from what was fetched last time, never waited for
-  const { engine, demo, note } = await pickEngine(cc.cfg.client.engine, rflags);
+  const { engine, demo, note } = await pickEngine(cc.cfg.client.engine, rflags, cc.cfg.agent.engine_unsupported_ok);
   const [hasClaude, hasCodex] = demo ? [false, false] : await Promise.all([isInstalled('claude'), isInstalled(process.env.CENTCOM_CODEX_BIN || 'codex')]); // both installed: the model list can switch between them
   let branch = ''; try { branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { /* not a git repo */ }
   const dangerous = has('--dangerously-skip-permissions') || has('--yolo');
@@ -185,7 +187,7 @@ async function main() {
     else resumeId = c.id;
   }
   const ctl = new AppController({ ...rt.options, turnTimeoutS: cc.cfg.agent.turn_timeout_s || undefined, views: appViews(process.cwd(), { doctor: () => realDoctorContext({ version: VERSION, contract: CONTRACT_VERSION, apiBase: cc.cfg.api.base_url, stateDir: stateDir(defaultDeps()), relayUrl: process.env.CENTCOM_RELAY_URL || cc.cfg.relay.url, account: doctorAccount() }) }),
-    engine, demo, engines: demo ? undefined : { ...(hasClaude ? { 'claude-code': () => new ClaudeCodeEngine() } : {}), ...(hasCodex ? { codex: () => new CodexEngine() } : {}) }, onEngine: (id) => cc.set('client.engine', id), cwd: process.cwd(), branch, version: VERSION, permissionMode: mode, dangerous: dangerous || mode === 'bypassPermissions', ghosts: has('--demo-team'),
+    engine, demo, engines: demo ? undefined : { ...(hasClaude ? { 'claude-code': () => claudeEngine(cc.cfg.agent.engine_unsupported_ok) } : {}), ...(hasCodex ? { codex: () => new CodexEngine() } : {}) }, onEngine: (id) => cc.set('client.engine', id), cwd: process.cwd(), branch, version: VERSION, permissionMode: mode, dangerous: dangerous || mode === 'bypassPermissions', ghosts: has('--demo-team'),
     logger, settings, external: (task) => { pendingExternal = task; instance?.unmount(); }, bell: () => { try { process.stdout.write('\x07'); } catch { /* no terminal */ } }, ...cc.options({ ...initialSettings(), ...settings }, { saveHistory: persist }),
     sessions: sessionStore, night: demo ? undefined : { dir: pathJoin(homedir(), '.centcom', 'night') },
     modelCache: { read: async (f) => { try { return await readFile(pathJoin(stateDir(defaultDeps()), f), 'utf8'); } catch { return undefined; } }, write: async (f, t) => { const d = stateDir(defaultDeps()); await mkdir(d, { recursive: true, mode: 0o700 }); await writeFile(pathJoin(d, f), t, { mode: 0o600 }); } },

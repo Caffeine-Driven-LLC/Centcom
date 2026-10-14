@@ -15,7 +15,7 @@ function fakeProcess(lines: string[], o: { hang?: boolean; code?: number } = {})
     const child = new EventEmitter() as any; child.stdout = new PassThrough(); child.stderr = new PassThrough(); child.stdin = new PassThrough(); child.pid = undefined;
     const call = { args, stdin: '', opts }; calls.push(call); child.stdin.on('data', (d: Buffer) => { call.stdin += d.toString(); });
     child.kill = (sig = 'SIGTERM') => { setImmediate(() => child.emit('close', null, sig)); return true; };
-    child.stdin.on('end', () => { if (o.hang) return; setImmediate(() => { for (const l of lines) child.stdout.write(l + '\n'); child.stdout.end(); setImmediate(() => child.emit('close', o.code ?? 0, null)); }); });
+    let answered = false; child.stdin.on('data', () => { if (answered || o.hang || !call.stdin.includes('\n')) return; answered = true; setImmediate(() => { for (const l of lines) child.stdout.write(l + '\n'); child.stdout.end(); setImmediate(() => child.emit('close', o.code ?? 0, null)); }); }); // the prompt is one stream-json line; the process answers once it has it
     return child;
   }) as never;
   return { spawn, calls };
@@ -25,7 +25,7 @@ describe('the prompt goes in over stdin (lane C102)', () => {
   it('argv carries the flags and not the prompt; the whole prompt arrives on stdin, even 300 KiB of it', async () => {
     const f = fakeProcess(fixture('claude-ok.jsonl')); const s = await new ClaudeCodeEngine({ spawn: f.spawn }).start({ agentId: 'a', cwd: '/' });
     const prompt = 'secret-token-in-a-prompt ' + 'x'.repeat(300 * 1024); await s.send(prompt); await collect(s.events, (e) => e.type === 'turn.done');
-    expect(f.calls[0]!.args[0]).toBe('-p'); expect(f.calls[0]!.args[1]).toBe('--output-format'); expect(f.calls[0]!.args.join(' ')).not.toContain('secret-token'); expect(f.calls[0]!.stdin).toBe(prompt); expect(f.calls[0]!.opts.stdio[0]).toBe('pipe');
+    expect(f.calls[0]!.args.slice(0, 3)).toEqual(['-p', '--input-format', 'stream-json']); expect(f.calls[0]!.args.join(' ')).not.toContain('secret-token'); expect(JSON.parse(f.calls[0]!.stdin)).toEqual({ type: 'user', message: { role: 'user', content: prompt } }); expect(f.calls[0]!.opts.stdio[0]).toBe('pipe');
   });
   it('the old form with the prompt on the command line is still available to callers that ask for it', () => { expect(buildArgv('hi', {})[1]).toBe('hi'); expect(buildArgv('hi', { viaStdin: true })).not.toContain('hi'); });
   it('a variadic flag before the end of the list cannot swallow the prompt: --allowedTools is followed by another flag, not by text', () => {

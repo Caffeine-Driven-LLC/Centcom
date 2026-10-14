@@ -14,7 +14,9 @@ The runner (`createRunner`, in `@centcom/agent`) hosts several engine sessions (
 
 ## The daemon
 
-`centcom-runnerd [--socket <path>] [--idle-exit-s 60]` serves the runner over a Unix socket (`$XDG_RUNTIME_DIR/centcom/runner.sock`, folder 0700, socket 0600). It is optional: the CLI can embed the runner in-process.
+`centcom-runnerd [--socket <path>] [--idle-exit-s 60] [--log <file>] [--unsupported-ok]` serves the runner over a Unix socket (`$XDG_RUNTIME_DIR/centcom/runner.sock`, folder 0700, socket 0600). It is optional: the CLI can embed the runner in-process.
+
+The daemon checks the tool before it spawns anything (`preflightFromDetector`: installed, and a version Centcom has been checked against, unless `--unsupported-ok`), so a missing or unsupported `claude` fails the `start` command with `provider_not_installed` or `provider_version_unsupported`. Its log is one JSON line per event in `<socket folder>/runnerd.log` (mode 0600, credentials scrubbed, ids and kinds only, 5 MiB then one older copy kept). `CENTCOM_CLAUDE_BIN` and `CENTCOM_CODEX_BIN` name the executables to drive. `packages/agent/test/runner/daemon.test.ts` runs the real process: permissions, an agent end to end, an interrupt with the CLI's receipt, shutdown, idle exit and a second daemon on the same socket.
 
 - A second daemon on a live socket prints `already running` and exits 1; a socket nobody answers on is replaced.
 - Frames are newline-delimited JSON, at most 1 MiB: `{v:1,id,cmd,args}` -> `{v:1,id,ok,result|error:{code}}`, plus pushed `{v:1,evt}`.

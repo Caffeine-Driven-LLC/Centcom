@@ -64,6 +64,8 @@ interface Block { type: string; tool_id?: string; name?: string; json: string; p
 export class ClaudeStreamParser {
   private messageId = '';
   private textIndex = 0;
+  /** The answer that has had words but no `message_stop`: a turn that is cut off (an interrupt) still has to close it. */
+  private openText?: string;
   private blocks = new Map<number, Block>();
   private tools = new Map<string, { name: string; input: J }>();
   private seenStream = new Set<string>();
@@ -74,6 +76,10 @@ export class ClaudeStreamParser {
   private openTools = new Set<string>();
   private usage = { input: 0, output: 0, cacheRead: 0 };
   sessionId?: string;
+  /** What the CLI said it can do in `system/init` (`interrupt_receipt_v1` among them). Undefined until the init message. */
+  initCapabilities?: string[];
+  /** The turn is being interrupted: its `result` ends it as cancelled, not as an error. */
+  interrupted = false;
 
   /** Parse one stdout line into zero or more event bodies. */
   push(line: string): EventBody[] {
@@ -95,7 +101,7 @@ export class ClaudeStreamParser {
   private system(d: J): EventBody[] {
     switch (d.subtype) {
       case 'init':
-        this.sessionId = d.session_id;
+        this.sessionId = d.session_id; this.initCapabilities = Array.isArray(d.capabilities) ? d.capabilities.filter((x: unknown): x is string => typeof x === 'string').slice(0, 100) : undefined;
         return [{ type: 'session.started', engine: 'claude-code', engine_session_id: String(d.session_id ?? ''), model: String(d.model ?? ''), cli_version: d.claude_code_version,
           tools: Array.isArray(d.tools) ? d.tools.map(String) : [], mcp_servers: Array.isArray(d.mcp_servers) ? d.mcp_servers.map((m: J) => ({ name: String(m.name), status: String(m.status) })) : [],
           capabilities: CAPS, login_kind: loginKindFrom(d.apiKeySource), ...(Array.isArray(d.skills) ? { skills: d.skills.filter((x: unknown) => typeof x === 'string').slice(0, 200).map((x: string) => x.slice(0, 80)) } : {}) }];
@@ -132,7 +138,7 @@ export class ClaudeStreamParser {
         const idx = Number(e.index); const blk = this.blocks.get(idx); const dl = e.delta as J;
         if (dl.type === 'text_delta') {
           if (parent) out.push(...this.sub(parent), { type: 'subagent.text', subagent_id: parent, text: String(dl.text) });
-          else out.push({ type: 'text.delta', message_id: this.messageId, index: this.textIndex++, text: String(dl.text) });
+          else { this.openText = this.messageId; out.push({ type: 'text.delta', message_id: this.messageId, index: this.textIndex++, text: String(dl.text) }); }
         } else if (dl.type === 'thinking_delta') out.push({ type: 'thinking.delta', message_id: this.messageId, text: String(dl.thinking ?? dl.text ?? '') });
         else if (dl.type === 'input_json_delta' && blk) blk.json += String(dl.partial_json ?? '');
         break;
@@ -158,7 +164,7 @@ export class ClaudeStreamParser {
         if (e.usage?.output_tokens !== undefined) this.usage.output = e.usage.output_tokens;
         break;
       case 'message_stop':
-        if (!parent) out.push({ type: 'text.done', message_id: this.messageId, input_tokens: this.usage.input, output_tokens: this.usage.output });
+        if (!parent) { if (this.openText === this.messageId) this.openText = undefined; out.push({ type: 'text.done', message_id: this.messageId, input_tokens: this.usage.input, output_tokens: this.usage.output }); }
         break;
     }
     return out;
@@ -221,7 +227,7 @@ export class ClaudeStreamParser {
   }
 
   /** Tools and sub-agents still open when the turn ends (interrupted, failed or cut off) are closed as canceled so nothing keeps showing as running. */
-  closeOpen(): EventBody[] { const out: EventBody[] = [...this.openTools].map((id) => ({ type: 'tool.result' as const, tool_id: id, status: 'canceled' as const, summary: 'Stopped before it finished' })); this.openTools.clear(); out.push(...[...this.openSub].map((id) => ({ type: 'subagent.done' as const, subagent_id: id, status: 'canceled' as const }))); this.openSub.clear(); return out; }
+  closeOpen(): EventBody[] { const out: EventBody[] = []; if (this.openText) { out.push({ type: 'text.done', message_id: this.openText, input_tokens: this.usage.input, output_tokens: this.usage.output }); this.openText = undefined; } out.push(...[...this.openTools].map((id) => ({ type: 'tool.result' as const, tool_id: id, status: 'canceled' as const, summary: 'Stopped before it finished' }))); this.openTools.clear(); out.push(...[...this.openSub].map((id) => ({ type: 'subagent.done' as const, subagent_id: id, status: 'canceled' as const }))); this.openSub.clear(); return out; }
 
   private result(d: J): EventBody[] {
     const out: EventBody[] = this.closeOpen();
@@ -234,7 +240,9 @@ export class ClaudeStreamParser {
     const win = Number(mu?.contextWindow ?? 0);
     out.push({ type: 'usage.report', input_tokens: Number(u.input_tokens ?? 0) + Number(u.cache_creation_input_tokens ?? 0), output_tokens: Number(u.output_tokens ?? 0), cache_read_tokens: Number(u.cache_read_input_tokens ?? 0), ...(typeof d.total_cost_usd === 'number' ? { cost_usd: d.total_cost_usd } : {}), cost_is_estimate: true,
       ...(win > 0 && ctxTokens > 0 ? { context_tokens: ctxTokens, context_window: win, context_used_pct: Math.min(100, Math.round((ctxTokens / win) * 100)) } : {}) });
-    if (d.is_error) {
+    if (this.interrupted) {
+      out.push({ type: 'status', state: 'idle' }, { type: 'turn.done', outcome: 'canceled', stop_reason: 'interrupted' });
+    } else if (d.is_error) {
       const text = String(d.result ?? 'Claude Code reported an error');
       out.push({ type: 'error', code: errorCodeFor(undefined, d.api_error_status, text), tool_message: firstLines(text, 4), fatal: true });
       out.push({ type: 'status', state: 'error' }, { type: 'turn.done', outcome: 'error', stop_reason: String(d.terminal_reason ?? d.subtype ?? 'error') });

@@ -5,7 +5,7 @@ export * from './backpressure.js';
 export * from './risk.js';
 export * from './detect.js';
 export * from './demo.js';
-export { ClaudeCodeEngine, buildArgv, redact } from './claude/engine.js';
+export { ClaudeCodeEngine, buildArgv, redact, claudeVersionProbe } from './claude/engine.js';
 export { ClaudeStreamParser, loginKindFrom, questionFrom, todosFrom } from './claude/parse.js';
 export { editDiff } from './claude/diff.js';
 export * from './models.js';

@@ -13,11 +13,12 @@ const HELPER = fileURLToPath(new URL('./pty-helper.py', import.meta.url));
 const live = new Set<PtyHarness>();
 export const livePtys = (): number => live.size;
 
+const RAW_CAP = 2 * 1024 * 1024;
 export class PtyHarness {
   private exit?: number; private exited: Promise<number>; private readonly emu: Screen; private dirs: string[] = []; private env: Record<string, string>;
   private constructor(private child: ChildProcess, emu: Screen, dirs: string[], env: Record<string, string>) {
     this.emu = emu; this.dirs = dirs; this.env = env; live.add(this);
-    child.stdout!.on('data', (d: Buffer) => { void emu.write(d); }); child.stderr!.on('data', () => undefined); child.stdin!.on('error', () => undefined);
+    child.stdout!.on('data', (d: Buffer) => { if (this.rawBytes.length < RAW_CAP) this.rawBytes += d.toString('latin1'); void emu.write(d); }); child.stderr!.on('data', () => undefined); child.stdin!.on('error', () => undefined);
     this.exited = new Promise((res) => child.on('close', (code, sig) => { this.exit = code ?? (sig ? 128 + 9 : 1); live.delete(this); void this.cleanup().then(() => res(this.exit!)); }));
   }
   static async spawn(cmd: string, args: string[] = [], o: PtyOptions = {}): Promise<PtyHarness> {
@@ -29,6 +30,9 @@ export class PtyHarness {
     await new Promise<void>((res, rej) => { child.once('spawn', () => res()); child.once('error', (e) => { void Promise.all(dirs.map((d) => rm(d, { recursive: true, force: true }))); rej(new Error(`cannot start the pty helper (is python3 installed?): ${e.message}`)); }); });
     return new PtyHarness(child, new Screen(cols, rows), dirs, env);
   }
+  private rawBytes = '';
+  /** Every byte the program wrote, as the terminal received it (escape sequences included, up to 2 MiB), for tests that say a program writes none. */
+  rawOutput(): string { return this.rawBytes; }
   get exitCode(): number | undefined { return this.exit; }
   send(s: string): void { if (this.exit === undefined) this.child.stdin!.write(s); }
   press(key: 'enter' | 'esc' | 'up' | 'down' | 'left' | 'right' | 'tab' | 'ctrl-c' | (string & {})): void { this.send(KEYS[key] ?? key); }
