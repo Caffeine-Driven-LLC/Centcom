@@ -65,4 +65,9 @@ describe('host engine over loopback', () => {
     await g1.t.send({ t: 'event', k: 'reaction', id: ID(++seqN), sid: SID, p: { code: 'bad' } } as never); await g1.t.send({ t: 'event', k: 'reaction', id: ID(++seqN), sid: SID, p: { target: T, code: 'good', op: 'add' } } as never);
     await wait(() => g1.ofKind('reaction').length >= 1); expect(g1.ofKind('reaction').map((f) => (f.p as { code: string }).code)).toEqual(['good']); // the bad one (sent first) was refused, the good one was numbered and echoed
   });
+  it('transferring the host role puts a running item back to approved first, so the next host runs it once (C079)', async () => {
+    const { engine, guest } = await setup(); const g1 = await guest('g1', 2); const item = 'que_AAAAAAAAAAAAAAAAAAAAAAAAB1';
+    await g1.t.send(submit(item)); await wait(() => engine.queue().items.length === 1); await engine.approveItem(item); await engine.claim(item, 'agt_AAAAAAAAAAAAAAAAAAAAAAAAA1'); await wait(() => (engine.queue().items[0] as { state: string }).state === 'running');
+    void engine.transferHost(mem(2)); await wait(() => (engine.queue().items[0] as { state: string }).state === 'approved'); await wait(() => (g1.ofKind('queue.state').at(-1)?.p as { items: { state: string }[] } | undefined)?.items[0]?.state === 'approved');
+  });
 });
