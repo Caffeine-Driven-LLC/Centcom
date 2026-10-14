@@ -578,6 +578,8 @@ export class AppController {
   private shareHandler?: (arg: string) => Promise<void>;
   /** The app that has an account hands in what `/share` does. */
   setShareHandler(f: ((arg: string) => Promise<void>) | undefined): void { this.shareHandler = f; }
+  /** The who-pays gate for moving the conversation to another agent while it is shared (a failover is a new start of that engine). */
+  private engineGuard?: (engine: string) => Promise<boolean>; setEngineGuard(f: ((engine: string) => Promise<boolean>) | undefined): void { this.engineGuard = f; }
   private readonly turnEndListeners = new Set<(outcome: string) => void>();
   /** Calls `fn` each time a turn ends (a sharing bridge uses it to tell when a request it ran is finished). Returns how to stop. */
   onTurnEnd(fn: (outcome: string) => void): () => void { this.turnEndListeners.add(fn); return () => { this.turnEndListeners.delete(fn); }; }
@@ -613,8 +615,9 @@ export class AppController {
     if (id === this.o.engine.id) { this.setModel(model); return; }
     const make = this.o.engines?.[id]; if (!make) { this.toast('warn', `${id === 'codex' ? 'Codex' : 'Claude Code'} is not installed.`); return; }
     if (this.state.busy) { this.toast('warn', 'Cento is still working. Press Esc to interrupt, then try again.'); return; }
+    if (this.engineGuard && !(await this.engineGuard(id))) return;
     const was = this.o.engine.label; await this.dropSession(); const engine = make(); this.o = { ...this.o, engine }; this.effort = '';
-    this.set({ engineId: engine.id, engineLabel: engine.label }); this.setSettings({ model }); this.updateAgent(this.me, () => ({ engine: engine.label, provider: engine.provider, model: model || 'default' })); this.o.onEngine?.(id);
+    this.set({ engineId: engine.id, engineLabel: engine.label }); this.setSettings({ model }); this.updateAgent(this.me, () => ({ engine: engine.label, provider: engine.provider, model: model || 'default', loginKind: 'unknown' /* the new agent has not said which login it uses */ })); this.o.onEngine?.(id);
     const n = this.state.items.filter((i) => i.kind === 'user').length; const carry = n ? `This conversation started with another coding agent (${was}). Summary of it so far:\n\n${this.summaryUpTo(n + 1, 8 * 1024)}` : undefined;
     this.notice('info', `Switched to ${engine.label}${model ? ` (${model})` : ''}.${n ? ` It continues from a summary of what was said with ${was}.` : ''}`);
     await this.startEngine(undefined, carry);
@@ -1301,6 +1304,7 @@ export class AppController {
   /** A notice from the service (`sys.notice`): shown from the local message table only, never the server's own text. */
   showNotice(n: NoticeIn) { this.toasts.show(noticeToToast(n, { now: new Date(), locale: Intl.DateTimeFormat().resolvedOptions().locale })); this.syncToasts(); }
   /** The hosted link changed (or sharing ended: undefined). Said once per change, in words; local work is never blocked. */
+  setShareStatus(v: AppState['share']): void { this.set({ share: v }); }
   setNet(next: AppState['net'], prev?: AppState['net']) {
     this.set({ net: next }); if (!next || next === prev) return;
     const said: Record<NonNullable<AppState['net']>, [level: 'info' | 'ok' | 'warn', text: string] | undefined> = {

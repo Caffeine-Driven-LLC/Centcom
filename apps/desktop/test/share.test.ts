@@ -11,13 +11,13 @@ import type { Workspace } from '../src/local/workspace.js';
 let m: MockBackend | undefined; const cleanup: (() => unknown)[] = []; afterEach(async () => { for (const c of cleanup.splice(0).reverse()) await c(); await m?.stop(); m = undefined; });
 const instant = { now: () => Date.now(), setTimeout: (f: () => void) => setImmediate(f) as never, clearTimeout: (h: never) => clearImmediate(h as never) } as never;
 const until = async (f: () => boolean, ms = 6000) => { const t0 = Date.now(); while (!f()) { if (Date.now() - t0 > ms) throw new Error('timed out waiting'); await new Promise((r) => setTimeout(r, 10)); } };
-async function rig(signIn = true) {
+async function rig(signIn = true, policy: ConstructorParameters<typeof CollabService>[0]['policy'] = { detectLoginKind: async () => 'api_key' }) {
   m = await startMockBackend({ seed: 11 });
   const account = await Account.create({ app: 'centcom-desktop', version: '0.1.0', baseUrl: m.url, keychain: 'memory', clock: instant, stateDir: mkdtempSync(join(tmpdir(), 'share-')) });
   if (signIn) { const login = await account.beginLogin(); await m.control('approve-device', { user_code: login.userCode }); await login.wait(); }
   const ctl = new AppController({ engine: new FakeEngine({ script: {} }) as never, demo: false, cwd: '/tmp/proj', version: 't', skills: [] }); await ctl.start(); cleanup.push(() => ctl.stop());
   const ws = { ctl, dir: '/tmp/proj', demo: false } as unknown as Workspace; const got: ServerMsg[] = [];
-  const svc = new CollabService({ version: '0', broadcast: () => undefined, openExternal: () => false, makeAccount: async () => account, toViewers: (_w, msg) => got.push(msg) }); cleanup.push(() => svc.stopSharing(ws));
+  const svc = new CollabService({ version: '0', broadcast: () => undefined, openExternal: () => false, makeAccount: async () => account, policy, toViewers: (_w, msg) => got.push(msg) }); cleanup.push(() => svc.stopSharing(ws));
   const view = (): SharingView | null => { const l = [...got].reverse().find((x) => x.t === 'sharing'); return l && l.t === 'sharing' ? l.sharing : null; };
   return { svc, ws, got, view, send: (x: ServerMsg) => got.push(x), account };
 }
@@ -36,6 +36,23 @@ describe('sharing a conversation from the desktop app', () => {
   it('without a sign-in it says to sign in, and the demo cannot be shared at all', async () => {
     const r = await rig(false); await r.svc.handleShare({ t: 'share' }, r.ws, r.send); await until(() => r.view()?.state === 'failed'); expect(r.view()).toMatchObject({ code: 'not_signed_in', error: expect.stringMatching(/Sign in/) });
     await r.svc.handleShare({ t: 'share' }, { ...r.ws, demo: true } as never, r.send); expect(r.got.at(-1)).toMatchObject({ t: 'notice' });
+  });
+  it('who pays: a live command post says it runs on you, with the guest count and the pause', async () => {
+    const r = await rig(); await r.svc.handleShare({ t: 'share' }, r.ws, r.send); await until(() => r.view()?.state === 'live');
+    expect(r.view()!.whoPays).toMatchObject({ runsOn: 'you', guests: 0, paused: false }); expect(r.view()!.blocked).toBeUndefined();
+  });
+  it('who pays: a subscription login in a command post is not shared by default, and the view says what to do', async () => {
+    const r = await rig(true, { detectLoginKind: async () => 'subscription' }); await r.svc.handleShare({ t: 'share' }, r.ws, r.send); await until(() => r.view()?.state === 'failed');
+    const v = r.view()!; expect(v.code).toBe('provider_policy_blocked'); expect(v.error).toMatch(/API-key/); expect(v.error).toMatch(/branch mode/); expect(v.sessionId).toBeUndefined();
+    expect(r.got.some((g) => g.t === 'notice' && /subscription login/.test(g.text))).toBe(true);
+  });
+  it('who pays: with the flag on the host is asked in the window; yes goes live, no ends the session', async () => {
+    const flags = { flag: () => true, on: () => () => undefined } as never; // every provider flag on, including the shared-subscription one
+    const r = await rig(true, { flags, detectLoginKind: async () => 'subscription' }); const first = r.svc.handleShare({ t: 'share' }, r.ws, r.send); // waits for the host's answer
+    await until(() => !!r.view()?.confirm); expect(r.view()!.state).toBe('starting'); expect(r.view()!.confirm).toMatchObject({ engine: 'fake', text: expect.stringMatching(/YOUR fake login/) });
+    await r.svc.handleShare({ t: 'shareConfirm', ok: true }, r.ws, r.send); await first; await until(() => r.view()?.state === 'live'); expect(r.view()!.confirm).toBeUndefined();
+    await r.svc.handleShare({ t: 'unshare' }, r.ws, r.send);
+    const second = r.svc.handleShare({ t: 'share' }, r.ws, r.send); await until(() => !!r.view()?.confirm); await r.svc.handleShare({ t: 'shareConfirm', ok: false }, r.ws, r.send); await second; await until(() => r.view()?.state === 'failed'); expect(r.view()!.code).toBe('provider_policy_blocked');
   });
   it('a plan without the relay is explained as an upgrade, not as an error code', () => {
     expect(shareWhy(Object.assign(new Error('x'), { code: 'entitlement_required' }))).toMatchObject({ code: 'entitlement_required', error: expect.stringMatching(/Upgrade to Pro or Team/) });

@@ -11,7 +11,7 @@ async function setup(o: { autoApprove?: boolean; /** the store tells its listene
   const host = await r.host.client.createSession({ name: 'shared', workspace: WS }); r.host.handle = host; cleanup.push(() => host.leave().catch(() => undefined));
   const ctl = new AppController({ engine: new FakeEngine({ script: {} }) as never, demo: false, cwd: '/tmp', version: 't', skills: [] }); await ctl.start(); cleanup.push(() => ctl.stop());
   if (o.lateStore) { const sub = ctl.store.subscribe; ctl.store.subscribe = (l) => sub(() => { const t = setTimeout(l, o.lateStore); t.unref?.(); }); }
-  const bridge = new HostBridge(ctl, host, { flushMs: 5, ...(o.autoApprove ? { autoApprove: true } : {}) }); bridge.start(); cleanup.push(() => bridge.stop());
+  const bridge = new HostBridge(ctl, host, { flushMs: 5, policy: { detectLoginKind: async () => 'api_key' }, ...(o.autoApprove ? { autoApprove: true } : {}) }); bridge.start(); cleanup.push(() => bridge.stop());
   const guest = await r.guest.client.joinSession({ sessionId: host.id }); r.guest.handle = guest; cleanup.push(() => guest.leave().catch(() => undefined));
   await until(() => guest.state === 'live', 8000);
   const seen: DecodedEvent[] = []; guest.onAny((e) => seen.push(e));

@@ -20,7 +20,7 @@ const aWs = (await alice.account.workspaces())[0]!; check(!!aWs, `Alice's worksp
 step('Alice shares a conversation'); 
 const ctl = new AppController({ engine: new FakeEngine({ script: {} }) as never, demo: false, cwd: mkdtempSync(join(tmpdir(), 'share-live-')), version: 'live', skills: [] }); await ctl.start();
 const aliceSessions = await alice.account.sessions(); const host = await aliceSessions.createSession({ name: 'live check', workspace: aWs.id });
-const bridge = new HostBridge(ctl, host, { onError: (e) => console.log('     bridge error:', String(e)) }); bridge.start();
+const bridge = new HostBridge(ctl, host, { policy: { detectLoginKind: async () => 'api_key' /* a dev account, not anybody's subscription */ }, onError: (e) => console.log('     bridge error:', String(e)) }); bridge.start();
 check(host.state === 'live' && host.me.role === 'host', `session ${host.id} is live, Alice is host`);
 step('Alice invites Bob to this one session; Bob accepts and joins');
 const inv = await alice.account.inviteToSession(host.id, { email: bob.email, role: 'editor' }); check(typeof inv.token === 'string', 'the session invite has a link');

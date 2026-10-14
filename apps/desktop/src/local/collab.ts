@@ -3,7 +3,7 @@
  * that follow, hosting a session over the relay and joining one. A person who never signs in never starts any of it: local sessions do not
  * need the server.
  */
-import { Account, HostBridge, JoinedSession, Team, startBranchBridge, teamWhy, untilLive, type AccountStatus } from '@centcom/tui';
+import { Account, HostBridge, JoinedSession, MESSAGES, Team, describeBlock, preflightShare, startBranchBridge, teamWhy, untilLive, type AccountStatus, type BlockedInfo, type PolicyOptions } from '@centcom/tui';
 import type { SessionHandle } from '@centcom/net';
 import type { Workspace } from './workspace.js';
 import type { AccountView, ClientMsg, JoinedView, ServerMsg, SharingView } from './protocol.js';
@@ -14,12 +14,13 @@ export interface CollabOptions {
   /** Opens the sign-in page in the browser; false when it may not be opened or could not be. `apiBase` is the configured API address. */ openExternal(url: string, apiBase: string): boolean;
   /** A seam for tests: the account to use. */ makeAccount?: () => Promise<Account>;
   /** Tells the windows that show `ws`. */ toViewers?(ws: Workspace, m: ServerMsg): void;
+  /** The who-pays gate's seams (C105): the flags client, the login lookup, an audit sink. The host's confirmation is asked in the window. */ policy?: Pick<PolicyOptions, 'flags' | 'detectLoginKind' | 'audit'>;
 }
 export type CollabMsg = Extract<ClientMsg, { t: 'account' | 'login' | 'cancelLogin' | 'logout' | 'team' | 'teamInvite' | 'teamRevoke' | 'teamRole' | 'teamRemove' | 'upgrade' }>;
 export type JoinMsg = Extract<ClientMsg, { t: 'join' | 'joinedAsk' | 'joinedLeave' }>;
 export const isJoinMsg = (m: ClientMsg): m is JoinMsg => m.t === 'join' || m.t === 'joinedAsk' || m.t === 'joinedLeave';
-export type ShareMsg = Extract<ClientMsg, { t: 'share' | 'unshare' | 'shareLink' | 'shareInvite' | 'shareDecide' | 'shareAuto' | 'shareActivity' | 'shareHandoff' | 'shareHandoffAnswer' | 'teamWatch' }>;
-const ACCOUNT = new Set(['account', 'login', 'cancelLogin', 'logout', 'team', 'teamInvite', 'teamRevoke', 'teamRole', 'teamRemove', 'upgrade']); const SHARE = new Set(['share', 'unshare', 'shareLink', 'shareInvite', 'shareDecide', 'shareAuto', 'shareActivity', 'shareHandoff', 'shareHandoffAnswer', 'teamWatch']);
+export type ShareMsg = Extract<ClientMsg, { t: 'share' | 'unshare' | 'shareLink' | 'shareInvite' | 'shareDecide' | 'shareAuto' | 'shareConfirm' | 'sharePause' | 'shareActivity' | 'shareHandoff' | 'shareHandoffAnswer' | 'teamWatch' }>;
+const ACCOUNT = new Set(['account', 'login', 'cancelLogin', 'logout', 'team', 'teamInvite', 'teamRevoke', 'teamRole', 'teamRemove', 'upgrade']); const SHARE = new Set(['share', 'unshare', 'shareLink', 'shareInvite', 'shareDecide', 'shareAuto', 'shareConfirm', 'sharePause', 'shareActivity', 'shareHandoff', 'shareHandoffAnswer', 'teamWatch']);
 export const isCollabMsg = (m: ClientMsg): m is CollabMsg => ACCOUNT.has(m.t);
 export const isShareMsg = (m: ClientMsg): m is ShareMsg => SHARE.has(m.t);
 const view = (s: AccountStatus): AccountView => ({ signedIn: s.signedIn, persisted: s.persisted, api: s.api, ...(s.offline ? { offline: true } : {}), ...(s.me ? { me: s.me } : {}) });
@@ -82,24 +83,33 @@ export class CollabService {
   }
 
   /* ---------------------------------------------------------------- sharing a conversation */
-  private shares = new Map<Workspace, { name: string; handle?: SessionHandle; bridge?: HostBridge; state: SharingView['state']; error?: string; code?: string; link?: SharingView['link']; invite?: SharingView['invite']; hint?: string; workspace?: string; account?: Account; degraded?: boolean; joinedBranch?: boolean; watching?: string; conflict?: { text: string; at: number } }>();
+  private shares = new Map<Workspace, { name: string; handle?: SessionHandle; bridge?: HostBridge; state: SharingView['state']; error?: string; code?: string; link?: SharingView['link']; invite?: SharingView['invite']; hint?: string; workspace?: string; account?: Account; degraded?: boolean; joinedBranch?: boolean; watching?: string; conflict?: { text: string; at: number }; blocked?: BlockedInfo; ask?: { engine: string; resolve(ok: boolean): void } }>();
   /** What the screens show for a conversation: undefined when it is not shared. */
   sharingOf(ws: Workspace): SharingView | null {
     const sh = this.shares.get(ws); if (!sh) return null; const h = sh.handle; const me = h?.me.id;
     const br = sh.bridge?.mode === 'branch' ? sh.bridge : undefined;
     return { state: sh.state, name: sh.name, mode: br ? 'branch' : 'command_post', ...(sh.degraded ? { degraded: true } : {}), ...(sh.joinedBranch ? { joinedBranch: true } : {}), ...(br ? { activity: br.sharingActivity, ...(br.team ? { team: br.team.snapshot() } : {}) } : {}), ...(br?.team && sh.watching ? watchOf(br.team, sh.watching) : {}), ...(h ? { sessionId: h.id } : {}), ...(sh.workspace ? { workspace: sh.workspace } : {}), ...(sh.error ? { error: sh.error } : {}), ...(sh.code ? { code: sh.code } : {}), ...(sh.link ? { link: sh.link } : {}), ...(sh.invite ? { invite: sh.invite } : {}), ...(sh.hint ? { hint: sh.hint } : {}),
       auto: sh.bridge?.autoApproving ?? false,
+      ...(sh.bridge ? (() => { const v = sh.bridge.whoPaysView(); return { whoPays: { runsOn: 'you' as const, provider: v.provider, guests: v.guests, paused: v.paused, held: v.held, stale: v.stale, failed: v.failed } }; })() : {}),
+      ...(sh.blocked ? { blocked: { code: sh.blocked.code, title: sh.blocked.title, detail: sh.blocked.detail } } : {}),
+      ...(sh.ask ? { confirm: { engine: sh.ask.engine, title: MESSAGES['provider.cp_subscription.title']({ engine: sh.ask.engine }), text: MESSAGES['provider.cp_subscription.notice']({ engine: sh.ask.engine }) } } : {}),
       members: (h?.roster() ?? []).map((m) => ({ id: m.id, name: m.name || 'Someone', slot: m.slot, role: m.role, online: m.online !== false, you: m.id === me })),
       pending: (sh.bridge?.pending() ?? []).map((p) => ({ item: p.item, from: p.from, slot: p.slot, text: p.text.slice(0, 2000) })) };
   }
   /** This person's own agent in a branch-mode session: it publishes, and the team's locks reach it. */
   private branchBridge(ws: Workspace, handle: SessionHandle): HostBridge {
-    return startBranchBridge(ws.ctl, handle, { onChange: () => this.publish(ws), onError: () => undefined, onConflict: (c) => { const sh = this.shares.get(ws); if (!sh) return; const t = sh.bridge?.team?.digestFor(handle.me.id)[0] ?? 'A teammate\'s agent is working on a file your agent is changing.'; sh.conflict = { text: t, at: Date.now() }; this.o.toViewers?.(ws, { t: 'notice', level: 'warn', text: t }); this.publish(ws); } });
+    return startBranchBridge(ws.ctl, handle, { policy: this.policyFor(ws), onChange: () => this.publish(ws), onError: () => undefined, onConflict: (c) => { const sh = this.shares.get(ws); if (!sh) return; const t = sh.bridge?.team?.digestFor(handle.me.id)[0] ?? 'A teammate\'s agent is working on a file your agent is changing.'; sh.conflict = { text: t, at: Date.now() }; this.o.toViewers?.(ws, { t: 'notice', level: 'warn', text: t }); this.publish(ws); } });
+  }
+  /** The who-pays gate's seams for one conversation: what was blocked is shown in its window, and the host's confirmation is a button there. */
+  private policyFor(ws: Workspace): PolicyOptions {
+    return { ...this.o.policy,
+      onBlocked: (b) => { const sh = this.shares.get(ws); if (sh) sh.blocked = b; this.o.toViewers?.(ws, { t: 'notice', level: 'warn', text: `${b.title}. ${b.detail}` }); this.publish(ws); },
+      confirm: (q) => new Promise<boolean>((resolve) => { const sh = this.shares.get(ws); if (!sh) { resolve(false); return; } sh.ask?.resolve(false); sh.ask = { engine: q.engine, resolve: (ok) => { sh.ask = undefined; resolve(ok); this.publish(ws); } }; this.publish(ws); }) };
   }
   private publish(ws: Workspace): void { this.o.toViewers?.(ws, { t: 'sharing', sharing: this.sharingOf(ws) }); }
   /** A window that starts showing `ws` is told whether it is shared. */
   sendSharing(ws: Workspace, send: (m: ServerMsg) => void): void { const v = this.sharingOf(ws); if (v) send({ t: 'sharing', sharing: v }); }
-  stopSharing(ws: Workspace): void { const sh = this.shares.get(ws); if (!sh) return; sh.bridge?.stop(); void sh.handle?.leave().catch(() => undefined); this.shares.delete(ws); }
+  stopSharing(ws: Workspace): void { const sh = this.shares.get(ws); if (!sh) return; sh.ask?.resolve(false); ws.ctl.setEngineGuard(undefined); sh.bridge?.stop(); void sh.handle?.leave().catch(() => undefined); this.shares.delete(ws); }
 
   async handleShare(m: ShareMsg, ws: Workspace | undefined, send: (m: ServerMsg) => void): Promise<void> {
     if (!ws || ws.demo) { send({ t: 'notice', level: 'info', text: ws?.demo ? 'The demo agent cannot be shared.' : 'Open a project first.' }); return; }
@@ -109,6 +119,7 @@ export class CollabService {
         if (cur && cur.state !== 'ended' && cur.state !== 'failed') { this.publish(ws); return; }
         const name = ws.dir.replace(/\/+$/, '').split('/').pop() || 'session'; const sh: NonNullable<typeof cur> = { name, state: 'starting' }; this.shares.set(ws, sh); this.publish(ws);
         try {
+          if (m.mode !== 'branch') { const pre = await preflightShare(this.policyFor(ws), ws.ctl); if (!pre.allowed) { sh.state = 'failed'; sh.code = 'error' in pre ? pre.error : 'host_confirmation'; const b = describeBlockFor(pre); sh.error = `${b.title}. ${b.detail}`; sh.blocked = b; this.o.toViewers?.(ws, { t: 'notice', level: 'warn', text: sh.error }); this.publish(ws); return; } } // a hard block: nothing is created
           const account = await this.getAccount(); sh.account = account; const st = await account.status();
           if (!st.signedIn) { sh.state = 'failed'; sh.code = 'not_signed_in'; sh.error = 'Sign in first: sharing needs an account.'; this.publish(ws); return; }
           const sessions = await account.sessions(); const spaces = await account.workspaces(); const home = st.me?.workspace?.id ?? spaces[0]?.id;
@@ -117,7 +128,14 @@ export class CollabService {
           const wantBranch = m.mode === 'branch'; const handle = await sessions.createSession({ name, workspace: home, ...(wantBranch ? { mode: 'branch' as const } : {}) }); sh.handle = handle;
           // a server that does not know about modes answers command_post: say so, and share as a command post instead of pretending
           const branch = wantBranch && handle.mode === 'branch'; if (wantBranch && !branch) { sh.degraded = true; sh.hint = 'This server does not support "everyone runs their own agent" yet, so the session works as a command post: you run the agent and others ask.'; }
-          sh.bridge = branch ? this.branchBridge(ws, handle) : new HostBridge(ws.ctl, handle, { onChange: () => this.publish(ws), onError: () => undefined }); if (!branch) sh.bridge.start(); sh.state = 'live';
+          if (branch) sh.bridge = this.branchBridge(ws, handle);
+          else {
+            const bridge = new HostBridge(ws.ctl, handle, { onChange: () => this.publish(ws), onError: () => undefined, policy: this.policyFor(ws) }); sh.bridge = bridge;
+            const gate = await bridge.admit(); // the same gate as every other path; the host may be asked in the window
+            if (!gate.allowed) { sh.bridge = undefined; bridge.stop(); sh.state = 'failed'; sh.code = 'provider_policy_blocked'; sh.error = sh.blocked ? `${sh.blocked.title}. ${sh.blocked.detail}` : 'Sharing was not started.'; await handle.end().catch(() => handle.leave().catch(() => undefined)); this.publish(ws); return; }
+            bridge.start();
+          }
+          ws.ctl.setEngineGuard((engine) => sh.bridge?.admitEngine(engine) ?? Promise.resolve(true)); sh.state = 'live';
           handle.on('state', (s) => { if (s === 'ended') sh.state = 'ended'; this.publish(ws); }); handle.on('ended', () => { sh.state = 'ended'; this.publish(ws); }); handle.on('roster', () => this.publish(ws));
           this.publish(ws);
         } catch (e) { sh.state = 'failed'; const w = shareWhy(e); sh.error = w.error; sh.code = w.code; this.publish(ws); }
@@ -131,12 +149,14 @@ export class CollabService {
         catch (e) { cur.hint = shareWhy(e).error; }
         this.publish(ws); return;
       }
+      case 'shareConfirm': { cur?.ask?.resolve(m.ok); if (m.ok) { cur!.blocked = undefined; void cur?.bridge?.confirmNow(); } this.publish(ws); return; }
+      case 'sharePause': { const sp = cur?.bridge?.spend; if (sp) { if (m.on) await sp.pause(); else await sp.resume(); } this.publish(ws); return; }
       case 'shareDecide': { try { if (m.decision === 'approve') await cur?.bridge?.approve(m.item); else await cur?.bridge?.reject(m.item); } catch { /* the item was already decided or withdrawn */ } this.publish(ws); return; }
-      case 'shareAuto': { cur?.bridge?.setAutoApprove(m.on); this.publish(ws); return; }
+      case 'shareAuto': { await cur?.bridge?.setAutoApprove(m.on); this.publish(ws); return; }
       case 'teamWatch': { if (cur) cur.watching = m.agent; this.publish(ws); return; }
       case 'shareActivity': { cur?.bridge?.setShareActivity(m.on); this.publish(ws); return; }
       case 'shareHandoff': { cur?.bridge?.offerHandoff(m.to, m.note); this.publish(ws); return; }
-      case 'shareHandoffAnswer': { cur?.bridge?.answerHandoff(m.id, m.accept); this.publish(ws); return; }
+      case 'shareHandoffAnswer': { await cur?.bridge?.answerHandoff(m.id, m.accept); this.publish(ws); return; }
     }
   }
 
@@ -153,7 +173,8 @@ export class CollabService {
       else if (e.kind === 'tool_result') entries.push({ id: e.id, kind: 'tool', text: e.summary.slice(0, 400), status: e.status }); else if (e.kind === 'approval') entries.push({ id: e.id, kind: 'approval', text: e.summary, ...(e.decision ? { status: e.decision } : { status: 'waiting' }) });
     }
     const q = sess.queue.snapshot().items; const mine = sess.handle.me.id;
-    j.view = { ...j.view, state: gs.phase === 'ended' || gs.phase === 'kicked' ? 'ended' : 'live', phase: gs.phase, role: sess.role, people: sess.people(), entries, asked: q.filter((i) => i.submitter === mine && ['queued', 'approved', 'running'].includes(i.state)).map((i) => ({ item: i.id, text: i.body ?? j.asked.get(i.id) ?? '', state: i.state })), ...(gs.phase === 'kicked' ? { error: 'You were removed from this session.' } : {}) };
+    const payer = sess.people().find((p) => p.role === 'host')?.name;
+    j.view = { ...j.view, ...(payer ? { payer } : {}), state: gs.phase === 'ended' || gs.phase === 'kicked' ? 'ended' : 'live', phase: gs.phase, role: sess.role, people: sess.people(), entries, asked: q.filter((i) => i.submitter === mine && ['queued', 'approved', 'running'].includes(i.state)).map((i) => ({ item: i.id, text: i.body ?? j.asked.get(i.id) ?? '', state: i.state })), ...(gs.phase === 'kicked' ? { error: 'You were removed from this session.' } : {}) };
     if (!j.timer) j.timer = setTimeout(() => { j.timer = undefined; this.pushJoined(); }, 120);
   }
   /** Joins; in a branch-mode session this person's own agent (the open project) takes part, otherwise the session is read through a JoinedSession. */
@@ -165,7 +186,7 @@ export class CollabService {
   }
   async handleJoin(m: JoinMsg, send: (m: ServerMsg) => void, ws?: Workspace): Promise<void> {
     if (m.t === 'joinedLeave') { await this.leaveJoined(); return; }
-    if (m.t === 'joinedAsk') { const s = this.joinedSession?.session; if (!s) return; try { const r = await s.ask(m.text); this.joinedSession!.asked.set(r.item, m.text); this.refreshJoined(); } catch (e) { send({ t: 'notice', level: 'warn', text: e instanceof Error ? e.message : 'Could not send that.' }); } return; }
+    if (m.t === 'joinedAsk') { const s = this.joinedSession?.session; if (!s) return; if (!this.joinedSession?.view.payer) { send({ t: 'notice', level: 'warn', text: 'Not sent: it is not known yet whose account would run your prompt. Try again in a moment.' }); return; } try { const r = await s.ask(m.text); this.joinedSession!.asked.set(r.item, m.text); this.refreshJoined(); } catch (e) { send({ t: 'notice', level: 'warn', text: e instanceof Error ? e.message : 'Could not send that.' }); } return; }
     await this.leaveJoined(); const view: JoinedView = { state: 'joining', people: [], entries: [], asked: [] }; this.joinedSession = { view, asked: new Map() }; this.pushJoined();
     try {
       const account = await this.getAccount(); const { joined, how } = await this.joinAny(account, m.input, ws);
@@ -181,6 +202,9 @@ export class CollabService {
   /** A window that starts up is told about a session the app has joined. */
   sendJoined(send: (m: ServerMsg) => void): void { if (this.joinedSession) send({ t: 'joined', joined: this.joinedSession.view }); }
 }
+
+/** The words for a gate result that is a block. */
+function describeBlockFor(r: Extract<Awaited<ReturnType<typeof preflightShare>>, { allowed: false }>): BlockedInfo { return describeBlock('new_session', r); }
 
 /** What went wrong while sharing, in words for the person. */
 export function shareWhy(e: unknown): { error: string; code?: string } {

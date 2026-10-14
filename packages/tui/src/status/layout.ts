@@ -1,14 +1,14 @@
 /** The header and footer lines: which fields exist, what they say, and what is dropped first when the terminal gets narrow. */
 import { textWidth } from '../util/text.js';
 
-export type StatusFieldName = 'cwd' | 'branch' | 'mode' | 'agents' | 'online' | 'cost' | 'quota' | 'role' | 'connectivity' | 'hints' | 'engine' | 'night' | 'state' | 'need' | 'context' | 'limits' | 'tokens';
-export interface StatusFields { cwd: string; home?: string; branch?: string; mode?: 'ask' | 'accept-edits' | 'plan' | 'bypass'; /** The engine and model, as the app header shows them. */ engine?: string; /** Night cycle, as a short phrase (`night 2/5`). */ night?: string; /** What the agent is doing (`thinking`) or `idle`. */ state?: string; /** Agents (and permission prompts) waiting for you. */ needYou?: number; context?: { pct: number; tokens?: string }; limits?: { name: string; pct: number; resets?: string }[]; tokens?: string; agents?: number; online?: number; costMicroUsd?: number; showCost?: boolean; quota?: { used: number; limit: number | null; warnPct?: number }; role?: 'host' | 'editor' | 'viewer'; connectivity?: 'online' | 'offline' | 'reconnecting' | 'degraded' | 'down'; hints?: string[] }
+export type StatusFieldName = 'cwd' | 'branch' | 'mode' | 'agents' | 'online' | 'cost' | 'quota' | 'role' | 'connectivity' | 'hints' | 'engine' | 'night' | 'state' | 'need' | 'context' | 'limits' | 'tokens' | 'runs' | 'guests';
+export interface StatusFields { cwd: string; home?: string; branch?: string; mode?: 'ask' | 'accept-edits' | 'plan' | 'bypass'; /** The engine and model, as the app header shows them. */ engine?: string; /** Night cycle, as a short phrase (`night 2/5`). */ night?: string; /** What the agent is doing (`thinking`) or `idle`. */ state?: string; /** Agents (and permission prompts) waiting for you. */ needYou?: number; context?: { pct: number; tokens?: string }; limits?: { name: string; pct: number; resets?: string }[]; tokens?: string; agents?: number; online?: number; costMicroUsd?: number; showCost?: boolean; quota?: { used: number; limit: number | null; warnPct?: number }; role?: 'host' | 'editor' | 'viewer'; connectivity?: 'online' | 'offline' | 'reconnecting' | 'degraded' | 'down'; hints?: string[]; /** C105: `runs on <name> · <provider>`. */ runsOn?: string; /** C105: `N guests can spend your <provider> usage` and how to pause, or `Guests paused`. */ guests?: { text: string; stale?: boolean } }
 export type Tone = 'muted' | 'warning' | 'danger';
 export interface StatusSegment { field: StatusFieldName; text: string; tone: Tone; side: 'left' | 'right' }
 /** What goes first when the line is too wide. The mode goes last; quota, role and connectivity are never dropped. */
 export const STATUS_DROP_ORDER: StatusFieldName[] = ['hints', 'cost', 'online', 'agents', 'branch', 'mode'];
 /** Fields the app adds on top of the DESIGN lines; they go before the branch and the mode when the line is too wide (hints and cost still go first). */
-export const EXTRA_DROP_ORDER: StatusFieldName[] = ['tokens', 'engine', 'night', 'limits', 'state', 'context'];
+export const EXTRA_DROP_ORDER: StatusFieldName[] = ['tokens', 'engine', 'night', 'limits', 'state', 'context', 'runs'];
 export const SEP = ' · ';
 export const MAX_BRANCH = 24;
 
@@ -34,11 +34,12 @@ const ROLE = { host: 'HOST', editor: 'EDIT', viewer: 'VIEW' } as const;
 function build(f: StatusFields, line: 'header' | 'footer'): StatusSegment[] {
   const seg = (field: StatusFieldName, text: string, side: 'left' | 'right', tone: Tone = 'muted'): StatusSegment => ({ field, text, tone, side }); const out: StatusSegment[] = [];
   if (line === 'header') {
-    out.push(seg('cwd', `cento${SEP}${shortCwd(f.cwd, f.home)}`, 'left')); if (f.branch) out.push(seg('branch', shortBranch(f.branch), 'left')); if (f.engine) out.push(seg('engine', f.engine, 'right'));
+    out.push(seg('cwd', `cento${SEP}${shortCwd(f.cwd, f.home)}`, 'left')); if (f.branch) out.push(seg('branch', shortBranch(f.branch), 'left')); if (f.engine) out.push(seg('engine', f.engine, 'right')); if (f.runsOn) out.push(seg('runs', f.runsOn, 'right'));
     if (f.agents !== undefined) out.push(seg('agents', `● ${f.agents} agent${f.agents === 1 ? '' : 's'}`, 'right')); if (f.online !== undefined) out.push(seg('online', `☻ ${f.online} online`, 'right'));
     if (f.costMicroUsd !== undefined && f.showCost !== false) out.push(seg('cost', formatCost(f.costMicroUsd), 'right'));
     const q = quotaChip(f.quota); if (q) out.push(seg('quota', q.text, 'right', q.tone)); if (f.role) out.push(seg('role', ROLE[f.role], 'right')); if (f.connectivity && f.connectivity !== 'online') out.push(seg('connectivity', CONNECTIVITY[f.connectivity], 'right', f.connectivity === 'down' ? 'danger' : 'warning'));
   } else {
+    if (f.guests) out.push(seg('guests', f.guests.text, 'left', f.guests.stale ? 'muted' : 'warning'));
     if (f.mode) out.push(seg('mode', MODE_TEXT[f.mode], 'left', f.mode === 'bypass' ? 'danger' : 'muted')); if (f.night) out.push(seg('night', f.night, 'left'));
     if (f.state) out.push(seg('state', f.state, 'left')); if (f.needYou) out.push(seg('need', `${f.needYou} need${f.needYou === 1 ? 's' : ''} you`, 'left', 'warning'));
     if (f.context) out.push(seg('context', `context ${bar(f.context.pct)} ${Math.round(f.context.pct)}%${f.context.tokens ? ' ' + f.context.tokens : ''}`, 'left', gaugeTone(f.context.pct)));

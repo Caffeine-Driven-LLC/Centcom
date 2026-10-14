@@ -33,6 +33,7 @@ export interface AppState {
   history: string[]; histIdx: number | null; draft: string;
   scroll: number;
   toasts: Toast[];
+  /** While a conversation is shared (C105): whose account runs the agent, and, in a command post, how many guests can spend it. */ share?: { runsOn: string; guests?: string; guestsStale?: boolean };
   /** The link to the hosted service while a session is shared (lane C063); undefined when nothing is shared. */ net?: 'online' | 'reconnecting' | 'offline' | 'degraded' | 'backend-down';
   approvals: PendingApproval[];
   settings: Settings;

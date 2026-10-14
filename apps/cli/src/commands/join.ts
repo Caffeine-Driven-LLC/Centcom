@@ -6,6 +6,7 @@
  */
 import type { GuestState } from '@centcom/guest';
 import type { JoinedSession } from '@centcom/tui';
+import { MESSAGES } from '@centcom/tui';
 
 export interface JoinDeps {
   account: { join(input: string, o?: { displayName?: string }): Promise<{ joined: JoinedSession | JoinedLike; how: 'invite' | 'session' | 'watch' }> };
@@ -45,9 +46,12 @@ export async function runJoin(argv: string[], deps: JoinDeps): Promise<number> {
   try { ({ joined, how } = await d.account.join(target, displayName ? { displayName } : {})); } catch (e) { d.err(failure(e)); return 1; }
   d.out(`Joined (${how === 'invite' ? 'by invite' : how === 'watch' ? 'watch-only link' : 'in your workspace'}) as ${WHO[joined.role] ?? joined.role}. ${joined.role === 'viewer' ? 'You can watch but not send.' : 'Type a line to ask the host\'s agent for something; Ctrl-C leaves.'}`);
   const shown = new Map<string, number>(); let phase = ''; let lastPeople = '';
+  /** Whose account runs a prompt typed here (C105): the host's, in a command post. Said before the first prompt can be sent; unknown means nothing is sent. */
+  const hostName = (): string | undefined => joined.people().find((p) => p.role === 'host')?.name || undefined; let noticeFor = '';
+  const payerNotice = (): void => { const h = hostName(); if (joined.role === 'viewer' || !h || h === noticeFor) return; noticeFor = h; d.out(MESSAGES['provider.guest_notice']({ host: h })); };
   const print = (s: GuestState): void => {
     if (s.phase !== phase) { phase = s.phase; if (phase === 'waiting_for_key') d.out('… waiting for the host to let you read'); else if (phase === 'reconnecting') d.out('… reconnecting'); else if (phase === 'ended') d.out('The session has ended.'); else if (phase === 'kicked') d.out('You were removed from this session.'); }
-    const people = joined.people().map((p) => `${p.you ? 'you' : p.name} (${WHO[p.role] ?? p.role})`).join(', '); if (people !== lastPeople) { lastPeople = people; d.out(`In the session: ${people}`); }
+    const people = joined.people().map((p) => `${p.you ? 'you' : p.name} (${WHO[p.role] ?? p.role})`).join(', '); if (people !== lastPeople) { lastPeople = people; d.out(`In the session: ${people}`); payerNotice(); }
     for (const e of s.transcript) {
       const key = e.id; const done = e.kind === 'assistant' ? e.done : true; if (!done || shown.has(key)) continue; shown.set(key, 1);
       if (e.kind === 'user') { const p = joined.people().find((x) => x.id === e.from); d.out(`${p ? (p.you ? 'you' : p.name) : 'someone'}> ${e.text}`); } else if (e.kind === 'assistant') d.out(e.text); else if (e.kind === 'system') d.out(`· ${e.text}`);
@@ -55,7 +59,7 @@ export async function runJoin(argv: string[], deps: JoinDeps): Promise<number> {
     }
   };
   const off = joined.subscribe(print); const ended = new Promise<void>((resolve) => { const check = joined.subscribe((s) => { if (s.phase === 'ended' || s.phase === 'kicked') resolve(); }); d.signal?.addEventListener('abort', () => { check(); resolve(); }); });
-  const reader = joined.role !== 'viewer' && d.lines ? (async () => { try { for await (const line of d.lines!) { const t = line.trim(); if (!t) continue; try { await joined.ask(t); d.out('(asked: waiting for the host)'); } catch (e) { d.err(failure(e)); } } } catch { /* input closed */ } })() : undefined;
+  const reader = joined.role !== 'viewer' && d.lines ? (async () => { try { for await (const line of d.lines!) { const t = line.trim(); if (!t) continue; if (!hostName()) { d.err('Not sent: it is not known yet whose account would run your prompt. Try again in a moment.'); continue; } payerNotice(); try { await joined.ask(t); d.out('(asked: waiting for the host)'); } catch (e) { d.err(failure(e)); } } } catch { /* input closed */ } })() : undefined;
   await ended; void reader; off(); await joined.leave();
   return 0;
 }

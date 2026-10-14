@@ -18,7 +18,7 @@ async function agent(cwd: string) { const ctl = new AppController({ engine: new 
 
 describe('choosing how to work together in the terminal', { timeout: 30_000 }, () => {
   it('/share branch on a server without modes falls back to a command post and says so', async () => {
-    const r = await rig(); cleanup.push(() => r.stop()); const ctl = await agent('/tmp/proj'); const share = new ShareSession(ctl, account(r.host, { serverMode: 'command_post' })); cleanup.push(() => share.close());
+    const r = await rig(); cleanup.push(() => r.stop()); const ctl = await agent('/tmp/proj'); const share = new ShareSession(ctl, account(r.host, { serverMode: 'command_post' }), { detectLoginKind: async () => 'api_key' }); cleanup.push(() => share.close());
     await share.handleCommand('branch'); expect(share.live).toBe(true); expect(notices(ctl).some((n) => /does not support everyone running their own agent/.test(n.text))).toBe(true); expect(notices(ctl).at(-1)!.text).toBe('Sharing proj');
     await share.handleCommand('team'); expect(ctl.state.toasts.at(-1)!.text).toMatch(/No team yet/);
   });

@@ -28,6 +28,14 @@ describe('centcom join', () => {
     const v = fake('viewer'); const j = io(); async function* typed() { yield 'nope'; } const run2 = runJoin(['ses_x'], { account: { join: async () => ({ joined: v.joined, how: 'watch' as const }) }, lines: typed(), ...j.d }); await new Promise((r) => setTimeout(r, 30)); v.end(); await run2; expect(v.asked).toEqual([]); expect(j.out[0]).toMatch(/watch but not send/);
     const k = io(); expect(await runJoin(['x'], { account: { join: async () => { throw Object.assign(new Error('x'), { code: 'invite_expired' }); } }, ...k.d })).toBe(1); expect(k.err[0]).toMatch(/no longer valid/);
   });
+  it('says whose account runs a prompt before the first one is sent, and sends nothing when the host is not known', async () => {
+    const f = fake(); const i = io(); async function* lines() { yield 'add tests'; }
+    const run = runJoin(['ses_x'], { account: { join: async () => ({ joined: f.joined, how: 'session' as const }) }, lines: lines(), ...i.d }); await new Promise((r) => setTimeout(r, 30)); f.end(); await run;
+    const out = i.out.join('\n'); expect(out).toContain("Your prompt will run on Alice's account"); expect(out.indexOf("Your prompt will run")).toBeLessThan(out.indexOf('(asked'));
+    const g = fake(); (g.joined as unknown as { people(): never[] }).people = () => []; const j = io(); async function* typed() { yield 'who pays?'; }
+    const run2 = runJoin(['ses_x'], { account: { join: async () => ({ joined: g.joined, how: 'session' as const }) }, lines: typed(), ...j.d }); await new Promise((r) => setTimeout(r, 30)); g.end(); await run2;
+    expect(g.asked).toEqual([]); expect(j.err.join('\n')).toMatch(/whose account would run your prompt/);
+  });
   it('does not let the host write escape sequences or control characters into a guest terminal', () => {
     expect(clean('ok\u001b[2J\u001b[Hgone')).toBe('okgone'); expect(clean('a\u001b]0;pwned title\u0007b')).toBe('ab'); expect(clean('a\u001b]52;c;ZXZpbA==\u001b\\b')).toBe('ab');
     expect(clean('line one\nline two\ttab')).toBe('line one\nline two\ttab'); expect(clean('over\rwrite\u0007\u0008x')).toBe('overwritex'); expect(clean('\u001bPdevice control\u001b\\z')).toBe('z'); expect(clean('c1\u009b31mred')).toBe('c131mred');

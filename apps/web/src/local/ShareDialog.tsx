@@ -22,8 +22,11 @@ export function ShareButton({ view }: { view: LocalView }): React.JSX.Element | 
 export function ShareDialog({ view, send }: { view: LocalView; send(m: ClientMsg): void }): React.JSX.Element | null {
   const [open, setOpen] = useState(false); const [email, setEmail] = useState(''); const [mode, setMode] = useState<'command_post' | 'branch'>('command_post'); const sh = view.sharing; const account = view.account;
   useEffect(() => { const f = (): void => { setOpen(true); send({ t: 'account' }); }; window.addEventListener('centcom:share', f); return () => window.removeEventListener('centcom:share', f); }, [send]);
+  const asking = !!sh?.confirm; useEffect(() => { if (asking) setOpen(true); }, [asking]); // the host's question must be seen
   if (!view.opened) return null;
   const live = sh?.state === 'live';
+  const confirmBox = sh?.confirm ? <section className="shr__sec" role="alertdialog" aria-label={sh.confirm.title}><h3>{sh.confirm.title}</h3><p>{sh.confirm.text}</p><div className="acct__actions"><Button onClick={() => send({ t: 'shareConfirm', ok: true })}>Yes, share my login</Button><Button variant="ghost" onClick={() => send({ t: 'shareConfirm', ok: false })}>No, cancel</Button></div></section> : null;
+  const wp = sh?.whoPays; const blockedBox = sh?.blocked ? <p className="acct__error" role="alert"><strong>{sh.blocked.title}.</strong> {sh.blocked.detail}</p> : null;
   return <Dialog open={open} onOpenChange={setOpen} label="Share this session">
     <div className="shr">
       <h2 className="acct__title">{live ? (sh?.joinedBranch ? 'You are in a shared session' : 'Shared session') : 'Share this session'}</h2>
@@ -38,7 +41,7 @@ export function ShareDialog({ view, send }: { view: LocalView; send(m: ClientMsg
           <p className="acct__note">Sharing needs an account.</p>
           <div className="acct__actions"><Button onClick={() => { setOpen(false); window.dispatchEvent(new Event('centcom:account')); }}>Sign in</Button><Button variant="ghost" onClick={() => setOpen(false)}>Not now</Button></div>
         </> : <div className="acct__actions"><Button onClick={() => send({ t: 'share', mode })}>Start sharing</Button><Button variant="ghost" onClick={() => setOpen(false)}>Not now</Button></div>}
-      </> : sh.state === 'starting' ? <p>Starting the session…</p> : sh.state === 'failed' ? <>
+      </> : sh.state === 'starting' ? <>{confirmBox}<p>Starting the session…</p></> : sh.state === 'failed' ? <>
         <p className="acct__error" role="alert">{sh.error ?? 'Sharing did not start.'}</p>
         <div className="acct__actions">{sh.code === 'not_signed_in' ? <Button onClick={() => { setOpen(false); window.dispatchEvent(new Event('centcom:account')); }}>Sign in</Button> : <Button onClick={() => send({ t: 'share', mode })}>Try again</Button>}<Button variant="ghost" onClick={() => { send({ t: 'unshare' }); setOpen(false); }}>Close</Button></div>
       </> : <>
@@ -57,6 +60,10 @@ export function ShareDialog({ view, send }: { view: LocalView; send(m: ClientMsg
           <p className="acct__note">Anyone with the link can watch, for an hour, without an account. Treat it like a password.</p></section>
         <section className="shr__sec"><h3><Users aria-hidden="true" />In this session</h3>
           <ul className="ps-list">{sh.members.map((m) => <Person key={m.id} name={m.you ? 'You' : m.name} slot={m.slot} sub={`${ROLE[m.role]}${m.online ? '' : ' · away'}`} />)}</ul></section>
+        {confirmBox}{blockedBox}
+        {wp ? <section className="shr__sec" aria-label="Whose account runs the agent"><h3>Whose account</h3>
+          <p data-testid="runs-on">{sh.mode === 'branch' ? `Your agent runs on your own account · ${wp.provider}` : `Runs on you · ${wp.provider}`}</p>
+          {sh.mode !== 'branch' && (wp.guests > 0 || wp.held) ? <p data-testid="guest-spend" className={wp.stale ? 'acct__note' : 'acct__error'}>{wp.paused || wp.held ? 'Guests paused' : `${wp.guests} ${wp.guests === 1 ? 'guest' : 'guests'} can spend your ${wp.provider === 'anthropic' ? 'Anthropic' : wp.provider === 'openai' ? 'OpenAI' : 'provider'} usage`}{wp.failed ? ' (could not pause on the server; guests are held on this computer anyway)' : ''} <Button size="sm" variant="outline" onClick={() => send({ t: 'sharePause', on: !(wp.paused || wp.held) })}>{wp.paused || wp.held ? 'Resume guests' : 'Pause guests'}</Button></p> : null}</section> : null}
         <section className="shr__sec"><h3>Asked for by others {sh.pending.length ? <Badge>{sh.pending.length}</Badge> : null}</h3>
           {sh.pending.length ? <ul className="shr__asks">{sh.pending.map((p) => <li key={p.item}><span><strong>{p.from}</strong>: {p.text}</span><span className="shr__btns"><Button size="sm" onClick={() => send({ t: 'shareDecide', item: p.item, decision: 'approve' })}>Run it</Button><Button size="sm" variant="ghost" onClick={() => send({ t: 'shareDecide', item: p.item, decision: 'reject' })}>No</Button></span></li>)}</ul> : <p className="acct__note">{sh.auto ? 'Requests from editors run without asking you.' : 'Nothing waiting. Requests from editors wait here for you.'}</p>}
           <label className="shr__auto"><input type="checkbox" checked={sh.auto} onChange={(e) => send({ t: 'shareAuto', on: e.target.checked })} />Run requests from editors without asking me</label></section>

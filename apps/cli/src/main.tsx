@@ -218,7 +218,7 @@ async function main() {
   rt.bind(ctl);
   await ctl.start();
   let share: ShareSession | undefined; // /share: made on first use, so nobody who never shares reads the keychain or the server settings for it
-  if (!demo) ctl.setShareHandler(async (arg) => { share ??= new ShareSession(ctl, await Account.create({ app: 'centcom-tui', version: VERSION, logger })); await share.handleCommand(arg); });
+  if (!demo) ctl.setShareHandler(async (arg) => { share ??= new ShareSession(ctl, await Account.create({ app: 'centcom-tui', version: VERSION, logger }), { ...(rflags ? { flags: rflags.client } : {}), detectLoginKind: async (e) => (e === 'claude-code' || e === 'codex' ? (await createProviderDetector({ run: runProbe, which: makeWhich(), clock: { now: () => Date.now(), setTimeout: (f: () => void, ms: number) => setTimeout(f, ms), clearTimeout: (h: unknown) => clearTimeout(h as NodeJS.Timeout) } as never }).detect(e)).effective_kind : 'unknown') }); /* the who-pays gate reads the service's flags (defaults until loaded) and looks the login kind up */ await share.handleCommand(arg); });
   process.on('exit', () => share?.close());
   { // every start: look for a newer release in the background and bring it in, so the next start is the latest (never delays this one, never while a session is live)
     const http = createHttpClient({ baseUrl: cc.cfg.api.base_url, getAccessToken: async () => undefined, userAgent: defaultUserAgent(VERSION) });

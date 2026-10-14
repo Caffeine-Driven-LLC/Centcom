@@ -9,11 +9,22 @@ import { startUsageReporting, type UsageLink } from './usage-link.js';
 import type { AppController } from '../controller.js';
 import type { Account } from './account.js';
 import { HostBridge, startBranchBridge, untilLive } from './host-bridge.js';
+import { describeBlock, preflightShare, type PolicyOptions } from './policy.js';
+import { MESSAGES, providerName } from '../provider/messages.js';
+import { runsOnLabel } from '../provider/RunsOnChip.js';
 import { renderTeam, renderTranscript } from './team-text.js';
 
 export class ShareSession {
   private handle?: SessionHandle; private bridge?: HostBridge; private net?: NetStateMonitor; private lastNet?: NetState; private usage?: UsageLink; private inbox?: NotificationsClient; private offInbox?: () => void; private known = new Set<string>(); private order: string[] = []; private workspace = '';
-  constructor(private readonly ctl: AppController, private readonly account: Account) {}
+  constructor(private readonly ctl: AppController, private readonly account: Account, private readonly policyOpts: PolicyOptions = {}) {}
+  /** The who-pays gate's seams: the caller's flags and login lookup, plus this app's words and the host's confirmation dialog. */
+  private policy(): PolicyOptions {
+    const ctl = this.ctl;
+    return { ...this.policyOpts,
+      onBlocked: (b) => { ctl.notice('warn', b.title, b.detail); ctl.toast('warn', b.title); this.policyOpts.onBlocked?.(b); },
+      confirm: this.policyOpts.confirm ?? (async (q) => { const ids = await ctl.pick({ title: MESSAGES['provider.cp_subscription.title']({ engine: q.engine }), note: MESSAGES['provider.cp_subscription.notice']({ engine: q.engine }), multi: false, confirm: 'yes, share it', options: [{ id: 'yes', label: 'Yes, share my login', hint: 'for this session only' }, { id: 'no', label: 'No, cancel', hint: 'guests cannot use your login' }] }); return ids?.[0] === 'yes'; }),
+      audit: (n) => { ctl.notice('info', 'You confirmed sharing your login', `${n.note} (${n.engine}). This holds for this session only.`); this.policyOpts.audit?.(n); } };
+  }
   get live(): boolean { return !!this.handle && this.handle.state !== 'ended'; }
 
   /** Words for what went wrong while sharing. */
@@ -40,10 +51,12 @@ export class ShareSession {
         case 'status': return this.status();
         case 'invite': return await this.invite(rest[0]);
         case 'link': return await this.link();
-        case 'auto': { if (!this.bridge) return this.need(); const on = rest[0] ? rest[0] === 'on' : !this.bridge.autoApproving; this.bridge.setAutoApprove(on); ctl.toast('info', on ? 'Requests from editors run without asking you.' : 'Requests from editors wait for you.'); return; }
+        case 'auto': { if (!this.bridge) return this.need(); const on = rest[0] ? rest[0] === 'on' : !this.bridge.autoApproving; const now = await this.bridge.setAutoApprove(on); if (on && !now) return; /* the gate said no and told why */ ctl.toast('info', now ? 'Requests from editors run without asking you.' : 'Requests from editors wait for you.'); return; }
+        case 'pause': case 'resume': { const sp = this.bridge?.spend; if (!sp) return this.need(); if (sub.toLowerCase() === 'pause') await sp.pause(); else await sp.resume(); this.refreshStatus(); if (sp.lastError()) ctl.toast('warn', MESSAGES['provider.pause_failed']()); else ctl.toast('info', sp.paused() ? MESSAGES['provider.guests_paused']() : 'Guests can ask again.'); return; }
+        case 'confirm': { const b = this.bridge; if (!b || b.mode !== 'command_post') return this.need(); const ok = await b.confirmNow(); if (ok) ctl.toast('ok', 'Guests can now use your login in this session.'); return; }
         case 'run': case 'no': return await this.decide(sub.toLowerCase() === 'run', rest[0]);
         case 'stop': return await this.stop();
-        default: ctl.toast('warn', 'Use /share, /share branch, /share join <id|link>, /team, /share activity [on|off], /share handoff <number> [note], /share invite [email], /share link, /share status, /share run <n>, /share no <n>, /share auto or /share stop.');
+        default: ctl.toast('warn', 'Use /share, /share branch, /share join <id|link>, /team, /share activity [on|off], /share handoff <number> [note], /share invite [email], /share link, /share status, /share run <n>, /share no <n>, /share auto, /share pause, /share resume, /share confirm or /share stop.');
       }
     } catch (e) { ctl.notice('error', 'Sharing', this.why(e)); }
   }
@@ -53,6 +66,7 @@ export class ShareSession {
   private async start(mode: 'command_post' | 'branch' = 'command_post'): Promise<void> {
     const ctl = this.ctl; if (this.live) return this.status();
     if (ctl.state.busy) { ctl.toast('warn', 'Cento is still working. Try again when it is done.'); return; }
+    if (mode === 'command_post') { const pre = await preflightShare(this.policy(), ctl); if (!pre.allowed) { this.blockedStart(pre); return; } } // switched off, or a subscription login with shared sessions off: nothing is created
     ctl.toast('info', 'Starting the session…'); const st = await this.account.status();
     if (!st.signedIn) { ctl.notice('warn', 'Sharing needs an account', 'Run `centcom login` in a terminal, approve it in your browser, then type /share again.'); return; }
     const sessions = await this.account.sessions(); const spaces = await this.account.workspaces(); const home = st.me?.workspace?.id ?? spaces[0]?.id; if (!home) { ctl.notice('error', 'Sharing', 'Your account has no workspace to share in.'); return; }
@@ -60,14 +74,23 @@ export class ShareSession {
     const handle = await sessions.createSession({ name, workspace: home, ...(mode === 'branch' ? { mode: 'branch' as const } : {}) }); this.handle = handle;
     const branch = mode === 'branch' && handle.mode === 'branch'; if (mode === 'branch' && !branch) ctl.notice('warn', 'This server does not support everyone running their own agent yet', 'The session works as a command post instead: you run the agent and others ask.');
     this.watchNet(handle);
-    if (branch) this.bridge = this.branch(handle); else { this.bridge = new HostBridge(ctl, handle, { onChange: () => this.onChange(), onError: () => undefined }); this.bridge.start(); }
+    if (branch) this.bridge = this.branch(handle);
+    else {
+      const bridge = new HostBridge(ctl, handle, { onChange: () => this.onChange(), onError: () => undefined, policy: this.policy() }); this.bridge = bridge;
+      const gate = await bridge.admit(); // the same gate as every other path; the host may be asked here
+      if (!gate.allowed) { this.drop(); await handle.end().catch(() => handle.leave().catch(() => undefined)); return; }
+      bridge.start();
+    }
+    this.ctl.setEngineGuard((engine) => this.bridge?.admitEngine(engine) ?? Promise.resolve(true)); this.refreshStatus();
     handle.on('ended', () => { ctl.notice('info', 'The shared session ended.'); this.drop(); });
     if (branch) { ctl.notice('ok', `Sharing ${name}: everyone runs their own agent`, `Session ${handle.id} in ${this.workspace}.\nEach person joins with their own copy of the project: /share join ${handle.id} (or centcom join, for a watch-only view). /team shows who is working on what; /share activity off keeps your agent's messages private (state, branch and locks are always shared).\n/share invite <email> makes an invite link for one person.`); return; }
     ctl.notice('ok', `Sharing ${name}`, `Session ${handle.id} in ${this.workspace}.\n/share invite <email> makes an invite link for one person, /share link makes a watch-only link, /share stop ends it.\nPeople in your workspace can join with: centcom join ${handle.id}`);
   }
+  /** A start the gate refused before any session existed (its notice was shown by the bridge's callback or here). */
+  private blockedStart(r: import('@centcom/agent').GateResult): void { if (r.allowed) return; const b = describeBlock('new_session', r); this.ctl.notice('warn', b.title, b.detail); this.ctl.toast('warn', b.title); }
   /** This person's own agent in a branch-mode session. */
   private branch(handle: SessionHandle): HostBridge {
-    return startBranchBridge(this.ctl, handle, { onChange: () => this.onChange(), onError: () => undefined, onConflict: () => { const line = this.bridge?.team?.digestFor(handle.me.id)[0] ?? "A teammate's agent is changing a file your agent is changing."; this.ctl.notice('warn', 'Two agents are working on the same file', `${line} Your branches will conflict there; tell them, or pick another file.`); } });
+    return startBranchBridge(this.ctl, handle, { policy: this.policy(), onChange: () => this.onChange(), onError: () => undefined, onConflict: () => { const line = this.bridge?.team?.digestFor(handle.me.id)[0] ?? "A teammate's agent is changing a file your agent is changing."; this.ctl.notice('warn', 'Two agents are working on the same file', `${line} Your branches will conflict there; tell them, or pick another file.`); } });
   }
   /** `/share join <id|link>`: this conversation joins somebody's session with its own agent (a command post is read with `centcom join`). */
   private async joinBranch(input?: string): Promise<void> {
@@ -75,7 +98,7 @@ export class ShareSession {
     const st = await this.account.status(); if (!st.signedIn) { ctl.notice('warn', 'Joining needs an account', 'Run `centcom login` in a terminal first.'); return; }
     const { handle } = await this.account.joinMember(input); if (handle.mode !== 'branch') { await handle.leave().catch(() => undefined); ctl.notice('warn', 'That session is a command post', `There the host runs the agent. Watch and ask with: centcom join ${input}`); return; }
     ctl.toast('info', 'Joining…'); if (!(await untilLive(handle))) { await handle.leave().catch(() => undefined); ctl.notice('error', 'Could not join', 'The host did not let this computer in yet (it has to be online to hand out the keys). Try again in a moment.'); return; }
-    this.handle = handle; this.watchNet(handle); this.bridge = this.branch(handle); handle.on('ended', () => { ctl.notice('info', 'The shared session ended.'); this.drop(); });
+    this.handle = handle; this.watchNet(handle); this.bridge = this.branch(handle); this.ctl.setEngineGuard((engine) => this.bridge?.admitEngine(engine) ?? Promise.resolve(true)); this.refreshStatus(); handle.on('ended', () => { ctl.notice('info', 'The shared session ended.'); this.drop(); });
     ctl.notice('ok', 'You are in the session with your own agent', `Your agent works on ${ctl.state.cwd}. /team shows who is working on what; /share stop leaves.`);
   }
   /** `/team` (also `/share team`): everybody's agents. */
@@ -122,13 +145,18 @@ export class ShareSession {
   private async link(): Promise<void> {
     if (!this.handle) return this.need(); const l = await this.handle.createShareLink(); this.ctl.notice('ok', 'Watch-only link', `${l.url}${l.fragment}\nAnyone with it can watch for an hour, without an account. Treat it like a password.`);
   }
+  /** The header and footer say whose account runs the agent and how many guests can spend it. */
+  private refreshStatus(): void {
+    const b = this.bridge; if (!b) { this.ctl.setShareStatus(undefined); return; } const v = b.whoPaysView(); const name = providerName(v.provider);
+    this.ctl.setShareStatus({ runsOn: runsOnLabel({ payerName: 'you', provider: v.provider }), ...(v.guests > 0 || v.held ? { guests: v.paused || v.held ? `${MESSAGES['provider.guests_paused']()}  ${MESSAGES['provider.resume_cmd']()}` : `${MESSAGES['provider.guests_spend']({ count: v.guests, provider: v.provider })}  ${MESSAGES['provider.pause_cmd']()}`, guestsStale: v.stale || v.failed } : {}) }); void name;
+  }
   private onChange(): void {
-    const b = this.bridge; if (!b) return; for (const p of b.pending()) { if (this.known.has(p.item)) continue; this.known.add(p.item); this.order.push(p.item); const n = this.order.length; this.ctl.notice('warn', `${p.from} asks: ${p.text.length > 200 ? p.text.slice(0, 200) + '…' : p.text}`, `Type /share run ${n} to let the agent do it, or /share no ${n}.`); this.ctl.toast('warn', `${p.from} asked for something (/share run ${n})`); }
+    this.refreshStatus(); const b = this.bridge; if (!b) return; for (const p of b.pending()) { if (this.known.has(p.item)) continue; this.known.add(p.item); this.order.push(p.item); const n = this.order.length; this.ctl.notice('warn', `${p.from} asks: ${p.text.length > 200 ? p.text.slice(0, 200) + '…' : p.text}`, `Type /share run ${n} to let the agent do it, or /share no ${n}.`); this.ctl.toast('warn', `${p.from} asked for something (/share run ${n})`); }
   }
   private async decide(run: boolean, n?: string): Promise<void> {
     const b = this.bridge; if (!b) return this.need(); const open = b.pending(); const idx = n ? Number(n) : open.length === 1 ? this.order.indexOf(open[0]!.item) + 1 : 0;
     const item = this.order[idx - 1]; if (!item || !open.some((p) => p.item === item)) { this.ctl.toast('warn', open.length ? `Which one? ${open.map((p) => `${this.order.indexOf(p.item) + 1}`).join(', ')}` : 'Nothing is waiting.'); return; }
-    if (run) await b.approve(item); else await b.reject(item); this.ctl.toast('ok', run ? 'Running it.' : 'Declined.');
+    if (run) { if (await b.approve(item)) this.ctl.toast('ok', 'Running it.'); return; } await b.reject(item); this.ctl.toast('ok', 'Declined.');
   }
   private async stop(): Promise<void> { if (!this.handle) return this.need(); const h = this.handle; this.drop(); await h.end().catch(() => h.leave().catch(() => undefined)); this.ctl.notice('info', 'Stopped sharing'); }
   /** From the moment a session is live, the link to the hosted service is watched: the sockets first, the status feed as a second opinion. */
@@ -142,7 +170,7 @@ export class ShareSession {
     const monitor = new NetStateMonitor({ sessions: () => [handle], status: () => this.account.plain.getStatus(), clock: { now: () => Date.now(), setTimeout: (f, ms) => { const h = setTimeout(f, ms); h.unref?.(); return h; }, clearTimeout: (h) => clearTimeout(h as unknown as NodeJS.Timeout) } });
     monitor.on('change', (s, prev) => { this.lastNet = s; this.ctl.setNet(s, prev); }); this.net = monitor; this.ctl.setNet('online'); monitor.start();
   }
-  private drop(): void { this.offInbox?.(); this.offInbox = undefined; this.inbox?.stop(); void this.usage?.stop(); this.usage = undefined; this.net?.stop(); this.net = undefined; this.ctl.setNet(undefined); this.bridge?.stop(); this.bridge = undefined; this.handle = undefined; this.known.clear(); this.order = []; }
+  private drop(): void { this.ctl.setEngineGuard(undefined); this.ctl.setShareStatus(undefined); this.offInbox?.(); this.offInbox = undefined; this.inbox?.stop(); void this.usage?.stop(); this.usage = undefined; this.net?.stop(); this.net = undefined; this.ctl.setNet(undefined); this.bridge?.stop(); this.bridge = undefined; this.handle = undefined; this.known.clear(); this.order = []; }
   /** The app is closing. */
   close(): void { const h = this.handle; this.drop(); void h?.leave().catch(() => undefined); }
 }
