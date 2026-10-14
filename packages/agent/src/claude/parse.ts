@@ -64,6 +64,8 @@ interface Block { type: string; tool_id?: string; name?: string; json: string; p
 export class ClaudeStreamParser {
   private messageId = '';
   private textIndex = 0;
+  /** The answer that has had words but no `message_stop`: a turn that is cut off (an interrupt) still has to close it. */
+  private openText?: string;
   private blocks = new Map<number, Block>();
   private tools = new Map<string, { name: string; input: J }>();
   private seenStream = new Set<string>();
@@ -136,7 +138,7 @@ export class ClaudeStreamParser {
         const idx = Number(e.index); const blk = this.blocks.get(idx); const dl = e.delta as J;
         if (dl.type === 'text_delta') {
           if (parent) out.push(...this.sub(parent), { type: 'subagent.text', subagent_id: parent, text: String(dl.text) });
-          else out.push({ type: 'text.delta', message_id: this.messageId, index: this.textIndex++, text: String(dl.text) });
+          else { this.openText = this.messageId; out.push({ type: 'text.delta', message_id: this.messageId, index: this.textIndex++, text: String(dl.text) }); }
         } else if (dl.type === 'thinking_delta') out.push({ type: 'thinking.delta', message_id: this.messageId, text: String(dl.thinking ?? dl.text ?? '') });
         else if (dl.type === 'input_json_delta' && blk) blk.json += String(dl.partial_json ?? '');
         break;
@@ -162,7 +164,7 @@ export class ClaudeStreamParser {
         if (e.usage?.output_tokens !== undefined) this.usage.output = e.usage.output_tokens;
         break;
       case 'message_stop':
-        if (!parent) out.push({ type: 'text.done', message_id: this.messageId, input_tokens: this.usage.input, output_tokens: this.usage.output });
+        if (!parent) { if (this.openText === this.messageId) this.openText = undefined; out.push({ type: 'text.done', message_id: this.messageId, input_tokens: this.usage.input, output_tokens: this.usage.output }); }
         break;
     }
     return out;
@@ -225,7 +227,7 @@ export class ClaudeStreamParser {
   }
 
   /** Tools and sub-agents still open when the turn ends (interrupted, failed or cut off) are closed as canceled so nothing keeps showing as running. */
-  closeOpen(): EventBody[] { const out: EventBody[] = [...this.openTools].map((id) => ({ type: 'tool.result' as const, tool_id: id, status: 'canceled' as const, summary: 'Stopped before it finished' })); this.openTools.clear(); out.push(...[...this.openSub].map((id) => ({ type: 'subagent.done' as const, subagent_id: id, status: 'canceled' as const }))); this.openSub.clear(); return out; }
+  closeOpen(): EventBody[] { const out: EventBody[] = []; if (this.openText) { out.push({ type: 'text.done', message_id: this.openText, input_tokens: this.usage.input, output_tokens: this.usage.output }); this.openText = undefined; } out.push(...[...this.openTools].map((id) => ({ type: 'tool.result' as const, tool_id: id, status: 'canceled' as const, summary: 'Stopped before it finished' }))); this.openTools.clear(); out.push(...[...this.openSub].map((id) => ({ type: 'subagent.done' as const, subagent_id: id, status: 'canceled' as const }))); this.openSub.clear(); return out; }
 
   private result(d: J): EventBody[] {
     const out: EventBody[] = this.closeOpen();
