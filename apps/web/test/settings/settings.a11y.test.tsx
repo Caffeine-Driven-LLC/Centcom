@@ -2,6 +2,7 @@
 import { RouterProvider, createMemoryHistory } from '@tanstack/react-router';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import React from 'react';
+import { expectNoA11yViolations } from '../../src/a11y/index.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildRouter } from '../../src/app/router.js';
 import { HttpProvider } from '../../src/lib/http-context.js';
@@ -28,4 +29,11 @@ describe('account, appearance and devices pages', () => {
   it('devices: lists, the current one cannot be revoked here, another can', async () => { const http = setup('/settings/devices', undefined, { listDevices: () => ({ data: [{ id: 'dev_1', name: 'Laptop', created_at: '2026-10-01T00:00:00Z', current: true }, { id: 'dev_2', name: 'Phone', created_at: '2026-10-02T00:00:00Z' }], has_more: false }) }); await screen.findByText('Laptop (this one)'); const rows = screen.getAllByRole('row'); expect(within(rows[1]!).getByText('Revoke').getAttribute('aria-disabled')).toBe('true'); fireEvent.click(within(rows[2]!).getByText('Revoke')); await waitFor(() => expect(http.calls.some((c) => c.op === 'revokeDevice' && c.args.id === 'dev_2')).toBe(true)); });
   it('appearance: theme and density controls are labelled and the density choice sticks', async () => { setup('/settings/appearance'); const d = (await screen.findByLabelText('Density')) as HTMLSelectElement; fireEvent.change(d, { target: { value: 'compact' } }); expect(document.documentElement.getAttribute('data-density')).toBe('compact'); expect(within(screen.getByRole('main')).getByLabelText('Theme')).toBeTruthy(); });
   it('the top bar badge has an accessible name with the count', async () => { unread.set(3); const { ShellCtx } = await import('../../src/app/Frame.js'); const { router } = buildRouter({ './settings/routes.tsx': { routeModule } }, createMemoryHistory({ initialEntries: ['/settings/appearance'] })); render(<ShellCtx.Provider value={{ nav: [], connectivity: 'online', inspector: null }}><ToastProvider><HttpProvider http={fakeHttp(() => ({}))}><RouterProvider router={router} /></HttpProvider></ToastProvider></ShellCtx.Provider>); expect(await screen.findByRole('link', { name: 'Notifications, 3 unread' })).toBeTruthy(); });
+  it('every settings page passes the structural accessibility check (no axe-core: its licence is not allowed)', async () => {
+    for (const [path, ready] of [['/notifications', /./], ['/settings/account', /Display name/], ['/settings/devices', /./], ['/settings/appearance', /Density/]] as const) {
+      cleanup(); setup(path, undefined, { listNotifications: () => ({ data: [n(1)], has_more: false }), listDevices: () => ({ data: [{ id: 'dev_1', name: 'Laptop', created_at: '2026-10-01T00:00:00Z', current: true }], has_more: false }) });
+      if (path === '/settings/account') await screen.findByLabelText('Display name'); else if (path === '/settings/appearance') await screen.findByLabelText('Density'); else await screen.findAllByText(/mentioned|Laptop/i);
+      void ready; await expectNoA11yViolations(document.body);
+    }
+  });
 });
