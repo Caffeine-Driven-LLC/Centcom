@@ -2,6 +2,10 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CodexMapper, knownNotification } from '../src/codex/map.js';
+import { EventStreamValidator } from '../src/engine/validator.js';
+import type { EventBody, NormalisedEvent } from '../src/types.js';
+
+const START: EventBody = { type: 'session.started', engine: 'codex', engine_session_id: 's1', model: 'm', tools: [], mcp_servers: [], capabilities: ['streaming'], login_kind: 'unknown' };
 
 const dir = join(__dirname, 'fixtures/providers/codex');
 const scenarios = readdirSync(dir).filter((f) => f.endsWith('.frames.jsonl')).map((f) => f.replace('.frames.jsonl', ''));
@@ -17,6 +21,17 @@ describe('real codex-cli 0.161.0 traffic through the mapper', () => {
         for (const e of m.notification(j.method, j.params ?? {})) { if (e.type === 'text.done') done.set(e.message_id, e.text ?? ''); if (e.type === 'text.delta') deltas.set(e.message_id, (deltas.get(e.message_id) ?? '') + e.text); }
       }
       expect([...unknown]).toEqual([]); for (const [id, text] of done) expect(deltas.get(id) ?? text, `${id}: deltas equal the final text`).toBe(text); /* a message cut off by an interrupt has deltas but no final text */
+    });
+    it(`${n}: the adapter's events for the recorded traffic pass the stream validator (C101): tools paired, every answer closed, one turn at a time`, () => {
+      const m = new CodexMapper(); const bodies: EventBody[] = [START]; let turns = 0;
+      for (const f of frames(n)) {
+        if (f.dir !== '<-') continue; const j = JSON.parse(f.line); if (!j.method || j.id !== undefined) continue;
+        if (j.method === 'turn/started') { turns++; bodies.push({ type: 'turn.started', turn_id: `trn_${turns}` }); continue; }
+        bodies.push(...m.notification(j.method, j.params ?? {}));
+      }
+      const evs = bodies.filter((b) => b.type !== 'tool.requested' && b.type !== 'tool.result').map((b, i) => ({ ...b, v: 1, seq: i + 1, ts: '2026-10-06T00:00:00.000Z', agent_id: 'agt_01JTEST0000000000000000001' }) as NormalisedEvent); const v = new EventStreamValidator('codex');
+      for (const e of evs) v.check(e); // tool results are left out: the engine pairs them with its approval requests, which these frames do not carry
+      v.end(); expect(evs.some((e) => e.type === 'turn.done')).toBe(true);
     });
     it(`${n}: the recorded events keep their shape (every event has v, seq, ts, agent_id and a known type)`, () => {
       const evs = JSON.parse(readFileSync(join(dir, `${n}.events.json`), 'utf8')) as { type: string; v: number; seq: number }[]; expect(evs.length).toBeGreaterThan(5);

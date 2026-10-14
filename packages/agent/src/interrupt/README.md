@@ -18,7 +18,7 @@ One way to stop an agent, whatever the engine.
 
 ## Engines
 
-- **Claude Code** gets the ladder directly: SIGINT ends its turn.
+- **Claude Code** is asked first, by the protocol: the turn runs with `--input-format stream-json`, and when `system/init` lists `interrupt_receipt_v1` the engine writes a `control_request` with the subtype `interrupt`. The CLI answers with a `control_response` (the receipt), then the turn's `result`, and the engine ends stdin so the process leaves by itself (`method: 'protocol'`, `receipt: true`, no signal sent). The turn ends as `canceled`, not as an error. If the CLI does not list the capability, does not answer within the grace time, or the stop is `hard`, the ladder runs: SIGINT ends its turn (`receipt: false`). Checked against the real `claude` 2.1.289 with `tools/dev/claude-interrupt-live.ts`.
 - **Codex** gets `turn/interrupt` first (`method: 'protocol'`). If it does not finish the turn within the grace time, the ladder stops the app-server (`method: 'sigint'`), and the next message starts it again on the same thread (`thread/resume`).
 
 The fixture processes for the tests are in `packages/agent/test/fixtures/procs/`.
@@ -27,7 +27,11 @@ The fixture processes for the tests are in `packages/agent/test/fixtures/procs/`
 
 `agent.turn_timeout_s` (0 = off) stops a turn that runs too long: the app calls `interrupt(reason: 'timeout')` and tells the person which setting to change. In print mode `--timeout` does the same with exit code 124.
 
+## A leftover git lock
+
+A killed `git add` can leave `index.lock` behind, and every later git command in the folder then refuses to run. After the engine's processes are gone, `removeStaleIndexLock` (`lock.ts`) removes that one file, and only when all of this holds: it is a regular file in the folder git itself names (`git rev-parse --git-path index.lock`, so a linked worktree's own folder is found); it was made during the stopped turn (not older than the turn start, so a lock held by something the person started is never touched); no process Centcom registered for the agent is alive; and it did not change during a 300 ms settle time. Otherwise the file stays and the result says why. The app tells the person when it removed one. A link or a folder with that name is never removed.
+
 ## Not yet
 
-- Waiting for an interrupt receipt advertised in `system/init`.
-- Removing a stale `index.lock` after a git operation is killed.
+- The Codex path has no protocol-level receipt beyond the `turn/interrupt` answer.
+- The lock rule looks at the agent's registered processes only; a git process the agent's tool started in a different process group would be seen as gone.

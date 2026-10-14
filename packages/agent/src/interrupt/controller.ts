@@ -4,11 +4,11 @@ import { realClock } from './ladder.js';
 import type { Killed } from './procs.js';
 
 export type InterruptReason = 'user' | 'signal' | 'timeout' | 'shutdown';
-export interface InterruptResult { agentId: string; method: 'protocol' | 'sigint' | 'none'; stoppedStream: boolean; cancelledApprovals: number; terminated: Killed[]; durationMs: number }
+export interface InterruptResult { agentId: string; method: 'protocol' | 'sigint' | 'none'; /** A leftover git `index.lock` of the stopped turn was removed (see `lock.ts`). */ staleLockRemoved: boolean; /** The engine confirmed the interrupt before the turn ended (a receipt, not just a signal that was sent). */ receipt: boolean; stoppedStream: boolean; cancelledApprovals: number; terminated: Killed[]; durationMs: number }
 /** What the controller needs from an agent. Engines report how they stopped (`method`, `terminated`); older ones that only say `stopped` count as a signal stop. */
 export interface InterruptTarget {
-  busy(): boolean; turnId(): string | undefined;
-  interrupt(o: { hard: boolean }): Promise<{ stopped: boolean; method?: 'protocol' | 'sigint'; terminated?: Killed[] }>;
+  busy(): boolean; turnId(): string | undefined; /** When the turn began (ms since the epoch), for the leftover-lock rule. */ turnStartedAt?(): number | undefined;
+  interrupt(o: { hard: boolean }): Promise<{ stopped: boolean; method?: 'protocol' | 'sigint'; receipt?: boolean; terminated?: Killed[] }>;
 }
 export interface InterruptDeps {
   targets: { get(agentId: string): InterruptTarget | undefined; busyIds(): string[] };
@@ -16,7 +16,9 @@ export interface InterruptDeps {
   approvals: { cancel(agentId: string): number };
   /** Puts the agent in `idle` and flags its partial message `interrupted: true`. */
   states: { interrupted(agentId: string): void };
-  emit: (e: { agent_id: string; reason: InterruptReason; hard: boolean; method: InterruptResult['method'] }) => void;
+  emit: (e: { agent_id: string; reason: InterruptReason; hard: boolean; method: InterruptResult['method']; receipt?: boolean; stale_lock_removed?: boolean }) => void;
+  /** Runs once the engine's processes are gone: removes what the stopped turn left behind. Returns whether it removed a leftover git lock. A failure here never fails the interrupt. */
+  cleanup?: (agentId: string, o: { turnStartedAt?: number; terminated: Killed[] }) => Promise<{ staleLockRemoved?: boolean }>;
   clock?: LadderClock & { now(): number };
   log?: { warn(msg: string, f?: Record<string, unknown>): void };
   /** The engine ignored the interrupt this long: give up on it, mark the agent idle, drop the rest of that turn (default 8 s + 1 s). */
@@ -39,7 +41,7 @@ export function createInterruptController(d: InterruptDeps): InterruptController
   async function run(agentId: string, hard: boolean, reason: InterruptReason): Promise<InterruptResult> {
     const t0 = clock.now(); const tg = d.targets.get(agentId);
     const done = (r: Omit<InterruptResult, 'agentId' | 'durationMs'>): InterruptResult => ({ agentId, durationMs: clock.now() - t0, ...r });
-    if (!tg || !tg.busy()) return done({ method: 'none', stoppedStream: false, cancelledApprovals: 0, terminated: [] });
+    if (!tg || !tg.busy()) return done({ method: 'none', receipt: false, staleLockRemoved: false, stoppedStream: false, cancelledApprovals: 0, terminated: [] });
     const turn = tg.turnId(); if (turn) cancelled.add(turn);
     const cancelledApprovals = d.approvals.cancel(agentId); // no approval stays open, whatever the engine does next
     let r: Awaited<ReturnType<InterruptTarget['interrupt']>> | undefined; const giveUp = d.giveUpMs ?? 9000; let h: unknown;
@@ -47,8 +49,9 @@ export function createInterruptController(d: InterruptDeps): InterruptController
     catch (e) { d.log?.warn('interrupt.failed', { agent_id: agentId, err: String(e) }); } finally { clock.clearTimeout(h); }
     if (!r) d.log?.warn('interrupt.ignored', { agent_id: agentId, after_ms: giveUp }); // the agent is set idle locally; later events of that turn are dropped by turn id
     const method: InterruptResult['method'] = r?.method ?? (r?.stopped ? 'sigint' : 'none');
-    d.states.interrupted(agentId); d.emit({ agent_id: agentId, reason, hard, method });
-    return done({ method, stoppedStream: true, cancelledApprovals, terminated: r?.terminated ?? [] });
+    let staleLockRemoved = false; if (d.cleanup) { try { staleLockRemoved = (await d.cleanup(agentId, { turnStartedAt: tg.turnStartedAt?.(), terminated: r?.terminated ?? [] })).staleLockRemoved === true; } catch (e) { d.log?.warn('interrupt.cleanup_failed', { agent_id: agentId, err: String(e) }); } }
+    d.states.interrupted(agentId); d.emit({ agent_id: agentId, reason, hard, method, receipt: r?.receipt === true, stale_lock_removed: staleLockRemoved });
+    return done({ method, receipt: r?.receipt === true, staleLockRemoved, stoppedStream: true, cancelledApprovals, terminated: r?.terminated ?? [] });
   }
 
   const ctl: InterruptController = {

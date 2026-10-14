@@ -4,7 +4,7 @@
  * The React tree only reads the store and calls the controller's methods.
  */
 import { CLAUDE_MODELS, type Board, createAgentBus, createCheckpointManager, createContextView, modelLabel, newId, nodeGit } from '@centcom/agent';
-import { createInterruptController, createModelRegistry, usageTable, type InterruptController, type ModelRegistry } from '@centcom/agent';
+import { createInterruptController, createModelRegistry, removeStaleIndexLock, sharedProcessRegistry, usageTable, type InterruptController, type ModelRegistry } from '@centcom/agent';
 import type { AgentBus, AgentId, FleetManager, FleetNode, Ledger, Checkpoint, CheckpointManager, ContextConfig, ContextView, EngineId, EngineStartOptions, GitRunner, PermissionEngine, PolicyMode, RewindMode } from '@centcom/agent';
 import type { PendingApproval as PolicyPending } from '@centcom/agent';
 import type { Logger } from '@centcom/net';
@@ -211,7 +211,7 @@ export class AppController {
   private startOptions(resumeToken?: string, carry?: string): EngineStartOptions {
     const gate: PermissionGate = { decide: (r) => this.decide(r) };
     const questionGate: QuestionGate = { ask: (qs) => this.askEngine(qs) };
-    return { agentId: this.me, cwd: this.o.cwd, permissionMode: this.state.settings.permissionMode, model: this.state.settings.model || undefined, addDirs: this.o.demo ? undefined : [MASTER_DIR, LIBRARY_DIR], approvalGate: gate, questionGate, ...(resumeToken ? { resume: { engine_session_id: resumeToken } } : {}), ...(carry ? { systemPromptAppend: carry } : {}) };
+    return { agentId: this.me, cwd: this.o.cwd, permissionMode: this.state.settings.permissionMode, allowBypass: !!this.o.dangerous || this.bypassChosen, model: this.state.settings.model || undefined, addDirs: this.o.demo ? undefined : [MASTER_DIR, LIBRARY_DIR], approvalGate: gate, questionGate, ...(resumeToken ? { resume: { engine_session_id: resumeToken } } : {}), ...(carry ? { systemPromptAppend: carry } : {}) };
   }
   private async startEngine(resumeToken?: string, carry?: string) { this.adopt(await this.o.engine.start(this.startOptions(resumeToken, carry))); }
   /** A conversation saved with the other engine cannot be resumed by this one (its session id means nothing here): this one starts fresh with a summary of what was said. */
@@ -661,10 +661,15 @@ export class AppController {
   private currentTurn?: string;
   /** One way to stop the agent, whatever the engine: its open approvals are denied, its processes stopped by the signal ladder, the partial answer kept and marked. */
   readonly interrupts: InterruptController = createInterruptController({
-    targets: { get: (id) => (id === this.me ? { busy: () => this.state.busy, turnId: () => this.currentTurn, interrupt: (o) => (this.session ? this.session.interrupt(o) : Promise.resolve({ stopped: false })) } : undefined), busyIds: () => (this.state.busy ? [this.me] : []) },
+    targets: { get: (id) => (id === this.me ? { busy: () => this.state.busy, turnId: () => this.currentTurn, turnStartedAt: () => this.state.turnStartedAt, interrupt: (o) => (this.session ? this.session.interrupt(o) : Promise.resolve({ stopped: false })) } : undefined), busyIds: () => (this.state.busy ? [this.me] : []) },
     approvals: { cancel: () => { const open = this.state.approvals; for (const a of open) a.resolve({ decision: 'deny', scope: 'once', reason: 'interrupt' }); if (open.length) this.set({ approvals: [] }); return open.length; } },
     states: { interrupted: () => { this.set((s) => ({ busy: false, turnStartedAt: undefined, items: s.items.map((i) => (i.kind === 'assistant' && !i.done && i.agentId === this.me ? { ...i, done: true, interrupted: true } : i)) })); this.updateAgent(this.me, () => ({ busy: false })); this.setAgentState(this.me, 'idle'); } },
-    emit: (e) => this.o.logger?.info('agent.interrupted', { reason: e.reason, hard: e.hard, method: e.method }),
+    emit: (e) => this.o.logger?.info('agent.interrupted', { reason: e.reason, hard: e.hard, method: e.method, receipt: e.receipt, stale_lock_removed: e.stale_lock_removed }),
+    cleanup: async (id, c) => { // a git command the agent was in the middle of can leave git's index.lock behind; take away that one file, only when it is certain to be the stopped turn's
+      if (this.o.demo || c.turnStartedAt === undefined) return {};
+      const r = await removeStaleIndexLock({ git: this.o.checkpoints?.git ?? nodeGit, cwd: this.o.cwd, turnStartedAt: c.turnStartedAt, processesGone: () => sharedProcessRegistry().pids(id).length === 0 });
+      if (r.removed) this.toast('info', 'Removed a leftover git lock the stopped step left behind, so git works again.'); return { staleLockRemoved: r.removed };
+    },
   });
   /** True when the latest turn was stopped by an interrupt. */
   turnInterrupted(): boolean { return this.interrupts.cancelledTurn(this.currentTurn); }
@@ -689,8 +694,10 @@ export class AppController {
   }
 
   /** Change how permissions are asked. Switching to bypass is explicit, loud and reversible. */
+  /** The person asked for bypass in this run (`/mode bypass`, Shift+Tab): the engine may then start in it. A default from a file never counts. */
+  private bypassChosen = false;
   setMode(m: PermissionMode) {
-    const prev = this.state.settings.permissionMode; if (m === prev) return;
+    const prev = this.state.settings.permissionMode; if (m === prev) return; if (m === 'bypassPermissions') this.bypassChosen = true;
     this.setSettings({ permissionMode: m }); this.session?.setPermissionMode?.(m); this.o.logger?.info('permission_mode.changed', { from: prev, to: m });
     if (m === 'bypassPermissions') {
       this.addItem({ kind: 'notice', id: nid('n'), level: 'warn', text: 'Dangerously skip permissions is ON', detail: 'Cento will run commands and edit files without asking, including destructive ones. Use /mode default to turn approvals back on.' });

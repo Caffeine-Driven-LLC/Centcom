@@ -71,6 +71,10 @@ export interface EngineStartOptions {
   /** Where an engine's questions to the person go when it can take the answer directly (Codex). Without one the question is declined. */
   questionGate?: QuestionGate;
   limits?: { spawn_timeout_ms?: number; first_event_timeout_ms?: number; interrupt_grace_ms?: number };
+  /** A session that starts in `bypassPermissions` must say it may (the person chose it, or `--dangerously-skip-permissions`); without this the engine starts in ask mode and says so. A later `setPermissionMode` is the person's own call and is honoured. */
+  allowBypass?: boolean;
+  /** Run a CLI whose version is outside the range Centcom has been checked against (config `agent.engine_unsupported_ok`). */
+  unsupportedOk?: boolean;
 }
 
 export interface EngineSession {
@@ -78,7 +82,7 @@ export interface EngineSession {
   readonly events: AsyncIterable<NormalisedEvent>;
   send(prompt: string): Promise<{ turn_id: string }>;
   /** Ends the current turn. `hard` skips the grace time. Engines may say how (`method`) and which processes they signalled. */
-  interrupt(o?: { hard?: boolean }): Promise<{ stopped: boolean; method?: 'protocol' | 'sigint'; terminated?: { pid: number; signal: 'SIGINT' | 'SIGTERM' | 'SIGKILL' }[] }>;
+  interrupt(o?: { hard?: boolean }): Promise<{ stopped: boolean; method?: 'protocol' | 'sigint'; /** The engine confirmed the interrupt itself (Claude Code's `interrupt_receipt_v1`) before the turn ended. */ receipt?: boolean; terminated?: { pid: number; signal: 'SIGINT' | 'SIGTERM' | 'SIGKILL' }[] }>;
   /** The card also allows reporting how the engine ended; engines that return nothing remain valid. */
   stop(): Promise<void | { exit_code: number | null; signal: string | null }>;
   resumeToken(): string | undefined;

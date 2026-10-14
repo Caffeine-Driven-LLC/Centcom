@@ -74,6 +74,10 @@ export class ClaudeStreamParser {
   private openTools = new Set<string>();
   private usage = { input: 0, output: 0, cacheRead: 0 };
   sessionId?: string;
+  /** What the CLI said it can do in `system/init` (`interrupt_receipt_v1` among them). Undefined until the init message. */
+  initCapabilities?: string[];
+  /** The turn is being interrupted: its `result` ends it as cancelled, not as an error. */
+  interrupted = false;
 
   /** Parse one stdout line into zero or more event bodies. */
   push(line: string): EventBody[] {
@@ -95,7 +99,7 @@ export class ClaudeStreamParser {
   private system(d: J): EventBody[] {
     switch (d.subtype) {
       case 'init':
-        this.sessionId = d.session_id;
+        this.sessionId = d.session_id; this.initCapabilities = Array.isArray(d.capabilities) ? d.capabilities.filter((x: unknown): x is string => typeof x === 'string').slice(0, 100) : undefined;
         return [{ type: 'session.started', engine: 'claude-code', engine_session_id: String(d.session_id ?? ''), model: String(d.model ?? ''), cli_version: d.claude_code_version,
           tools: Array.isArray(d.tools) ? d.tools.map(String) : [], mcp_servers: Array.isArray(d.mcp_servers) ? d.mcp_servers.map((m: J) => ({ name: String(m.name), status: String(m.status) })) : [],
           capabilities: CAPS, login_kind: loginKindFrom(d.apiKeySource), ...(Array.isArray(d.skills) ? { skills: d.skills.filter((x: unknown) => typeof x === 'string').slice(0, 200).map((x: string) => x.slice(0, 80)) } : {}) }];
@@ -234,7 +238,9 @@ export class ClaudeStreamParser {
     const win = Number(mu?.contextWindow ?? 0);
     out.push({ type: 'usage.report', input_tokens: Number(u.input_tokens ?? 0) + Number(u.cache_creation_input_tokens ?? 0), output_tokens: Number(u.output_tokens ?? 0), cache_read_tokens: Number(u.cache_read_input_tokens ?? 0), ...(typeof d.total_cost_usd === 'number' ? { cost_usd: d.total_cost_usd } : {}), cost_is_estimate: true,
       ...(win > 0 && ctxTokens > 0 ? { context_tokens: ctxTokens, context_window: win, context_used_pct: Math.min(100, Math.round((ctxTokens / win) * 100)) } : {}) });
-    if (d.is_error) {
+    if (this.interrupted) {
+      out.push({ type: 'status', state: 'idle' }, { type: 'turn.done', outcome: 'canceled', stop_reason: 'interrupted' });
+    } else if (d.is_error) {
       const text = String(d.result ?? 'Claude Code reported an error');
       out.push({ type: 'error', code: errorCodeFor(undefined, d.api_error_status, text), tool_message: firstLines(text, 4), fatal: true });
       out.push({ type: 'status', state: 'error' }, { type: 'turn.done', outcome: 'error', stop_reason: String(d.terminal_reason ?? d.subtype ?? 'error') });

@@ -5,14 +5,18 @@
 import { redact as redactSecrets } from '@centcom/protocol';
 import { ApprovalBridge } from './bridge.js';
 import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process';
-import { signalLadder, type LadderClock } from '../interrupt/ladder.js';
+import { realClock, signalLadder, type LadderClock } from '../interrupt/ladder.js';
 import { sharedProcessRegistry, type Killed, type ProcessRegistry } from '../interrupt/procs.js';
 import { EventSink, eventQueue } from '../backpressure.js';
 import { newId } from '../ids.js';
+import { rangeFor } from '../provider/detect/ranges.js';
+import { rangePosition } from '../provider/detect/semver.js';
+import { runProbe } from '../provider/detect/probe.js';
+import { providerMessage } from '../provider/messages.js';
 import { ClaudeStreamParser } from './parse.js';
 import { ProviderError, type AgentEngine, type Capability, type EngineSession, type EngineStartOptions, type EventBody, type NormalisedEvent, type PermissionMode } from '../types.js';
 
-export interface ClaudeEngineDeps { bin?: string; spawn?: typeof nodeSpawn; now?: () => Date; /** Where engine pids are registered for the interrupt ladder (default: the app-wide one). */ procs?: ProcessRegistry; clock?: LadderClock }
+export interface ClaudeEngineDeps { /** Reads `claude --version` before the first turn; with it the engine refuses a version outside the supported range (`provider_version_unsupported`) unless `unsupportedOk`. */ versionProbe?: () => Promise<string | undefined>; unsupportedOk?: boolean; bin?: string; spawn?: typeof nodeSpawn; now?: () => Date; /** Where engine pids are registered for the interrupt ladder (default: the app-wide one). */ procs?: ProcessRegistry; clock?: LadderClock }
 
 /** Engine processes lead their own process group (not on Windows), so stopping one stops everything it started. */
 const GROUPS = process.platform !== 'win32';
@@ -20,6 +24,9 @@ const CAPS = new Set<Capability>(['streaming', 'approvals', 'resume', 'subagents
 
 /** Strips credentials from text we may show or log. The patterns are the contract's (CT-PROVIDER rule 1), shared with the rest of the client. */
 export const redact = (s: string): string => redactSecrets(s);
+
+/** `claude --version`, read once and bounded (3 s, 4 KiB); undefined when it cannot be read (the check then lets the turn go on: the app's own start-up check already said what it could). */
+export const claudeVersionProbe = (bin = 'claude'): (() => Promise<string | undefined>) => async () => { const r = await runProbe(bin, ['--version'], { timeoutMs: 3000, maxBytes: 4096 }); return r.missing || r.timedOut || r.code !== 0 ? undefined : r.out.trim().slice(0, 100); };
 
 export class ClaudeCodeEngine implements AgentEngine {
   readonly id = 'claude-code' as const;
@@ -31,8 +38,8 @@ export class ClaudeCodeEngine implements AgentEngine {
 }
 
 /** `viaStdin`: the prompt is not on the command line (it would show in `ps`, and the system limits its size); `claude -p` then reads it from standard input. */
-export function buildArgv(prompt: string, o: { viaStdin?: boolean; resume?: string; permissionMode?: PermissionMode; model?: string; effort?: string; allowedTools?: string[]; systemPromptAppend?: string; addDirs?: string[]; extra?: string[] }): string[] {
-  const a = [...(o.viaStdin ? ['-p'] : ['-p', prompt]), '--output-format', 'stream-json', '--verbose', '--include-partial-messages'];
+export function buildArgv(prompt: string, o: { viaStdin?: boolean; /** The prompt and later control requests go in as stream-json lines (`--input-format stream-json`); needs `viaStdin`. */ streamInput?: boolean; resume?: string; permissionMode?: PermissionMode; model?: string; effort?: string; allowedTools?: string[]; systemPromptAppend?: string; addDirs?: string[]; extra?: string[] }): string[] {
+  const a = [...(o.viaStdin ? ['-p', ...(o.streamInput ? ['--input-format', 'stream-json'] : [])] : ['-p', prompt]), '--output-format', 'stream-json', '--verbose', '--include-partial-messages'];
   if (o.resume) a.push('--resume', o.resume);
   // 'default' is Centcom's "ask first"; say so explicitly, otherwise the user's own claude settings (e.g. defaultMode: auto) decide silently
   a.push('--permission-mode', !o.permissionMode || o.permissionMode === 'default' ? 'manual' : o.permissionMode);
@@ -64,7 +71,9 @@ class ClaudeSession implements EngineSession {
 
   constructor(private o: EngineStartOptions, private deps: ClaudeEngineDeps) {
     this.agentId = o.agentId; this.sessionId = o.resume?.engine_session_id; this.mode = o.permissionMode ?? 'default'; this.model = o.model;
+    if (this.mode === 'bypassPermissions' && !o.allowBypass) { this.mode = 'default'; this.bypassRefused = true; } // never skip approvals because a default said so: the person has to have asked
   }
+  private bypassRefused = false; private versionChecked = false;
 
   resumeToken() { return this.sessionId; }
   setModel(m: string) { this.model = m; }
@@ -81,16 +90,18 @@ class ClaudeSession implements EngineSession {
     if (this.child && !this.sawResult) throw new Error('a turn is already running');
     if (this.child) await this.exitWait; // the previous turn already reported its result; let the process finish exiting
     if (this.o.approvalGate && !this.bridge) { this.bridge = new ApprovalBridge({ agentId: this.agentId, cwd: this.o.cwd, gate: this.o.approvalGate, emit: (b) => this.emit(b) }); try { await this.bridge.start(); } catch (e) { this.bridge = undefined; /* fail closed: never run Claude without Centcom's approvals */ const turn = newId('trn'); this.turn = turn; this.emit({ type: 'turn.started', turn_id: turn }); this.emit({ type: 'error', code: 'provider_protocol_error', tool_message: `Approvals could not be set up (${redact(String((e as Error)?.message ?? e))}), so nothing was run.`, fatal: false }); this.emit({ type: 'turn.done', outcome: 'error', stop_reason: 'approval_bridge_failed' }); return { turn_id: turn }; } }
-    const turn = newId('trn'); this.turn = turn; this.sawResult = false;
+    const turn = newId('trn'); this.turn = turn; this.sawResult = false; this.interrupted = false;
     this.emit({ type: 'turn.started', turn_id: turn });
+    if (this.bypassRefused) { this.bypassRefused = false; this.emit({ type: 'engine.warning', code: 'bypass_not_allowed', text: 'Approvals stay on: skipping them has to be asked for (/mode bypass, or --dangerously-skip-permissions).' }); }
+    if (!(await this.versionOk())) return { turn_id: turn };
     this.emit({ type: 'status', state: 'prompt-received' });
-    const argv = buildArgv(prompt, { viaStdin: true, resume: this.sessionId, permissionMode: this.mode, model: this.model, effort: this.effort, allowedTools: this.o.allowedTools, systemPromptAppend: this.o.systemPromptAppend, addDirs: this.o.addDirs, extra: this.bridge?.argv() });
-    const parser = new ClaudeStreamParser();
+    const argv = buildArgv(prompt, { viaStdin: true, streamInput: true, resume: this.sessionId, permissionMode: this.mode, model: this.model, effort: this.effort, allowedTools: this.o.allowedTools, systemPromptAppend: this.o.systemPromptAppend, addDirs: this.o.addDirs, extra: this.bridge?.argv() });
+    const parser = new ClaudeStreamParser(); this.parser = parser; this.receiptCap = false;
     const spawnFn = this.deps.spawn ?? nodeSpawn;
     let child: ChildProcess;
     try { child = spawnFn(this.deps.bin ?? 'claude', argv, { cwd: this.o.cwd, env: this.o.envExact ? { ...this.o.env } : { ...process.env, ...this.o.env }, stdio: ['pipe', 'pipe', 'pipe'], detached: GROUPS }); }
     catch (e) { this.fail(e); return { turn_id: turn }; }
-    child.stdin?.on('error', () => undefined); child.stdin?.end(prompt); // the prompt goes in over stdin, whole and unquoted
+    child.stdin?.on('error', () => undefined); child.stdin?.write(JSON.stringify({ type: 'user', message: { role: 'user', content: prompt } }) + '\n'); // the prompt goes in over stdin as one stream-json message (never on the command line); stdin stays open for a control request until the turn is over
     this.child = child; const unreg = child.pid ? this.procs().register(this.agentId, child.pid, { group: GROUPS }) : () => undefined; // its own process group: tools and the approval helper go with it
     this.exitWait = new Promise<void>((res) => { child.once('close', () => { clearTimeout(firstTimer); unreg(); res(); }); child.once('error', () => { clearTimeout(firstTimer); unreg(); res(); }); });
     let buf = ''; let err = '';
@@ -124,6 +135,15 @@ class ClaudeSession implements EngineSession {
     return { turn_id: turn };
   }
 
+  /** Before the first turn: is this `claude` a version Centcom has been checked against? Says so and ends the turn when it is not. */
+  private async versionOk(): Promise<boolean> {
+    const probe = this.deps.versionProbe; if (!probe || this.versionChecked) return true; this.versionChecked = true;
+    let v: string | undefined; try { v = await probe(); } catch { v = undefined; }
+    const pos = rangePosition(v, rangeFor('claude-code')); if ((pos !== 'below' && pos !== 'above') || this.deps.unsupportedOk || this.o.unsupportedOk) return true;
+    this.emit({ type: 'error', code: 'provider_version_unsupported', tool_message: providerMessage('provider_version_unsupported', { engine: 'claude-code' }).body, fatal: true });
+    this.emit({ type: 'status', state: 'error' }); this.emit({ type: 'turn.done', outcome: 'error', stop_reason: 'version_unsupported' }); return false;
+  }
+
   /** A line longer than the cap means the stream cannot be trusted any more: report it and stop the process. */
   private tooLong(child: ChildProcess, parser: ClaudeStreamParser) {
     if (this.sawResult) return; this.sawResult = true; child.kill('SIGKILL'); for (const b of parser.closeOpen()) this.emit(b);
@@ -134,12 +154,16 @@ class ClaudeSession implements EngineSession {
   signal(sig: 'SIGINT' | 'SIGTERM' | 'SIGKILL') { try { this.child?.kill(sig); } catch { /* already gone */ } }
 
   private interrupted = false;
+  private parser?: ClaudeStreamParser; private receiptCap = false; private reqN = 0; private receipts = new Map<string, (ok: boolean) => void>();
+  private controlResponse(line: string) { try { const j = JSON.parse(line) as { type?: string; response?: { subtype?: string; request_id?: string } }; if (j.type !== 'control_response') return; const id = String(j.response?.request_id ?? ''); this.receipts.get(id)?.(j.response?.subtype === 'success'); this.receipts.delete(id); } catch { /* not ours */ } }
   private exitWait: Promise<void> = Promise.resolve();
 
   private handle(parser: ClaudeStreamParser, line: string) {
+    if (line.includes('"control_response"')) { this.controlResponse(line); return; }
     for (const b of parser.push(line)) {
       if (b.type === 'session.started') this.sessionId = b.engine_session_id || this.sessionId;
-      if (b.type === 'turn.done') this.sawResult = true;
+      if (b.type === 'session.started') this.receiptCap = parser.initCapabilities?.includes('interrupt_receipt_v1') === true;
+      if (b.type === 'turn.done') { this.sawResult = true; try { this.child?.stdin?.end(); } catch { /* gone */ } } // the turn is over: closing stdin lets the process finish
       if (b.type === 'error') b.tool_message = redact(b.tool_message);
       if (b.type === 'tool.result') b.summary = redact(b.summary);
       this.emit(b);
@@ -156,14 +180,28 @@ class ClaudeSession implements EngineSession {
   }
 
   private procs(): ProcessRegistry { return this.deps.procs ?? sharedProcessRegistry(); }
-  /** SIGINT ends Claude's turn; it gets 3 s, then SIGTERM, then SIGKILL at 8 s, each to its whole process group. `hard` kills at once. */
-  async interrupt(o: { hard?: boolean } = {}): Promise<{ stopped: boolean; method?: 'sigint'; terminated?: Killed[] }> {
+  /** The way to stop a turn: when the CLI says in `system/init` that it takes an interrupt request and answers with a receipt (`interrupt_receipt_v1`), ask it that way and wait for the receipt and the turn's result; otherwise (or when no receipt comes within the grace time, or for `hard`) SIGINT, then SIGTERM, then SIGKILL at 8 s, each to the whole process group. */
+  async interrupt(o: { hard?: boolean } = {}): Promise<{ stopped: boolean; method?: 'protocol' | 'sigint'; receipt?: boolean; terminated?: Killed[] }> {
     const c = this.child;
     if (!c || this.sawResult) return { stopped: false };
-    this.interrupted = true;
+    this.interrupted = true; if (this.parser) this.parser.interrupted = true;
+    const graceMs = this.o.limits?.interrupt_grace_ms ?? 3000; const clock = this.deps.clock ?? realClock;
+    if (!o.hard && this.receiptCap && c.stdin && c.stdin.writable && !c.stdin.destroyed) {
+      const id = `req_${++this.reqN}`; const got = new Promise<boolean>((res) => { this.receipts.set(id, res); });
+      c.stdin.write(JSON.stringify({ type: 'control_request', request_id: id, request: { subtype: 'interrupt' } }) + '\n');
+      const wait = (ms: number) => new Promise<'late'>((res) => { clock.setTimeout(() => res('late'), ms); });
+      const first = await Promise.race([got, this.exitWait.then(() => true), wait(graceMs).then(() => false)]); this.receipts.delete(id);
+      if (first) { // the CLI took it: its result follows, then the process ends by itself
+        const t0 = Date.now(); while (!this.sawResult && this.child && Date.now() - t0 < graceMs) await new Promise((r) => setTimeout(r, 10));
+        try { c.stdin.end(); } catch { /* gone */ }
+        if (!c.pid) { await this.exitWait; return { stopped: true, method: 'protocol', receipt: true, terminated: [] }; }
+        const r = await signalLadder({ agentId: this.agentId, procs: this.procs(), exited: this.exitWait, graceMs, skipSigint: true, clock: this.deps.clock });
+        return { stopped: true, method: 'protocol', receipt: true, terminated: r.terminated };
+      }
+    }
     if (!c.pid) { c.kill(o.hard ? 'SIGKILL' : 'SIGINT'); await this.exitWait; return { stopped: true, method: 'sigint', terminated: [] }; }
-    const r = await signalLadder({ agentId: this.agentId, procs: this.procs(), exited: this.exitWait, graceMs: this.o.limits?.interrupt_grace_ms ?? 3000, hard: o.hard, clock: this.deps.clock });
-    return { stopped: true, method: 'sigint', terminated: r.terminated };
+    const r = await signalLadder({ agentId: this.agentId, procs: this.procs(), exited: this.exitWait, graceMs, hard: o.hard, clock: this.deps.clock });
+    return { stopped: true, method: 'sigint', receipt: false, terminated: r.terminated };
   }
 
   async stop() { this.closed = true; await this.interrupt(); this.bridge?.close(); this.events.close(); }
