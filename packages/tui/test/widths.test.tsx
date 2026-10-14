@@ -5,8 +5,7 @@ import { DemoEngine } from '@centcom/agent';
 import { createTheme } from '@centcom/theme';
 import { AppController } from '../src/controller.js';
 import { ThemeCtx } from '../src/components/ui.js';
-import { Header } from '../src/components/Header.js';
-import { StatusLine } from '../src/components/StatusLine.js';
+import { StatusBar } from '../src/components/StatusBars.js';
 import { PermissionPrompt, approvalFromPending } from '../src/permission/index.js';
 const Approval = ({ a, width }: { a: never; width: number; confirming?: boolean }) => <PermissionPrompt request={approvalFromPending(a, { engine: 'claude-code' })} canDecide onDecide={() => undefined} cols={width + 2} />;
 import { Prompt, SlashPopup, slashMatches } from '../src/components/Prompt.js';
@@ -23,7 +22,7 @@ ctl.patch({ busy: true, turnStartedAt: Date.now() - 125_000, limits: [{ name: '5
 const approval = (risk: 'medium' | 'high') => ({ req: { approval_id: 'a', agent_id: 'me', tool_id: 't', tool: 'Bash', summary: 'x', risk, command: 'find . -name "*.log" -not -path "./node_modules/*" -exec grep -l "ERROR" {} + | xargs wc -l | sort -rn | head -20', path: undefined }, agentName: 'you', color: 'violet', resolve() {}, confirmHigh: false, expiresAt: Date.now() + 590_000 } as never);
 const pick = newPick({ title: 'A rather long title that needs to wrap or be cut somewhere', note: 'And a long note below it as well, to be safe', options: [{ id: 'a', label: 'An option with a long label that goes on', hint: 'and a hint that also goes on for a while' }, { id: 'b', label: 'short' }] });
 const SCREENS: [string, (w: number) => React.ReactElement][] = [
-  ['header', (w) => <Header s={ctl.state} width={w} />], ['status line', (w) => <StatusLine s={ctl.state} width={w} />],
+  ['header', (w) => <StatusBar s={ctl.state} width={w} line="header" />], ['footer', (w) => <StatusBar s={ctl.state} width={w} line="footer" />],
   ['approval', (w) => <Approval a={approval('medium')} width={w} confirming={false} />], ['approval (destructive)', (w) => <Approval a={approval('high')} width={w} confirming />],
   ['prompt', (w) => <Prompt text={'a long line of text '.repeat(12)} cursor={20} busy={false} width={w} active placeholder="Message Cento…" />], ['command menu', (w) => <SlashPopup matches={slashMatches('/')} sel={0} width={w} />],
   ['file suggestions', (w) => <MentionPopup items={['packages/tui/src/components/a-rather-long-file-name-for-testing.tsx', 'README.md', 'apps/cli/src/main.tsx']} sel={1} width={w} />],
@@ -66,9 +65,9 @@ describe('the mascot strip offers the same answers as the permission dialog', ()
   it('the strip only says that something waits (the dialog below carries the keys); a second request is counted', async () => {
     const { LiveStrip } = await import('../src/components/LiveStrip.js'); const { MascotDriver } = await import('@centcom/mascot');
     const c = new AppController({ engine: new DemoEngine({ speed: 100 }), demo: true, cwd: '/tmp', version: 't', skills: [] }); c.patch({ items: [{ id: 'u', kind: 'user', text: 'x' } as never] });
-    const strip = (risk: 'medium' | 'high') => { c.patch({ approvals: [approval(risk)] }); return strip_(renderToString(<ThemeCtx.Provider value={createTheme('dark', 'truecolor')}><LiveStrip s={c.state} driver={new MascotDriver({}) as never} width={70} size="small" /></ThemeCtx.Provider>, { columns: 80 })); };
+    const strip = (risk: 'medium' | 'high') => { c.patch({ approvals: [approval(risk)] }); return strip_(renderToString(<ThemeCtx.Provider value={createTheme('dark', 'truecolor')}><LiveStrip s={c.state} mascot={c.mascot} width={70} size="small" /></ThemeCtx.Provider>, { columns: 80 })); };
     const strip_ = (x: string) => x.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '');
-    for (const r of ['high', 'medium'] as const) { const x = strip(r); expect(x).toContain('Waiting for you'); expect(x).not.toContain('y yes'); } c.patch({ approvals: [approval('medium'), approval('medium')] }); expect(strip_(renderToString(<ThemeCtx.Provider value={createTheme('dark', 'truecolor')}><LiveStrip s={c.state} driver={new MascotDriver({}) as never} width={70} size="small" /></ThemeCtx.Provider>, { columns: 80 }))).toContain('+1 more'); c.stop();
+    for (const r of ['high', 'medium'] as const) { const x = strip(r); expect(x).toContain('Waiting for you'); expect(x).not.toContain('y yes'); } c.patch({ approvals: [approval('medium'), approval('medium')] }); expect(strip_(renderToString(<ThemeCtx.Provider value={createTheme('dark', 'truecolor')}><LiveStrip s={c.state} mascot={c.mascot} width={70} size="small" /></ThemeCtx.Provider>, { columns: 80 }))).toContain('+1 more'); c.stop();
   });
 });
 

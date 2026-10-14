@@ -133,7 +133,7 @@ describe('/spinner', () => {
   it('plain shows "Working…" in the waiting line, fun rotates; bare /spinner is a list; it is remembered', async () => {
     const React = (await import('react')).default; const { renderToString } = await import('ink'); const { LiveStrip } = await import('../src/components/LiveStrip.js'); const { MascotDriver } = await import('@centcom/mascot');
     const c = make(); c.patch({ busy: true, verb: 'Pondering', items: [{ id: 'u', kind: 'user', text: 'x' } as never] });
-    const strip = () => renderToString(React.createElement(LiveStrip, { s: c.state, driver: new MascotDriver({}) as never, width: 60, size: 'off' as const }), { columns: 70 });
+    const strip = () => renderToString(React.createElement(LiveStrip, { s: c.state, mascot: c.mascot, width: 60, size: 'off' as const }), { columns: 70 });
     expect(strip()).not.toContain('Working…'); await c.runCommand('/spinner plain'); expect(c.state.settings.spinner).toBe('plain'); const t = strip(); expect(t).toContain('Working…');
     await c.runCommand('/spinner fun'); expect(strip()).not.toContain('Working…'); // the words come from the spinner module's pools (lane C040)
     await c.runCommand('/spinner loud'); expect(c.state.toasts.at(-1)!.text).toMatch(/fun or \/spinner plain/);

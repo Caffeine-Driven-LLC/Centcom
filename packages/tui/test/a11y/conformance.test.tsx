@@ -6,14 +6,13 @@ import { createTheme } from '@centcom/theme';
 import { AppController } from '../../src/controller.js';
 import { assertNoColorCodes, assertNoEscape } from '../../src/a11y/index.js';
 import { ThemeCtx } from '../../src/components/ui.js';
-import { Header } from '../../src/components/Header.js';
-import { StatusLine } from '../../src/components/StatusLine.js';
+import { StatusBar } from '../../src/components/StatusBars.js';
 import { PermissionPrompt, approvalFromPending } from '../../src/permission/index.js';
 import { Toasts } from '../../src/components/Toasts.js';
 import { ToastView } from '../../src/toast/index.js';
 import { Prompt, SlashPopup, slashMatches } from '../../src/components/Prompt.js';
 import { Palette } from '../../src/components/Overlays.js';
-import { FleetPanel } from '../../src/components/FleetPanel.js';
+import { FleetPanel, fleetFromAgents, STATE_MAP } from '../../src/index.js';
 import { Transcript } from '../../src/components/Transcript.js';
 import { TranscriptLayout } from '../../src/transcript/layout.js';
 import { NightPanel } from '../../src/night/NightPanel.js';
@@ -31,14 +30,14 @@ const pick = pickToggle(newPick({ title: 'Pick', options: [{ id: 'a', label: 'on
 
 /** Every screen the app can show, drawn with no colour (NO_COLOR): nothing may carry a colour or escape code, and meaning must survive without it. */
 const SCREENS: [string, () => React.ReactElement][] = [
-  ['header', () => <Header s={ctl.state} width={80} />],
-  ['status line', () => <StatusLine s={ctl.state} width={80} />],
+  ['header', () => <StatusBar s={ctl.state} width={80} line="header" />],
+  ['footer', () => <StatusBar s={ctl.state} width={80} line="footer" />],
   ['permission prompt', () => <PermissionPrompt request={approval} canDecide onDecide={() => undefined} cols={82} />],
   ['prompt', () => <Prompt text="hello world" cursor={5} anchor={0} busy={false} width={80} active placeholder="Message Cento…" />],
   ['command menu', () => <SlashPopup matches={slashMatches('/')} sel={0} width={80} />],
   ['palette', () => <Palette query="" sel={0} width={80} />],
   ['toasts', () => <Toasts toasts={[{ id: 'toast_1', level: 'warn', text: 'a warn toast', count: 1, expiresAt: null }]} width={80} />],
-  ['fleet panel', () => <FleetPanel s={ctl.state} width={30} height={10} />],
+  ['fleet rail with mini mascots', () => <FleetPanel agents={fleetFromAgents(ctl.state.agents, { since: () => new Date(0).toISOString() })} selfMemberId="self" selfSlot={0} mode="rail" onSelect={() => undefined} interactive={false} mascots={{ tier: 'none', unicode: true, motion: 'full', stateMap: STATE_MAP }} />],
   ['transcript', () => <Transcript layout={layout} items={items} width={70} height={12} scroll={0} />],
   ['night panel', () => <NightPanel n={ctl.state.night} width={80} height={20} />],
   ['file suggestions', () => <MentionPopup items={['src/a.ts', 'docs/b.md']} sel={0} width={80} />],
@@ -57,6 +56,6 @@ describe('NO_COLOR conformance across the whole interface', () => {
     for (const w of ['info toast', 'ok toast', 'warn toast', 'error toast']) expect(t).toContain(w);
     const symbols = new Set(t.split('\n').filter((l) => /toast/.test(l)).map((l) => l.trim().split(/\s+/)[0])); expect(symbols.size).toBeGreaterThanOrEqual(3); // levels differ by a glyph, not only by colour
     const a = renderToString(<ThemeCtx.Provider value={theme}><PermissionPrompt request={approval} canDecide onDecide={() => undefined} cols={82} /></ThemeCtx.Provider>, { columns: 100 }); expect(a).toMatch(/high risk/); expect(a).toContain('[y]'); expect(a).toContain('[n]');
-    const st = renderToString(<ThemeCtx.Provider value={theme}><StatusLine s={ctl.state} width={90} /></ThemeCtx.Provider>, { columns: 100 }); expect(st).toMatch(/idle|working|needs you/);
+    const st = renderToString(<ThemeCtx.Provider value={theme}><StatusBar s={ctl.state} width={90} line="footer" /></ThemeCtx.Provider>, { columns: 100 }); expect(st).toMatch(/idle|working|needs you/);
   });
 });

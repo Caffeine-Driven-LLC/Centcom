@@ -1,19 +1,21 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Text, useInput, usePaste, useStdin, useStdout, useWindowSize } from 'ink';
 import { createTheme, type ColorTier } from '@centcom/theme';
+import { createTheme as createStyledTheme, ThemeProvider } from './theme/index.js';
 import { bakedCategories } from '@centcom/mascot';
 import { CLAUDE_MODELS } from '@centcom/agent';
 import type { AppController } from './controller.js';
 import { ThemeCtx, useStore } from './components/ui.js';
 import { TaskList } from './tasks/TaskList.js';
 import { actions as allActions, createDispatcher, defaultKeymap, fromInk, HelpScreen, type KeyContext, type Keymap, type KeymapWarning } from './keys/index.js';
-import { Header } from './components/Header.js';
+import { StatusBar } from './components/StatusBars.js';
+import { Shell, computeLayout, RAIL_MIN_COLS, RAIL_WIDTH } from './shell/index.js';
 import { Welcome } from './components/Welcome.js';
-import { LiveStrip, LARGE_H } from './components/LiveStrip.js';
+import { LiveStrip, LARGE_H, SMALL_H } from './components/LiveStrip.js';
 import { PermissionPrompt, permissionHeight, approvalFromPending } from './permission/index.js';
 import { Prompt, SlashPopup, promptRows, slashMatches } from './components/Prompt.js';
-import { StatusLine } from './components/StatusLine.js';
-import { FleetPanel, FLEET_W } from './components/FleetPanel.js';
+import { FleetPanel, createSinceTracker, fleetFromAgents, SELF_MEMBER } from './fleet/index.js';
+import { STATE_MAP } from './mascot/index.js';
 import { Transcript, useTranscriptLayout } from './components/Transcript.js';
 import { CommandPalette } from './palette/index.js';
 import { Gallery, galleryList, paletteItems } from './components/Overlays.js';
@@ -33,6 +35,8 @@ export function App({ ctl, tier, keys }: AppProps) {
   const win = useWindowSize();
   const cols = win.columns; const rows = Math.max(1, win.rows - 1); // Ink clears the whole screen every frame when output is as tall as the terminal; stay one row short
   const theme = useMemo(() => createTheme(s.settings.theme, tier), [s.settings.theme, tier]);
+  const styled = useMemo(() => createStyledTheme({ caps: { tier, unicode: tier !== 'none' }, mode: s.settings.theme }), [s.settings.theme, tier]); // the colour module (lane C032) decides every colour
+  const sinceOf = useRef(createSinceTracker()).current;
   const keymap = useMemo(() => keys?.keymap ?? defaultKeymap(allActions()), [keys]); const focusRef = useRef<KeyContext[]>(['prompt']);
   const dispatcher = useMemo(() => createDispatcher({ keymap, focus: () => focusRef.current, clock: { now: () => Date.now() } }), [keymap]);
   const pending = s.approvals[0];
@@ -40,14 +44,15 @@ export function App({ ctl, tier, keys }: AppProps) {
   const approvalView = useMemo(() => (pending ? approvalFromPending(pending, { engine: s.engineId === 'codex' ? 'codex' : 'claude-code', branch: s.branch || undefined }) : undefined), [pending?.req.approval_id, s.engineId, s.branch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ---- layout ---- */
-  const showFleet = s.fleet && s.agents.length > 1 && cols >= 110 && s.mode === 'chat'; // a solo session has no fleet panel; it appears when others join
-  const mainW = cols - (showFleet ? FLEET_W + 1 : 0);
+  const showFleet = s.fleet && s.agents.length > 1 && cols >= RAIL_MIN_COLS && s.mode === 'chat'; // a solo session has no fleet rail; it appears when others join
+  const mainW = cols; // the prompt, the strip and the permission question use the whole width; the scrollback gives the rail its 28 columns
+  const bodyW = showFleet ? cols - RAIL_WIDTH - 1 : cols;
   const mascot = s.settings.mascot === 'auto' ? (rows >= 34 ? 'large' : rows >= 22 ? 'small' : 'off') : s.settings.mascot;
   const welcome = s.items.length === 0 && !s.busy && s.mode === 'chat' && !pending;
   const nightOpen = s.mode === 'night';
   const tight = !!pending && rows < 30;
   const overlay = s.mode === 'help' || s.mode === 'palette' || s.mode === 'pick' || s.mode === 'gallery'; // a full-screen list or page: Cento steps aside so it has the rows
-  const stripH = welcome || overlay ? 0 : tight ? 1 : mascot === 'large' ? LARGE_H : mascot === 'small' ? 4 : 1;
+  const stripH = welcome || overlay ? 0 : tight ? 1 : mascot === 'large' ? LARGE_H : mascot === 'small' ? SMALL_H : 1;
   const stripSize = tight && mascot !== 'off' ? 'off' : mascot;
   const matches = (s.mode === 'chat' || s.mode === 'night') && !pending ? slashMatches(s.input) : [];
   const mentionNow = (s.mode === 'chat' || s.mode === 'night') && !pending && !matches.length ? ed.mentionAt(s.input, s.cursor) : undefined; const mentionFresh = !!mentionNow && !!s.mention && s.mention.q === mentionNow.query; const related = !!mentionNow && !!s.mention && (mentionNow.query.startsWith(s.mention.q) || s.mention.q.startsWith(mentionNow.query)); const mentions = mentionNow && s.mention && (mentionFresh || related) ? ed.visibleMentions(mentionNow.query, s.mention.items, mentionFresh) : []; // while the next search runs the last list stays (cut to what still matches), so the layout does not jump and every entry shown works
@@ -59,16 +64,17 @@ export function App({ ctl, tier, keys }: AppProps) {
   const showTasks = s.tasksOpen && s.tasks.length > 0 && !pending && s.mode === 'chat';
   const tasksH = showTasks ? Math.min(s.tasks.length, rows >= 34 ? 10 : 5) + 1 + (s.tasks.length > (rows >= 34 ? 10 : 5) ? 1 : 0) : 0;
   const bottomH = approvalView ? permissionHeight(approvalView, { cols: mainW, canDecide: true, maxDiff }) : promptH + popupH + tasksH;
-  const bodyH = Math.max(3, rows - 2 - stripH - bottomH);
-  const layout = useTranscriptLayout(s.items, mainW - 2, s.settings.density === 'compact');
+  const lay = computeLayout({ cols, rows, promptRows: stripH + bottomH, promptMax: rows, rail: showFleet }); // the same call the shell makes
+  const bodyH = Math.max(3, lay.transcriptRows);
+  const layout = useTranscriptLayout(s.items, bodyW - 2, s.settings.density === 'compact');
   const total = layout.total;
 
   // keep the view anchored while the user is scrolled up and new lines arrive; count the new messages; keep the top block in place on a resize
-  const prevTotal = useRef(total); const prevW = useRef(mainW); const prevCount = useRef(s.items.length); const anchor = useRef<{ id: string; offset: number } | undefined>(undefined); const [unseen, setUnseen] = useState(0);
+  const prevTotal = useRef(total); const prevW = useRef(bodyW); const prevCount = useRef(s.items.length); const anchor = useRef<{ id: string; offset: number } | undefined>(undefined); const [unseen, setUnseen] = useState(0);
   useEffect(() => {
-    if (prevW.current !== mainW) { prevW.current = mainW; prevTotal.current = total; const a = anchor.current; if (a && ctl.state.scroll > 0) { const row = layout.rowOf(a); if (row !== undefined) ctl.patch({ scroll: Math.max(0, total - row - bodyH) }); } return; }
+    if (prevW.current !== bodyW) { prevW.current = bodyW; prevTotal.current = total; const a = anchor.current; if (a && ctl.state.scroll > 0) { const row = layout.rowOf(a); if (row !== undefined) ctl.patch({ scroll: Math.max(0, total - row - bodyH) }); } return; }
     const d = total - prevTotal.current; prevTotal.current = total; if (d > 0 && ctl.state.scroll > 0) ctl.patch({ scroll: ctl.state.scroll + d });
-  }, [total, mainW, ctl, layout, bodyH]);
+  }, [total, bodyW, ctl, layout, bodyH]);
   useEffect(() => { const added = s.items.length - prevCount.current; prevCount.current = s.items.length; if (s.scroll > 0 && added > 0) setUnseen((u) => u + added); else if (s.scroll === 0) setUnseen(0); }, [s.items.length, s.scroll]);
   useEffect(() => { if (s.scroll > 0) anchor.current = layout.anchorAt(Math.max(0, total - s.scroll - bodyH)); else anchor.current = undefined; });
   const maxScroll = Math.max(0, total - bodyH);
@@ -253,39 +259,46 @@ export function App({ ctl, tier, keys }: AppProps) {
 
   const placeholder = s.busy ? 'Cento is working… Esc to interrupt' : s.items.length ? 'Message Cento…' : 'What should we build?';
   const gallerySize = bodyH;
+  const fleetRows = showFleet ? fleetFromAgents(s.agents, { since: sinceOf }) : [];
+  const body = (
+    <>
+      {nightOpen ? <NightPanel n={s.night} width={bodyW} height={bodyH} unicode={tier !== 'none'} />
+        : s.mode === 'pick' && s.pick ? <MultiSelect p={s.pick} width={bodyW} height={bodyH} unicode={tier !== 'none'} onRow={(i) => ctl.pickClick(i)} onConfirm={() => ctl.pickKey('enter')} onCancel={() => ctl.pickKey('cancel')} />
+        : s.mode === 'palette' ? <CommandPalette providers={paletteProviders} cols={bodyW} onClose={() => ctl.patch({ mode: 'chat' })} />
+        : s.mode === 'help' ? <HelpScreen actions={allActions()} keymap={keymap} warnings={keys?.warnings ?? []} onClose={() => ctl.patch({ mode: 'chat' })} width={bodyW} height={bodyH} />
+          : s.mode === 'gallery' ? <Gallery cat={s.gallery.cat} idx={s.gallery.idx} color={s.gallery.color} width={bodyW} height={gallerySize} reduced={s.settings.reducedMotion} />
+            : welcome ? <Welcome s={s} width={bodyW} height={bodyH} color={s.settings.color} reduced={s.settings.reducedMotion} calm={calm} mascot={s.settings.mascot !== 'off'} />
+              : <Box paddingX={1}><Transcript layout={layout} items={s.items} width={bodyW - 2} height={bodyH} scroll={s.scroll} unseen={unseen} /></Box>}
+      <Box position="absolute" width={bodyW}><Toasts toasts={s.toasts} showing={ctl.toasts.current()?.id} width={bodyW - 1} unicode={tier !== 'none'} /></Box>
+    </>
+  );
+  const bottom = (
+    <>
+      {stripH > 0 ? <Box paddingX={1} height={stripH}><LiveStrip s={s} mascot={ctl.mascot} width={mainW - 2} size={stripSize as 'large' | 'small' | 'off'} calm={calm} /></Box> : null}
+      {approvalView ? <PermissionPrompt request={approvalView} canDecide cols={mainW} maxDiff={maxDiff} onDecide={(d) => { if (ctl.state.approvals[0]?.req.approval_id === d.approvalId) ctl.answerApproval(d.decision, d.scope); }} /> : (
+        <>
+          {showTasks ? <Box paddingX={1} height={tasksH}><TaskList items={s.tasks} maxRows={rows >= 34 ? 10 : 5} width={mainW - 2} unicode={tier !== 'none'} /></Box> : null}
+          {mentions.length && !matches.length ? <MentionPopup items={mentions.slice(0, 6)} sel={s.mention!.sel} width={mainW} onPick={(p) => { const e = ed.completeMention({ text: s.input, cursor: s.cursor }, mentionNow!, p); ctl.setInputUndoable(e.text, e.cursor); ctl.clearMentions(); }} /> : null}
+          {popupH && matches.length ? <SlashPopup matches={matches} sel={s.slashSel} width={mainW} onPick={(c) => { const t = '/' + c.name + (c.args ? ' ' : ''); ctl.patch({ input: t, cursor: t.length, anchor: undefined, slashSel: 0 }); if (!c.args) void ctl.submit('/' + c.name); }} /> : null}
+          <Prompt text={s.maskInput ? s.input.replace(/[^\n]/g, '•') : s.input} cursor={s.cursor} anchor={s.anchor} maxRows={maxInput} busy={s.busy} width={mainW} active={s.mode === 'chat' || s.mode === 'night'} placeholder={nightOpen ? 'Add a task for tonight…' : placeholder} />
+        </>
+      )}
+    </>
+  );
   return (
     <ThemeCtx.Provider value={theme}>
-      <ClickContext.Provider value={clicks}>
-      <Box flexDirection="column" width={cols} height={rows}>
-        <Header s={s} width={cols} />
-        <Box height={bodyH + stripH + bottomH} width={cols}>
-          <Box flexDirection="column" width={mainW} height={bodyH + stripH + bottomH}>
-            <Box height={bodyH} width={mainW} flexDirection="column">
-              {nightOpen ? <NightPanel n={s.night} width={mainW} height={bodyH} unicode={tier !== 'none'} />
-                : s.mode === 'pick' && s.pick ? <MultiSelect p={s.pick} width={mainW} height={bodyH} unicode={tier !== 'none'} onRow={(i) => ctl.pickClick(i)} onConfirm={() => ctl.pickKey('enter')} onCancel={() => ctl.pickKey('cancel')} />
-                : s.mode === 'palette' ? <CommandPalette providers={paletteProviders} cols={mainW} onClose={() => ctl.patch({ mode: 'chat' })} />
-                : s.mode === 'help' ? <HelpScreen actions={allActions()} keymap={keymap} warnings={keys?.warnings ?? []} onClose={() => ctl.patch({ mode: 'chat' })} width={mainW} height={bodyH} />
-                  : s.mode === 'gallery' ? <Gallery cat={s.gallery.cat} idx={s.gallery.idx} color={s.gallery.color} width={mainW} height={gallerySize} reduced={s.settings.reducedMotion} />
-                    : welcome ? <Welcome s={s} width={mainW} height={bodyH} color={s.settings.color} reduced={s.settings.reducedMotion} calm={calm} mascot={s.settings.mascot !== 'off'} />
-                      : <Box paddingX={1}><Transcript layout={layout} items={s.items} width={mainW - 2} height={bodyH} scroll={s.scroll} unseen={unseen} /></Box>}
-            </Box>
-            {stripH > 0 ? <Box paddingX={1} height={stripH}><LiveStrip s={s} driver={ctl.driver} width={mainW - 2} size={stripSize as 'large' | 'small' | 'off'} calm={calm} /></Box> : null}
-            {approvalView ? <PermissionPrompt request={approvalView} canDecide cols={mainW} maxDiff={maxDiff} onDecide={(d) => { if (ctl.state.approvals[0]?.req.approval_id === d.approvalId) ctl.answerApproval(d.decision, d.scope); }} /> : (
-              <>
-                {showTasks ? <Box paddingX={1} height={tasksH}><TaskList items={s.tasks} maxRows={rows >= 34 ? 10 : 5} width={mainW - 2} unicode={tier !== 'none'} /></Box> : null}
-                {mentions.length && !matches.length ? <MentionPopup items={mentions.slice(0, 6)} sel={s.mention!.sel} width={mainW} onPick={(p) => { const e = ed.completeMention({ text: s.input, cursor: s.cursor }, mentionNow!, p); ctl.setInputUndoable(e.text, e.cursor); ctl.clearMentions(); }} /> : null}
-                {popupH && matches.length ? <SlashPopup matches={matches} sel={s.slashSel} width={mainW} onPick={(c) => { const t = '/' + c.name + (c.args ? ' ' : ''); ctl.patch({ input: t, cursor: t.length, anchor: undefined, slashSel: 0 }); if (!c.args) void ctl.submit('/' + c.name); }} /> : null}
-                <Prompt text={s.maskInput ? s.input.replace(/[^\n]/g, '•') : s.input} cursor={s.cursor} anchor={s.anchor} maxRows={maxInput} busy={s.busy} width={mainW} active={s.mode === 'chat' || s.mode === 'night'} placeholder={nightOpen ? 'Add a task for tonight…' : placeholder} />
-              </>
-            )}
-          </Box>
-          {showFleet ? <Box marginLeft={1}><FleetPanel s={s} width={FLEET_W} height={bodyH + stripH + bottomH} /></Box> : null}
-        </Box>
-        <StatusLine s={s} width={cols} />
-        <Box position="absolute" marginTop={1} width={cols}><Toasts toasts={s.toasts} showing={ctl.toasts.current()?.id} width={cols - 1} unicode={tier !== 'none'} /></Box>
-      </Box>
-      </ClickContext.Provider>
+      <ThemeProvider theme={styled}>
+        <ClickContext.Provider value={clicks}>
+          <Shell cols={cols} rows={rows} promptRows={stripH + bottomH} promptMax={rows} slots={{
+            header: <StatusBar s={s} width={cols} line="header" />,
+            transcript: body,
+            prompt: bottom,
+            footer: <StatusBar s={s} width={cols} line="footer" />,
+            rail: showFleet ? <FleetPanel agents={fleetRows} selfMemberId={SELF_MEMBER} selfSlot={0} mode="rail" selectedId={s.activeAgent} onSelect={() => undefined} interactive={false} width={RAIL_WIDTH}
+              mascots={{ tier, unicode: tier !== 'none', motion: s.settings.reducedMotion ? 'reduced' : 'full', stateMap: STATE_MAP }} /> : undefined,
+          }} />
+        </ClickContext.Provider>
+      </ThemeProvider>
     </ThemeCtx.Provider>
   );
 }
-

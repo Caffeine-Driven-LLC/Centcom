@@ -7,7 +7,7 @@ import { renderToString } from 'ink';
 import { CodexEngine, DemoEngine, type NormalisedEvent } from '@centcom/agent';
 import { AppController } from '../../src/controller.js';
 import { NightCycle, counts, initialNight, nightDecision, nightRows, parseTasks, renderReport, taskPrompt, type NightHost, type NightState } from '../../src/index.js';
-import { StatusLine } from '../../src/components/StatusLine.js';
+import { StatusBar } from '../../src/components/StatusBars.js';
 
 const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '');
 describe('night model', () => {
@@ -65,7 +65,7 @@ describe('panel and status line', () => {
     const n: NightState = { ...initialNight(), armed: true, running: true, startedAt: 0, tasks: [{ id: 'a', text: 'fix login', status: 'done', startedAt: 0, endedAt: 60000, approved: 1, denied: 0 }, { id: 'b', text: 'add tests for billing', status: 'running', startedAt: 60000, approved: 0, denied: 0 }, { id: 'c', text: 'update docs', status: 'queued', approved: 0, denied: 0 }] };
     const text = nightRows(n, { width: 100, height: 30, now: 120000 }).map((r) => r.map((s) => s.t).join('')).join('\n'); expect(text).toContain('Night cycle'); expect(text).toContain('running'); expect(text).toContain('1 done · 0 failed · 2 to go'); expect(text).toContain('✓ fix login'); expect(text).toContain('● add tests for billing'); expect(text).toContain('○ update docs'); expect(text).toContain('nobody is asked anything'); expect(text).toContain('/night stop');
     expect(nightRows(initialNight(), { width: 100, height: 30, now: 0 }).map((r) => r.map((s) => s.t).join('')).join('\n')).toContain('The queue is empty.'); expect(nightRows(n, { width: 100, height: 30, now: 0, unicode: false }).map((r) => r.map((s) => s.t).join('')).join('')).toContain('+ fix login');
-    const c = new AppController({ engine: new DemoEngine({ speed: 100 }), demo: true, cwd: '/tmp', version: 't', skills: [] }); c.night.add('a\nb\nc'); c.night.arm(true); const line = strip(renderToString(<StatusLine s={c.state} width={110} />)); expect(line).toContain('◐ night · 3 queued');
+    const c = new AppController({ engine: new DemoEngine({ speed: 100 }), demo: true, cwd: '/tmp', version: 't', skills: [] }); c.night.add('a\nb\nc'); c.night.arm(true); const line = strip(renderToString(<StatusBar s={c.state} width={110} line="footer" />)); expect(line).toContain('night · 3 queued');
   });
 });
 

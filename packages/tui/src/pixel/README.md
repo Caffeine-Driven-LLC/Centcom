@@ -10,4 +10,4 @@ The mascot in the terminal, on top of the half-block renderer in `@centcom/masco
 - **`createFrameCache`** renders each animation once per colour, tier and size; a cached frame costs far under 2 ms.
 - **`createAnimationBudget`** lets at most 6 mascots animate; the others hold their first frame until a place frees up, in the order they asked.
 
-Not done: byte-for-byte golden files against `assets/mascot/play.py`, and the app does not use this component yet (it still draws through `PixelView` in `components/ui.tsx`).
+The app draws Cento with this component: the live strip (hero or mini), the welcome page and the mini mascot in every fleet rail row (the animation comes from `contracts/state-map.json` through `mascot/stateMap.ts`). Not done: byte-for-byte golden files against `assets/mascot/play.py`; the gallery page still draws the scenes through `PixelView`.

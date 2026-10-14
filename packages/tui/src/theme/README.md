@@ -17,4 +17,4 @@ Styled terminal output for every colour tier and theme.
 - The pinned grey values follow the shipped graphite palette (for example `text.muted` is 245, not the retired navy palette's 68); the colourful ones match DESIGN.
 - The card's `memberColor` examples are not consistent with each other (`memberColor(2,0)` red and `memberColor(0,2)` violet "for self"); this follows the written rule instead: others in slot order skipping yours.
 
-Not done: the app still uses `packages/theme`'s older `createTheme(mode, tier)` and its own colour helpers; switching components to these hooks is an integration step.
+The app now takes every colour from this module (`useCol` in `components/ui.tsx` resolves tokens through `<ThemeProvider>`); the older `@centcom/theme` `createTheme(mode, tier)` remains only for the tier and the five presence colours.

@@ -1,18 +1,16 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React from 'react';
 import { Box } from 'ink';
-import { MascotDriver, logoRows, renderHalfBlock, type CentoColor, type MascotFrame } from '@centcom/mascot';
-import { useTheme, PixelView, Rich } from './ui.js';
+import { getBaked, logoRows, renderHalfBlock, type CentoColor } from '@centcom/mascot';
+import { useTheme, Rich } from './ui.js';
+import { Cento } from '../pixel/index.js';
+import { animationForState } from '../mascot/stateMap.js';
 import { sp, truncate, type Line } from '../util/text.js';
 import { ago } from '../sessions.js';
 import type { AppState } from '../state/model.js';
 
 export function Welcome({ s, width, height, color, reduced, calm = 1, mascot = true }: { s: AppState; width: number; height: number; color: CentoColor; reduced: boolean; /** 1 = normal; more = the animation runs that many times slower (nothing has happened for a while). */ calm?: number; /** false when you turned the mascot off: no picture, nothing animating. */ mascot?: boolean }) {
   const theme = useTheme();
-  const driver = useMemo(() => new MascotDriver({ color, reducedMotion: reduced, dwellMs: 0 }), [color, reduced]);
-  const [f, setF] = useState<MascotFrame>(() => { driver.setState('first-run'); return driver.frame; });
-  useEffect(() => { driver.setState('first-run'); driver.start(); const u = driver.subscribe(setF); return () => { u(); driver.stop(); }; }, [driver]);
-  useEffect(() => { driver.setSpeed(calm); }, [driver, calm]);
-  useEffect(() => { driver.setPaused(!mascot); }, [driver, mascot]);
+  const animation = animationForState('first-run'); const baked = getBaked(animation); const mw = Math.max(baked?.w ?? 14, 14); const mh = Math.ceil((baked?.h ?? 16) / 2);
   const logo = renderHalfBlock(logoRows('CENTCOM', 'B'), theme.tier);
   const me = s.agents.find((a) => a.mine);
   const status: Line = s.demo
@@ -26,7 +24,7 @@ export function Welcome({ s, width, height, color, reduced, calm = 1, mascot = t
     ...(s.demo ? [[sp('try  ', { c: 'text.muted' }), sp('/demo fix', { c: 'signal' }), sp('   /demo search', { c: 'signal' }), sp('   /demo delete', { c: 'signal' })] as Line] : []),
   ];
   const wide = width >= 70;
-  const last = s.lastSession && !s.demo ? s.lastSession : undefined; const room = wide ? width - f.width - 6 : width - 2; // the text column beside (or under) the picture
+  const last = s.lastSession && !s.demo ? s.lastSession : undefined; const room = wide ? width - mw - 6 : width - 2; // the text column beside (or under) the picture
   if (last) { const when = ago(last.when); tips.push([sp('/resume', { c: 'accent.hover', b: true }), sp('  continue "' + truncate(last.title, Math.max(8, room - 19 - when.length - 4)) + '" · ' + when, { c: 'text.secondary' })]); }
   const text = (
     <Box flexDirection="column" marginLeft={wide ? 2 : 0}>
@@ -38,7 +36,7 @@ export function Welcome({ s, width, height, color, reduced, calm = 1, mascot = t
   );
   return (
     <Box width={width} height={height} alignItems="center" justifyContent="center" flexDirection={wide ? 'row' : 'column'}>
-      {mascot ? <PixelView rows={f.rows} tier={theme.tier} width={f.width} height={Math.ceil(f.height / 2)} /> : null}
+      {mascot ? <Box width={mw} height={mh} flexShrink={0}><Cento animation={animation} color={color} tier={theme.tier} unicode={theme.tier !== 'none'} motion={reduced ? 'reduced' : 'full'} playing={calm < 8} /></Box> : null}
       {text}
     </Box>
   );
