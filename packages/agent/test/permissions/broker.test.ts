@@ -54,7 +54,7 @@ describe('remote approvers', () => {
 
 describe('always and session rules', () => {
   it('approving `git status` with scope always creates a rule: next time it is allowed, but `git status; rm -rf x` still asks', async () => {
-    const r = rig({ prompter: scripted({ decision: 'approve', scope: 'always' }) }); await r.engine.handle(req({ command: 'git status' }), r.ctx); await tick(); await tick();
+    const r = rig({ prompter: scripted({ decision: 'approve', scope: 'always' }) }); await r.engine.handle(req({ command: 'git status' }), r.ctx); for (let i = 0; i < 100 && r.rules.list(r.ctx.root).length === 0; i += 1) await tick(); // the rule is saved after the answer: wait for it, a slow runner needs more than two ticks
     const rule = r.rules.list(r.ctx.root).find((x) => x.matcher?.command); expect(rule).toMatchObject({ tool: 'Bash', action: 'allow', scope: 'project', matcher: { command: 'git status:*' } }); expect(rule!.matcher!.command).not.toBe('*');
     expect((await r.engine.decide(req({ command: 'git status' }), r.ctx)).action).toBe('allow'); expect((await r.engine.decide(req({ command: 'git status --short' }), r.ctx)).action).toBe('allow'); expect((await r.engine.decide(req({ command: 'git status; rm -rf x' }), r.ctx)).action).toBe('ask'); expect((await r.engine.decide(req({ command: 'git push' }), r.ctx)).action).toBe('ask');
   });
