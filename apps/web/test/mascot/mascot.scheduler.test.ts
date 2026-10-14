@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BRIDGE_MS, COLLAPSED_STATE, MAX_ANIMATING, MIN_DWELL, MascotScheduler, StateGate } from '../../src/mascot/scheduler.js';
+import { BRIDGE_MS, COLLAPSED_STATE, MAX_ANIMATING, MIN_DWELL, ONE_SHOT_MS, MascotScheduler, StateGate } from '../../src/mascot/scheduler.js';
 
 const clock = () => { let t = 0; const q: { at: number; fn: () => void; h: number }[] = []; let id = 0; return { now: () => t, setTimeout: (fn: () => void, ms: number) => { const h = ++id; q.push({ at: t + ms, fn, h }); return h; }, clearTimeout: (h: unknown) => { const i = q.findIndex((x) => x.h === h); if (i >= 0) q.splice(i, 1); }, advance(ms: number) { const end = t + ms; for (;;) { q.sort((a, b) => a.at - b.at); const n = q[0]; if (!n || n.at > end) break; q.shift(); t = n.at; n.fn(); } t = end; } }; };
 describe('at most six move (acceptance 3, 8)', () => {
@@ -12,4 +12,19 @@ describe('changing the shown state (acceptance 4)', () => {
   it('changes that are far enough apart are each shown, after the dwell', () => { const c = clock(); const shown: string[] = []; const g = new StateGate(c, (s) => shown.push(s)); g.request('idle'); c.advance(50); g.request('thinking'); c.advance(2000); g.request('searching'); c.advance(100); g.request('planning'); c.advance(1000); expect(shown).toEqual(['idle', 'thinking', 'searching', 'planning']); });
   it('three changes in two seconds collapse into one tool-running', () => { const c = clock(); const shown: string[] = []; const g = new StateGate(c, (s) => shown.push(s)); g.request('reading-file'); c.advance(200); g.request('editing-file'); c.advance(200); g.request('running-command'); c.advance(1000); expect(shown).toEqual(['reading-file', COLLAPSED_STATE]); expect(g.shown).toBe(COLLAPSED_STATE); c.advance(3000); g.request('idle'); expect(shown.at(-1)).toBe('idle'); });
   it('the same state again changes nothing, and dispose stops a waiting change', () => { const c = clock(); const shown: string[] = []; const g = new StateGate(c, (s) => shown.push(s)); g.request('idle'); g.request('idle'); c.advance(1000); expect(shown).toEqual(['idle']); c.advance(2500); g.request('thinking'); c.advance(10); g.request('searching'); g.dispose(); c.advance(2000); expect(shown).toEqual(['idle', 'thinking']); expect(BRIDGE_MS).toBeLessThanOrEqual(200); });
+});
+
+describe('the bridge and the one-shots (C086)', () => {
+  it('prompt-received is a bridge: the next state replaces it after 200 ms, not 600', () => {
+    const c = clock(); const shown: string[] = []; const g = new StateGate(c, (s) => shown.push(s)); g.request('idle'); c.advance(3000); g.request('prompt-received'); expect(shown).toEqual(['idle', 'prompt-received']); c.advance(50); g.request('thinking'); c.advance(BRIDGE_MS - 50 - 1); expect(shown.at(-1)).toBe('prompt-received'); c.advance(2); expect(shown.at(-1)).toBe('thinking');
+    c.advance(2500); g.request('editing-file'); expect(shown.at(-1)).toBe('editing-file'); c.advance(100); g.request('searching'); c.advance(BRIDGE_MS + 10); expect(shown.at(-1)).toBe('editing-file'); // an ordinary state still stays 600 ms
+  });
+  it('a one-shot plays once and the mascot returns to the state the agent is really in, not to the one before it', () => {
+    const c = clock(); const shown: string[] = []; const g = new StateGate(c, (s) => shown.push(s)); g.request('editing-file'); c.advance(3000); g.request('success'); expect(shown.at(-1)).toBe('success');
+    c.advance(800); g.request('reading-file'); c.advance(ONE_SHOT_MS); expect(shown.at(-1)).toBe('reading-file'); expect(shown.filter((x) => x === 'success')).toHaveLength(1);
+  });
+  it('a one-shot with nothing else going on goes back to what was there, and a state change before it ends cancels the return', () => {
+    const c = clock(); const shown: string[] = []; const g = new StateGate(c, (s) => shown.push(s)); g.request('thinking'); c.advance(3000); g.request('approved'); c.advance(ONE_SHOT_MS + 10); expect(shown.at(-1)).toBe('thinking');
+    c.advance(3000); g.request('success'); c.advance(700); g.request('idle'); c.advance(100); expect(shown.at(-1)).toBe('idle'); c.advance(ONE_SHOT_MS * 2); expect(shown.at(-1)).toBe('idle'); g.dispose();
+  });
 });

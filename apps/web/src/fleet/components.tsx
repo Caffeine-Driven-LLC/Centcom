@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useReducedMotion } from '../a11y/motion.js';
 import { Banner, Button, Card, Chip, EmptyState, Table } from '../ui/index.js';
 import { Mascot } from '../mascot/Mascot.js';
+import { t } from '../i18n/index.js';
 import { MAX_ANIMATED, elapsed, middleTruncate, motionPlan, type Card as FleetCard } from './model.js';
 
 /** The 36 px mascot slot: the player (lane C086) runs only for the cards the board lets move; the rest show nothing animated. */
@@ -25,6 +26,23 @@ export function FleetBoard({ cards, now, view, onOpen, onMerge }: { cards: Fleet
   if (view === 'table') return <Table caption="Agents" rows={cards} rowKey={(c) => c.agentId} columns={[{ key: 'a', header: 'Agent', cell: (c) => c.label }, { key: 'o', header: 'Owner', cell: (c) => (c.mine ? 'you' : c.ownerName) }, { key: 's', header: 'State', cell: (c) => `${c.glyph} ${c.word}` }, { key: 'b', header: 'Branch', cell: (c) => (c.branch ? middleTruncate(c.branch) : '') }, { key: 't', header: 'Time', cell: (c) => elapsed(c.since, now) }]} />;
   const move = (i: number): void => { const n = Math.max(0, Math.min(cards.length - 1, i)); setCur(n); els.current[n]?.focus(); };
   return <div className="cc-fleet" role="list" aria-label="Agents">{cards.map((c, i) => <div role="listitem" key={c.agentId}><AgentCard c={c} now={now} plan={plan} active={i === cur} tabIndex={i === cur ? 0 : -1} refCb={(el) => { els.current[i] = el; }} onKey={(e) => { if ((e.target as HTMLElement).closest('button')) return; if (e.key === 'j' || e.key === 'ArrowDown') { e.preventDefault(); move(i + 1); } else if (e.key === 'k' || e.key === 'ArrowUp') { e.preventDefault(); move(i - 1); } else if (e.key === 'Enter') { onOpen?.(c.agentId); } }} onOpen={onOpen} onMerge={onMerge} /></div>)}</div>;
+}
+/** The details of one agent, beside the board: everything on its card in full (the branch is not cut), what it holds and whether it clashes. Esc or Close hands the focus back to the card that opened it. */
+export function AgentInspector({ card, now, onClose, onMerge }: { card: FleetCard; now: number; onClose(): void } & Pick<FleetActions, 'onMerge'>): React.JSX.Element {
+  const ref = useRef<HTMLElement | null>(null); const opener = useRef<Element | null>(typeof document === 'undefined' ? null : document.activeElement);
+  useEffect(() => { ref.current?.focus(); }, [card.agentId]); useEffect(() => () => { const o = opener.current; if (o instanceof HTMLElement && o.isConnected) o.focus(); }, []);
+  return <aside ref={ref} tabIndex={-1} role="complementary" aria-label={t('fleet.inspector.title', { name: card.label })} className="cc-inspector" onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } }}>
+    <header><strong>{card.label}</strong> <Button variant="ghost" onClick={onClose}>{t('fleet.inspector.close')}</Button></header>
+    <dl>
+      <dt>{t('fleet.inspector.owner')}</dt><dd>{card.mine ? t('fleet.inspector.you') : card.ownerName}</dd>
+      <dt>{t('fleet.inspector.state')}</dt><dd><span aria-hidden="true">{card.glyph} </span>{card.word}{card.since ? <span className="cc-help"> · {elapsed(card.since, now)}</span> : null}{card.needsYou ? <> <Chip tone="warning">{t('fleet.inspector.needsYou')}</Chip></> : null}</dd>
+      <dt>{t('fleet.inspector.branch')}</dt><dd>{card.branch ? <code>{card.branch}</code> : t('fleet.inspector.branchNone')}</dd>
+      {card.ahead !== undefined ? <><dt>{t('fleet.inspector.ahead')}</dt><dd>{t('fleet.inspector.aheadText', { ahead: card.ahead, behind: card.behind ?? 0 })}{card.dirty ? t('fleet.inspector.dirty') : ''}</dd></> : null}
+      <dt>{t('fleet.inspector.files')}</dt><dd>{card.locks ? (card.locks === 1 ? t('fleet.inspector.lockedOne') : t('fleet.inspector.lockedMany', { count: card.locks })) : t('fleet.inspector.none')}</dd>
+      <dt>{t('fleet.inspector.conflict')}</dt><dd>{card.conflict ? t('fleet.inspector.conflictText') : t('fleet.inspector.none')}</dd>
+    </dl>
+    {card.mine && card.branch && card.ahead ? <div><Button variant="ghost" onClick={() => onMerge?.(card.agentId, 'merge')}>{t('fleet.inspector.merge')}</Button><Button variant="ghost" onClick={() => onMerge?.(card.agentId, 'rebase')}>{t('fleet.inspector.rebase')}</Button><Button variant="ghost" onClick={() => onMerge?.(card.agentId, 'open-pr')}>{t('fleet.inspector.openPr')}</Button></div> : null}
+  </aside>;
 }
 export function ConflictList({ cards }: { cards: FleetCard[] }): React.JSX.Element | null {
   const c = cards.filter((x) => x.conflict); const l = cards.filter((x) => x.locks > 0); if (!c.length && !l.length) return null;

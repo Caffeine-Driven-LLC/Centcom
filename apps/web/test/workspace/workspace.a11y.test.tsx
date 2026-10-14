@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, within } from '@testing-library/react';
 import React from 'react';
+import { expectNoA11yViolations } from '../../src/a11y/index.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { MembersTable, SeatBanner } from '../../src/workspace/components.js';
 import { ToastProvider } from '../../src/ui/index.js';
@@ -13,4 +14,8 @@ describe('structure for assistive tech (acceptance 7; no axe run here, the roles
     expect(screen.getByRole('region', { name: 'Members' })).toBeTruthy(); expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Name', 'Role', 'Joined', 'Actions']); expect(screen.getAllByRole('row')).toHaveLength(3); for (const b of screen.getAllByRole('button')) expect((b.textContent ?? b.getAttribute('aria-label') ?? '').length).toBeGreaterThan(0); for (const s of screen.getAllByRole('combobox')) expect(s.getAttribute('aria-label')).toMatch(/^Role of /); expect(within(screen.getAllByRole('row')[1]!).getByText('2026-10-01')).toBeTruthy();
   });
   it('the seat banner is one status message with one link, not a modal', () => { render(<SeatBanner billingHref="/w/1/billing" />); expect(screen.getByRole('alert').textContent).toContain('No free seats'); expect(screen.getAllByRole('link')).toHaveLength(1); expect(screen.getByRole('link', { name: 'See billing' }).getAttribute('href')).toBe('/w/1/billing'); expect(screen.queryByRole('dialog')).toBeNull(); });
+  it('the members table and the seat banner pass the structural accessibility check', async () => {
+    const { container } = render(<ToastProvider><SeatBanner billingHref="/w/1/billing" /><MembersTable members={[{ id: 'a', role: 'member', user: { display_name: 'Ada' }, joined_at: '2026-10-01T00:00:00Z' }]} me="x" myRole="owner" http={fakeHttp(() => ({}))} ws="w" onChanged={() => undefined} onRemove={() => undefined} onTransfer={() => undefined} /></ToastProvider>);
+    await expectNoA11yViolations(container);
+  });
 });

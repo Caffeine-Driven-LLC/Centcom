@@ -10,16 +10,22 @@ export class MascotScheduler {
   private recompute(): void { const on = new Set(this.animating()); for (const id of this.order) { const v = on.has(id); if (this.last.get(id) !== v) { this.last.set(id, v); this.fns.get(id)?.(v); } } }
 }
 export interface GateClock { now(): number; setTimeout(fn: () => void, ms: number): unknown; clearTimeout(h: unknown): void }
+/** These play once and the mascot goes back to the state it was really in (DESIGN 19.3). */
+export const ONE_SHOT = new Set(['success', 'approved', 'denied', 'celebrate']); export const ONE_SHOT_MS = 1500;
 export const MIN_DWELL = 600; export const COLLAPSE_COUNT = 3; export const COLLAPSE_WINDOW = 2000; export const BRIDGE_MS = 200; export const COLLAPSED_STATE = 'tool-running';
 /** The rules for changing what the mascot shows: a state stays for at least 600 ms, three changes within two seconds become one `tool-running`, and `prompt-received` is a bridge of at most 200 ms. The mascot only follows the real state; it never changes it. */
 export class StateGate {
-  private current?: string; private since = -Infinity; private pending?: string; private timer?: unknown; private changes: number[] = [];
+  private current?: string; private since = -Infinity; private pending?: string; private timer?: unknown; private changes: number[] = []; /** the state the agent is really in (a one-shot is not one) */ private base?: string; private backTimer?: unknown;
   constructor(private readonly clock: GateClock, private readonly play: (state: string) => void) {}
   get shown(): string | undefined { return this.current; }
   request(state: string): void {
+    if (!ONE_SHOT.has(state)) this.base = state;
     const now = this.clock.now(); this.changes = this.changes.filter((t) => now - t < COLLAPSE_WINDOW); this.changes.push(now); const target = this.changes.length >= COLLAPSE_COUNT && state !== 'idle' && state !== 'ready' ? COLLAPSED_STATE : state;
-    if (target === this.current && !this.pending) return; this.pending = target; const wait = this.since + MIN_DWELL - now; if (wait <= 0) return this.flush(); if (this.timer === undefined) this.timer = this.clock.setTimeout(() => { this.timer = undefined; this.flush(); }, wait);
+    if (target === this.current && !this.pending) return; this.pending = target; const wait = this.since + (this.current === 'prompt-received' ? BRIDGE_MS : MIN_DWELL) - now; if (wait <= 0) return this.flush(); if (this.timer === undefined) this.timer = this.clock.setTimeout(() => { this.timer = undefined; this.flush(); }, wait);
   }
-  private flush(): void { const s = this.pending; this.pending = undefined; if (s === undefined || s === this.current) return; this.current = s; this.since = this.clock.now(); this.play(s); }
-  dispose(): void { if (this.timer !== undefined) this.clock.clearTimeout(this.timer); this.timer = undefined; this.pending = undefined; }
+  private flush(): void { const s = this.pending; this.pending = undefined; if (s === undefined || s === this.current) return; this.current = s; this.since = this.clock.now(); this.play(s);
+    if (this.backTimer !== undefined) { this.clock.clearTimeout(this.backTimer); this.backTimer = undefined; }
+    if (ONE_SHOT.has(s)) this.backTimer = this.clock.setTimeout(() => { this.backTimer = undefined; const b = this.base; if (b !== undefined && b !== this.current) { this.pending = b; this.flush(); } }, ONE_SHOT_MS); // played once, back to the real state
+  }
+  dispose(): void { if (this.backTimer !== undefined) this.clock.clearTimeout(this.backTimer); this.backTimer = undefined; if (this.timer !== undefined) this.clock.clearTimeout(this.timer); this.timer = undefined; this.pending = undefined; }
 }
