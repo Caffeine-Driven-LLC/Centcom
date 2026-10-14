@@ -13,7 +13,7 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 
 ![Progress](docs/progress.svg)
 
-**89% built** (weighted by lane size across 105 lanes). Details and how this is computed: [`tools/plan/progress.py`](tools/plan/progress.py). Update [`plan/STATUS.json`](plan/STATUS.json) when you finish or advance a lane, then run `python3 tools/plan/progress.py`.
+**90% built** (weighted by lane size across 105 lanes). Details and how this is computed: [`tools/plan/progress.py`](tools/plan/progress.py). Update [`plan/STATUS.json`](plan/STATUS.json) when you finish or advance a lane, then run `python3 tools/plan/progress.py`.
 
 ## Next steps
 
@@ -32,10 +32,10 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 | [C012](plan/client/C012.md) | Release engineering skeleton: versioning, changesets, signing placeholders | 90% | Changesets fixed group, build metadata, Ed25519 signing over the SHA-256 digest, release manifest for 5 targets, dry-run release workflow, docs/releasing.md; publish steps are stubs until lanes C094/C068 |
 | [C020](plan/client/C020.md) | Skills pack: install and manage Claude Code skills and Codex AGENTS.md guidance | 90% | bundled pack (5 skills + checksummed manifest, checked in CI), installer with plan/apply/planHash, Claude Code files and a delimited AGENTS.md block, modified-file protection with a per-file overwrite prompt (--overwrite for all), atomic writes and symlink/escape refusal, install record, centcom skills command, /skills loaded lists what Claude Code itself loaded (from its start message, run against the real claude); gap: Codex has no loaded-skills list to read |
 | [C031](plan/client/C031.md) | Terminal capability detection and colour tiers | 90% | terminal capability module (tier matrix, unicode, half-block, hyperlink/paste flags, typed CENTO_* env with warnings, OSC 11 background query with 150 ms bound, layout class, mascotAllowed, debounced watchSize); the app now starts from it for colour depth (shared detection, the colour setting on top) and says an unclear CENTO_* value in words; gaps: components still use the older theme helpers, Unicode/ASCII fallback is not switched by caps.unicode yet |
-| [C037](plan/client/C037.md) | Diff view | 90% | unified-diff parser with caps (2,000 lines, 200 files, 50k lines in <300 ms), two-string differ, camelCase-aware word highlights, row layout with numbered gutter, wrapping, gap folding/expansion, binary/rename rows, DiffView with focusable gaps, diff.share adapter; the approval prompt now shows an edit's numbered diff (checked with the real Claude Code); gap: the transcript still uses util/diff.ts; diff view notes rows |
-| [C041](plan/client/C041.md) | Command palette | 90% | palette core: DP fuzzy matcher with indices, engine (debounce, abort, slow-provider append, fixed group order, recent), list and file providers (git ls-files or walk, 20k cap, sliced scoring), view and live component (60/cols-4 wide, 8 rows + more row, wrap-around keys), palette.* actions; gap: the app still shows its older palette, sessions/skills providers not wired; palette with ranking and click, entries from the command list; /settings and pickers on one picker model |
+| [C103](plan/client/C103.md) | Codex engine: drive the user’s own codex binary (app-server JSON-RPC, exec fallback) | 90% | codex app-server engine tested against a protocol-faithful fake; no real turn yet. Real-Codex checklist: docs/codex-verification.md, recorder: tools/codex/record.ts; verified on a real Codex (codex-cli 0.161.0): a real turn, questions (needs the default_mode_request_user_input flag, passed per process), /effort, models, cancel. Not tried live: secret and multi-question requests |
+| [C104](plan/client/C104.md) | Provider detection and login handoff: provider status, login, logout, doctor checks | 90% | provider detection and commands; the app now checks at start, in the background, that the tool is signed in and in range and says so with the next step (run against the real claude and codex); gaps: message copy sign-off (the app's error guide and the provider messages are two sets of words), runtime fs spy, CLI-level hang test |
 
-+45 more in [`plan/STATUS.json`](plan/STATUS.json).
++42 more in [`plan/STATUS.json`](plan/STATUS.json).
 
 ### Ready to pick up (all dependencies done)
 

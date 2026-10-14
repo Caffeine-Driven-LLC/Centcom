@@ -94,8 +94,8 @@
    "note": "virtualised layout with per-block cache (10k blocks), follow tail with \"N new\" indicator, ctrl+home/end, resize anchor, 5,000-block cap, terminal sanitising of every string, session-event reducer (seq order, delta reorder/dedupe/gap) and member identity rendering; loadRange for older blocks waits for remote history"
   },
   "C037": {
-   "pct": 0.9,
-   "note": "unified-diff parser with caps (2,000 lines, 200 files, 50k lines in <300 ms), two-string differ, camelCase-aware word highlights, row layout with numbered gutter, wrapping, gap folding/expansion, binary/rename rows, DiffView with focusable gaps, diff.share adapter; the approval prompt now shows an edit's numbered diff (checked with the real Claude Code); gap: the transcript still uses util/diff.ts; diff view notes rows"
+   "pct": 1,
+   "note": "merged in #189"
   },
   "C038": {
    "pct": 0.95,
@@ -110,16 +110,16 @@
    "note": "spinner module in the app: 10-frame glyph at 80 ms, time after 2 s, tokens after 5 s, interrupt hint, verb pools by state, plain words in serious states or with ui.spinner plain; gap: the older VerbRotator still feeds the title"
   },
   "C041": {
-   "pct": 0.9,
-   "note": "palette core: DP fuzzy matcher with indices, engine (debounce, abort, slow-provider append, fixed group order, recent), list and file providers (git ls-files or walk, 20k cap, sliced scoring), view and live component (60/cols-4 wide, 8 rows + more row, wrap-around keys), palette.* actions; gap: the app still shows its older palette, sessions/skills providers not wired; palette with ranking and click, entries from the command list; /settings and pickers on one picker model"
+   "pct": 1,
+   "note": "merged in #189"
   },
   "C042": {
    "pct": 0.85,
    "note": "state labels with tier for all 64 states, sort (tier, needs you, age), event reducer, rail/overlay FleetPanel, exit outcomes, key handling; the panel in the app takes its words, glyphs and order from the same table; gaps: the app keeps its panel with mini mascots instead of the rail rows, memberColor from theme; /fleet as a menu: start, list, preview, stop, remove, clean; Team section in the desktop session panel"
   },
   "C044": {
-   "pct": 0.9,
-   "note": "toast controller in the app (one at a time, queue of 20, severity preemption, errors stay until ctrl+y/Esc, repeats counted xN, action keys), sys.notice table shown for the service's notices; gaps: bus event toast.dismissed not wired"
+   "pct": 1,
+   "note": "merged in #189"
   },
   "C045": {
    "pct": 1,
