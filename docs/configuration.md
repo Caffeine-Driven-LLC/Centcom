@@ -58,12 +58,14 @@ When you change them in the app, these are saved to your user file: theme, Cento
 | `a11y.screen_reader` | boolean | `false` | no | Plain text for screen readers: no colour, no boxes, no animation, no redraws; one line per event. Same as --screen-reader or CENTO_SCREEN_READER=1 |
 | `update.check` | boolean | `true` | no | Look for a newer Centcom each time it starts (in the background, never delaying the start; CENTCOM_NO_UPDATE_CHECK=1 turns it off for one run) |
 | `update.auto` | boolean | `true` | no | Bring a newer Centcom in by itself each time it starts, so the next start is the latest (off: only say that one exists) |
+| `update.check_interval_h` | number (1 to 168) | `6` | no | How many hours pass between looks for a newer Centcom (give or take 20 %, so many installs do not call in step) |
 | `update.channel` | stable \| beta \| nightly | `"stable"` | no | Which releases to follow: stable, beta or nightly |
 | `lan.enabled` | boolean | `true` | no | Allow LAN sessions |
 | `agent.max_parallel` | number (1 to 16) | `4` | yes | Most agents running at once |
 | `session.persist` | boolean | `true` | no | Save conversations and your prompt history on this computer (off is the same as --no-save) |
 | `session.retention_days` | number (1 to 3650) | `30` | no | Delete saved conversations that were not touched for this many days (checked each time Centcom starts) |
 | `agent.turn_timeout_s` | number (0 to 86400) | `0` | yes | Stop a turn that runs longer than this many seconds (0 means no limit) |
+| `agent.engine_unsupported_ok` | boolean | `false` | no | Run a Claude Code whose version is outside the range Centcom has been checked against (otherwise the turn stops and says which versions work) |
 | `agent.approval_timeout_ms` | number (1000 to 86400000) | `600000` | yes | How long an approval waits before it is declined |
 | `client.engine` | claude-code \| codex | `"claude-code"` | no | Last agent you used |
 | `client.model` | string | `""` | yes | Model id passed to the agent (empty = the CLI default) |

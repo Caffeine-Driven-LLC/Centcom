@@ -14,6 +14,8 @@
 - [logout](./logout.md): sign out of Centcom
 - [whoami](./whoami.md): who is signed in
 - [devices](./devices.md): computers signed in to your account
+- [webhooks](./webhooks.md): manage webhooks of a workspace
+- [audit](./audit.md): read or export the workspace audit log
 - [join](./join.md): join a shared session
 - [lan](./lan.md): find sessions on this network
 - [update](./update.md): look for a newer Centcom and bring it in

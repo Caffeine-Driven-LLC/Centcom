@@ -22,7 +22,7 @@ Exit 0 up to date or updated, 1 failed, cancelled or refused (a downgrade, a fai
 
 ## Config
 
-`update.check` (default on), `update.auto` (default on; the effective default is off for anything but a standalone install), `update.channel` (default stable). The interval (`update.check_interval_h`, default 6) is a parameter of `shouldCheck`; there is no settings key for it yet.
+`update.check` (default on), `update.auto` (default on; the effective default is off for anything but a standalone install), `update.channel` (default stable). The interval is `update.check_interval_h` (default 6, 1 to 168 hours, give or take 20 %), passed to `shouldCheck`.
 
 ## Failure modes
 
