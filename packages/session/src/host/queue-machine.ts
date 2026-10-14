@@ -42,5 +42,7 @@ export class QueueMachine {
     this.version++; return true;
   }
   /** The host is gone: approved and running items show as held. */
+  /** The host role is moving (a handoff or a failover): what was running goes back to approved with no agent, at the front, so the next host runs it once (CT-WS-QUEUE host loss). Returns the items changed. */
+  requeueRunning(): string[] { const ids = [...this.items.values()].filter((i) => i.state === 'running').map((i) => i.item); if (!ids.length) return []; for (const id of ids) { const it = this.items.get(id)!; it.state = 'approved'; delete it.agent_id; } this.order = [...ids, ...this.order.filter((x) => !ids.includes(x))]; this.version++; return ids; }
   setHostAway(away: boolean): boolean { if (this.held === away) return false; this.held = away; this.version++; return true; }
 }

@@ -17,4 +17,4 @@ Rejected actions answer the sender only (`sys.error`), are logged, and are never
 
 Changes in `@centcom/lan` for this lane: `setInterceptor`, `setHooks` (connected, disconnected, left), `setRole`, `roleOf`, `dropMember`, `setSnapshots`, `onSequenced`, a stable slot per member, and an `id` on server frames (clients refuse frames without one).
 
-Not here: host failover, restoring a session after a host restart (the session ends), the snapshot builder (the caller encrypts it), the agent runner. Frame payload shapes are not schema-checked beyond what the control and queue checks need; unknown kinds are sequenced and forwarded.
+Each frame's clear part is checked against the contract for its kind before it is numbered (a known kind with a wrong clear part is refused as `invalid_frame`; unknown kinds, `presence.*`, `queue.*` and `control.*` have their own rules). `releaseRunning()` puts running queue items back to approved when the host role is about to move, so the next host runs them once. Not here: host failover, restoring a session after a host restart (the session ends), the snapshot builder (the caller encrypts it), the agent runner.

@@ -20,8 +20,10 @@ type IfaceTable = NodeJS.Dict<NetworkInterfaceInfo[]>;
 
 /**
  * Interfaces mDNS may use. Node lists only interfaces that are up and have an address; loopback is skipped unless `bind` names it.
- * `bind` entries are interface names or addresses; when given, only those interfaces are used.
+ * `bind` entries are interface names or addresses; when given, only those interfaces are used. Container and virtual interfaces (docker0, veth..., virbr0, tun0) are skipped unless named.
  */
+/** Names of container, virtual-machine and tunnel interfaces: a session announced there is found at an address nobody on the real network can reach, so they are skipped unless `--bind` names them. */
+export const VIRTUAL_IFACE = /^(docker|br-|veth|virbr|vmnet|vboxnet|vmbr|cni|flannel|cali|lxc|lxd|podman|cbr|kube|tun\d|tap\d|zt)/i;
 export function usableInterfaces(o: { bind?: readonly string[]; table?: () => IfaceTable } = {}): NetIface[] {
   const table = (o.table ?? networkInterfaces)(); const out: NetIface[] = []; const bind = o.bind?.filter(Boolean) ?? [];
   for (const [name, list] of Object.entries(table)) for (const i of list ?? []) {
@@ -29,6 +31,7 @@ export function usableInterfaces(o: { bind?: readonly string[]; table?: () => If
     const named = bind.length > 0 && (bind.includes(name) || bind.includes(i.address));
     if (bind.length > 0 && !named) continue;
     if (i.internal && !named) continue;
+    if (!named && VIRTUAL_IFACE.test(name)) continue;
     out.push({ name, family, address: i.address, netmask: i.netmask, internal: i.internal, ...(family === 'IPv6' ? { scopeid: i.scopeid } : {}) });
   }
   return out;
