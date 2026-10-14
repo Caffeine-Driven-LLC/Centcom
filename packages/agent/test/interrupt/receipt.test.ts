@@ -75,6 +75,14 @@ describe('the engine checks what it starts (C102)', () => {
       const ok = engine({ FAKE_CLAUDE_ARGV_FILE: f }, { versionProbe: claudeVersionProbe(FAKE), unsupportedOk: true }); const s2 = await start(ok); await s2.send('hi'); await until(s2, (x) => x.type === 'text.delta'); expect(JSON.parse(readFileSync(f, 'utf8')).length).toBeGreaterThan(3); await s2.interrupt();
     } finally { delete process.env.FAKE_CLAUDE_VERSION; }
   });
+  it('a refusal stays: the second prompt of the same session is refused too and nothing is spawned', async () => {
+    const f = join(tmp(), 'argv.json'); process.env.FAKE_CLAUDE_VERSION = '1.0.3 (Claude Code)';
+    try {
+      const s = await start(engine({ FAKE_CLAUDE_ARGV_FILE: f }, { versionProbe: claudeVersionProbe(FAKE) }));
+      await s.send('one'); await until(s, (x) => x.type === 'turn.done'); await s.send('two'); const evs = await until(s, (x) => x.type === 'turn.done');
+      expect(evs.find((x) => x.type === 'error')).toMatchObject({ code: 'provider_version_unsupported' }); expect(() => readFileSync(f)).toThrow();
+    } finally { delete process.env.FAKE_CLAUDE_VERSION; }
+  });
   it('a version inside the range, or one that cannot be read, goes ahead', async () => {
     const e = engine({}, { versionProbe: claudeVersionProbe(FAKE) }); const s = await start(e); await s.send('hi'); await until(s, (x) => x.type === 'text.delta'); await s.interrupt();
     const e2 = engine({}, { versionProbe: async () => undefined }); const s2 = await start(e2); await s2.send('hi'); await until(s2, (x) => x.type === 'text.delta'); await s2.interrupt();

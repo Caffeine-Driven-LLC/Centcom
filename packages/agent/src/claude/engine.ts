@@ -73,7 +73,7 @@ class ClaudeSession implements EngineSession {
     this.agentId = o.agentId; this.sessionId = o.resume?.engine_session_id; this.mode = o.permissionMode ?? 'default'; this.model = o.model;
     if (this.mode === 'bypassPermissions' && !o.allowBypass) { this.mode = 'default'; this.bypassRefused = true; } // never skip approvals because a default said so: the person has to have asked
   }
-  private bypassRefused = false; private versionChecked = false;
+  private bypassRefused = false; private versionAllowed?: boolean;
 
   resumeToken() { return this.sessionId; }
   setModel(m: string) { this.model = m; }
@@ -137,9 +137,12 @@ class ClaudeSession implements EngineSession {
 
   /** Before the first turn: is this `claude` a version Centcom has been checked against? Says so and ends the turn when it is not. */
   private async versionOk(): Promise<boolean> {
-    const probe = this.deps.versionProbe; if (!probe || this.versionChecked) return true; this.versionChecked = true;
-    let v: string | undefined; try { v = await probe(); } catch { v = undefined; }
-    const pos = rangePosition(v, rangeFor('claude-code')); if ((pos !== 'below' && pos !== 'above') || this.deps.unsupportedOk || this.o.unsupportedOk) return true;
+    const probe = this.deps.versionProbe; if (!probe) return true;
+    if (this.versionAllowed === undefined) { // read once per session; a refusal stays, so the next prompt is refused too
+      let v: string | undefined; try { v = await probe(); } catch { v = undefined; }
+      const pos = rangePosition(v, rangeFor('claude-code')); this.versionAllowed = (pos !== 'below' && pos !== 'above') || !!this.deps.unsupportedOk || !!this.o.unsupportedOk;
+    }
+    if (this.versionAllowed) return true;
     this.emit({ type: 'error', code: 'provider_version_unsupported', tool_message: providerMessage('provider_version_unsupported', { engine: 'claude-code' }).body, fatal: true });
     this.emit({ type: 'status', state: 'error' }); this.emit({ type: 'turn.done', outcome: 'error', stop_reason: 'version_unsupported' }); return false;
   }
