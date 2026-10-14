@@ -1,6 +1,7 @@
 import { ArrowUp, LogOut, Users } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { Button } from '../ui/shadcn/index.js';
+import { t } from '../i18n/index.js';
 import { Markdown } from './Markdown.js';
 import { Person } from './SessionPanel.js';
 import type { LocalView } from './model.js';
@@ -32,7 +33,7 @@ export function JoinedPane({ view, send }: { view: LocalView; send(m: ClientMsg)
       <div ref={end} />
     </div>
     {j.asked.length ? <ul className="jn__asked" aria-label="Waiting for the host">{j.asked.map((a) => <li key={a.item}>{a.state === 'queued' ? 'Waiting for the host: ' : 'Running: '}{a.text}</li>)}</ul> : null}
-    <div className="lc-composer">{can ? <>{j.payer ? <p className="acct__note jn__payer" data-testid="guest-notice">Your prompt will run on {j.payer}'s account</p> : <p className="acct__note jn__payer" role="status">Finding out whose account would run your prompt…</p>}<textarea aria-label="Ask the host's agent" rows={2} placeholder="Ask for something… the host decides whether it runs" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); ask(); } }} /><div className="lc-composer-bar"><span className="lc-hint">Enter to ask</span><span className="lc-grow" /><Button size="sm" disabled={!text.trim() || !j.payer} onClick={ask}><ArrowUp />Ask</Button></div></> : <p className="acct__note">You can watch this session but not send to it.</p>}</div>
+    <div className="lc-composer">{can ? <>{j.payer ? <p className="acct__note jn__payer" data-testid="guest-notice">{t('joined.payer', { host: j.payer })}</p> : <p className="acct__note jn__payer" role="status">{t('joined.payerUnknown')}</p>}<textarea aria-label="Ask the host's agent" rows={2} placeholder="Ask for something… the host decides whether it runs" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); ask(); } }} /><div className="lc-composer-bar"><span className="lc-hint">Enter to ask</span><span className="lc-grow" /><Button size="sm" disabled={!text.trim() || !j.payer} onClick={ask}><ArrowUp />Ask</Button></div></> : <p className="acct__note">You can watch this session but not send to it.</p>}</div>
   </div>
   <aside className="ps" aria-label="People"><section className="ps-sec"><h3 className="ps-h"><Users aria-hidden="true" />People</h3><ul className="ps-list">{j.people.map((p) => <Person key={p.id} name={p.you ? 'You' : p.name} slot={p.slot} sub={`${ROLE[p.role]}${p.online ? '' : ' · away'}`} />)}</ul></section></aside></div>;
 }
