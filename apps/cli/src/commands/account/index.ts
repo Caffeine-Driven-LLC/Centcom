@@ -12,7 +12,8 @@ export { createBrowserOpener, isOpenableUrl, openerCommand } from './browser.js'
 export { runDevices, runLogin, runLogout, runWhoami };
 
 /** The command names this module registers. */
-export const ACCOUNT_COMMANDS = ['login', 'logout', 'whoami', 'devices'] as const;
+/** The commands that need the stored sign-in: the four account commands and the two that call the service as the signed-in person (`webhooks`, `audit`). */
+export const ACCOUNT_COMMANDS = ['login', 'logout', 'whoami', 'devices', 'webhooks', 'audit'] as const;
 
 /** Register `login`, `logout`, `whoami` and `devices` on a command router. */
 export function registerAccountCommands(program: CommandBuilder, deps: AccountDeps): void {

@@ -74,4 +74,11 @@ describe('a blackholed network', () => {
     const t0 = Date.now(); const r = await runChecks(ctx({ replies: { '/healthz': 'hang', '/v1/status': 'hang' } }), { timeoutMs: 400 }); const took = Date.now() - t0; expect(took).toBeLessThan(1500); const by = Object.fromEntries(r.checks.map((c) => [c.id, c])); expect(by.network!.status).toBe('fail'); expect(by.network!.summary).toMatch(/in time/); expect(by.node!.status).toBe('pass'); expect(by.keychain!.status).toBe('pass'); expect(r.checks.length).toBe(ALL_CHECKS.length);
   });
   it('a check that throws is a failure with a next step, not a crash', async () => { const r = await runChecks(ctx(), { checks: [{ id: 'boom', run: async () => { throw new Error('oops /home/alice/x'); } }] }); expect(r.checks[0]).toMatchObject({ id: 'boom', status: 'fail' }); expect(JSON.stringify(r)).not.toContain('alice'); });
+  it('--bundle also carries the last 500 lines of the app log, scrubbed again, with the home folder shortened and no more than 256 KiB', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cc-doc-')); const file = join(dir, 'r.tar.gz'); const lines = Array.from({ length: 800 }, (_, i) => JSON.stringify({ n: i, msg: i === 799 ? 'last /home/me/proj token sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123' : 'x' }));
+    const c = ctx({ readFile: (p) => (p === '/home/me/.centcom/logs/centcom.log' ? { text: lines.join('\n') + '\n', mode: 0o600 } : undefined) });
+    expect(await runDoctor(['--bundle', file], c, { out: () => undefined, err: () => undefined })).toBe(0); const tar = gunzipSync(readFileSync(file)).toString('latin1'); expect(tar).toContain('log-tail.jsonl'); expect(tar).toContain('"n":799'); expect(tar).not.toContain('"n":299'); expect(tar).toContain('"n":300');
+    expect(tar).not.toContain('abcdefghijklmnopqrstuvwxyz0123'); expect(tar).not.toContain('/home/me/proj'); expect(tar).toContain('~/proj');
+    const none = join(dir, 'n.tar.gz'); await runDoctor(['--bundle', none], ctx(), { out: () => undefined, err: () => undefined }); expect(gunzipSync(readFileSync(none)).toString('latin1')).not.toContain('log-tail.jsonl');
+  });
 });

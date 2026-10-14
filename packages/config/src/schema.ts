@@ -28,6 +28,7 @@ export const SCHEMA = {
   'a11y.screen_reader': { kind: 'boolean', default: false, doc: 'Plain text for screen readers: no colour, no boxes, no animation, no redraws; one line per event. Same as --screen-reader or CENTO_SCREEN_READER=1' },
   'update.check': { kind: 'boolean', default: true, doc: 'Look for a newer Centcom each time it starts (in the background, never delaying the start; CENTCOM_NO_UPDATE_CHECK=1 turns it off for one run)' },
   'update.auto': { kind: 'boolean', default: true, doc: 'Bring a newer Centcom in by itself each time it starts, so the next start is the latest (off: only say that one exists)' },
+  'update.check_interval_h': { kind: 'number', default: 6, min: 1, max: 168, doc: 'How many hours pass between looks for a newer Centcom (give or take 20 %, so many installs do not call in step)' },
   'update.channel': { kind: 'enum', default: 'stable', enum: ['stable', 'beta', 'nightly'], doc: 'Which releases to follow: stable, beta or nightly' },
   'lan.enabled': { kind: 'boolean', default: true, doc: 'Allow LAN sessions' },
   'agent.max_parallel': { kind: 'number', default: 4, min: 1, max: 16, project: true, doc: 'Most agents running at once' },
