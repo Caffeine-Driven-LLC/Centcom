@@ -51,7 +51,7 @@ describe('host engine over loopback', () => {
   it('locks: first acquire echoed, second denied by the server', async () => {
     const { engine, guest } = await setup(); const g1 = await guest('g1', 2); const lock = (agent: string, action = 'acquire') => ({ t: 'event', k: 'file.lock', id: ID(++seqN), sid: SID, p: { action, path_hmac: 'h'.repeat(43), agent_id: agent, ttl_ms: 60_000 } }) as never;
     await engine.setPolicy({ ...engine.policy(), auto_approve: 'ask' }); await engine.setPolicy({ ...engine.policy() }); void lock;
-    const hostLink = engine.hostLink(); await hostLink.send(lock('agt_1')); await hostLink.send(lock('agt_2')); await wait(() => g1.ofKind('file.lock').length >= 2); expect(g1.ofKind('file.lock').map((f) => (f.p as { action: string }).action)).toEqual(['acquire', 'deny']); expect(engine.lockList()).toHaveLength(1);
+    const hostLink = engine.hostLink(); await hostLink.send(lock('agt_AAAAAAAAAAAAAAAAAAAAAAAAA1')); await hostLink.send(lock('agt_AAAAAAAAAAAAAAAAAAAAAAAAA2')); await wait(() => g1.ofKind('file.lock').length >= 2); expect(g1.ofKind('file.lock').map((f) => (f.p as { action: string }).action)).toEqual(['acquire', 'deny']); expect(engine.lockList()).toHaveLength(1);
   });
   it('frames are stored on disk and a snapshot is served; the host ends with session_state ended', async () => {
     const { engine, guest, persistence } = await setup(); const g1 = await guest('g1', 2); await g1.t.send({ t: 'event', k: 'reaction', id: ID(++seqN), sid: SID, p: { target: ID(1), code: 'ok', op: 'add' } } as never); await wait(() => g1.ofKind('reaction').length === 1); await engine.snapshot(); expect((await persistence.latestSnapshot(SID))!.seq).toBeGreaterThan(0); const frames: number[] = []; for await (const f of persistence.readFrames(SID, 0, 100)) frames.push(f.seq); expect(frames.length).toBeGreaterThan(2);
@@ -59,5 +59,22 @@ describe('host engine over loopback', () => {
   });
   it('the engine never decrypts: it does not import the crypto module', async () => {
     const { readdirSync, readFileSync } = await import('node:fs'); const dir = join(import.meta.dirname, '../../src/host'); for (const f of readdirSync(dir).filter((x) => x.endsWith('.ts'))) { const s = readFileSync(join(dir, f), 'utf8'); expect(s, f).not.toMatch(/decrypt|crypto_secretbox|sodium|openEnvelope|@centcom\/net\/crypto/i); }
+  });
+  it('a frame whose clear part does not match its kind is refused and never numbered (C075); a good one right after it goes through', async () => {
+    const { guest } = await setup(); const g1 = await guest('g1', 2); const T = 'msg_AAAAAAAAAAAAAAAAAAAAAAAAAA';
+    await g1.t.send({ t: 'event', k: 'reaction', id: ID(++seqN), sid: SID, p: { code: 'bad' } } as never); await g1.t.send({ t: 'event', k: 'reaction', id: ID(++seqN), sid: SID, p: { target: T, code: 'good', op: 'add' } } as never);
+    await wait(() => g1.ofKind('reaction').length >= 1); expect(g1.ofKind('reaction').map((f) => (f.p as { code: string }).code)).toEqual(['good']); // the bad one (sent first) was refused, the good one was numbered and echoed
+  });
+  it('transferring the host role puts a running item back to approved first, so the next host runs it once (C079)', async () => {
+    const { engine, guest } = await setup(); const g1 = await guest('g1', 2); const item = 'que_AAAAAAAAAAAAAAAAAAAAAAAAB1';
+    await g1.t.send(submit(item)); await wait(() => engine.queue().items.length === 1); await engine.approveItem(item); await engine.claim(item, 'agt_AAAAAAAAAAAAAAAAAAAAAAAAA1'); await wait(() => (engine.queue().items[0] as { state: string }).state === 'running');
+    void engine.transferHost(mem(2)); await wait(() => (engine.queue().items[0] as { state: string }).state === 'approved'); await wait(() => (g1.ofKind('queue.state').at(-1)?.p as { items: { state: string }[] } | undefined)?.items[0]?.state === 'approved');
+  });
+  it('a transfer the host engine refuses leaves a running item running (C079)', async () => {
+    const { engine, guest } = await setup(); const g1 = await guest('g1', 2); const item = 'que_AAAAAAAAAAAAAAAAAAAAAAAAB2';
+    await g1.t.send(submit(item)); await wait(() => engine.queue().items.length === 1); await engine.approveItem(item); await engine.claim(item, 'agt_AAAAAAAAAAAAAAAAAAAAAAAAA1'); await wait(() => (engine.queue().items[0] as { state: string }).state === 'running');
+    await g1.t.send({ t: 'control', k: 'control.transfer_host', id: ID(++seqN), sid: SID, p: { to: mem(2) } } as never); // a guest asks: refused, only the host may
+    await engine.transferHost('mem_NOSUCHMEMBER00000000000000').catch(() => undefined); // the host names someone who is not in the session: refused
+    await new Promise((r) => setTimeout(r, 200)); expect((engine.queue().items[0] as { state: string }).state).toBe('running'); expect(g1.ofKind('control.host_changed')).toHaveLength(0);
   });
 });

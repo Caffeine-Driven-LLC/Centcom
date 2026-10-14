@@ -13,4 +13,10 @@ describe('queue across a transfer (acceptance 3)', () => {
     const l = new ClaimLedger(); expect(l.claim('a', 'ag1')).toBe(true); expect(l.claim('a', 'ag2')).toBe(false); expect(l.holder('a')).toBe('ag1'); l.release('a'); expect(l.claim('a', 'ag2')).toBe(true);
     const q = new QueueMachine(() => 20); q.apply('queue.submit', 'u', { item: 'a', size: 1, kind: 'message' }, ts); q.apply('queue.approve', 'h', { item: 'a' }, ts); q.apply('queue.claim', 'h', { item: 'a', agent_id: 'ag1' }, ts); expect(q.check('queue.claim', 'h', { item: 'a', agent_id: 'ag2' }, { paused: false })).toEqual({ ok: false, code: 'queue_item_gone' });
   });
+  it('releasing the running items (C079): they go back to approved with no agent, in front, the version moves once, and a second release changes nothing', () => {
+    const q = new QueueMachine(() => 20); const t = '2026-10-14T00:00:00Z';
+    for (const id of ['a', 'b', 'c']) { q.apply('queue.submit', 'mem_x', { item: id, size: 1, kind: 'message' }, t); q.apply('queue.approve', 'srv', { item: id }, t); } q.apply('queue.claim', 'srv', { item: 'b', agent_id: 'agt_1' }, t);
+    const v = q.version; expect(q.requeueRunning()).toEqual(['b']); expect(q.version).toBe(v + 1); const view = q.view().items as { item: string; state: string; agent_id?: string }[]; expect(view.map((i) => [i.item, i.state])).toEqual([['b', 'approved'], ['a', 'approved'], ['c', 'approved']]); expect(view[0]!.agent_id).toBeUndefined();
+    expect(q.requeueRunning()).toEqual([]); expect(q.version).toBe(v + 1);
+  });
 });

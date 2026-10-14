@@ -67,3 +67,13 @@ describe('dns packet vectors', () => {
   });
   it('a name that points back at itself, or a length that runs past the end, is refused (null), not followed', () => { expect(decodePacket(new Uint8Array([0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0xc0, 12, 0, 1, 0, 1]))).toBeNull(); expect(decodePacket(new Uint8Array([0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 63, 1, 2]))).toBeNull(); });
 });
+
+describe('interfaces (C071): real networks only unless named', () => {
+  const table = () => ({ lo: [{ family: 'IPv4', address: '127.0.0.1', netmask: '255.0.0.0', internal: true }], wlan0: [{ family: 'IPv4', address: '192.168.1.20', netmask: '255.255.255.0', internal: false }], docker0: [{ family: 'IPv4', address: '172.17.0.1', netmask: '255.255.0.0', internal: false }], 'br-1a2b3c': [{ family: 'IPv4', address: '172.18.0.1', netmask: '255.255.0.0', internal: false }], veth12ab: [{ family: 'IPv6', address: 'fe80::1', netmask: 'ffff:ffff:ffff:ffff::', internal: false, scopeid: 5 }], virbr0: [{ family: 'IPv4', address: '192.168.122.1', netmask: '255.255.255.0', internal: false }], tailscale0: [{ family: 'IPv4', address: '100.64.0.2', netmask: '255.192.0.0', internal: false }] }) as never;
+  it('skips loopback, docker, bridges, veth pairs and libvirt by default and keeps wlan0 and tailscale0', async () => {
+    const { usableInterfaces } = await import('../../src/discovery/interfaces.js'); expect(usableInterfaces({ table }).map((i) => i.name).sort()).toEqual(['tailscale0', 'wlan0']);
+  });
+  it('an interface named with --bind is used even when it looks virtual', async () => {
+    const { usableInterfaces } = await import('../../src/discovery/interfaces.js'); expect(usableInterfaces({ table, bind: ['docker0'] }).map((i) => i.address)).toEqual(['172.17.0.1']); expect(usableInterfaces({ table, bind: ['172.18.0.1'] }).map((i) => i.name)).toEqual(['br-1a2b3c']);
+  });
+});
