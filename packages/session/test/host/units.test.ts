@@ -58,6 +58,13 @@ describe('lock arbiter (acceptance 9)', () => {
   it('first acquire wins, the second is denied, a release frees it, a ttl expires with a callback at the deadline', () => {
     const c = clock(); const expired: string[] = []; const l = new LockArbiter(c, (x) => expired.push(x.pathHmac)); expect(l.acquire('p1', 'ag1', 'm1', 1000)).toBe('granted'); expect(l.acquire('p1', 'ag2', 'm2', 1000)).toBe('denied'); expect(l.acquire('p1', 'ag1', 'm1', 1000)).toBe('granted'); c.advance(999); expect(expired).toEqual([]); c.advance(1); expect(expired).toEqual(['p1']); expect(l.acquire('p1', 'ag2', 'm2', 5000)).toBe('granted'); expect(l.release('p1', 'ag1', 'm1')).toBe(false); expect(l.release('p1', 'ag2', 'm2')).toBe(true); expect(l.list()).toEqual([]);
   });
+  it('another member naming the holder\'s agent id cannot take a lock over', () => {
+    const c = clock(); const l = new LockArbiter(c, () => undefined); expect(l.acquire('p1', 'ag1', 'm1', 9e6)).toBe('granted');
+    expect(l.acquire('p1', 'ag1', 'm2', 9e6)).toBe('denied'); expect(l.list()[0]?.member).toBe('m1'); expect(l.release('p1', 'ag1', 'm1')).toBe(true); l.stop();
+  });
+  it('a lock lives at most ten minutes whatever ttl was asked for (a huge one would also overflow the timer)', () => {
+    const c = clock(); const expired: string[] = []; const l = new LockArbiter(c, (x) => expired.push(x.pathHmac)); l.acquire('p1', 'a', 'm1', 1e12); c.advance(599_999); expect(expired).toEqual([]); c.advance(1); expect(expired).toEqual(['p1']);
+  });
   it('a member that is gone loses its locks', () => { const c = clock(); const l = new LockArbiter(c, () => undefined); l.acquire('p1', 'a', 'm1', 9e6); l.acquire('p2', 'b', 'm2', 9e6); expect(l.dropMember('m1').map((x) => x.pathHmac)).toEqual(['p1']); expect(l.list()).toHaveLength(1); l.stop(); });
 });
 

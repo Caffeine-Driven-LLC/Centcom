@@ -41,6 +41,8 @@ export class FrameCodec {
   decode(f: SequencedFrame): Decoded {
     const kind = f.k ?? ''; const base = { kind, seq: f.seq, id: f.id ?? '', from: f.from ?? '', ts: f.ts ?? '', verified: true as const };
     if (!f.ct) { // clear: whatever the relay stamped
+      /* a kind that is encrypted or hybrid is always sent sealed and signed; without a ciphertext it would skip the signature check and be taken for a frame of whoever the relay names. Only the service's own frames (a refused or expired lock) go out in the clear. */
+      if (f.from !== 'srv' && payloadMode(kind) !== 'clear' && payloadMode(kind) !== 'unknown') return { ok: false, reason: 'unsigned' };
       if (f.p !== undefined && !parseEventPayload(kind, f.p).ok && payloadMode(kind) === 'clear') return { ok: false, reason: 'invalid_payload' };
       return { ok: true, clear: true, event: { ...base, ...(f.p !== undefined ? { p: f.p } : {}) } };
     }
