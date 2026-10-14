@@ -1,6 +1,7 @@
 import { ArrowUp, LogOut, Users } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { Button } from '../ui/shadcn/index.js';
+import { t } from '../i18n/index.js';
 import { Markdown } from './Markdown.js';
 import { Person } from './SessionPanel.js';
 import type { LocalView } from './model.js';
@@ -16,7 +17,7 @@ export function JoinedPane({ view, send }: { view: LocalView; send(m: ClientMsg)
   useEffect(() => { end.current?.scrollIntoView?.({ block: 'end' }); }, [j?.entries.length, j?.entries.at(-1)?.text.length]);
   if (!j) return null;
   const leave = (): void => send({ t: 'joinedLeave' }); const can = j.role === 'editor' || j.role === 'host';
-  const ask = (): void => { const t = text.trim(); if (!t) return; send({ t: 'joinedAsk', text: t }); setText(''); };
+  const ask = (): void => { const t = text.trim(); if (!t || !j.payer) return; send({ t: 'joinedAsk', text: t }); setText(''); };
   if (j.state === 'joining') return <div className="lc-home"><p>Joining…</p></div>;
   if (j.state === 'failed') return <div className="lc-home jn__fail"><h2 className="acct__title">Could not join</h2><p role="alert" className="acct__error">{j.error}</p><Button onClick={leave}>Back</Button></div>;
   return <div className="lc-split" data-panel="true"><div className="lc-ws" aria-label="Shared session">
@@ -32,7 +33,7 @@ export function JoinedPane({ view, send }: { view: LocalView; send(m: ClientMsg)
       <div ref={end} />
     </div>
     {j.asked.length ? <ul className="jn__asked" aria-label="Waiting for the host">{j.asked.map((a) => <li key={a.item}>{a.state === 'queued' ? 'Waiting for the host: ' : 'Running: '}{a.text}</li>)}</ul> : null}
-    <div className="lc-composer">{can ? <><textarea aria-label="Ask the host's agent" rows={2} placeholder="Ask for something… the host decides whether it runs" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); ask(); } }} /><div className="lc-composer-bar"><span className="lc-hint">Enter to ask</span><span className="lc-grow" /><Button size="sm" disabled={!text.trim()} onClick={ask}><ArrowUp />Ask</Button></div></> : <p className="acct__note">You can watch this session but not send to it.</p>}</div>
+    <div className="lc-composer">{can ? <>{j.payer ? <p className="acct__note jn__payer" data-testid="guest-notice">{t('joined.payer', { host: j.payer })}</p> : <p className="acct__note jn__payer" role="status">{t('joined.payerUnknown')}</p>}<textarea aria-label="Ask the host's agent" rows={2} placeholder="Ask for something… the host decides whether it runs" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); ask(); } }} /><div className="lc-composer-bar"><span className="lc-hint">Enter to ask</span><span className="lc-grow" /><Button size="sm" disabled={!text.trim() || !j.payer} onClick={ask}><ArrowUp />Ask</Button></div></> : <p className="acct__note">You can watch this session but not send to it.</p>}</div>
   </div>
   <aside className="ps" aria-label="People"><section className="ps-sec"><h3 className="ps-h"><Users aria-hidden="true" />People</h3><ul className="ps-list">{j.people.map((p) => <Person key={p.id} name={p.you ? 'You' : p.name} slot={p.slot} sub={`${ROLE[p.role]}${p.online ? '' : ' · away'}`} />)}</ul></section></aside></div>;
 }

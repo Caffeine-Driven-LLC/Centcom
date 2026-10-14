@@ -200,5 +200,19 @@
  "fleet.inspector.conflictText": "! Another agent changed the same file",
  "fleet.inspector.merge": "Merge",
  "fleet.inspector.rebase": "Rebase",
- "fleet.inspector.openPr": "Open pull request"
+ "fleet.inspector.openPr": "Open pull request",
+ "share.whoPays.title": "Whose account",
+ "share.whoPays.aria": "Whose account runs the agent",
+ "share.whoPays.runsOn": "Runs on you · {provider}",
+ "share.whoPays.branch": "Your agent runs on your own account · {provider}",
+ "share.guests.one": "1 guest can spend your {name} usage",
+ "share.guests.many": "{n} guests can spend your {name} usage",
+ "share.guests.paused": "Guests paused",
+ "share.guests.pauseFailed": " (could not pause on the server; guests are held on this computer anyway)",
+ "share.guests.pause": "Pause guests",
+ "share.guests.resume": "Resume guests",
+ "share.confirm.yes": "Yes, share my login",
+ "share.confirm.no": "No, cancel",
+ "joined.payer": "Your prompt will run on {host}'s account",
+ "joined.payerUnknown": "Finding out whose account would run your prompt…"
 }

@@ -13,7 +13,7 @@ async function setup(signedIn = true) {
   const invites: string[] = [];
   const account = { plain: { getStatus: async () => ({ status: 'ok' }) }, status: async () => ({ signedIn, persisted: true, api: 'x', me: { id: 'u', name: 'A', email: 'a@x', plan: 'team', workspace: { id: WS, name: 'ws' } } }), sessions: async () => r.host.client, workspaces: async () => [{ id: WS, name: 'ws' }],
     inviteToSession: async (_id: string, o: { email?: string }) => { invites.push(o.email ?? ''); return { url: 'https://centcom.dev/i/' + 'A'.repeat(30), token: 'A'.repeat(30) }; } } as unknown as Account;
-  const share = new ShareSession(ctl, account); cleanup.push(() => share.close()); return { r, ctl, share, invites };
+  const share = new ShareSession(ctl, account, { detectLoginKind: async () => 'api_key' }); cleanup.push(() => share.close()); return { r, ctl, share, invites };
 }
 describe('/share in the terminal app', () => {
   it('starts a session, says how to join and invite, hands out links, and stops', async () => {

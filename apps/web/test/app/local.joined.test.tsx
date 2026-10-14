@@ -9,7 +9,7 @@ import type { ClientMsg, JoinedView } from '../../../desktop/src/local/protocol.
 
 afterEach(cleanup);
 const people = [{ id: 'm1', name: 'Alice', slot: 0, role: 'host' as const, you: false, online: true }, { id: 'm2', name: 'Bob', slot: 1, role: 'editor' as const, you: true, online: true }];
-const j = (o: Partial<JoinedView> = {}): JoinedView => ({ state: 'live', sessionId: 'ses_1', how: 'invite', role: 'editor', people, entries: [{ id: 'e1', kind: 'user', text: 'fix the bug', who: 'Alice', slot: 0 }, { id: 'e2', kind: 'assistant', text: 'Done: **fixed**', done: true }, { id: 'e3', kind: 'tool', text: 'Edit: a.ts', status: 'ok' }], asked: [{ item: 'que_1', text: 'add a test', state: 'queued' }], ...o });
+const j = (o: Partial<JoinedView> = {}): JoinedView => ({ state: 'live', sessionId: 'ses_1', how: 'invite', role: 'editor', payer: 'Alice', people, entries: [{ id: 'e1', kind: 'user', text: 'fix the bug', who: 'Alice', slot: 0 }, { id: 'e2', kind: 'assistant', text: 'Done: **fixed**', done: true }, { id: 'e3', kind: 'tool', text: 'Edit: a.ts', status: 'ok' }], asked: [{ item: 'que_1', text: 'add a test', state: 'queued' }], ...o });
 const withJoined = (v: JoinedView): LocalView => reduceLocal(emptyView(), { t: 'joined', joined: v });
 function pane(v: JoinedView) { const sent: ClientMsg[] = []; render(<JoinedPane view={withJoined(v)} send={(m) => sent.push(m)} />); return sent; }
 
@@ -18,6 +18,11 @@ describe('somebody else\'s session', () => {
     const sent = pane(j()); expect(screen.getByText('fix the bug')).toBeTruthy(); expect(screen.getByText('fixed')).toBeTruthy(); expect(screen.getByText(/Waiting for the host: add a test/)).toBeTruthy(); expect(screen.getByText('can edit')).toBeTruthy();
     const box = screen.getByLabelText("Ask the host's agent"); fireEvent.change(box, { target: { value: ' add docs ' } }); fireEvent.keyDown(box, { key: 'Enter' }); expect(sent.at(-1)).toEqual({ t: 'joinedAsk', text: 'add docs' });
     fireEvent.click(screen.getByRole('button', { name: /Leave/ })); expect(sent.at(-1)).toEqual({ t: 'joinedLeave' });
+  });
+  it('says whose account runs the prompt before anything can be sent, and sends nothing while that is unknown', () => {
+    const sent = pane(j()); expect(screen.getByTestId('guest-notice').textContent).toBe("Your prompt will run on Alice's account"); cleanup();
+    const s2 = pane(j({ payer: undefined })); expect(screen.queryByTestId('guest-notice')).toBeNull(); expect(screen.getByText(/Finding out whose account/)).toBeTruthy();
+    const box = screen.getByLabelText("Ask the host's agent"); fireEvent.change(box, { target: { value: 'hi' } }); fireEvent.keyDown(box, { key: 'Enter' }); expect(s2).toEqual([]); expect((screen.getByRole('button', { name: /Ask/ }) as HTMLButtonElement).disabled).toBe(true); void sent;
   });
   it('a viewer can read but has no box; a failed join says why; an ended session says so', () => {
     pane(j({ role: 'viewer', asked: [] })); expect(screen.queryByLabelText("Ask the host's agent")).toBeNull(); expect(screen.getByText(/watch this session but not send/)).toBeTruthy(); cleanup();

@@ -54,6 +54,9 @@ export type ClientMsg =
   | { t: 'shareInvite'; email?: string }
   | { t: 'shareDecide'; item: string; decision: 'approve' | 'reject' }
   | { t: 'shareAuto'; on: boolean }
+  /** C105: the host's answer to the subscription notice (only a click in the host's own window counts), and pausing or resuming guests. */
+  | { t: 'shareConfirm'; ok: boolean }
+  | { t: 'sharePause'; on: boolean }
   /** Joining somebody else's session: paste an id or a link. */
   | { t: 'join'; input: string }
   | { t: 'joinedAsk'; text: string }
@@ -87,12 +90,19 @@ export interface SharingView {
   /** branch mode: the teammate's agent whose transcript is open (read only): what it said and did, as far as its owner shares it */ watch?: { agent: string; owner: string; name: string; sharing: boolean; lines: import('@centcom/tui').TeamLine[] };
   auto: boolean; members: { id: string; name: string; slot: number; role: 'host' | 'editor' | 'viewer'; online: boolean; you: boolean }[];
   pending: { item: string; from: string; slot: number; text: string }[];
+  /** C105: whose account runs the agent here, and (command post) how many guests can spend it; `held` = guests' requests are not being claimed. */
+  whoPays?: { runsOn: 'you'; provider: 'anthropic' | 'openai' | 'other'; guests: number; paused: boolean; held: boolean; stale: boolean; failed: boolean };
+  /** C105: something was not run because of the who-pays policy: what happened and what the host can do. Cleared when the host acts. */
+  blocked?: { code: 'provider_policy_blocked' | 'provider_method_disabled' | 'host_confirmation'; title: string; detail: string };
+  /** C105: the host is asked whether guests may use this login (answer with `shareConfirm`). */
+  confirm?: { engine: string; title: string; text: string };
 }
 /** Somebody else's session that this window joined: what happened in it, who is there, what you may do. */
 export interface JoinedView {
   state: 'joining' | 'live' | 'ended' | 'failed'; sessionId?: string; how?: 'invite' | 'session' | 'watch'; role?: 'host' | 'editor' | 'viewer'; error?: string;
   /** waiting for the host's key, or reconnecting */ phase?: string;
   people: { id: string; name: string; slot: number; role: 'host' | 'editor' | 'viewer'; you: boolean; online: boolean }[];
+  /** C105: whose account runs what you ask for (the host's); unknown until the roster is there, and then nothing can be sent */ payer?: string;
   /** what is in the transcript (the last 300 entries) */
   entries: { id: string; kind: 'user' | 'assistant' | 'system' | 'tool' | 'approval'; who?: string; slot?: number; text: string; done?: boolean; status?: string }[];
   /** what you asked for that the host has not run yet */ asked: { item: string; text: string; state: string }[];

@@ -17,7 +17,7 @@ export function statusFieldsFor(s: AppState, o: { home?: string; now?: number } 
   return {
     cwd: s.cwd, home: o.home, branch: s.branch || undefined, engine, agents: s.agents.length, costMicroUsd: cost > 0 ? Math.round(cost * 1_000_000) : undefined, showCost: s.settings.showCost !== false,
     connectivity: s.net === 'backend-down' ? 'down' : s.net && s.net !== 'online' ? s.net : undefined,
-    mode: MODE[s.settings.permissionMode], night,
+    mode: MODE[s.settings.permissionMode], night, ...(s.share ? { runsOn: s.share.runsOn, ...(s.share.guests ? { guests: { text: s.share.guests, stale: s.share.guestsStale } } : {}) } : {}),
     state: me && s.busy ? me.state.replace(/-/g, ' ') : 'idle', needYou: need || undefined,
     context: me?.ctxPct !== undefined ? { pct: me.ctxPct, tokens: me.ctxTokens && me.ctxWindow ? `${formatTokens(me.ctxTokens)}/${formatTokens(me.ctxWindow)}` : undefined } : undefined,
     limits: s.limits.map((l) => ({ name: WIN[l.name] ?? l.name.replace(/_/g, ' '), pct: l.utilization * 100, resets: l.resets_at ? formatReset(l.resets_at, o.now) : undefined })),

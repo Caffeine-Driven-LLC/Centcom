@@ -43,4 +43,14 @@ describe('the share button and dialog', () => {
     expect(screen.getByRole('alert').textContent).toMatch(/Upgrade to Pro or Team/); cleanup();
     const demo = reduceLocal(reduceLocal(base(), { t: 'state', state: { demo: true } as never, changed: [], order: [] }), { t: 'sharing', sharing: null }); const d = ui(demo); expect(d.r.container.textContent).toBe('');
   });
+  it('who pays: shows the runs-on line, the guest spend line with pause and resume, a blocked reason and the host question', async () => {
+    const wp = { runsOn: 'you' as const, provider: 'anthropic' as const, guests: 2, paused: false, held: false, stale: false, failed: false };
+    const v = reduceLocal(base(), { t: 'sharing', sharing: { ...live, whoPays: wp } }); const { sent } = ui(v); await open();
+    expect(screen.getByTestId('runs-on').textContent).toBe('Runs on you · anthropic'); expect(screen.getByTestId('guest-spend').textContent).toContain('2 guests can spend your Anthropic usage');
+    fireEvent.click(screen.getByRole('button', { name: 'Pause guests' })); expect(sent.at(-1)).toEqual({ t: 'sharePause', on: true }); cleanup();
+    const p = ui(reduceLocal(base(), { t: 'sharing', sharing: { ...live, whoPays: { ...wp, paused: true } } })); await open(); expect(screen.getByTestId('guest-spend').textContent).toContain('Guests paused'); fireEvent.click(screen.getByRole('button', { name: 'Resume guests' })); expect(p.sent.at(-1)).toEqual({ t: 'sharePause', on: false }); cleanup();
+    const b = ui(reduceLocal(base(), { t: 'sharing', sharing: { ...live, blocked: { code: 'provider_policy_blocked', title: 'Not run', detail: 'Use an API-key login or share in branch mode.' } } })); await open(); expect(screen.getByRole('alert').textContent).toMatch(/API-key login/); void b; cleanup();
+    const c = ui(reduceLocal(base(), { t: 'sharing', sharing: { ...live, confirm: { engine: 'claude-code', title: 'Share your claude-code login in this command post?', text: 'Guests prompts will run through YOUR login.' } } })); await open();
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, share my login' })); expect(c.sent.at(-1)).toEqual({ t: 'shareConfirm', ok: true }); fireEvent.click(screen.getByRole('button', { name: 'No, cancel' })); expect(c.sent.at(-1)).toEqual({ t: 'shareConfirm', ok: false });
+  });
 });

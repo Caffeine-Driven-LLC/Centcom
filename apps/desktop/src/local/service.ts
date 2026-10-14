@@ -9,7 +9,7 @@ import { CollabService, isCollabMsg, isJoinMsg, isShareMsg } from './collab.js';
 import type { ClientMsg, DirEntry, Prefs, RecentDir, ServerMsg } from './protocol.js';
 
 export const MAX_TEXT = 100_000; export const MODES = ['default', 'acceptEdits', 'plan', 'bypassPermissions'] as const;
-export interface ServiceOptions { home?: string; stateDir?: string; cwd?: string; version?: string; /** Opens an address in the system browser (the sign-in page); `apiBase` is the configured API. Without it nothing is opened. */ openExternal?: (url: string, apiBase: string) => boolean; /** A seam for tests: the account the sign-in uses. */ makeAccount?: ConstructorParameters<typeof CollabService>[0]['makeAccount'] }
+export interface ServiceOptions { home?: string; stateDir?: string; cwd?: string; version?: string; /** Opens an address in the system browser (the sign-in page); `apiBase` is the configured API. Without it nothing is opened. */ openExternal?: (url: string, apiBase: string) => boolean; /** A seam for tests: the account the sign-in uses. */ makeAccount?: ConstructorParameters<typeof CollabService>[0]['makeAccount']; /** The who-pays gate's seams (flags client, login lookup, audit sink). Without them the defaults apply: a subscription command post stays blocked. */ policy?: ConstructorParameters<typeof CollabService>[0]['policy'] }
 /** Reads a folder for the picker: no hidden folders, no node_modules, git folders first, at most 400 entries. */
 export function listDir(path: string, home: string): { path: string; parent: string | null; git: boolean; entries: DirEntry[]; error?: string } {
   const p = resolve(path || home); const parent = dirname(p) === p ? null : dirname(p);
@@ -40,6 +40,8 @@ export function sanitise(raw: unknown): ClientMsg | undefined {
     case 'shareInvite': { const e = str(m.email, 254); return { t, ...(e && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) ? { email: e } : {}) } as ClientMsg; }
     case 'shareDecide': { const item = str(m.item, 80); return item && /^que_[0-9A-Za-z]+$/.test(item) ? { t, item, decision: m.decision === 'approve' ? 'approve' : 'reject' } : undefined; }
     case 'shareAuto': return { t, on: m.on === true } as ClientMsg;
+    case 'shareConfirm': return { t, ok: m.ok === true } as ClientMsg;
+    case 'sharePause': return { t, on: m.on === true } as ClientMsg;
     case 'shareActivity': return { t, on: m.on === true } as ClientMsg;
     case 'shareHandoff': { const to = str(m.to, 80); const note = str(m.note, 2000); return to ? { t, to, ...(note ? { note } : {}) } as ClientMsg : undefined; }
     case 'shareHandoffAnswer': { const id = str(m.id, 80); return id ? { t, id, accept: m.accept === true } as ClientMsg : undefined; }
@@ -76,7 +78,7 @@ export class LocalService {
   private runningMsg(): ServerMsg { return { t: 'running', sessions: [...this.workspaces.values()].map((w) => w.status()) }; }
   /** Tells every window which sessions are alive and what each one is doing, when that changed. */
   private broadcastRunning(): void { const m = this.runningMsg(); const j = JSON.stringify(m); if (j === this.lastRunning) return; this.lastRunning = j; for (const s of this.sessions.values()) s.send(m); }
-  constructor(o: ServiceOptions = {}) { this.collab = new CollabService({ version: o.version ?? '0.1.0', broadcast: (m) => { for (const s of this.sessions.values()) s.send(m); }, toViewers: (ws, m) => { for (const s of this.sessions.values()) if (s.current === ws) s.send(m); }, openExternal: o.openExternal ?? (() => false), ...(o.makeAccount ? { makeAccount: o.makeAccount } : {}) }); this.home = o.home ?? homedir(); this.stateDir = o.stateDir ?? join(this.home, '.centcom'); this.cwd = o.cwd ?? this.home; mkdirSync(this.stateDir, { recursive: true, mode: 0o700 }); }
+  constructor(o: ServiceOptions = {}) { this.collab = new CollabService({ version: o.version ?? '0.1.0', broadcast: (m) => { for (const s of this.sessions.values()) s.send(m); }, toViewers: (ws, m) => { for (const s of this.sessions.values()) if (s.current === ws) s.send(m); }, openExternal: o.openExternal ?? (() => false), ...(o.makeAccount ? { makeAccount: o.makeAccount } : {}), ...(o.policy ? { policy: o.policy } : {}) }); this.home = o.home ?? homedir(); this.stateDir = o.stateDir ?? join(this.home, '.centcom'); this.cwd = o.cwd ?? this.home; mkdirSync(this.stateDir, { recursive: true, mode: 0o700 }); }
   private recentFile = (): string => join(this.stateDir, 'recent.json');
   recent(): RecentDir[] { try { return (JSON.parse(readFileSync(this.recentFile(), 'utf8')) as RecentDir[]).filter((r) => existsSync(r.dir)); } catch { return []; } }
   private addRecent(dir: string): void { const r = [{ dir, at: Date.now() }, ...this.recent().filter((x) => x.dir !== dir)].slice(0, 12); try { writeFileSync(this.recentFile(), JSON.stringify(r)); } catch { /* not critical */ } }

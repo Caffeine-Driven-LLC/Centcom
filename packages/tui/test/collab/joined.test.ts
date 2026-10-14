@@ -24,7 +24,7 @@ describe('a joined session', () => {
   it('shows the host\'s transcript as it happens, who is there, and an editor can ask (a viewer cannot)', async () => {
     const r = await rig(); cleanup.push(() => r.stop()); const host = await r.host.client.createSession({ name: 's', workspace: WS }); r.host.handle = host; cleanup.push(() => host.leave().catch(() => undefined));
     const ctl = new AppController({ engine: new FakeEngine({ script: {} }) as never, demo: false, cwd: '/tmp', version: 't', skills: [] }); await ctl.start(); cleanup.push(() => ctl.stop());
-    const bridge = new HostBridge(ctl, host, { flushMs: 5 }); bridge.start(); cleanup.push(() => bridge.stop());
+    const bridge = new HostBridge(ctl, host, { flushMs: 5, policy: { detectLoginKind: async () => 'api_key' } }); bridge.start(); cleanup.push(() => bridge.stop());
     const g = await r.guest.client.joinSession({ sessionId: host.id }); r.guest.handle = g; await until(() => g.state === 'live', 8000); const joined = new JoinedSession(g); cleanup.push(() => joined.leave());
     await ctl.submit('what is up'); await until(() => joined.state().transcript.some((e) => e.kind === 'assistant'), 8000); const t = joined.state().transcript;
     expect(t.find((e) => e.kind === 'user')).toMatchObject({ text: 'what is up' }); expect(joined.people().map((p) => p.role).sort()).toEqual(['editor', 'host']); expect(joined.people().find((p) => p.you)?.role).toBe('editor');

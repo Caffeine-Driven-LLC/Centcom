@@ -22,7 +22,7 @@ step('Alice signs up and hosts a session with a scripted agent');
 const alice = await signUp('alice'); const ws = (await alice.account.workspaces())[0]!;
 const ctl = new AppController({ engine: new FakeEngine({ script: {} }) as never, demo: false, cwd: mkdtempSync(join(tmpdir(), 'web-live-')), version: 'live', skills: [] }); await ctl.start();
 const host = await (await alice.account.sessions()).createSession({ name: 'web live check', workspace: ws.id });
-const bridge = new HostBridge(ctl, host, { onError: (e) => console.log('     bridge error:', String(e)) }); bridge.start();
+const bridge = new HostBridge(ctl, host, { policy: { detectLoginKind: async () => 'api_key' /* a dev account, not anybody's subscription */ }, onError: (e) => console.log('     bridge error:', String(e)) }); bridge.start();
 check(host.state === 'live' && host.me.role === 'host', `session ${host.id} is live`);
 
 step('A visitor with no account opens the watch link in the web engine');

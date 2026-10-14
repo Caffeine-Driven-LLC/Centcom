@@ -12,12 +12,15 @@
  */
 import { QueueClient, type QueueItem, type SessionHandle } from '@centcom/net';
 import { newIdGenerator } from '@centcom/protocol';
-import type { LockHub, LockLink } from '@centcom/agent';
+import type { MemberId } from '@centcom/agent';
+import { buildSpawnClearFields, computeWhoPays, createGuestSpendControl, providerOf, type GuestSpendControl, type LockHub, type LockLink } from '@centcom/agent';
 import type { AppController } from '../controller.js';
 import type { Item } from '../state/model.js';
 import { gitBranchInfo, type BranchProbe } from './git-info.js';
 import { TeamModel } from './team.js';
 import { BoardSync } from './board-sync.js';
+import { PolicyGate, type Blocked, type PolicyOptions } from './policy.js';
+import { MESSAGES } from '../provider/messages.js';
 
 export interface HostBridgeOptions {
   /** run editors' requests without asking the host */ autoApprove?: boolean;
@@ -29,6 +32,7 @@ export interface HostBridgeOptions {
   /** branch mode: reads the branch of the working folder (default: git) */ branchProbe?: BranchProbe;
   /** branch mode: where the session plugs into this runtime's file locks */ locks?: LockHub;
   /** branch mode: a teammate's agent is working on a file this person's agent is changing */ onConflict?(c: { agents: string[]; hmacs: string[] }): void;
+  /** The who-pays gate (C105): flags, the host's confirmation, login lookup, notices. Whatever is left out resolves to the safe answer: a command post on a subscription login does not run guests' prompts. */ policy?: PolicyOptions;
 }
 export interface PendingRequest { item: string; from: string; slot: number; text: string; ts: string }
 const ID_OK = { agt: /^agt_[0-9A-HJKMNP-TV-Z]{26}$/, apr: /^apr_[0-9A-HJKMNP-TV-Z]{26}$/, msg: /^msg_[0-9A-HJKMNP-TV-Z]{26}$/ } as const;
@@ -44,8 +48,12 @@ export class HostBridge {
   private toolSent = new Map<string, 'request' | 'result'>(); private approvals = new Set<string>(); private wasBusy = false; private chain: Promise<unknown> = Promise.resolve();
   private flushTimer?: ReturnType<typeof setTimeout>; private offStore?: () => void; private offTurn?: () => void; private stopped = false; private busyWaiters: (() => void)[] = []; private readonly stoppers = new Set<() => void>();
   private active?: { item: string; from: { name: string; slot: number } }; private working = false; private autoApprove: boolean; private tagNext?: string;
+  /** The who-pays gate: every path that lets a guest's prompt, an approval or an engine reach the host's login goes through it. */ readonly gate: PolicyGate;
+  /** command post: how many guests can spend the host's usage, and the pause. */ readonly spend?: GuestSpendControl; private askOk = true; private readonly refused = new Set<string>();
   constructor(private readonly ctl: AppController, private readonly handle: SessionHandle, private readonly o: HostBridgeOptions = {}) {
     this.autoApprove = o.autoApprove === true; this.queue = new QueueClient(handle); this.mode = o.mode ?? 'command_post'; this.shareActivity = o.shareActivity !== false;
+    this.gate = new PolicyGate(o.policy ?? {}, { sessionId: () => handle.id, engine: () => ctl.state.engineId, mode: this.mode, loginKind: () => ctl.state.agents.find((a) => a.mine)?.loginKind ?? 'unknown' });
+    if (this.mode === 'command_post') { this.spend = createGuestSpendControl({ roster: () => handle.roster().map((m) => ({ id: m.id as MemberId, role: m.role, connected: m.online !== false })), hostId: handle.me.id as MemberId, provider: providerOf(ctl.state.engineId), setGuestsPaused: (p) => this.setGuestsPaused(p) }); this.spend.on('change', () => { this.o.onChange?.(); if (!this.spend!.held()) void this.pump(); }); }
     if (this.mode === 'branch') { this.team = new TeamModel(); this.team.setRoster(handle.roster(), handle.me.id); }
   }
 
@@ -55,20 +63,51 @@ export class HostBridge {
     this.offStore = this.ctl.store.subscribe(() => this.onState());
     this.offTurn = this.ctl.onTurnEnd(() => { void this.settle().then(() => { this.setState('idle'); void this.publishBranch(); }); });
     this.queue.on('changed', () => { this.o.onChange?.(); void this.pump(); }); this.queue.on('error', (e) => this.o.onError?.(e));
-    this.handle.on('roster', () => this.o.onChange?.());
-    this.emit('agent.spawn', { p: { agent_id: this.agent(), owner: this.handle.me.id, mode: this.mode, runs_on: this.handle.me.id, provider: this.ctl.state.engineId === 'codex' ? 'openai' : this.ctl.state.engineId === 'claude-code' ? 'anthropic' : 'other' }, secret: { label: this.ctl.state.engineLabel, ...(this.mode === 'branch' ? { worktree: this.ctl.state.cwd } : {}) } });
+    this.handle.on('roster', () => { if (this.handle.me.role !== 'host') this.gate.drop(); /* the host role moved: the new host is asked */ this.o.onChange?.(); });
+    const who = computeWhoPays({ mode: this.mode, engine: this.ctl.state.engineId, loginKind: this.ctl.state.agents.find((a) => a.mine)?.loginKind ?? 'unknown', owner: this.handle.me.id as MemberId, host: (this.handle.roster().find((m) => m.role === 'host')?.id ?? this.handle.me.id) as MemberId, prompter: this.handle.me.id as MemberId });
+    this.emit('agent.spawn', { p: { agent_id: this.agent(), owner: this.handle.me.id, mode: this.mode, ...buildSpawnClearFields(who) }, secret: { label: this.ctl.state.engineLabel, ...(this.mode === 'branch' ? { worktree: this.ctl.state.cwd } : {}) } });
     if (this.mode === 'command_post') { this.emitActivity('message.system', { secret: { level: 'info', text: 'This conversation is now shared.' } }); void this.pump(); } else this.startBranch();
   }
-  stop(): void { if (this.mode === 'branch' && !this.stopped) this.emit('agent.exit', { p: { agent_id: this.agent(), outcome: 'ok' } }); this.offAny?.(); this.offLink?.(); this.boardSync?.stop(); if (this.mode === 'branch') { this.ctl.setTeamDigest(undefined); this.ctl.setRemoteAgentNamer(undefined); } if (this.branchTimer) clearTimeout(this.branchTimer); for (const t of this.reannounceTimers) clearTimeout(t); this.stopped = true; this.offStore?.(); this.offTurn?.(); this.queue.dispose(); if (this.flushTimer) clearTimeout(this.flushTimer); if (this.stateTimer) clearTimeout(this.stateTimer); for (const w of this.busyWaiters.splice(0)) w(); for (const f of [...this.stoppers]) f(); }
+  stop(): void { if (this.mode === 'branch' && !this.stopped) this.emit('agent.exit', { p: { agent_id: this.agent(), outcome: 'ok' } }); this.offAny?.(); this.offLink?.(); this.boardSync?.stop(); if (this.mode === 'branch') { this.ctl.setTeamDigest(undefined); this.ctl.setRemoteAgentNamer(undefined); } if (this.branchTimer) clearTimeout(this.branchTimer); for (const t of this.reannounceTimers) clearTimeout(t); this.stopped = true; this.gate.drop(); this.offStore?.(); this.offTurn?.(); this.queue.dispose(); if (this.flushTimer) clearTimeout(this.flushTimer); if (this.stateTimer) clearTimeout(this.stateTimer); for (const w of this.busyWaiters.splice(0)) w(); for (const f of [...this.stoppers]) f(); }
 
-  setAutoApprove(on: boolean): void { this.autoApprove = on; void this.pump(); this.o.onChange?.(); }
+  /** Turning it on goes through the gate (the host may be asked); returns whether it is on now. */
+  async setAutoApprove(on: boolean): Promise<boolean> {
+    if (!on) { this.autoApprove = false; this.o.onChange?.(); return false; }
+    this.askOk = true; const r = await this.gate.check('auto_approve'); if (!r.allowed) this.gate.tell('auto_approve', r);
+    this.autoApprove = r.allowed; this.o.onChange?.(); void this.pump(); return r.allowed;
+  }
   get autoApproving(): boolean { return this.autoApprove; }
   /** Editors' requests waiting for the host. */
   pending(): PendingRequest[] {
     return this.queue.snapshot().items.filter((i) => i.state === 'queued' && i.submitter !== this.handle.me.id && i.body !== undefined).map((i) => this.requestOf(i));
   }
   private requestOf(i: QueueItem): PendingRequest { const m = this.handle.roster().find((r) => r.id === i.submitter); return { item: i.id, from: m?.name || 'Someone', slot: m?.slot ?? 0, text: i.body ?? '', ts: i.ts }; }
-  async approve(item: string): Promise<void> { await this.queue.approve(item); void this.pump(); }
+  /** The host approves a guest's request. The gate decides first; false when it was not approved (the reason was told to the host). */
+  async approve(item: string): Promise<boolean> {
+    this.askOk = true; const r = await this.gate.check('queue_approval'); if (!r.allowed) { this.gate.tell('queue_approval', r); this.o.onChange?.(); return false; }
+    await this.queue.approve(item); void this.pump(); return true;
+  }
+  /** A new session in a command post: asks the host if needed. Not allowed means the caller ends the session. */
+  async admit(): Promise<import('@centcom/agent').GateResult> { if (this.mode !== 'command_post') return { allowed: true }; this.askOk = true; const r = await this.gate.check('new_session'); if (!r.allowed) this.gate.tell('new_session', r); return r; }
+  /** The host confirms the subscription notice by hand (`/share confirm`); then waiting guest requests go on. */
+  async confirmNow(): Promise<boolean> { this.askOk = true; const r = await this.gate.check('guest_prompt'); if (!r.allowed) this.gate.tell('guest_prompt', r); void this.pump(); this.o.onChange?.(); return r.allowed; }
+  /** Moving the conversation to another agent (a failover or a switch) is a new start of that engine. */
+  async admitEngine(engine: string): Promise<boolean> { this.askOk = true; this.gate.retell(); const r = await this.gate.check('failover', true, engine); if (!r.allowed) this.gate.tell('failover', r); return r.allowed; }
+  /** What the screens show: who pays, how many guests can spend it, and whether they are paused. */
+  whoPaysView(): { mode: 'command_post' | 'branch'; payer: string; provider: 'anthropic' | 'openai' | 'other'; guests: number; paused: boolean; held: boolean; stale: boolean; failed: boolean } {
+    const sp = this.spend; return { mode: this.mode, payer: this.handle.me.id, provider: providerOf(this.ctl.state.engineId), guests: sp?.count() ?? 0, paused: sp?.paused() ?? false, held: sp?.held() ?? false, stale: sp?.stale() ?? false, failed: sp?.lastError() ?? false };
+  }
+  /** The pause of the guest spend control goes out as the session's `control.policy` (`locked`), with the other fields as they are. */
+  private async setGuestsPaused(paused: boolean): Promise<void> {
+    const p = this.handle.policy; /* the fields the contract requires, as the host engine's own defaults when this client has not heard them */
+    await this.handle.sendEvent('control.policy', { p: { auto_approve: p.auto_approve ?? 'ask', share_history: p.share_history ?? true, queue_limit: p.queue_limit ?? 20, locked: paused } } as never);
+  }
+  /** A guest's request that the gate refuses: told to the host; a hard block also ends the request so the guest is not left waiting; a missing confirmation only holds it. */
+  private async refuse(id: string | undefined, r: Blocked, path: Parameters<PolicyGate['tell']>[0]): Promise<void> {
+    this.gate.tell(path, r); this.o.onChange?.(); if ('needs' in r) { this.askOk = false; return; }
+    if (id) { this.refused.add(id); await this.queue.reject(id, 'other').catch((e) => this.o.onError?.(e)); }
+    this.emitActivity('message.system', { secret: { level: 'warn', text: MESSAGES['provider.blocked.guest_item']() } }); this.o.onChange?.();
+  }
   async reject(item: string, code: 'not_now' | 'off_topic' | 'unsafe' | 'duplicate' | 'other' = 'not_now'): Promise<void> { await this.queue.reject(item, code); this.o.onChange?.(); }
 
   /** Approved items run one at a time, when the agent is idle. */
@@ -76,11 +115,15 @@ export class HostBridge {
     if (this.working || this.stopped) return; this.working = true;
     try {
       for (;;) {
-        if (this.stopped) return; const items = this.queue.snapshot().items;
-        if (this.autoApprove) for (const i of items) if (i.state === 'queued' && i.submitter !== this.handle.me.id && i.body !== undefined) await this.queue.approve(i.id).catch((e) => this.o.onError?.(e));
-        const next = this.queue.snapshot().items.find((i) => i.state === 'approved' && i.body !== undefined);
+        if (this.stopped || this.spend?.held()) return; const items = this.queue.snapshot().items;
+        if (this.autoApprove) for (const i of items) if (i.state === 'queued' && i.submitter !== this.handle.me.id && i.body !== undefined && !this.refused.has(i.id)) {
+          const g = await this.gate.check('auto_approve', this.askOk); if (!g.allowed) { await this.refuse(undefined, g, 'auto_approve'); break; }
+          await this.queue.approve(i.id).catch((e) => this.o.onError?.(e));
+        }
+        const next = this.queue.snapshot().items.find((i) => i.state === 'approved' && i.body !== undefined && !this.refused.has(i.id));
         if (!next) return;
-        await this.untilIdle(); if (this.stopped) return;
+        await this.untilIdle(); if (this.stopped || this.spend?.held()) return;
+        const g = await this.gate.check('guest_prompt', this.askOk); if (!g.allowed) { await this.refuse(next.id, g, 'guest_prompt'); if ('needs' in g) return; continue; } // checked right before the claim: a flag that flipped while the agent was busy counts
         const from = this.requestOf(next); this.active = { item: next.id, from: { name: from.from, slot: from.slot } };
         await this.queue.claim(next.id, this.agent()).catch((e) => this.o.onError?.(e)); this.tagNext = next.id;
         const turn = this.turnEnds(); const ok = await this.ctl.submitRemote(this.active.from, next.body ?? ''); this.onState(); /* the store tells listeners up to 24 ms late: say the request's own message now, while it is still tagged */ this.tagNext = undefined;
@@ -162,7 +205,7 @@ export class HostBridge {
   }
   /** Offers the work of this agent to another member (they accept or decline in their app). */
   offerHandoff(to: string, note?: string): string { const id = this.ids.next('msg'); this.emit('agent.handoff', { p: { handoff: id, agent_id: this.agent(), to, op: 'offer' }, ...(note ? { secret: { note: note.slice(0, 2000) } } : {}) }); return id; }
-  answerHandoff(id: string, accept: boolean): void { const h = this.team?.snapshot().handoffs.find((x) => x.id === id); if (!h || h.to !== this.handle.me.id) return; this.emit('agent.handoff', { p: { handoff: id, agent_id: h.agent, to: h.to, op: accept ? 'accept' : 'decline' } }); }
+  async answerHandoff(id: string, accept: boolean): Promise<boolean> { const h = this.team?.snapshot().handoffs.find((x) => x.id === id); if (!h || h.to !== this.handle.me.id) return false; if (accept) { const r = await this.gate.check('host_handoff'); if (!r.allowed) { this.gate.tell('host_handoff', r); this.o.onChange?.(); return false; } } this.emit('agent.handoff', { p: { handoff: id, agent_id: h.agent, to: h.to, op: accept ? 'accept' : 'decline' } }); return true; }
 
   private onState(): void {
     const st = this.ctl.state; const agent = this.agent();
@@ -202,7 +245,7 @@ export class HostBridge {
 const withTimeout = <T,>(p: Promise<T>, ms: number, what: string): Promise<T> => new Promise<T>((resolve, reject) => { const t = setTimeout(() => reject(new Error(`${what} was not confirmed by the relay`)), ms); t.unref?.(); p.then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); }); });
 
 /** What a branch-mode member's app needs from a bridge: built on the controller's own file-lock hub, so locks reach the team and the team's locks reach this person's agent. */
-export function startBranchBridge(ctl: AppController, handle: SessionHandle, o: { shareActivity?: boolean; onChange?(): void; onConflict?(c: { agents: string[]; hmacs: string[] }): void; onError?(e: unknown): void; branchProbe?: BranchProbe } = {}): HostBridge {
+export function startBranchBridge(ctl: AppController, handle: SessionHandle, o: { policy?: PolicyOptions; shareActivity?: boolean; onChange?(): void; onConflict?(c: { agents: string[]; hmacs: string[] }): void; onError?(e: unknown): void; branchProbe?: BranchProbe } = {}): HostBridge {
   const bridge = new HostBridge(ctl, handle, { mode: 'branch', ...(ctl.lockHub ? { locks: ctl.lockHub } : {}), ...o }); bridge.start(); return bridge;
 }
 
