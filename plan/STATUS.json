@@ -26,12 +26,12 @@
    "note": "Changesets fixed group, build metadata, Ed25519 signing over the SHA-256 digest, release manifest for 5 targets, dry-run release workflow, docs/releasing.md; publish steps are stubs until lanes C094/C068"
   },
   "C013": {
-   "pct": 1,
-   "note": "merged in #184"
+   "pct": 0.92,
+   "note": "runner and runnerd; gaps: windows pipe, preflight wiring, runnerd logs, daemon-level tests | 2026-10-14: runnerd checks the tool before spawning (installed, supported version, --unsupported-ok), writes a 0600 log of ids and kinds, honours CENTCOM_CLAUDE_BIN, and the real process is tested: permissions, an agent end to end, an interrupt with the CLI receipt, shutdown, idle exit, a second daemon (#184); gap: the Windows pipe"
   },
   "C014": {
-   "pct": 1,
-   "note": "merged in #184"
+   "pct": 0.93,
+   "note": "state machine and emitter; property test over random legal streams (400 runs: states on the contract list, calm state after a turn, idle after interrupt, open approval never displaced, crash is final); gaps: golden transcripts from real parsers | 2026-10-14: the state machine is run over the real claude recordings (a plain answer and an interrupted turn: the agent ends idle with no error on the way) (#184); gap: golden transcripts from the real Codex parser"
   },
   "C015": {
    "pct": 1,
@@ -62,28 +62,28 @@
    "note": "model registry (precedence, engine-reported list + aliases, 24 h cache keyed by engine version, turn-boundary switch with one model.changed, rejection keeps previous model), wired into /model and setModel; gaps: /model no-arg still opens the fixed picker, engines do not yet read models.aliases/--model through the registry at spawn; /model lists the models the Codex account reports; /effort offers each model's levels (Claude and Codex); 2026-10-13: both engines in the model list; /model and the desktop Model menu switch between Claude and Codex"
   },
   "C029": {
-   "pct": 1,
-   "note": "merged in #184"
+   "pct": 0.92,
+   "note": "ledger (reported cost only, running-total deltas, agent minutes, budget alerts, outbox with cap and drop order), /usage, wired into the app; gap: ledger replay from the golden transcripts of real CLIs | 2026-10-14: the ledger is fed from the real claude result (cost and tokens equal the recording, labelled an estimate) and an interrupted turn adds nothing (#184); gap: ledger replay from real Codex runs"
   },
   "C030": {
-   "pct": 1,
-   "note": "merged in #184"
+   "pct": 0.97,
+   "note": "interrupt controller, 3 s/8 s signal ladder to whole process groups, registered pids only, Codex protocol-then-ladder with restart on the same thread, approvals denied and late ones refused, partial answer kept, ctrl+c semantics with exit 130 in the app and -p; agent.turn_timeout_s stops a turn that runs too long (checked in a real terminal); gaps: interrupt receipt (the CLI advertises none), stale index.lock cleanup (needs a decision on deleting a lock automatically) | 2026-10-14: the real claude 2.1.289 advertises interrupt_receipt_v1; the engine stops a turn with a control request, gets the receipt and the result, sends no signal (checked live: tools/dev/claude-interrupt-live.ts, run again after the restart), and falls back to the signal ladder; a leftover git index.lock of the stopped turn is removed under strict rules (#184); gap: Codex has no receipt beyond its turn/interrupt answer"
   },
   "C031": {
-   "pct": 0.9,
-   "note": "terminal capability module (tier matrix, unicode, half-block, hyperlink/paste flags, typed CENTO_* env with warnings, OSC 11 background query with 150 ms bound, layout class, mascotAllowed, debounced watchSize); the app now starts from it for colour depth (shared detection, the colour setting on top) and says an unclear CENTO_* value in words; gaps: components still use the older theme helpers, Unicode/ASCII fallback is not switched by caps.unicode yet"
+   "pct": 0.93,
+   "note": "terminal capability module (tier matrix, unicode, half-block, hyperlink/paste flags, typed CENTO_* env with warnings, OSC 11 background query with 150 ms bound, layout class, mascotAllowed, debounced watchSize); the app now starts from it for colour depth (shared detection, the colour setting on top) and says an unclear CENTO_* value in words; gaps: components still use the older theme helpers, Unicode/ASCII fallback is not switched by caps.unicode yet | 2026-10-14: the app uses its colour depth and every colour now comes from the colour module (#183); gaps: Unicode/ASCII fallback is chosen from the colour tier, not from caps.unicode"
   },
   "C032": {
-   "pct": 0.85,
-   "note": "theme module: dark/light/hc, truecolor/256/16/none tiers with pinned tables and nearest search, ANSI-named status colours, glyph+word statuses without colour, member colours, provider and hooks, setMode single notification, 12 tier x mode snapshots; deviations: graphite greys in the pinned table, memberColor follows the written rule (card examples contradict); gap: components still use the older theme helpers; hc theme, light/dark detection from the terminal, NO_COLOR conformance"
+   "pct": 0.92,
+   "note": "theme module: dark/light/hc, truecolor/256/16/none tiers with pinned tables and nearest search, ANSI-named status colours, glyph+word statuses without colour, member colours, provider and hooks, setMode single notification, 12 tier x mode snapshots; deviations: graphite greys in the pinned table, memberColor follows the written rule (card examples contradict); gap: components still use the older theme helpers; hc theme, light/dark detection from the terminal, NO_COLOR conformance | 2026-10-14: every colour in the app is resolved through this module (useCol, ThemeProvider) (#183); deviations: graphite greys in the pinned table, memberColor follows the written rule; gap: the older presence palette is still used for cursors"
   },
   "C033": {
-   "pct": 0.65,
-   "note": "Cento component with per-frame durations, frame cache, hero/mini sizes (8x14 and 2x6), 256-colour and ASCII fallbacks, recolouring, animation budget of 6; gaps: no golden files against play.py, app still draws through PixelView"
+   "pct": 0.85,
+   "note": "Cento component with per-frame durations, frame cache, hero/mini sizes (8x14 and 2x6), 256-colour and ASCII fallbacks, recolouring, animation budget of 6; gaps: no golden files against play.py, app still draws through PixelView | 2026-10-14: the live strip, the welcome page and the fleet rail rows draw Cento with this component (#183); gaps: no byte-for-byte golden files against play.py, the gallery page still draws scenes through PixelView"
   },
   "C034": {
-   "pct": 0.92,
-   "note": "Shell frame (header/scrollback/toast/prompt/footer, 100-col rail, overlay, too-small state), renderApp with debounced resize, alt-screen guard for exit/SIGINT/SIGTERM/uncaught error, action registry with focus stack, grapheme-aware text helpers; --no-alt-screen wired and checked in a real terminal; gaps: App.tsx not moved onto the Shell, no lint rule for raw Text; resize repaints the whole frame, small-terminal layouts (pickers, help, overlays), width tests, tab title and terminal restore on every exit path"
+   "pct": 0.94,
+   "note": "Shell frame (header/scrollback/toast/prompt/footer, 100-col rail, overlay, too-small state), renderApp with debounced resize, alt-screen guard for exit/SIGINT/SIGTERM/uncaught error, action registry with focus stack, grapheme-aware text helpers; --no-alt-screen wired and checked in a real terminal; gaps: App.tsx not moved onto the Shell, no lint rule for raw Text; resize repaints the whole frame, small-terminal layouts (pickers, help, overlays), width tests, tab title and terminal restore on every exit path | 2026-10-14: App.tsx is drawn by the shell: header, scrollback, prompt region (grows past 12 rows for the strip, tasks and permission question), footer, rail from 100 columns (#183), checked in a real terminal; gaps: no lint rule for raw Text, the frame repaints fully on resize, small-terminal layouts of pickers and help"
   },
   "C035": {
    "pct": 0.95,
@@ -94,40 +94,40 @@
    "note": "virtualised layout with per-block cache (10k blocks), follow tail with \"N new\" indicator, ctrl+home/end, resize anchor, 5,000-block cap, terminal sanitising of every string, session-event reducer (seq order, delta reorder/dedupe/gap) and member identity rendering; loadRange for older blocks waits for remote history"
   },
   "C037": {
-   "pct": 1,
-   "note": "merged in #189"
+   "pct": 0.94,
+   "note": "unified-diff parser with caps (2,000 lines, 200 files, 50k lines in <300 ms), two-string differ, camelCase-aware word highlights, row layout with numbered gutter, wrapping, gap folding/expansion, binary/rename rows, DiffView with focusable gaps, diff.share adapter; the approval prompt now shows an edit's numbered diff (checked with the real Claude Code); gap: the transcript still uses util/diff.ts; diff view notes rows | 2026-10-14: the transcript draws diffs with this module too (#189)"
   },
   "C038": {
    "pct": 0.95,
    "note": "ApprovalView from either engine or a shared session, key state machine (scopes, edit only when editable, 300 ms grace, y+Enter for risky, expiry deny), PermissionPrompt box in the app (heavy border for destructive, diff, clickable answers, no deadline shown when the engine gives none), checked in a real terminal with the real Claude Code; gap: queue host and view-all screen not built; role-awareness and the edit key are not reachable from the app path yet"
   },
   "C039": {
-   "pct": 0.8,
-   "note": "status fields and layout with the drop order constant, branch cut, quota/role/connectivity chips as words, cost format, service banner from a local table, statusText sentence, StatusHeader/Footer/ServiceBanner; gap: the app still draws its own header/status line; status.showCost not read from config; footer shows context, session and week limits; narrow layouts"
+   "pct": 0.93,
+   "note": "status fields and layout with the drop order constant, branch cut, quota/role/connectivity chips as words, cost format, service banner from a local table, statusText sentence, StatusHeader/Footer/ServiceBanner; gap: the app still draws its own header/status line; status.showCost not read from config; footer shows context, session and week limits; narrow layouts | 2026-10-14: the app header and footer are this module (statusFieldsFor, StatusBar); the footer carries mode, night, state, who needs you, context and limit gauges and tokens; the link chip is a glyph and a word; ui.show_cost hides the cost (#183); gaps: the service banner row is not drawn by the app (no status feed in its state), narrow layouts of the extras"
   },
   "C040": {
    "pct": 0.92,
    "note": "spinner module in the app: 10-frame glyph at 80 ms, time after 2 s, tokens after 5 s, interrupt hint, verb pools by state, plain words in serious states or with ui.spinner plain; gap: the older VerbRotator still feeds the title"
   },
   "C041": {
-   "pct": 1,
-   "note": "merged in #189"
+   "pct": 0.94,
+   "note": "palette core: DP fuzzy matcher with indices, engine (debounce, abort, slow-provider append, fixed group order, recent), list and file providers (git ls-files or walk, 20k cap, sliced scoring), view and live component (60/cols-4 wide, 8 rows + more row, wrap-around keys), palette.* actions; gap: the app still shows its older palette, sessions/skills providers not wired; palette with ranking and click, entries from the command list; /settings and pickers on one picker model | 2026-10-14: the palette is checked inside the app: ctrl+k, a query across commands and files, Esc keeps the draft (#189)"
   },
   "C042": {
-   "pct": 0.85,
-   "note": "state labels with tier for all 64 states, sort (tier, needs you, age), event reducer, rail/overlay FleetPanel, exit outcomes, key handling; the panel in the app takes its words, glyphs and order from the same table; gaps: the app keeps its panel with mini mascots instead of the rail rows, memberColor from theme; /fleet as a menu: start, list, preview, stop, remove, clean; Team section in the desktop session panel"
+   "pct": 0.92,
+   "note": "state labels with tier for all 64 states, sort (tier, needs you, age), event reducer, rail/overlay FleetPanel, exit outcomes, key handling; the panel in the app takes its words, glyphs and order from the same table; gaps: the app keeps its panel with mini mascots instead of the rail rows, memberColor from theme; /fleet as a menu: start, list, preview, stop, remove, clean; Team section in the desktop session panel | 2026-10-14: the rail is this panel with a mini Cento beside each row, owner dot and mascot colour from memberColor, rows built by fleetFromAgents (#183); gaps: choosing an agent from the rail and the overlay mode are not wired, /fleet menu, Team section in the desktop app"
   },
   "C044": {
-   "pct": 1,
-   "note": "merged in #189"
+   "pct": 0.94,
+   "note": "toast controller in the app (one at a time, queue of 20, severity preemption, errors stay until ctrl+y/Esc, repeats counted xN, action keys), sys.notice table shown for the service's notices; gaps: bus event toast.dismissed not wired | 2026-10-14: a notice that goes away is announced on the bus as toast.dismissed with its id, level and how (#189)"
   },
   "C045": {
    "pct": 1,
    "note": "keymap of named actions with contexts and chords, keybindings.json overrides (validated, unbind, conflicts, protected quit/help, ctrl+c reserved), raw and Ink key decoding, dispatcher wired into the app, live help screen with filter, centcom keys [--json]"
   },
   "C046": {
-   "pct": 0.85,
-   "note": "driver with state map for all 64 states, 8 priority tiers and chips, 600 ms dwell, tool-call burst collapse, prompt beat, idle timeline and night sleep, one-shot error/worried/thumbs_up/celebrate caps, visibility policy and suppression, reduced-motion substitution, MascotSlot; gap: the app does not create or feed this driver yet, tier table duplicated in fleet lane; driver pauses when nothing shows it and slows down after 20 s and 2 min idle (11% to 2% of a core)"
+   "pct": 0.9,
+   "note": "driver with state map for all 64 states, 8 priority tiers and chips, 600 ms dwell, tool-call burst collapse, prompt beat, idle timeline and night sleep, one-shot error/worried/thumbs_up/celebrate caps, visibility policy and suppression, reduced-motion substitution, MascotSlot; gap: the app does not create or feed this driver yet, tier table duplicated in fleet lane; driver pauses when nothing shows it and slows down after 20 s and 2 min idle (11% to 2% of a core) | 2026-10-14: the controller creates this driver (ctl.mascot) and feeds it the same states as the old scene driver; the live strip and welcome page play its animation (#183); gaps: the visibility policy is not applied (the strip keeps its own size rules), the tier table is still duplicated with the fleet lane"
   },
   "C047": {
    "pct": 0.95,
@@ -138,28 +138,28 @@
    "note": "first-run screen (once, interactive only, Cento waving or ASCII, one sentence, one command), state.json, centcom init (config, memory file, exclude, idempotent, dry run, force with .bak, non-TTY rules), empty states in the app and web"
   },
   "C049": {
-   "pct": 1,
-   "note": "merged in #184"
+   "pct": 0.94,
+   "note": "mode resolution, MotionProvider, sentences for all 64 states, linear renderer with y/n/a permission prompt and Status:/Error: announcements, no-colour/no-escape test helpers, conformance for task list and progress bar; gaps: linear mode not started from main.tsx, a11y.screenReader config key, conformance for the other components; screen-reader mode (plain lines, zero escape codes), NO_COLOR conformance over 14 screens, reduced motion, high-contrast theme | 2026-10-14: screen-reader mode is started from main.tsx (it was already) and is now tested in a real pty: zero escape sequences, the permission question is one line (#184); gap: conformance for the remaining components"
   },
   "C081": {
-   "pct": 1,
-   "note": "merged in #186"
+   "pct": 0.87,
+   "note": "hosted web shell beside the local app: router, theme, 17 primitives, frame, CSP, budgets; gaps: no Tailwind, Silkscreen font, axe and Lighthouse runs | 2026-10-14: the structural accessibility check is extended and applied to every page area (#186); gaps: no Tailwind, Silkscreen font, no axe (licence) or Lighthouse run"
   },
   "C083": {
    "pct": 0.85,
    "note": "2026-10-13: roster, presence, cursor layer and the watch link now work in the web app, found by running it against the live backend; gaps: joining members cannot get the session key yet (web sign-in registers no device key), no real-browser traces"
   },
   "C086": {
-   "pct": 1,
-   "note": "merged in #186"
+   "pct": 0.9,
+   "note": "canvas player: state map, scheduler cap of 6, dwell and collapse, lazy categories, five colours, reduced motion; gaps: bridge and one-shot rules, real pixel-diff and timing benchmark | 2026-10-14: the state gate has the 200 ms prompt bridge and one-shots that return to the real state (#186); gap: a real pixel-diff and timing benchmark"
   },
   "C101": {
-   "pct": 1,
-   "note": "merged in #184"
+   "pct": 0.95,
+   "note": "engine layer: bounded event queue (past 5,000 waiting events text is merged without gaps in the sequence, chatter dropped with one notice, everything else kept), the stream validator run over the Claude adapter, 8 golden transcripts including denial and rate limit; gap: the validator over the Codex adapter's recorded run | 2026-10-14: the recorded Codex traffic and a real interrupted claude turn pass the stream validator; two real bugs fixed (an interrupted answer was left without text.done in both adapters) (#184)"
   },
   "C102": {
-   "pct": 1,
-   "note": "merged in #184"
+   "pct": 0.96,
+   "note": "claude engine with a secured approval bridge (per-run token, private socket, timeout, fail closed); prompt over stdin (checked with the real claude), first-event timeout, subagent.started/done always paired and tools closed on exit; AskUserQuestion becomes a list or typed answer; --effort; gaps: bypass gate, version check at spawn (done in C104's detector, not in the engine), fake CLI executable | 2026-10-14: bypass has to be asked for (otherwise ask mode with a warning), a claude version outside the checked range stops the turn before spawning unless agent.engine_unsupported_ok, and a fake claude executable drives the tests (#184); gap: the command-post rule for bypass"
   },
   "C103": {
    "pct": 0.9,
@@ -270,60 +270,60 @@
    "note": "flags client in the app for the two agent kill switches (provider.claude_code, provider.codex): cached, never waited for, a switched-off agent is not started, a running one is never stopped; gaps: the local backend has no /v1/flags (404), so only the fail-safe path ran live; no other feature has registered a flag"
   },
   "C071": {
-   "pct": 0.9,
-   "note": "mDNS advertiser and browser (probe, announce, goodbye, query schedule, TTL expiry, name conflicts, member-count updates), DNS-SD codec, TXT validation, fuzz, no-secrets packet scan, --no-announce, centcom lan scan; run on the real network (real UDP multicast on wlan0/docker/tailscale interfaces: found by the real centcom lan scan, goodbye removes it, tools/dev/lan-live.ts); gap: it also announces container and virtual interface addresses"
+   "pct": 0.94,
+   "note": "mDNS advertiser and browser (probe, announce, goodbye, query schedule, TTL expiry, name conflicts, member-count updates), DNS-SD codec, TXT validation, fuzz, no-secrets packet scan, --no-announce, centcom lan scan; run on the real network (real UDP multicast on wlan0/docker/tailscale interfaces: found by the real centcom lan scan, goodbye removes it, tools/dev/lan-live.ts); gap: it also announces container and virtual interface addresses | 2026-10-14: mDNS no longer announces on container and virtual interfaces unless named with --bind (#188)"
   },
   "C073": {
-   "pct": 0.85,
-   "note": "pairing code, CPace key exchange, host/guest flow with confirmation, attempt limit and ban list, reconnect token, session trust store, fingerprint binding, redaction tests; gap: no real socket run; host server (C072) not built"
+   "pct": 0.92,
+   "note": "pairing code, CPace key exchange, host/guest flow with confirmation, attempt limit and ban list, reconnect token, session trust store, fingerprint binding, redaction tests; gap: no real socket run; host server (C072) not built | 2026-10-14: pairing runs over a real WebSocket against the LAN host server: right code, token reconnect, wrong codes, wrong fingerprint (#188); gap: no run across two machines"
   },
   "C097": {
-   "pct": 1,
-   "note": "merged in #187"
+   "pct": 0.93,
+   "note": "centcom doctor (11 checks in parallel with 3 s network limits, one next step per problem, exit codes 0/1/2, JSON schema, --check, --bundle tar.gz) including the relay and the stored sign-in, and local crash reports (redaction corpus of 30, retention of 10, no egress), centcom crash list/show/delete; run against the local backend signed in and out; gap: recent log lines are not fed from the app logger | 2026-10-14: centcom doctor --bundle carries the last 500 scrubbed log lines (#187)"
   },
   "C098": {
-   "pct": 1,
-   "note": "merged in #191"
+   "pct": 0.9,
+   "note": "bench harness (calibration, stats, budgets, baseline compare with normalisation, noise handling, results schema, nightly workflow) with 12 metrics: crypto, envelope, mascot, transcript scroll and layout, diff paint (5,000 lines), guest reducer rate, resume replay (5,000 frames), version, memory, keypress; gaps: first-prompt and the 10,000-delta leak check not measured; version/memory not gating until the packaged CLI | 2026-10-14: memory.leak.deltas.10k replaces the undefined 5 % criterion with a measurable one (4 MB retained after 10,000 further frames, measured 0.4 MB) (#191); gaps: first-prompt time of the packaged CLI, no baseline entry for the new metric"
   },
   "C096": {
    "pct": 0.8,
    "note": "one command list drives centcom --help (80 columns), centcom help [topic], per-command --help, the CLI reference pages and the man pages (docs:gen, docs:check fails on drift); docs site pages (guide, privacy page from the crypto contract, env and exit codes, terminal-app guide, releases page, configuration reference generated from the schema); link/anchor, flag, env-var and command checks (every centcom line in the docs names a real command; centcom update was missing from the list and is now there); gaps: VitePress build/Lighthouse and the external link checker are not set up (VitePress is not installed), no spell check, /help text source for the TUI"
   },
   "C068": {
-   "pct": 1,
-   "note": "merged in #187"
+   "pct": 0.9,
+   "note": "update client: check (channel, platform, arch, pre-release and downgrade rules, required flag), resumable size-capped download, hash + Ed25519 verification before apply (two keys), atomic apply with .prev and rollback, managed-install detection, background-check schedule, centcom update with exit 10; reads both manifest spellings (contract mismatch noted); gaps: production keys empty, no run against real signed artifacts, startup background check not wired into the app; checked on every start from the app (bootUpdate), with update.check/auto/channel | 2026-10-14: the update interval key is read by the start-up check (#187); gaps: production keys, no run against real signed artifacts"
   },
   "C066": {
    "pct": 0.88,
    "note": "notifications client: inbox list/read/read-all, 60 s polling with backoff while a session is shared, /inbox and /inbox read in the terminal app (run against the real backend), the service's sys.notice in the local table; gaps: OS notices not raised from the terminal app, not run against fixtures for all 14 categories, locale packs"
   },
   "C100": {
-   "pct": 1,
-   "note": "merged in #187"
+   "pct": 0.7,
+   "note": "2026-10-13: pnpm gate with G1 built, conformance over client-read contracts, update line needs every scenario (#173); gaps: G2 to G5 not built so G6 fails, PAGE/AUTH/RESUME/DEEPLINK suites waived, G1 never run against a real backend | 2026-10-14: gate G1 passed against the local backend (tools/dev/gate-live.ts, run again today) (#187); gaps: G2 to G5 not built so G6 fails, PAGE/AUTH/RESUME/DEEPLINK suites waived"
   },
   "C099": {
    "pct": 0.85,
    "note": "security baseline: pnpm security:check (secret scan, install scripts, exact pinning [waived to 2026-12-31 until C001], lockfile integrity, workflow lint, licence allow-list, audit, fails closed), waivers, CycloneDX 1.5 SBOM per artifact, redaction fuzz, Renovate config, threat model, checklist, review log; the keystore scan now runs after a real sign-in (tools/dev/keystore-live.py: 5 keychain secrets, none anywhere else); gaps: SBOM not attached to a real release, full CycloneDX schema, web CSP review, runner env review"
   },
   "C069": {
-   "pct": 1,
-   "note": "merged in #187"
+   "pct": 0.9,
+   "note": "centcom webhooks list/show/create/update/rotate-secret/delete/test/deliveries/redeliver/verify: https-only and event-type validation from the contract list, show-once secret (TTY or --show-secret, never in --json otherwise), confirm/--yes on delete, friendly error mapping, local signature verification with overlap and tolerance (constant-time, exit 3); gaps: not wired into main.tsx until the auth lane (C052) lands, no webhook fixtures in contracts/fixtures (tests generate signatures), 18 event types in the contract vs 20+ in the card | 2026-10-14: centcom webhooks is wired into the program behind the stored sign-in, in help, the reference and the man page, tested through the real entry point against the mock (#187); gaps: not run against a team workspace on the local backend, no webhook fixtures in contracts"
   },
   "C070": {
-   "pct": 1,
-   "note": "merged in #187"
+   "pct": 0.9,
+   "note": "centcom audit list and export: cursor paging (<=200 per request, no offset), filters, RFC 3339 and relative times, sanitised table, exit 4 on no match, export with Idempotency-Key, 2/4/8/10 s polling and 5 minute limit, 0600 download with partial-file cleanup and no overwrite without --force, plan and role messages, no token or signed URL in output; gaps: not wired into main.tsx until the auth lane lands, not run against the mock backend audit data (tests use scripted answers) | 2026-10-14: centcom audit is wired into the program the same way (#187); gap: not run against audit data on a real backend"
   },
   "C057": {
-   "pct": 0.85,
-   "note": "session client against the mock relay: create/join/leave/end/claim-host/list/share-link REST, a new join token per attempt, host key grants (share_history on/off), rotation on kick and scheduled, guest waiting_for_key and held frames, sign-verify-decrypt before any event, forged server frames and bad frames dropped, TOFU key-changed with held frames and trustDevice, snapshot upload cadence and restore with history fill, 47 event fixtures round-trip; gaps: re-encrypting unsent frames after rotation, chunking over 192 KiB, share-link guests end to end, host hand-over key transfer; contract gaps noted (key.grant frame key, snapshot blob format); adds resumeFrom({ask:false}) and flush() to the C055 channel; 2026-10-13: create takes the session mode (command post or branch) and the handle reports it; create/join/list run against the real API"
+   "pct": 0.88,
+   "note": "session client against the mock relay: create/join/leave/end/claim-host/list/share-link REST, a new join token per attempt, host key grants (share_history on/off), rotation on kick and scheduled, guest waiting_for_key and held frames, sign-verify-decrypt before any event, forged server frames and bad frames dropped, TOFU key-changed with held frames and trustDevice, snapshot upload cadence and restore with history fill, 47 event fixtures round-trip; gaps: re-encrypting unsent frames after rotation, chunking over 192 KiB, share-link guests end to end, host hand-over key transfer; contract gaps noted (key.grant frame key, snapshot blob format); adds resumeFrom({ask:false}) and flush() to the C055 channel; 2026-10-13: create takes the session mode (command post or branch) and the handle reports it; create/join/list run against the real API | 2026-10-14: frames written offline now wait for the relay replay after a reconnect, so they are sealed under the key current after a rotation (#185); gaps: chunking over 192 KiB (needs a contract decision), host hand-over key transfer, share-link guests on the mock relay (they run against the real backend in pnpm dev:share, run again today); proposal: docs/proposals/queue-item-id.md"
   },
   "C058": {
    "pct": 0.8,
-   "note": "queue client: submit (hybrid frame, size = ciphertext bytes, idempotent item/frame id), cancel, host controls, deterministic reducer with held items while paused, relay queue.state replacement, ignored forged host frames, local pre-checks and server error mapping; tested between two clients on the mock relay plus property tests; gaps: no TUI wiring, auto-approve policies not exercised, frame id is msg_ (contract says que_)"
+   "note": "queue client: submit (hybrid frame, size = ciphertext bytes, idempotent item/frame id), cancel, host controls, deterministic reducer with held items while paused, relay queue.state replacement, ignored forged host frames, local pre-checks and server error mapping; tested between two clients on the mock relay plus property tests; gaps: no TUI wiring, auto-approve policies not exercised, frame id is msg_ (contract says que_) | 2026-10-14: the frame id (msg_) against the queue item id (que_) is a contradiction inside the contracts; four options are written in docs/proposals/queue-item-id.md (#185); gaps: no TUI wiring, auto-approve policies not exercised, the contract decision"
   },
   "C059": {
-   "pct": 0.8,
-   "note": "presence client: coalesced presence.update (1/s, latest wins), typing refresh and idle, auto-away and busy rules, encrypted cursors (10/s, deduped, null clears), receiver model with 10 s cursor expiry and offline on member_left, roster check, best-effort ephemeral frames, session reads presence off the socket and drops unverifiable ones with a counter; tested with a fake clock and two clients on the mock relay; gaps: no UI, nudge not implemented, burst seeding checked against the stub only"
+   "pct": 0.88,
+   "note": "presence client: coalesced presence.update (1/s, latest wins), typing refresh and idle, auto-away and busy rules, encrypted cursors (10/s, deduped, null clears), receiver model with 10 s cursor expiry and offline on member_left, roster check, best-effort ephemeral frames, session reads presence off the socket and drops unverifiable ones with a counter; tested with a fake clock and two clients on the mock relay; gaps: no UI, nudge not implemented, burst seeding checked against the stub only | 2026-10-14: nudge: PresenceClient.nudge (editor or host, one per target per minute) and the nudged event, using the presence.nudge event the contract already has (#185); gaps: no TUI use, burst seeding checked against the stub only"
   },
   "C060": {
    "pct": 0.8,
@@ -338,20 +338,20 @@
    "note": "fleet sync: publishers (spawn with plan-limit error, state with map validation, local-only states refused, 2/s per agent and no repeats, exit, encrypted branch.update, conflicts), lock arbitration through the relay with keyed path hashes (grant, deny, release, expire, reconnect re-ask), pure fleet model (replay deterministic, sender owns the agent, unknown states generic), bus bridge; three members on the mock relay incl. a lock clash and a conflict; mock relay gained lock arbitration and an agent limit; gaps: not wired to the real LockClient and fleet panel, state map has 64 names (card says 60); 2026-10-13: branch mode now live: publishers wired through the session bridge, TeamModel, locks and conflicts, handoff offers, mode chosen at session creation; checked against a live backend with two accounts (pnpm dev:branch-check)"
   },
   "C063": {
-   "pct": 0.85,
-   "note": "offline: NetStateMonitor now wired to a shared session (status chip and notices in words; reads the status feed in the contract's words), encrypted durable outbox with caps, corruption recovery and in-order replay after reconnect, file seq store, resume reporting, wake detector, requireOnline and 24 h display rule; tested on the mock relay with maintenance mode; gaps: frames buffered offline may go under the older key if the rotate_key replay is still coming, no real kill/restart of the relay run live"
+   "pct": 0.9,
+   "note": "offline: NetStateMonitor now wired to a shared session (status chip and notices in words; reads the status feed in the contract's words), encrypted durable outbox with caps, corruption recovery and in-order replay after reconnect, file seq store, resume reporting, wake detector, requireOnline and 24 h display rule; tested on the mock relay with maintenance mode; gaps: frames buffered offline may go under the older key if the rotate_key replay is still coming, no real kill/restart of the relay run live | 2026-10-14: frames buffered offline follow a key rotation that happened while the link was down (#185); note: up to 3 s wait for the replay when the relay sends no sys.resumed"
   },
   "C072": {
-   "pct": 0.8,
-   "note": "LAN host server on ws: hello/welcome with local tokens, supersede, 8 member cap, lowest free slot, one seq per session with echo and dedupe, replay buffer with resume and snapshot_required plus lan.snapshot.get, rate limits, 2 MiB outbound close, malformed frame handling, pings and dead detection, presence and cursor coalescing with typing auto-clear, member_left after 10 s, public bind refusal, 0600 JSONL transcript, interceptor, loopback link, pairing hook, ban list; tested with real RelayClient guests and raw sockets; gaps: CLI flags not wired, host engine (C075) not built, a revoked member needs the validator to say so"
+   "pct": 0.9,
+   "note": "LAN host server on ws: hello/welcome with local tokens, supersede, 8 member cap, lowest free slot, one seq per session with echo and dedupe, replay buffer with resume and snapshot_required plus lan.snapshot.get, rate limits, 2 MiB outbound close, malformed frame handling, pings and dead detection, presence and cursor coalescing with typing auto-clear, member_left after 10 s, public bind refusal, 0600 JSONL transcript, interceptor, loopback link, pairing hook, ban list; tested with real RelayClient guests and raw sockets; gaps: CLI flags not wired, host engine (C075) not built, a revoked member needs the validator to say so | 2026-10-14: centcom lan host (--name, --bind, --port, --allow-wan, --no-announce) composes the host server, engine, pairing and mDNS and was paired with a real guest (#190); gaps: no agent behind the host engine yet, a revoked member needs the validator to say so"
   },
   "C074": {
    "pct": 0.8,
    "note": "transports: RelayTransport, LanTransport (pairing on first connect, token afterwards, fingerprint check), LocalTransport, openTransport, parseJoinTarget, close-code error mapping and a conformance suite that passes for all three; new package @centcom/session; gaps: not used by the session client yet (it still builds the relay link itself), no real discovery-driven connect"
   },
   "C075": {
-   "pct": 0.8,
-   "note": "host session engine over the LAN server: role matrix, queue machine with caps and auto-approval, kick/mute/role/transfer/policy/end, approvals, locks with ttl, roster, file history with snapshots (latest 3), host actions through the loopback link; tested with unit tests and host plus guests over loopback; gaps: no host failover, no payload schema check per kind, the history window and snapshot serving to late joiners are tested only at the persistence level, the agent runner and event bus are not wired; 2026-10-13: HostBridge decides approvals for the owner, and in branch mode every person runs their own agent; 2026-10-14: a request's own message could lose its queue item when the store told the bridge late (CI only): fixed with a test that reproduces it"
+   "pct": 0.85,
+   "note": "host session engine over the LAN server: role matrix, queue machine with caps and auto-approval, kick/mute/role/transfer/policy/end, approvals, locks with ttl, roster, file history with snapshots (latest 3), host actions through the loopback link; tested with unit tests and host plus guests over loopback; gaps: no host failover, no payload schema check per kind, the history window and snapshot serving to late joiners are tested only at the persistence level, the agent runner and event bus are not wired; 2026-10-13: HostBridge decides approvals for the owner, and in branch mode every person runs their own agent; 2026-10-14: a request's own message could lose its queue item when the store told the bridge late (CI only): fixed with a test that reproduces it | 2026-10-14: each frame is checked against its kind before it is numbered (#188); gaps: no host failover, the agent runner and bus are not wired behind the host engine, snapshot serving to late joiners is tested only at the persistence level"
   },
   "C076": {
    "pct": 0.75,
@@ -374,24 +374,24 @@
    "note": "merged in #82"
   },
   "C079": {
-   "pct": 0.9,
-   "note": "handoff, failover watching, queue continuity helpers, epoch tracking, pair mode; gaps: not wired into the engines, the C075 engine keeps running items as running; 2026-10-13: agent handoff offers in branch mode (desktop dialog and /share handoff)"
+   "pct": 0.93,
+   "note": "handoff, failover watching, queue continuity helpers, epoch tracking, pair mode; gaps: not wired into the engines, the C075 engine keeps running items as running; 2026-10-13: agent handoff offers in branch mode (desktop dialog and /share handoff) | 2026-10-14: running queue items go back to approved when the host role moves, and the engine does it when a host transfer is accepted (#188); gap: an unplanned failover has no old host to call it (the new host view uses adoptQueue)"
   },
   "C082": {
    "pct": 0.85,
    "note": "PKCE sign-in, single-flight refresh across tabs, 401 rules, outage backoff and queue, sign-out; gaps: WebCrypto device keys are not the keys the session engine uses, no mock-backend device check"
   },
   "C084": {
-   "pct": 1,
-   "note": "merged in #186"
+   "pct": 0.9,
+   "note": "fleet board on the shared reducer: priority order, words and glyphs, filters, compact table, keys, mascot cap; gaps: inspector panel, colour-blind screenshots | 2026-10-14: the agent inspector (Enter or Details, Esc closes, own-branch merge actions only) (#186); gap: colour-blind screenshots"
   },
   "C085": {
-   "pct": 0.9,
-   "note": "2026-10-13: roster dialog, join and leave announcements, presence publishing, pixel-arrow cursor layer, avatar motion (#167); gap: nudge has no event yet"
+   "pct": 0.95,
+   "note": "2026-10-13: roster dialog, join and leave announcements, presence publishing, pixel-arrow cursor layer, avatar motion (#167); gap: nudge has no event yet | 2026-10-14: the roster Nudge button sends presence.nudge, is disabled for viewers, yourself and inside the minute, and a nudge for you is announced politely (#185); two flaky tests that failed CI were fixed (#192)"
   },
   "C087": {
-   "pct": 1,
-   "note": "merged in #191"
+   "pct": 0.89,
+   "note": "workspace pages: rbac mirror from the contract, members, invites, settings with ETag, destructive confirmations, 429 countdown; gaps: link-invite options, axe run | 2026-10-14: invites have the share_history option (#191) and the settings, workspace and integrations pages pass the structural check (#186); gap: no browser accessibility run"
   },
   "C088": {
    "pct": 0.9,
@@ -402,20 +402,20 @@
    "note": "billing pages: money, meters, statuses, checkout polling, seat preview, portal, invoices; gaps: claim and notice wiring, Lighthouse run"
   },
   "C090": {
-   "pct": 1,
-   "note": "merged in #186"
+   "pct": 0.88,
+   "note": "inbox, preferences matrix, push registration, account, appearance, devices; gaps: missing-session follow, axe run | 2026-10-14: the settings pages pass the structural check (#186); gap: missing-session follow"
   },
   "C092": {
-   "pct": 1,
-   "note": "merged in #186"
+   "pct": 0.93,
+   "note": "2026-10-13: language chosen at app start, raw words in markup held at a baseline by a test, accessibility checklist (#169); gaps: axe-core, jsx-a11y, forced-colours and 320px browser runs | 2026-10-14: a hand-written structural check with 15 rules, each proved by a failing and a passing page (axe-core stays out: MPL-2.0) (#186); gaps: eslint-plugin-jsx-a11y, forced-colours and 320 px browser runs"
   },
   "C093": {
    "pct": 1,
    "note": "merged in #108"
   },
   "C095": {
-   "pct": 1,
-   "note": "merged in #187"
+   "pct": 0.86,
+   "note": "2026-10-13: install detection, 6h schedule, apply with health check and rollback, crash recovery, downgrade rules, too-old screen, signed channel store and mock release server with 12 end-to-end scenarios (#173); gaps: production keys, real release host and backend endpoint, npm package name, no update.check_interval_h key | 2026-10-14: update.check_interval_h (1 to 168 hours, default 6) is read by the start-up check (#187); gaps: production keys, real release host and backend endpoint, npm package name"
   }
  },
  "next": [
@@ -434,6 +434,10 @@
   {
    "title": "Multiplayer client against the mock backend",
    "why": "M2 lanes (transport, relay client, crypto, sessions, queue, LAN) can be built and tested against the C007 mock backend before the real backend exists"
+  },
+  {
+   "title": "Decisions waiting for people",
+   "why": "web device keys (docs/proposals/web-device-keys.md) and the queue item id (docs/proposals/queue-item-id.md) need Contract PRs; release signing keys and hosting; chunking messages over 192 KiB; an agent behind the LAN host (centcom lan host has the server, pairing and engine but no runner)"
   }
  ]
 }
