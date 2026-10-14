@@ -1,7 +1,8 @@
 /** Transcript items -> styled, wrapped Lines. Pure: the viewport just slices the result. */
 import type { Item } from '../state/model.js';
 import { renderMarkdown } from './markdown.js';
-import { renderDiff, parseDiff, diffStats } from './diff.js';
+import { parseUnifiedDiff } from '../diff/parse.js';
+import { renderDiffRows } from '../diff/rows.js';
 import { formatElapsed, lineWidth, sp, truncate, truncateMiddle, wrapLine, type Line, type Colour } from './text.js';
 import { sanitizeForTerminal as clean } from '../transcript/sanitize.js';
 
@@ -40,10 +41,10 @@ function toolLines(it: Extract<Item, { kind: 'tool' }>, width: number): Line[] {
   if (it.status === 'denied') out.push([sp(IND + '└ ', { c: 'text.muted' }), sp(result[0] ?? 'declined', { c: 'status.warning' })]);
   else if (result.length) {
     const colour = it.status === 'error' ? 'status.danger' : 'text.muted';
-    const stats = it.diff && it.status === 'ok' ? diffStats(parseDiff(it.diff)) : undefined; // a declined change never happened: no +/- counts
+    const files = it.diff ? safeFiles(it.diff) : []; const stats = files.length && it.status === 'ok' ? { add: files.reduce((n, f) => n + f.adds, 0), del: files.reduce((n, f) => n + f.dels, 0) } : undefined; // a declined change never happened: no +/- counts
     result.slice(0, 4).forEach((r, i) => out.push([sp(i === 0 ? IND + '└ ' : IND + '  ', { c: 'text.muted' }), sp(truncate(r, width - 6), { c: colour }), ...(i === 0 && stats ? [sp(`  +${stats.add} -${stats.del}`, { c: 'text.muted' })] : [])]));
   }
-  if (it.diff && (it.status === 'ok' || it.approval === 'approved')) for (const l of renderDiff(it.diff, width - 4, 12)) out.push([sp(IND + '  '), ...l]);
+  if (it.diff && (it.status === 'ok' || it.approval === 'approved')) { const rows = renderDiffRows(safeFiles(it.diff), { width: width - 4 }); for (const r of rows.slice(0, 12)) out.push([sp(IND + '  '), ...r.line]); if (rows.length > 12) out.push([sp(IND + '  '), sp(`⋯ ${rows.length - 12} more rows`, { c: 'text.muted' })]); } // the same numbered rows, word highlights and folded gaps as the permission question (lane C037)
   return out;
 }
 
@@ -56,6 +57,8 @@ function cleanItem(it: Item): Item {
     case 'notice': return { ...it, text: clean(it.text), ...(it.detail !== undefined ? { detail: clean(it.detail) } : {}) };
   }
 }
+/** The diff module's files, or none when the text is not a diff it can read. */
+function safeFiles(diff: string): ReturnType<typeof parseUnifiedDiff> { try { return parseUnifiedDiff(diff); } catch { return []; } }
 export function itemLines(raw: Item, width: number, now = Date.now()): Line[] {
   const it = cleanItem(raw);
   switch (it.kind) {

@@ -15,4 +15,4 @@ File changes as a readable, collapsible unified diff.
 - **`<DiffView>`** draws the rows. With `focusable`, up and down pick a folded gap and enter opens it.
 - **`fromDiffShare`** reads `diff.share` payloads (unknown shapes give what can be read); `fromEdit` makes a diff from an edit's old and new text.
 
-Not done: using this in the approval prompt and transcript (they still use `util/diff.ts`), and the `diff.share` blob fetch (a net lane).
+The approval question and the transcript both draw their diffs with this module now (the old `util/diff.ts` is only left for its own tests). Not done: the `diff.share` blob fetch (a net lane).
