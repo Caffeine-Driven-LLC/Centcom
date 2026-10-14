@@ -98,7 +98,7 @@ export class ClaudeStreamParser {
         this.sessionId = d.session_id;
         return [{ type: 'session.started', engine: 'claude-code', engine_session_id: String(d.session_id ?? ''), model: String(d.model ?? ''), cli_version: d.claude_code_version,
           tools: Array.isArray(d.tools) ? d.tools.map(String) : [], mcp_servers: Array.isArray(d.mcp_servers) ? d.mcp_servers.map((m: J) => ({ name: String(m.name), status: String(m.status) })) : [],
-          capabilities: CAPS, login_kind: loginKindFrom(d.apiKeySource) }];
+          capabilities: CAPS, login_kind: loginKindFrom(d.apiKeySource), ...(Array.isArray(d.skills) ? { skills: d.skills.filter((x: unknown) => typeof x === 'string').slice(0, 200).map((x: string) => x.slice(0, 80)) } : {}) }];
       case 'status': return d.status === 'requesting' ? [{ type: 'status', state: 'thinking' }] : d.status === 'compacting' ? [{ type: 'compaction.started' }] : [];
       case 'api_retry': return [{ type: 'error', code: errorCodeFor(d.error, d.error_status, ''), tool_message: `API retry ${d.attempt}/${d.max_retries} (${d.error ?? 'error'})`, fatal: false,
         retry: { attempt: Number(d.attempt ?? 1), max_retries: Number(d.max_retries ?? 1), delay_ms: Number(d.retry_delay_ms ?? 0) } }];

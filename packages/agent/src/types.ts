@@ -16,7 +16,7 @@ export class ProviderError extends Error {
 
 interface Base { v: 1; seq: number; ts: string; agent_id: string; turn_id?: string }
 export type EventBody =
-  | { type: 'session.started'; engine: EngineId; engine_session_id: string; model: string; cli_version?: string; tools: string[]; mcp_servers: { name: string; status: string }[]; capabilities: Capability[]; login_kind: LoginKind }
+  | { type: 'session.started'; engine: EngineId; engine_session_id: string; model: string; cli_version?: string; tools: string[]; mcp_servers: { name: string; status: string }[]; capabilities: Capability[]; login_kind: LoginKind; /** The skills the engine itself loaded for this session, when it says (Claude Code does in its start message). */ skills?: string[] }
   | { type: 'turn.started'; turn_id: string }
   | { type: 'text.delta'; message_id: string; index: number; text: string }
   | { type: 'text.done'; message_id: string; text?: string; input_tokens?: number; output_tokens?: number }

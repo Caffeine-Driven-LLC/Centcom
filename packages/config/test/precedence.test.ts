@@ -44,6 +44,11 @@ describe('the short environment names (lane C004)', () => {
     const w: [string, string?][] = []; const d = { ...deps({}, { CENTO_THEME: 'neon', CENTO_MASCOT: 'maybe', CENTO_REDUCE_MOTION: '2' }), warn: (c: string, k?: string) => w.push([c, k]) } as LoadDeps; const c = await loadConfig(d);
     expect(get(c, 'ui.theme')).toBe('auto'); expect(get(c, 'ui.mascot')).toBe(true); expect(w.map((x) => x[1]).sort()).toEqual(['CENTO_MASCOT', 'CENTO_REDUCE_MOTION', 'CENTO_THEME']);
   });
+  it('session.persist and session.retention_days have their defaults and limits', async () => {
+    const c = await loadConfig(deps({})); expect(get(c, 'session.persist')).toBe(true); expect(get(c, 'session.retention_days')).toBe(30);
+    const w: string[] = []; const d = { ...deps({ [USER]: JSON.stringify({ session: { retention_days: 0 } }) }), warn: (x: string) => w.push(x) } as LoadDeps; expect(get(await loadConfig(d), 'session.retention_days')).toBe(30); expect(w).toEqual(['user_config_ignored']);
+    expect(get(await loadConfig(deps({ [USER]: JSON.stringify({ session: { persist: false, retention_days: 7 } }) })), 'session.retention_days')).toBe(7);
+  });
   it('the per-turn limit is a number from 0 to 86400', async () => {
     expect(get(await loadConfig(deps({ [USER]: nest('agent.turn_timeout_s', 900) })), 'agent.turn_timeout_s')).toBe(900); expect(get(await loadConfig(deps({})), 'agent.turn_timeout_s')).toBe(0);
     const w: string[] = []; const d = { ...deps({ [USER]: JSON.stringify({ agent: { turn_timeout_s: 90000 }, ui: { theme: 'light' } }) }), warn: (c: string) => w.push(c) } as LoadDeps; const c = await loadConfig(d);

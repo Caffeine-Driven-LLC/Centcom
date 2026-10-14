@@ -186,6 +186,15 @@ describe('DemoEngine', () => {
   });
 });
 
+describe('skills the engine loaded (lane C020)', () => {
+  const init = (skills: unknown) => JSON.stringify({ type: 'system', subtype: 'init', session_id: 's', model: 'm', apiKeySource: 'none', claude_code_version: '2.1.289', tools: [], mcp_servers: [], ...(skills === undefined ? {} : { skills }) });
+  it('the start message carries them, cleaned and capped; absent or malformed means unknown', () => {
+    const p = () => new ClaudeStreamParser(); const first = (line: string) => p().push(line)[0] as { skills?: string[] };
+    expect(first(init(['a', 'b'])).skills).toEqual(['a', 'b']); expect(first(init(['a', 5, null, 'b'])).skills).toEqual(['a', 'b']); expect(first(init('nope')).skills).toBeUndefined(); expect(first(init(undefined)).skills).toBeUndefined();
+    expect(first(init(Array.from({ length: 500 }, (_, i) => 'skill' + i))).skills).toHaveLength(200); expect(first(init(['x'.repeat(500)])).skills![0]).toHaveLength(80);
+  });
+});
+
 describe('context usage from a real Claude result', () => {
   it('derives context tokens, window and percentage from the last API call', () => {
     const lines = readFileSync(new URL('./fixtures/claude-ok.jsonl', import.meta.url), 'utf8').split('\n').filter(Boolean);

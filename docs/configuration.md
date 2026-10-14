@@ -60,6 +60,8 @@ When you change them in the app, these are saved to your user file: theme, Cento
 | `update.channel` | stable \| beta \| nightly | `"stable"` | no | Which releases to follow: stable, beta or nightly |
 | `lan.enabled` | boolean | `true` | no | Allow LAN sessions |
 | `agent.max_parallel` | number (1 to 16) | `4` | yes | Most agents running at once |
+| `session.persist` | boolean | `true` | no | Save conversations and your prompt history on this computer (off is the same as --no-save) |
+| `session.retention_days` | number (1 to 3650) | `30` | no | Delete saved conversations that were not touched for this many days (checked each time Centcom starts) |
 | `agent.turn_timeout_s` | number (0 to 86400) | `0` | yes | Stop a turn that runs longer than this many seconds (0 means no limit) |
 | `agent.approval_timeout_ms` | number (1000 to 86400000) | `600000` | yes | How long an approval waits before it is declined |
 | `client.engine` | claude-code \| codex | `"claude-code"` | no | Last agent you used |

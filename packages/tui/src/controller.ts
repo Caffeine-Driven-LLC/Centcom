@@ -280,6 +280,13 @@ export class AppController {
     if (ids?.[0] && ids[0] !== this.state.sessionId) await this.resumeSession(ids[0]);
   }
 
+  /** What the engine itself says it loaded for this session (lane C020): the truth about which skills the agent can use right now. */
+  private engineSkills?: string[];
+  private skillsLoaded() {
+    const l = this.engineSkills; const who = this.state.engineLabel;
+    if (l === undefined) { this.toast('info', `${who} did not say which skills it loaded${this.session ? '' : ' (no session yet: send a message first)'}.`); return; }
+    this.addItem({ kind: 'notice', id: nid('n'), level: 'info', text: `${who} loaded ${l.length} skill${l.length === 1 ? '' : 's'}`, detail: l.length ? l.join(', ') : 'none' });
+  }
   /** The per-turn limit (lane C030): when it runs out the turn is interrupted with reason `timeout` and the person is told. */
   private turnTimer?: NodeJS.Timeout;
   private armTurnTimer(turn: string) {
@@ -328,7 +335,7 @@ export class AppController {
     const me = this.me;
     switch (ev.type) {
       case 'session.started':
-        this.updateAgent(me, () => ({ model: ev.model, loginKind: ev.login_kind, engine: this.o.engine.label }));
+        this.engineSkills = ev.skills; this.updateAgent(me, () => ({ model: ev.model, loginKind: ev.login_kind, engine: this.o.engine.label }));
         break;
       case 'turn.started':
         this.currentTurn = ev.turn_id; this.armTurnTimer(ev.turn_id);
@@ -1021,6 +1028,7 @@ export class AppController {
         this.toast('info', on ? `Auto skills on (${this.skills().length} found)` : 'Auto skills off'); break;
       }
       case 'skills': {
+        if (arg.trim().toLowerCase() === 'loaded') { this.skillsLoaded(); break; }
         if (!arg) { await this.skillsPick(); break; }
         const sub = /^(enable|disable)\s+(.+)$/i.exec(arg);
         if (sub) { this.toast('info', setEnabled(sub[2]!.trim(), sub[1]!.toLowerCase() === 'enable')); this.skillCache = undefined; break; }

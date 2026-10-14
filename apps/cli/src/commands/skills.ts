@@ -12,7 +12,7 @@ const ENGINE: Record<string, EngineId> = { claude: 'claude-code', 'claude-code':
 
 export async function runSkills(argv: string[], io: SkillsIo): Promise<number> {
   const [cmd, ...rest] = argv; const val = (f: string) => { const i = rest.indexOf(f); return i >= 0 ? rest[i + 1] : undefined; };
-  if (!cmd || !['status', 'install', 'update', 'remove'].includes(cmd)) { io.err('Usage: centcom skills status|install|update|remove [--scope project|user] [--engine claude|codex] [--yes]'); return 2; }
+  if (!cmd || !['status', 'install', 'update', 'remove'].includes(cmd)) { io.err('Usage: centcom skills status|install|update|remove [--scope project|user] [--engine claude|codex] [--yes] [--overwrite]'); return 2; }
   const scope = (val('--scope') ?? 'project') as 'project' | 'user'; if (scope !== 'project' && scope !== 'user') { io.err('--scope must be project or user'); return 2; }
   const eng = val('--engine'); if (eng && !ENGINE[eng]) { io.err('--engine must be claude or codex'); return 2; } const engines: EngineId[] = eng ? [ENGINE[eng]!] : ['claude-code', 'codex']; const home = io.home ?? homedir();
   const inst = createSkillsInstaller({ fs: nodeSkillFs(), bundledDir: io.bundledDir ?? BUNDLED, engines: { targetDirs: (e, sc, r) => { const base = sc === 'project' ? r ?? io.cwd : home; return e === 'claude-code' ? { skillsDir: join(base, '.claude', 'skills') } : { agentsMd: join(base, 'AGENTS.md') }; } }, recordPath: (sc, r) => join(sc === 'project' ? r ?? io.cwd : home, '.centcom', 'skills-installed.json'), boundary: (sc, r) => (sc === 'project' ? r ?? io.cwd : home) });
@@ -23,6 +23,8 @@ export async function runSkills(argv: string[], io: SkillsIo): Promise<number> {
     io.out(plan.diff); /* the diff is shown even with --yes */
     if (scope === 'user' && !(await io.ask('This writes to your user folder, outside this project. Type "user folder" to continue: ')).trim().toLowerCase().startsWith('user folder')) { io.out('Cancelled.'); return 1; }
     if (!rest.includes('--yes') && !/^y(es)?$/i.test((await io.ask('Apply these changes? [y/N] ')).trim())) { io.out('Cancelled. Nothing was written.'); return 1; }
-    const rep = await inst.apply(plan, { accepted: true, planHash: plan.planHash }); io.out(`Written ${rep.written.length}, removed ${rep.deleted.length}${rep.skipped.length ? `, left alone ${rep.skipped.length} you edited` : ''}.`); for (const s of rep.skipped) io.out(`  left alone: ${s}`); return 0;
+    /* a file you edited is never touched unless you say so, one file at a time (--overwrite says yes to all of them; with --yes alone they are left alone) */
+    const overwrite: string[] = []; for (const c of plan.changes.filter((x) => x.action === 'skip_modified')) { if (rest.includes('--overwrite') || (!rest.includes('--yes') && /^y(es)?$/i.test((await io.ask(`${c.path} was edited by you. ${cmd === 'remove' ? 'Delete' : 'Replace'} it? [y/N] `)).trim()))) overwrite.push(c.path); }
+    const rep = await inst.apply(plan, { accepted: true, planHash: plan.planHash, ...(overwrite.length ? { overwrite } : {}) }); io.out(`Written ${rep.written.length}, removed ${rep.deleted.length}${rep.skipped.length ? `, left alone ${rep.skipped.length} you edited` : ''}.`); for (const s of rep.skipped) io.out(`  left alone: ${s}`); return 0;
   } catch (e) { io.err(String((e as Error).message ?? e)); return 1; }
 }
