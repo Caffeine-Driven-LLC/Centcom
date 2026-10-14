@@ -149,7 +149,7 @@ export class CollabService {
         catch (e) { cur.hint = shareWhy(e).error; }
         this.publish(ws); return;
       }
-      case 'shareConfirm': { cur?.ask?.resolve(m.ok); if (m.ok) { cur!.blocked = undefined; void cur?.bridge?.confirmNow(); } this.publish(ws); return; }
+      case 'shareConfirm': { cur?.ask?.resolve(m.ok); if (m.ok && cur) { cur.blocked = undefined; void cur.bridge?.confirmNow(); } this.publish(ws); return; }
       case 'sharePause': { const sp = cur?.bridge?.spend; if (sp) { if (m.on) await sp.pause(); else await sp.resume(); } this.publish(ws); return; }
       case 'shareDecide': { try { if (m.decision === 'approve') await cur?.bridge?.approve(m.item); else await cur?.bridge?.reject(m.item); } catch { /* the item was already decided or withdrawn */ } this.publish(ws); return; }
       case 'shareAuto': { await cur?.bridge?.setAutoApprove(m.on); this.publish(ws); return; }
