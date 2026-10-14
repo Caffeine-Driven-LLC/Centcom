@@ -49,6 +49,7 @@ When you change them in the app, these are saved to your user file: theme, Cento
 | `ui.restore_prompt` | boolean | `true` | no | When Centcom starts in a folder you have worked in before, ask in a small popup whether to restore your last session (yes or no) |
 | `ui.mouse` | boolean | `true` | no | Scroll with the mouse wheel in the terminal app (off gives the terminal its own text selection back) |
 | `ui.spinner` | fun \| plain | `"fun"` | no | The waiting line: rotating fun verbs, or a plain "Working…" |
+| `ui.show_cost` | boolean | `true` | no | Show the running cost in the header line (off hides it; the cost is still counted and reported) |
 | `ui.density` | comfortable \| compact | `"comfortable"` | no | Blank rows between messages: comfortable, or compact to fit more on screen |
 | `ui.bell` | boolean | `false` | no | Ring the terminal bell when an approval or question needs you, or a long task finishes |
 | `ui.title` | boolean | `true` | no | Show the folder and what the agent is doing in the terminal tab title |
