@@ -70,4 +70,11 @@ describe('host engine over loopback', () => {
     await g1.t.send(submit(item)); await wait(() => engine.queue().items.length === 1); await engine.approveItem(item); await engine.claim(item, 'agt_AAAAAAAAAAAAAAAAAAAAAAAAA1'); await wait(() => (engine.queue().items[0] as { state: string }).state === 'running');
     void engine.transferHost(mem(2)); await wait(() => (engine.queue().items[0] as { state: string }).state === 'approved'); await wait(() => (g1.ofKind('queue.state').at(-1)?.p as { items: { state: string }[] } | undefined)?.items[0]?.state === 'approved');
   });
+  it('a transfer the host engine refuses leaves a running item running (C079)', async () => {
+    const { engine, guest } = await setup(); const g1 = await guest('g1', 2); const item = 'que_AAAAAAAAAAAAAAAAAAAAAAAAB2';
+    await g1.t.send(submit(item)); await wait(() => engine.queue().items.length === 1); await engine.approveItem(item); await engine.claim(item, 'agt_AAAAAAAAAAAAAAAAAAAAAAAAA1'); await wait(() => (engine.queue().items[0] as { state: string }).state === 'running');
+    await g1.t.send({ t: 'control', k: 'control.transfer_host', id: ID(++seqN), sid: SID, p: { to: mem(2) } } as never); // a guest asks: refused, only the host may
+    await engine.transferHost('mem_NOSUCHMEMBER00000000000000').catch(() => undefined); // the host names someone who is not in the session: refused
+    await new Promise((r) => setTimeout(r, 200)); expect((engine.queue().items[0] as { state: string }).state).toBe('running'); expect(g1.ofKind('control.host_changed')).toHaveLength(0);
+  });
 });
