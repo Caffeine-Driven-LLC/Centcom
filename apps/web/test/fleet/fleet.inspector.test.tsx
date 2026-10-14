@@ -19,4 +19,7 @@ describe('the agent inspector (C084)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Rebase' })); expect(merge).toHaveBeenCalledWith('agt_a', 'rebase'); fireEvent.keyDown(screen.getByRole('complementary'), { key: 'Escape' }); expect(close).toHaveBeenCalledTimes(1); fireEvent.click(screen.getByRole('button', { name: 'Close' })); expect(close).toHaveBeenCalledTimes(2);
     cleanup(); render(<AgentInspector card={{ ...c, mine: false }} now={0} onClose={close} />); expect(screen.queryByRole('button', { name: 'Merge' })).toBeNull();
   });
+  it('closing hands the focus back to the element that opened it', () => {
+    const c = withBranch(); const btn = document.createElement('button'); document.body.appendChild(btn); btn.focus(); const { unmount } = render(<AgentInspector card={c} now={0} onClose={() => undefined} />); expect(document.activeElement).toBe(screen.getByRole('complementary')); unmount(); expect(document.activeElement).toBe(btn); btn.remove();
+  });
 });

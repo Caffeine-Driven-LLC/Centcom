@@ -29,7 +29,8 @@ export function FleetBoard({ cards, now, view, onOpen, onMerge }: { cards: Fleet
 }
 /** The details of one agent, beside the board: everything on its card in full (the branch is not cut), what it holds and whether it clashes. Esc or Close hands the focus back to the card that opened it. */
 export function AgentInspector({ card, now, onClose, onMerge }: { card: FleetCard; now: number; onClose(): void } & Pick<FleetActions, 'onMerge'>): React.JSX.Element {
-  const ref = useRef<HTMLElement | null>(null); useEffect(() => { ref.current?.focus(); }, [card.agentId]);
+  const ref = useRef<HTMLElement | null>(null); const opener = useRef<Element | null>(typeof document === 'undefined' ? null : document.activeElement);
+  useEffect(() => { ref.current?.focus(); }, [card.agentId]); useEffect(() => () => { const o = opener.current; if (o instanceof HTMLElement && o.isConnected) o.focus(); }, []);
   return <aside ref={ref} tabIndex={-1} role="complementary" aria-label={t('fleet.inspector.title', { name: card.label })} className="cc-inspector" onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } }}>
     <header><strong>{card.label}</strong> <Button variant="ghost" onClick={onClose}>{t('fleet.inspector.close')}</Button></header>
     <dl>
