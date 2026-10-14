@@ -29,7 +29,7 @@ const SAID_MAX = 160; const LINES_MAX = 300; const LINE_CHARS = 6000;
 const ESC_SEQ = new RegExp('\\u001b\\[[0-9;?]*[ -\\/]*[@-~]|\\u001b\\][^\\u0007\\u001b]*(?:\\u0007|\\u001b\\\\)?|\\u001b[@-Z\\\\-_]', 'g');
 const CTRL_KEEP_NL = new RegExp('[\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f\\u2028\\u2029\\u200b-\\u200f\\u202a-\\u202e\\u2066-\\u2069]', 'g');
 export const safeText = (s: string, max = LINE_CHARS): string => { const t = s.replace(ESC_SEQ, '').replace(CTRL_KEEP_NL, ' '); return t.length > max ? t.slice(0, max - 1) + '…' : t; };
-const clip = (s: string): string => { const t = s.replace(/\s+/g, ' ').trim(); return t.length > SAID_MAX ? t.slice(0, SAID_MAX - 1) + '…' : t; };
+const clip = (s: string): string => { const t = safeText(s, 4000).replace(/\s+/g, ' ').trim(); return t.length > SAID_MAX ? t.slice(0, SAID_MAX - 1) + '…' : t; };
 const DEFAULT_LOCK_MS = 300_000;
 
 export class TeamModel {
@@ -69,7 +69,7 @@ export class TeamModel {
     const old = this.agents.get(id); if (old && old.owner !== owner) return;
     const provider = str(e.p?.['provider']); const mode = e.p?.['mode'] === 'branch' ? 'branch' : 'command_post';
     const a: TeamAgent = { ...(old ?? { id, owner, state: 'idle', since: e.ts, locks: [], sharing: false }), id, owner, mode, ...(provider === 'anthropic' || provider === 'openai' || provider === 'other' ? { provider } : {}) };
-    const s = e.secret; if (s) { if (str(s['label'])) a.label = str(s['label']); if (str(s['model'])) a.model = str(s['model']); if (str(s['branch'])) a.branch = str(s['branch']); }
+    const s = e.secret; if (s) { if (str(s['label'])) a.label = safeText(str(s['label']), 80); if (str(s['model'])) a.model = safeText(str(s['model']), 80); if (str(s['branch'])) a.branch = safeText(str(s['branch']), 200); }
     this.agents.set(id, a); this.changed();
   }
   /** The agent a frame is about. One whose `agent.spawn` was missed (this person joined later) is entered when its own sender speaks for it, with what is not known left out: the spawn only says provider and label. */
@@ -80,18 +80,20 @@ export class TeamModel {
   private update(e: DecodedEvent, fn: (a: TeamAgent) => void): void { const a = this.agentFor(str(e.p?.['agent_id']), e.from, e.ts); if (!a || !this.mayAct(e.from, a)) return; fn(a); this.changed(); }
   private branch(e: DecodedEvent): void {
     const s = e.secret; const a = s ? this.agentFor(str(s['agent_id']), e.from, e.ts) : undefined; if (!a || !s || !this.mayAct(e.from, a)) return;
-    a.branch = str(s['branch']) || a.branch; a.head = str(s['head']) || a.head; const ah = num(s['ahead']); const be = num(s['behind']); if (ah !== undefined) a.ahead = ah; if (be !== undefined) a.behind = be; if (typeof s['dirty'] === 'boolean') a.dirty = s['dirty']; this.changed();
+    a.branch = safeText(str(s['branch']), 200) || a.branch; a.head = safeText(str(s['head']), 64) || a.head; const ah = num(s['ahead']); const be = num(s['behind']); if (ah !== undefined) a.ahead = ah; if (be !== undefined) a.behind = be; if (typeof s['dirty'] === 'boolean') a.dirty = s['dirty']; this.changed();
   }
   private lock(e: DecodedEvent): void {
     const a = this.agentFor(str(e.p?.['agent_id']), e.from, e.ts); const hmac = str(e.p?.['path_hmac']); if (!a || !hmac || !this.mayAct(e.from, a)) return; const action = str(e.p?.['action']);
     a.locks = a.locks.filter((l) => l.hmac !== hmac);
     // the receiver's clock from receipt: a sender's timestamp is never used (replayed history converges because releases replay too)
-    if (action === 'acquire') { const ttl = num(e.p?.['ttl_ms']) ?? DEFAULT_LOCK_MS; const path = str(e.secret?.['path']); a.locks.push({ hmac, ...(path ? { path } : {}), until: this.now() + ttl }); }
+    if (action === 'acquire') { const ttl = num(e.p?.['ttl_ms']) ?? DEFAULT_LOCK_MS; const path = safeText(str(e.secret?.['path']), 400); a.locks.push({ hmac, ...(path ? { path } : {}), until: this.now() + ttl }); }
     this.changed();
   }
   private conflict(e: DecodedEvent): void {
     const agents = Array.isArray(e.p?.['agent_ids']) ? (e.p!['agent_ids'] as unknown[]).map(str).filter(Boolean) : []; const hmacs = Array.isArray(e.p?.['path_hmacs']) ? (e.p!['path_hmacs'] as unknown[]).map(str).filter(Boolean) : [];
-    if (agents.length < 2 || !hmacs.length) return; const id = [...agents].sort().join('+') + '|' + [...hmacs].sort().join('+'); const paths = Array.isArray(e.secret?.['paths']) ? (e.secret!['paths'] as unknown[]).map(str).filter(Boolean) : [];
+    if (agents.length < 2 || !hmacs.length) return;
+    /* like every other frame here, a conflict is the word of someone who owns one of the agents it names (the host, or this person's own runtime): otherwise a member could put text into another person's agent through the digest */
+    if (e.from !== this.me && this.role(e.from) !== 'host' && !agents.some((id) => this.agents.get(id)?.owner === e.from)) return; const id = [...agents].sort().join('+') + '|' + [...hmacs].sort().join('+'); const paths = Array.isArray(e.secret?.['paths']) ? (e.secret!['paths'] as unknown[]).slice(0, 20).map((x) => safeText(str(x), 400)).filter(Boolean) : [];
     this.conflicts_.set(id, { id, agents, hmacs, paths, at: e.ts }); if (this.conflicts_.size > 50) this.conflicts_.delete(this.conflicts_.keys().next().value as string); this.changed();
   }
   private handoff(e: DecodedEvent): void {

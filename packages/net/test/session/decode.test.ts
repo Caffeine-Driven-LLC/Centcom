@@ -36,3 +36,21 @@ describe('through the relay (acceptance 3 and the decode test of the card)', () 
     expect(JSON.stringify(r.m.relay.frames(h.id))).not.toContain('"text"');
   });
 });
+
+describe('a frame that should be sealed but arrives without a ciphertext', () => {
+  const setup = async () => {
+    await initCrypto(); const device = new DeviceKeyStore(memoryKeychain(), DEV); const keys = await device.getOrCreatePublicKeys(); const ring = new KeyRing(); ring.addEpoch('k1', sodium().crypto_aead_xchacha20poly1305_ietf_keygen());
+    const roster = new Roster(); roster.upsert({ id: MEM, role: 'editor', slot: 1, device: DEV, keys: { device: DEV, ...keys } }); return new FrameCodec({ sid: SID, deviceId: DEV, device, ring, roster });
+  };
+  const frame = (k: string, from: string, p: Record<string, unknown>) => ({ v: 1, t: frameTypeOf(k), sid: SID, id: ID, from, ts: '2026-10-05T18:07:41.123Z', seq: 3, k, p }) as unknown as SequencedFrame;
+  it('is refused as unsigned, for encrypted and hybrid kinds alike (it would skip the signature check)', async () => {
+    const codec = await setup();
+    expect(codec.decode(frame('message.user', MEM, {}))).toMatchObject({ ok: false, reason: 'unsigned' });
+    expect(codec.decode(frame('approval.decision', MEM, { approval_id: 'apr_01JA3Z8K2M5N7P9Q0R1S2T3V4W', decision: 'approve' }))).toMatchObject({ ok: false, reason: 'unsigned' });
+  });
+  it('still passes clear kinds, and the service\'s own lock refusals', async () => {
+    const codec = await setup();
+    expect(codec.decode(frame('agent.state', MEM, { agent_id: 'agt_01JA3Z8K2M5N7P9Q0R1S2T3V4W', state: 'idle', since: '2026-10-05T18:07:41.123Z' })).ok).toBe(true);
+    expect(codec.decode(frame('file.lock', 'srv', { action: 'deny', path_hmac: 'x', agent_id: 'agt_01JA3Z8K2M5N7P9Q0R1S2T3V4W' })).ok).toBe(true);
+  });
+});

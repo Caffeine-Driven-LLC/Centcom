@@ -42,14 +42,14 @@ export function createInterruptController(d: InterruptDeps): InterruptController
     const t0 = clock.now(); const tg = d.targets.get(agentId);
     const done = (r: Omit<InterruptResult, 'agentId' | 'durationMs'>): InterruptResult => ({ agentId, durationMs: clock.now() - t0, ...r });
     if (!tg || !tg.busy()) return done({ method: 'none', receipt: false, staleLockRemoved: false, stoppedStream: false, cancelledApprovals: 0, terminated: [] });
-    const turn = tg.turnId(); if (turn) cancelled.add(turn);
+    const turn = tg.turnId(); if (turn) cancelled.add(turn); const startedAt = tg.turnStartedAt?.(); /* read now: the turn's end clears it while the engine is being stopped, and the leftover-lock rule needs it */
     const cancelledApprovals = d.approvals.cancel(agentId); // no approval stays open, whatever the engine does next
     let r: Awaited<ReturnType<InterruptTarget['interrupt']>> | undefined; const giveUp = d.giveUpMs ?? 9000; let h: unknown;
     try { r = await Promise.race([tg.interrupt({ hard }), new Promise<undefined>((res) => { h = clock.setTimeout(() => res(undefined), giveUp); })]); }
     catch (e) { d.log?.warn('interrupt.failed', { agent_id: agentId, err: String(e) }); } finally { clock.clearTimeout(h); }
     if (!r) d.log?.warn('interrupt.ignored', { agent_id: agentId, after_ms: giveUp }); // the agent is set idle locally; later events of that turn are dropped by turn id
     const method: InterruptResult['method'] = r?.method ?? (r?.stopped ? 'sigint' : 'none');
-    let staleLockRemoved = false; if (d.cleanup) { try { staleLockRemoved = (await d.cleanup(agentId, { turnStartedAt: tg.turnStartedAt?.(), terminated: r?.terminated ?? [] })).staleLockRemoved === true; } catch (e) { d.log?.warn('interrupt.cleanup_failed', { agent_id: agentId, err: String(e) }); } }
+    let staleLockRemoved = false; if (d.cleanup) { try { staleLockRemoved = (await d.cleanup(agentId, { turnStartedAt: startedAt, terminated: r?.terminated ?? [] })).staleLockRemoved === true; } catch (e) { d.log?.warn('interrupt.cleanup_failed', { agent_id: agentId, err: String(e) }); } }
     d.states.interrupted(agentId); d.emit({ agent_id: agentId, reason, hard, method, receipt: r?.receipt === true, stale_lock_removed: staleLockRemoved });
     return done({ method, receipt: r?.receipt === true, staleLockRemoved, stoppedStream: true, cancelledApprovals, terminated: r?.terminated ?? [] });
   }

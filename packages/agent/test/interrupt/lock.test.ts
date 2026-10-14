@@ -47,6 +47,12 @@ describe('the interrupt controller runs the cleanup', () => {
     const calls: unknown[] = []; const seen: unknown[] = []; const r = await ctl(async (id, o) => { calls.push([id, o]); return { staleLockRemoved: true }; }, seen).interrupt('a');
     expect(calls).toEqual([['a', { turnStartedAt: 1234, terminated: [{ pid: 9, signal: 'SIGINT' }] }]]); expect(r).toMatchObject({ staleLockRemoved: true }); expect(seen[0]).toMatchObject({ stale_lock_removed: true });
   });
+  it('passes the turn start that was known before the engine was stopped (the end of the turn clears it meanwhile)', async () => {
+    let started: number | undefined = 1234; const calls: unknown[] = [];
+    const t = { busy: () => true, turnId: () => 't1', turnStartedAt: () => started, interrupt: async () => { started = undefined; return { stopped: true, method: 'sigint' as const, terminated: [] as Killed[] }; } };
+    const c = createInterruptController({ targets: { get: () => t, busyIds: () => ['a'] }, approvals: { cancel: () => 0 }, states: { interrupted: () => undefined }, emit: () => undefined, cleanup: async (id, o) => { calls.push([id, o.turnStartedAt]); return {}; } });
+    await c.interrupt('a'); expect(calls).toEqual([['a', 1234]]);
+  });
   it('a cleanup that fails or says nothing does not fail the interrupt', async () => {
     expect(await ctl(async () => { throw new Error('boom'); }).interrupt('a')).toMatchObject({ stoppedStream: true, staleLockRemoved: false }); expect(await ctl().interrupt('a')).toMatchObject({ staleLockRemoved: false });
   });
