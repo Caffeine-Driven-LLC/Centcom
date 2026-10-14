@@ -65,6 +65,11 @@ describe('the preflight', () => {
 
 describe('the file log', () => {
   const clock = { now: () => 0, setTimeout: () => 0, clearTimeout: () => undefined };
+  it('counts the size cap in bytes, not characters: text in other scripts and emoji cannot push the file past it', async () => {
+    const path = join(mkdtempSync(join(tmpdir(), 'rlog-')), 'wide.log'); const log = createFileLog({ path, clock, maxBytes: 1000, level: 'info' });
+    for (let i = 0; i < 12; i++) log.info('wide', { text: '日本語のログ🙂'.repeat(8) + i }); await log.flush(); // each line is ~220 characters but ~420 bytes
+    expect(statSync(path).size).toBeLessThanOrEqual(1000); expect(statSync(path + '.1').size).toBeLessThanOrEqual(1000);
+  });
   it('writes one JSON line per event, scrubs credentials, honours the level, and starts again past the size cap', async () => {
     const path = join(mkdtempSync(join(tmpdir(), 'rlog-')), 'x.log'); const log = createFileLog({ path, clock, maxBytes: 600, level: 'info' });
     log.debug('hidden'); log.info('a', { token: 'sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789' }); await log.flush(); const first = readFileSync(path, 'utf8'); expect(first).not.toContain('hidden'); expect(first).not.toContain('abcdefghijklmnopqrstuvwxyz'); expect(JSON.parse(first.trim())).toMatchObject({ level: 'info', msg: 'a' });

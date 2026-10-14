@@ -14,6 +14,7 @@ export interface TeamAgent {
   id: string; owner: string; mode: 'command_post' | 'branch'; provider?: Provider; label?: string; model?: string; branch?: string;
   state: string; since: string; exit?: { outcome: string }; head?: string; ahead?: number; behind?: number; dirty?: boolean;
   locks: TeamLock[]; waiting?: { approval: string; risk: string }; lastSaid?: string; sharing: boolean;
+  /** Entered because its sender spoke for it before its `agent.spawn` was seen (this person joined later). The real owner's spawn replaces it, whoever claimed it first. */ provisional?: true;
 }
 export interface TeamMember { id: string; name: string; role: string; slot: number; online: boolean; you: boolean; agents: TeamAgent[] }
 export interface TeamConflict { id: string; agents: string[]; hmacs: string[]; paths: string[]; at: string }
@@ -66,16 +67,16 @@ export class TeamModel {
   }
   private spawn(e: DecodedEvent): void {
     const id = str(e.p?.['agent_id']); const owner = str(e.p?.['owner']); if (!id || !owner) return; if (e.from !== owner && this.role(e.from) !== 'host') return;
-    const old = this.agents.get(id); if (old && old.owner !== owner) return;
+    let old = this.agents.get(id); if (old && old.owner !== owner) { if (!old.provisional) return; this.agents.delete(id); this.lines_.delete(id); old = undefined; /* somebody named this agent id before its owner announced it: the owner's spawn wins, and nothing the claimant sent stays */ }
     const provider = str(e.p?.['provider']); const mode = e.p?.['mode'] === 'branch' ? 'branch' : 'command_post';
     const a: TeamAgent = { ...(old ?? { id, owner, state: 'idle', since: e.ts, locks: [], sharing: false }), id, owner, mode, ...(provider === 'anthropic' || provider === 'openai' || provider === 'other' ? { provider } : {}) };
     const s = e.secret; if (s) { if (str(s['label'])) a.label = safeText(str(s['label']), 80); if (str(s['model'])) a.model = safeText(str(s['model']), 80); if (str(s['branch'])) a.branch = safeText(str(s['branch']), 200); }
-    this.agents.set(id, a); this.changed();
+    delete a.provisional; this.agents.set(id, a); this.changed();
   }
   /** The agent a frame is about. One whose `agent.spawn` was missed (this person joined later) is entered when its own sender speaks for it, with what is not known left out: the spawn only says provider and label. */
   private agentFor(id: string, from: string, ts: string, mode: 'command_post' | 'branch' = 'branch'): TeamAgent | undefined {
     if (!id) return undefined; const a = this.agents.get(id); if (a) return a; if (!this.roster.some((m) => m.id === from)) return undefined;
-    const n: TeamAgent = { id, owner: from, mode, state: 'idle', since: ts, locks: [], sharing: false }; this.agents.set(id, n); return n;
+    const n: TeamAgent = { id, owner: from, mode, state: 'idle', since: ts, locks: [], sharing: false, provisional: true }; this.agents.set(id, n); return n;
   }
   private update(e: DecodedEvent, fn: (a: TeamAgent) => void): void { const a = this.agentFor(str(e.p?.['agent_id']), e.from, e.ts); if (!a || !this.mayAct(e.from, a)) return; fn(a); this.changed(); }
   private branch(e: DecodedEvent): void {

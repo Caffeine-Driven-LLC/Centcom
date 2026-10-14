@@ -14,11 +14,11 @@ import { HostRoster } from './roster.js';
 export interface SessionPolicy { auto_approve: 'ask' | 'trusted' | 'everyone'; share_history: boolean; queue_limit: number; locked?: boolean; auto_failover?: boolean; trusted?: string[]; approvers?: string[]; queue_paused?: boolean }
 export interface EngineOptions { server: LanHostServer; persistence: SessionPersistence; policy?: Partial<SessionPolicy>; mode?: Mode; tokens: ReconnectTokens; clock: Clock; snapshotBuilder?: () => Promise<Uint8Array>; initialEpoch?: number; logger?: { warn(m: string, c?: Record<string, unknown>): void; info?(m: string, c?: Record<string, unknown>): void }; hostMember?: HostMember }
 export interface EngineEvents { 'member-joined': [{ id: string }]; 'member-left': [{ id: string; code: string }]; 'queue-changed': [unknown]; 'approval-request': [{ approvalId: string; requester: string }]; 'protocol-violation': [{ member: string; kind: string }]; ended: [{ code: string }]; denied: [{ member: string; kind: string; code: string }] }
-const MAX_CT = 196_608; const reject = (code: string, status = 403, extra: Record<string, unknown> = {}): { reject: ProblemBody } => ({ reject: { code, status, title: code, ...extra } });
+const MAX_CT = 196_608; const STATE_TABLE_CAP = 1024; const reject = (code: string, status = 403, extra: Record<string, unknown> = {}): { reject: ProblemBody } => ({ reject: { code, status, title: code, ...extra } });
 
 export class HostSessionEngine extends TypedEmitter<EngineEvents> implements FrameInterceptor {
   private readonly server: LanHostServer; readonly roster: HostRoster; private readonly qm: QueueMachine; private readonly locks: LockArbiter; private readonly book: ApprovalBook; private policy_: SessionPolicy; private readonly muted = new Map<string, number>(); private muteTimers = new Map<string, unknown>();
-  private readonly mode: Mode; private epoch: number; private framesSinceSnapshot = 0; private snapTimer?: unknown; private snapshotting = false; private ended = false; private readonly stateAt = new Map<string, number[]>(); private readonly sid: string;
+  private readonly mode: Mode; private epoch: number; private framesSinceSnapshot = 0; private snapTimer?: unknown; private snapshotting = false; private ended = false; /** `agent.state` send times per member and agent (a member's own limit, never shared with another member's frames); expired entries are swept and the table is capped */ private readonly stateAt = new Map<string, number[]>(); private readonly sid: string;
   constructor(private readonly o: EngineOptions) {
     super(); this.server = o.server; this.mode = o.mode ?? 'command_post'; this.epoch = o.initialEpoch ?? 1; this.sid = (o.server as unknown as { o: { sessionId: string } }).o.sessionId;
     this.policy_ = { auto_approve: 'ask', share_history: true, queue_limit: DEFAULT_LIMIT, ...o.policy }; const host = o.hostMember ?? (o.server as unknown as { o: { hostMember: HostMember } }).o.hostMember; this.roster = new HostRoster(host);
@@ -50,9 +50,19 @@ export class HostSessionEngine extends TypedEmitter<EngineEvents> implements Fra
     if (kind.startsWith('control.')) { const r = checkControl(kind, p, this.roster, from.id); if (!r.ok) return reject(r.code); if (kind === 'control.policy' && !parseEventPayload(kind, frame.p).ok) return reject('invalid_frame', 400); return 'accept'; }
     if (kind === 'approval.decision') { const id = String(p.approval_id ?? ''); const v = this.book.check(id, from.id, role, this.policy_.approvers ?? []); if (v === 'ok') return 'accept'; return v === 'unknown' ? reject('not_found', 404) : reject('forbidden'); }
     if (kind === 'file.lock') { const a = String(p.action); const hmac = String(p.path_hmac); const agent = String(p.agent_id); if (a === 'acquire') { const r = this.locks.acquire(hmac, agent, from.id, typeof p.ttl_ms === 'number' && p.ttl_ms > 0 ? p.ttl_ms : 30_000); if (r === 'denied') { this.server.broadcast({ t: 'event', k: 'file.lock', p: { action: 'deny', path_hmac: hmac, agent_id: agent } } as never); return { replace: [] }; } } else if (a === 'release') { if (!this.locks.release(hmac, agent, from.id)) return { replace: [] }; } else return reject('forbidden'); return 'accept'; }
-    if (kind === 'agent.state') { const id = String(p.agent_id); const now = this.o.clock.now(); const l = (this.stateAt.get(id) ?? []).filter((t) => now - t < 1000); if (l.length >= 2) return reject('rate_limited', 429); l.push(now); this.stateAt.set(id, l); }
+    if (kind === 'agent.state' && !this.stateRateOk(from.id, String(p.agent_id))) return reject('rate_limited', 429);
     return 'accept';
   }
+
+  /** Two `agent.state` frames a second per member and agent. The key includes the sender: an agent id is chosen by the sender, so a shared key would let one member use up another's allowance. */
+  private stateRateOk(member: string, agent: string): boolean {
+    const now = this.o.clock.now(); const key = `${member}|${agent}`; const l = (this.stateAt.get(key) ?? []).filter((t) => now - t < 1000);
+    if (l.length >= 2) return false; l.push(now); this.stateAt.delete(key); this.stateAt.set(key, l); // re-inserted: the table stays in order of last use
+    if (this.stateAt.size > 256) { for (const [k, ts] of this.stateAt) if (ts.every((t) => now - t >= 1000)) this.stateAt.delete(k); while (this.stateAt.size > STATE_TABLE_CAP) this.stateAt.delete(this.stateAt.keys().next().value as string); }
+    return true;
+  }
+  /** How many (member, agent) pairs the `agent.state` limiter is tracking (bounded). */
+  stateRateKeys(): number { return this.stateAt.size; }
 
   /* ------------------------------------------------------------- after it was numbered and sent */
   onSequenced(f: Frame): void {

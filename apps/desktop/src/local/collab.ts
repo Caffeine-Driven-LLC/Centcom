@@ -187,15 +187,17 @@ export class CollabService {
   async handleJoin(m: JoinMsg, send: (m: ServerMsg) => void, ws?: Workspace): Promise<void> {
     if (m.t === 'joinedLeave') { await this.leaveJoined(); return; }
     if (m.t === 'joinedAsk') { const s = this.joinedSession?.session; if (!s) return; if (!this.joinedSession?.view.payer) { send({ t: 'notice', level: 'warn', text: 'Not sent: it is not known yet whose account would run your prompt. Try again in a moment.' }); return; } try { const r = await s.ask(m.text); this.joinedSession!.asked.set(r.item, m.text); this.refreshJoined(); } catch (e) { send({ t: 'notice', level: 'warn', text: e instanceof Error ? e.message : 'Could not send that.' }); } return; }
-    await this.leaveJoined(); const view: JoinedView = { state: 'joining', people: [], entries: [], asked: [] }; this.joinedSession = { view, asked: new Map() }; this.pushJoined();
+    await this.leaveJoined(); const view: JoinedView = { state: 'joining', people: [], entries: [], asked: [] }; const mine = { view, asked: new Map<string, string>() } as NonNullable<typeof this.joinedSession>; this.joinedSession = mine; this.pushJoined();
+    const current = (): boolean => this.joinedSession === mine; // a newer join (or a leave) replaces this attempt while it is still waiting: its result is then not used
     try {
       const account = await this.getAccount(); const { joined, how } = await this.joinAny(account, m.input, ws);
+      if (!current()) { await joined?.leave().catch(() => undefined); return; } // superseded: leave the session this attempt opened instead of overwriting the newer one
       if (!joined) { this.joinedSession = undefined; this.pushJoined(); return; }
-      const j = this.joinedSession; if (!j) { await joined.leave(); return; } j.session = joined; j.view = { ...j.view, state: 'live', how, sessionId: joined.handle.id }; j.off = joined.subscribe(() => this.refreshJoined()); joined.handle.on('roster', () => this.refreshJoined()); this.refreshJoined(); this.pushJoined();
+      const j = mine; j.session = joined; j.view = { ...j.view, state: 'live', how, sessionId: joined.handle.id }; j.off = joined.subscribe(() => this.refreshJoined()); joined.handle.on('roster', () => this.refreshJoined()); this.refreshJoined(); this.pushJoined();
     } catch (e) {
       const code = (e as { code?: string })?.code; const w = shareWhy(e);
       const error = code === 'bad_target' ? (e as Error).message : code === 'not_signed_in' ? 'Sign in first to join this session. (A watch-only link needs no account.)' : code === 'invite_invalid' || code === 'invite_expired' || code === 'invite_revoked' ? 'That invite is no longer valid. Ask for a new one.' : code === 'session_not_found' || code === 'not_found' ? 'That session was not found, or you are not allowed in it.' : code === 'not_a_member' ? 'You are not a member of that session. Ask the host for an invite.' : w.error;
-      if (this.joinedSession) this.joinedSession.view = { ...this.joinedSession.view, state: 'failed', error, ...(code ? { } : {}) }; this.pushJoined();
+      if (!current()) return; mine.view = { ...mine.view, state: 'failed', error }; this.pushJoined();
     }
   }
   async leaveJoined(): Promise<void> { const j = this.joinedSession; this.joinedSession = undefined; if (j?.timer) clearTimeout(j.timer); j?.off?.(); await j?.session?.leave().catch(() => undefined); this.o.broadcast({ t: 'joined', joined: null }); }

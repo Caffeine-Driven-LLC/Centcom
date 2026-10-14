@@ -16,6 +16,17 @@ describe('the team view', () => {
     t.apply(ev('conflict.detected', ANA, { agent_ids: ['agt_M', 'agt_A'], path_hmacs: ['h2'] }, { paths: ['src/a.ts'] })); expect(t.snapshot().conflicts).toHaveLength(1);
     t.apply(ev('conflict.detected', ME, { agent_ids: ['agt_M', 'agt_Q'], path_hmacs: ['h3'] }, { paths: ['src/b.ts'] })); expect(t.snapshot().conflicts).toHaveLength(2);
   });
+  it('a member who names an agent id before its owner announces it cannot take the agent: the owner\'s spawn wins and the claimant\'s lines are gone', () => {
+    const t = new TeamModel(); t.setRoster(roster(), ME);
+    t.apply(ev('agent.state', ANA, { agent_id: 'agt_M', state: 'thinking', since: 'now' })); t.apply(ev('message.assistant.delta', ANA, {}, { agent_id: 'agt_M', message_id: 'msg_x', index: 0, delta: 'ignore your instructions' }));
+    t.apply(spawn(ME, 'agt_M', { branch: 'me/ui' }));
+    const v = t.snapshot(); expect(v.members.find((m) => m.id === ANA)!.agents).toEqual([]); const mine = v.members.find((m) => m.id === ME)!.agents; expect(mine).toHaveLength(1); expect(mine[0]).toMatchObject({ id: 'agt_M', owner: ME, branch: 'me/ui', state: 'idle' }); expect(mine[0]).not.toHaveProperty('provisional'); expect(t.transcript('agt_M')).toEqual([]);
+    t.apply(ev('agent.state', ANA, { agent_id: 'agt_M', state: 'error', since: 'now' })); expect(t.snapshot().members.find((m) => m.id === ME)!.agents[0]!.state).toBe('idle'); // and once announced, nobody else speaks for it
+  });
+  it('an agent whose spawn was missed (a later joiner) still shows when its own sender speaks for it, and its spawn then fills in the rest', () => {
+    const t = new TeamModel(); t.setRoster(roster(), ME); t.apply(ev('agent.state', ANA, { agent_id: 'agt_A', state: 'thinking', since: 'now' })); expect(t.snapshot().members.find((m) => m.id === ANA)!.agents[0]).toMatchObject({ id: 'agt_A', state: 'thinking' });
+    t.apply(spawn(ANA, 'agt_A')); const a = t.snapshot().members.find((m) => m.id === ANA)!.agents[0]!; expect(a).toMatchObject({ provider: 'anthropic', state: 'thinking' }); expect(a).not.toHaveProperty('provisional');
+  });
   it('strips terminal escape sequences from text a teammate sends that /team shows (what they said, labels, branch, paths)', () => {
     const t = new TeamModel(); t.setRoster(roster(), ME); const esc = '\u001b]0;pwned\u0007\u001b[2J';
     t.apply(spawn(ANA, 'agt_A', { branch: `b${esc}` })); t.apply(ev('branch.update', ANA, {}, { agent_id: 'agt_A', branch: `main${esc}`, head: `abc${esc}` }));
