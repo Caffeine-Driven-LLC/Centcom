@@ -5,7 +5,7 @@ import { FakeEngine } from '@centcom/testkit';
 import { createTheme } from '@centcom/theme';
 import { AppController } from '../../src/controller.js';
 import { ShareSession } from '../../src/collab/share-session.js';
-import { StatusLine } from '../../src/components/StatusLine.js';
+import { StatusBar } from '../../src/components/StatusBars.js';
 import { ThemeCtx } from '../../src/components/ui.js';
 import type { Account } from '../../src/collab/account.js';
 import { WS, rig, until } from '../../../net/test/session/rig.js';
@@ -23,7 +23,7 @@ describe('the link to the hosted service, in words', () => {
     c.setNet('backend-down', 'online'); expect(texts(c).at(-1)).toMatch(/service is down.*Local work is not affected/); c.setNet('degraded', 'online'); expect(texts(c).at(-1)).toMatch(/slow/); c.stop();
   });
   it('the status line names a bad link with a glyph and a word, and shows nothing when it is fine or not shared', () => {
-    const c = make(); const show = () => renderToString(<ThemeCtx.Provider value={createTheme('dark', 'none')}><StatusLine s={c.state} width={110} /></ThemeCtx.Provider>, { columns: 120 });
+    const c = make(); const show = () => renderToString(<ThemeCtx.Provider value={createTheme('dark', 'none')}><StatusBar s={c.state} width={110} line="header" /></ThemeCtx.Provider>, { columns: 120 });
     expect(show()).not.toMatch(/offline|reconnecting|service/); c.setNet('online'); expect(show()).not.toMatch(/offline|reconnecting/);
     c.setNet('reconnecting', 'online'); expect(show()).toContain('↻ reconnecting'); c.setNet('offline', 'reconnecting'); expect(show()).toContain('○ offline'); c.setNet('backend-down', 'offline'); expect(show()).toContain('✗ service down'); c.setNet(undefined); expect(show()).not.toMatch(/service down/); c.stop();
   });

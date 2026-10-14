@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useEffect, useState, useSyncExternalStore } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Box, Text } from 'ink';
 import { createTheme, inkColor, type ColorTier, type Theme } from '@centcom/theme';
+import { createTheme as createStyledTheme, useProvidedTheme } from '../theme/index.js';
 import { PAL_HEX, renderHalfBlock, renderPlain, type MascotDriver, type MascotFrame } from '@centcom/mascot';
 import type { Colour, Line } from '../util/text.js';
 
@@ -9,8 +10,9 @@ export const useTheme = () => useContext(ThemeCtx);
 
 /** Resolve a semantic token or a literal hex to a colour for Ink (undefined = terminal default when colour is off). */
 export function useCol() {
-  const t = useTheme();
-  return (c: Colour | undefined): string | undefined => (c === undefined ? undefined : inkColor(c.startsWith('#') ? c : t.c(c as never), t.tier));
+  const t = useTheme(); const given = useProvidedTheme();
+  const styled = useMemo(() => given ?? createStyledTheme({ caps: { tier: t.tier, unicode: true }, mode: t.mode }), [given, t.tier, t.mode]); // the colour module (lane C032) decides every token; a literal hex goes through the tier
+  return (c: Colour | undefined): string | undefined => { if (c === undefined) return undefined; if (c.startsWith('#')) return inkColor(c, t.tier); const st = styled.style(c as never); return st.color ?? st.backgroundColor; };
 }
 
 export function Rich({ line }: { line: Line }) {

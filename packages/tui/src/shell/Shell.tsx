@@ -10,8 +10,8 @@ export const useLayout = (): Layout => useContext(LayoutCtx);
 export function useFocus(): { current: FocusContext; push(c: FocusContext): void; pop(): void } { const { stack } = useContext(FocusCtx); const [, bump] = useState(0); return { current: stack.current, push: (c) => { stack.push(c); bump((n) => n + 1); }, pop: () => { stack.pop(); bump((n) => n + 1); } }; }
 
 /** The frame: header, scrollback, optional toast row, prompt, footer, with a rail at 100+ columns and an overlay above all. Below 40 columns or 10 rows it only says the terminal is too small. */
-export function Shell({ slots, cols, rows, promptRows = 3 }: { slots: ShellSlots; cols: number; rows: number; promptRows?: number }) {
-  const l = computeLayout({ cols, rows, promptRows, toast: !!slots.toast, rail: !!slots.rail }); const stack = useState(() => new FocusStack())[0]; useEffect(() => undefined, []);
+export function Shell({ slots, cols, rows, promptRows = 3, promptMax }: { slots: ShellSlots; cols: number; rows: number; promptRows?: number; /** The most rows the prompt region may take (12 by default; the app lets it carry the live strip and the permission prompt). */ promptMax?: number }) {
+  const l = computeLayout({ cols, rows, promptRows, promptMax, toast: !!slots.toast, rail: !!slots.rail }); const stack = useState(() => new FocusStack())[0]; useEffect(() => undefined, []);
   if (l.cls === 'tiny') return <LayoutCtx.Provider value={l}><Text>{TOO_SMALL.slice(0, cols)}</Text></LayoutCtx.Provider>;
   return (
     <FocusCtx.Provider value={{ stack, version: 0 }}><LayoutCtx.Provider value={l}>

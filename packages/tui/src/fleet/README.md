@@ -12,4 +12,4 @@ The list of agents in a session, most urgent first.
   - **State and active row:** the state always has a glyph and a word, and the active row is reverse video, so nothing depends on colour.
   - **Keys and timing:** up and down move, enter selects (`onSelect`), esc closes the overlay; elapsed time ticks once a second.
 
-Not done: replacing the app's own `components/FleetPanel.tsx`, the `ctrl+b` rail slot wiring, and `memberColor` from the theme (the dot uses a fixed palette of tokens for now).
+The app shows this panel as its rail (28 columns at 100+ columns, `ctrl+b` toggles it) with a mini Cento (2 rows by 6 columns) beside each row (`mascots` prop), the dot and mascot colours from `memberColor`, and `fleetFromAgents` turning the session's agents into rows. The rail only shows the list; choosing an agent from it and the overlay mode are not wired into the app yet.

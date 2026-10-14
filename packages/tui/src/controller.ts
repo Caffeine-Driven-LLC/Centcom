@@ -22,6 +22,7 @@ import { newPick, pickAll, pickMove, pickResult, pickToggle, type PickOption } f
 import { NIGHT_MAX_TASKS, parseTasks } from './night/model.js';
 import { NightCycle, initialNight, counts as nightCounts, type NightState, type NightTask } from './night/index.js';
 import { LIBRARY_DIR, MASTER_DIR, discover, injection, librarySkills, masterSkills, match, mergeLibrary, setEnabled, loadEntries, type Skill } from '@centcom/skills';
+import { STATE_MAP, createMascotDriver, type MascotDriver as StateMascot } from './mascot/index.js';
 import { MascotDriver, bakedByCategory, bakedCategories, getBaked, type CentoColor } from '@centcom/mascot';
 import type { AgentEngine, ApprovalDecision, ApprovalRequest, EngineQuestion, EngineSession, QuestionGate, NormalisedEvent, PermissionGate, PermissionMode } from '@centcom/agent';
 import { Store } from './state/store.js';
@@ -116,6 +117,8 @@ const MODES: PermissionMode[] = ['default', 'acceptEdits', 'plan'];
 export class AppController {
   readonly store: Store<AppState>;
   readonly driver: MascotDriver;
+  /** What Cento does for the product state (lane C046): the animation to play, with its dwell, priority and idle timers. The app draws it with the `Cento` component. */
+  readonly mascot: StateMascot;
   private session?: EngineSession;
   private verbs: VerbRotator;
   private sessionRules = new Set<string>();
@@ -140,10 +143,11 @@ export class AppController {
     });
     this.toasts.subscribe(() => this.syncToasts());
     this.driver = new MascotDriver({ reducedMotion: settings.reducedMotion, color: settings.color });
+    this.mascot = createMascotDriver({ clock: { now: () => Date.now(), setTimeout: (f, ms) => { const h = setTimeout(f, ms); h.unref?.(); return h; }, clearTimeout: (h) => clearTimeout(h as NodeJS.Timeout) }, stateMap: STATE_MAP, caps: () => ({ cols: 120, rows: 40, mascotEnv: 'on' as 'auto' }), settings: () => ({ mascot: 'on', color: this.state.settings.color, motion: this.state.settings.reducedMotion ? 'reduced' : 'full' }) });
     this.night = this.makeNight();
     const clock = { now: () => Date.now(), setTimeout: (f: () => void, ms: number) => { const t = setTimeout(f, ms); t.unref?.(); return t; }, clearTimeout: (h: never) => clearTimeout(h as NodeJS.Timeout) };
     this.ctxView = createContextView({ bus: this.bus, clock, config: o.context, engines: { capabilities: () => this.o.engine.capabilities(), status: () => (this.state.busy ? 'running' : this.session ? 'waiting' : 'starting'), send: async (_id, prompt) => { await this.session?.send(prompt); } } });
-    this.bus.on('agent:context_alert', (a) => { if (a.level === 'warn') this.notice('warn', `The context is ${Math.round(a.pct)}% full.`, 'Type /compact to have the agent compact it, or /handoff to write a note for a fresh session.'); else if (a.level === 'full') { this.notice('warn', 'The context is almost full.', 'Choose what to do about it, or type /compact or /handoff.'); this.driver.setState('context-full'); this.offerContext = true; this.maybeOfferContext(); } else if (a.level === 'ok') this.offerContext = false; });
+    this.bus.on('agent:context_alert', (a) => { if (a.level === 'warn') this.notice('warn', `The context is ${Math.round(a.pct)}% full.`, 'Type /compact to have the agent compact it, or /handoff to write a note for a fresh session.'); else if (a.level === 'full') { this.notice('warn', 'The context is almost full.', 'Choose what to do about it, or type /compact or /handoff.'); this.mascotState('context-full'); this.offerContext = true; this.maybeOfferContext(); } else if (a.level === 'ok') this.offerContext = false; });
     if (o.fleet) this.watchFleet(o.fleet);
     this.models = createModelRegistry({
       config: () => ({ model: this.state.settings.model || undefined }), bus: { emit: (_k, p) => this.o.logger?.debug('model.changed', { reason: p.reason }) },
@@ -151,7 +155,7 @@ export class AppController {
       fs: { read: async (p) => this.o.modelCache?.read(p), write: async (p, t) => this.o.modelCache?.write(p, t) },
       notify: (level, text, detail) => { this.toast(level, text); if (detail) this.notice(level, text, detail); },
     });
-    o.ledgerBus?.on('cost.alert', (a) => { if (a.session_id !== this.state.sessionId) return; this.notice(a.level === 'error' ? 'warn' : 'info', a.level === 'error' ? `This conversation has reached its cost budget (${a.pct}% of it, as the tools reported it).` : `This conversation is at ${a.pct}% of its cost budget (as the tools reported it).`, 'Budgets only warn: nothing was stopped. Change it with budget.session_usd in your settings.'); this.driver.setState('cost-alert'); });
+    o.ledgerBus?.on('cost.alert', (a) => { if (a.session_id !== this.state.sessionId) return; this.notice(a.level === 'error' ? 'warn' : 'info', a.level === 'error' ? `This conversation has reached its cost budget (${a.pct}% of it, as the tools reported it).` : `This conversation is at ${a.pct}% of its cost budget (as the tools reported it).`, 'Budgets only warn: nothing was stopped. Change it with budget.session_usd in your settings.'); this.mascotState('cost-alert'); });
     if (o.checkpoints) this.cp = createCheckpointManager({ worktree: o.cwd, agentId: this.me, git: o.checkpoints.git ?? nodeGit, clock,
       store: { markRewind: async (seq) => this.rewindTranscript(seq), summarize: async (seq, max) => this.summaryUpTo(seq, max) },
       engine: { capabilities: () => this.o.engine.capabilities(), start: (so) => this.o.engine.start({ ...this.startOptions(so.resume?.engine_session_id), ...so }) } });
@@ -185,7 +189,7 @@ export class AppController {
   async start() {
     { const m = this.o.sessions?.list(this.o.cwd, 1)[0]; if (m) this.patch({ lastSession: { title: m.title, when: m.updatedAt } }); }
     this.driver.start();
-    this.driver.setState('ready');
+    this.mascotState('ready');
     let resumeToken: string | undefined; let carry: string | undefined;
     if (this.o.resume && this.o.sessions) {
       const id = this.o.resume === 'last' ? this.o.sessions.list(this.o.cwd, 1)[0]?.id : this.o.resume;
@@ -388,11 +392,14 @@ export class AppController {
     }
   }
 
+  /** The old scene driver (the gallery, the welcome page) and the new animation driver hear the same state. */
+  private mascotState(state: string) { this.driver.setState(state); this.mascot.input({ type: 'state', agentId: 'main', state }); }
+
   private setAgentState(id: string, state: string) {
     this.updateAgent(id, () => ({ state, mini: stateToMini(state) }));
     if (id === this.state.activeAgent) {
       const wasBusy = this.state.busy;
-      this.driver.setState(state === 'idle' && wasBusy ? 'idle' : state);
+      this.mascotState(state === 'idle' && wasBusy ? 'idle' : state);
     }
     if (id === this.me) this.set({ busy: isBusyState(state) || this.state.busy });
   }
@@ -468,7 +475,7 @@ export class AppController {
     if (decision === 'approve' && scope !== 'once' && !this.o.policy) this.sessionRules.add(this.ruleKey(first.req)); // with the policy engine, it saves the rule itself
     this.set({ approvals: rest });
     first.resolve({ decision, scope });
-    this.driver.setState(decision === 'approve' ? 'approved' : 'denied');
+    this.mascotState(decision === 'approve' ? 'approved' : 'denied');
   }
 
   /* ------------------------------------------------------------------ user actions */
@@ -687,14 +694,14 @@ export class AppController {
     this.setSettings({ permissionMode: m }); this.session?.setPermissionMode?.(m); this.o.logger?.info('permission_mode.changed', { from: prev, to: m });
     if (m === 'bypassPermissions') {
       this.addItem({ kind: 'notice', id: nid('n'), level: 'warn', text: 'Dangerously skip permissions is ON', detail: 'Cento will run commands and edit files without asking, including destructive ones. Use /mode default to turn approvals back on.' });
-      this.driver.setState('warning');
+      this.mascotState('warning');
     } else if (prev === 'bypassPermissions') this.toast('ok', `Approvals are back on (${modeLabel(m)})`);
     else this.toast('info', modeLabel(m));
   }
 
   setSettings(p: Partial<Settings>) {
     this.set((s) => ({ settings: { ...s.settings, ...p } }));
-    if (p.color) this.driver.setColor(p.color);
+    if (p.color) { this.driver.setColor(p.color); this.mascot.input({ type: 'activity', agentId: 'main' }); }
     if (p.reducedMotion !== undefined) this.driver.setReducedMotion(p.reducedMotion);
   }
 

@@ -1,12 +1,13 @@
 import React, { useRef } from 'react';
 import { Box } from 'ink';
-import { miniRows, type MascotDriver } from '@centcom/mascot';
-import { PixelView, Rich, useMascotFrame, useTheme, useTick, sameUnlessTyping } from './ui.js';
+import { Rich, useTheme, useTick, sameUnlessTyping } from './ui.js';
+import { Cento } from '../pixel/index.js';
+import { useMascotView, type MascotDriver } from '../mascot/index.js';
 import { createVerbPicker, isSeriousState, nextVerbDelayMs, plainVerb, spinnerLine, FRAME_MS, type VerbPicker } from '../spinner/index.js';
 import { formatCost, formatElapsed, formatTokens, sp, truncate, truncateMiddle, type Line } from '../util/text.js';
 import type { AppState } from '../state/model.js';
 
-export const LARGE_H = 8, LARGE_W = 26;
+export const LARGE_H = 10, LARGE_W = 30, SMALL_H = 2, SMALL_W = 8;
 
 /** What the working line says: the glyph, the verb and the parenthesis (lane C040). */
 export interface WorkLine { glyph: string; verb: string; meta: string }
@@ -36,19 +37,18 @@ function infoLines(s: AppState, work: WorkLine, width: number, now: number): Lin
 }
 
 export const LiveStrip = React.memo(LiveStripImpl, sameUnlessTyping as never) as typeof LiveStripImpl;
-function LiveStripImpl({ s, driver, width, size, calm = 1 }: { s: AppState; driver: MascotDriver; width: number; size: 'large' | 'small' | 'off'; /** 1 = normal; more = the animation runs that many times slower (nothing has happened for a while). */ calm?: number }) {
+function LiveStripImpl({ s, mascot, width, size, calm = 1 }: { s: AppState; /** What Cento does for the state (lane C046); the strip draws it with the `Cento` component. */ mascot: MascotDriver; width: number; size: 'large' | 'small' | 'off'; /** 1 = normal; more = the animation runs that many times slower (nothing has happened for a while). */ calm?: number }) {
   const theme = useTheme();
-  const f = useMascotFrame(driver);
+  const view = useMascotView(mascot, 'main');
   const spinning = s.busy && !s.settings.reducedMotion;
   const tick = useTick(FRAME_MS, spinning); void tick;
-  const slow = useTick(500 * calm, size === 'small' && !s.settings.reducedMotion);
   const me0 = s.agents.find((a) => a.mine)!; const plain = s.settings.reducedMotion || s.settings.spinner === 'plain';
   const picker = useRef<VerbPicker | undefined>(undefined); picker.current ??= createVerbPicker({ rng: Math.random }); const verbAt = useRef<{ verb: string; until: number; key: string } | undefined>(undefined);
   const t0 = Date.now(); const elapsedMs = s.turnStartedAt ? Math.max(0, t0 - s.turnStartedAt) : 0; const serious = isSeriousState(me0.state); const kind = `${me0.state}:${plain}:${width < 60}`;
   if (s.busy && (!verbAt.current || verbAt.current.key !== kind || t0 >= verbAt.current.until)) { // a new line every 3 to 6 seconds, at once when the state changes; plain words where a joke would be wrong
     const verb = plain ? 'Working…' : serious ? plainVerb(me0.state) : picker.current.next({ state: me0.state, elapsedMs, width, serious }); verbAt.current = { verb, until: t0 + nextVerbDelayMs(Math.random), key: kind };
   }
-  const work = spinnerLine({ elapsedMs, verb: verbAt.current?.verb ?? 'Working…', tokens: me0.inTok + me0.outTok || undefined, interruptible: true, width: Math.max(10, width - (size === 'large' ? LARGE_W : size === 'small' ? 10 : 0) - 2), motion: s.settings.reducedMotion ? 'reduced' : 'full', still: !spinning });
+  const work = spinnerLine({ elapsedMs, verb: verbAt.current?.verb ?? 'Working…', tokens: me0.inTok + me0.outTok || undefined, interruptible: true, width: Math.max(10, width - (size === 'large' ? LARGE_W : size === 'small' ? SMALL_W : 0) - 2), motion: s.settings.reducedMotion ? 'reduced' : 'full', still: !spinning });
   const me = s.agents.find((a) => a.mine)!;
   const now = Date.now();
   if (size === 'off') {
@@ -56,11 +56,11 @@ function LiveStripImpl({ s, driver, width, size, calm = 1 }: { s: AppState; driv
     return <Box height={1}><Rich line={l} /></Box>;
   }
   const small = size === 'small';
-  const boxW = small ? 10 : LARGE_W; const boxH = small ? 4 : LARGE_H;
+  const boxW = small ? SMALL_W : LARGE_W; const boxH = small ? SMALL_H : LARGE_H;
   const info = infoLines(s, work, Math.max(10, width - boxW - 2), now);
   return (
     <Box height={boxH} width={width}>
-      {small ? <PixelView rows={miniRows(me.mini, s.settings.color, slow)} tier={theme.tier} width={boxW} height={boxH} /> : <PixelView rows={f.rows} tier={theme.tier} width={boxW} height={boxH} />}
+      <Box width={boxW} height={boxH} flexShrink={0} flexDirection="column" justifyContent="flex-end" overflow="hidden"><Cento animation={view.animation} loop={view.loop} color={s.settings.color} size={small ? 'mini' : 'hero'} tier={theme.tier} unicode={theme.tier !== 'none'} motion={s.settings.reducedMotion ? 'reduced' : 'full'} playing={calm < 8} /></Box>
       <Box flexDirection="column" justifyContent="flex-end" height={boxH} paddingBottom={small ? 0 : 1}>{info.map((l, i) => <Rich key={i} line={l} />)}</Box>
     </Box>
   );

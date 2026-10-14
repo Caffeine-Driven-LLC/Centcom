@@ -7,3 +7,10 @@ export function MascotSlot({ driver, agentId, render }: { driver: MascotDriver; 
   useEffect(() => driver.subscribe((id, view) => { if (id === agentId) setV(view); }), [driver, agentId]);
   return v.visible ? <>{render(v)}</> : null;
 }
+
+/** What the driver says Cento does for an agent, as React state. */
+export function useMascotView(driver: MascotDriver, agentId: string): MascotView {
+  const [v, setV] = useState<MascotView>(() => driver.view(agentId));
+  useEffect(() => { setV(driver.view(agentId)); return driver.subscribe((id, view) => { if (id === agentId) setV(view); }); }, [driver, agentId]);
+  return v;
+}

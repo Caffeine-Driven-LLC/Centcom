@@ -8,4 +8,4 @@ The header and footer lines and the service banner.
 - **`ServiceBanner`** shows local wording for a degraded or down relay, only when there is a hosted session, and never text from the server. Local and LAN use are never blocked.
 - **`statusText`** is one plain sentence for screen-reader mode.
 
-Not done yet: the app's own header and status line (`components/Header.tsx`, `StatusLine.tsx`) still draw themselves; switching them to these, and reading `status.showCost` from config, is left for the integration.
+The app uses these for its header and footer (`statusFieldsFor` reads the app state; `components/StatusBars.tsx`), and `ui.show_cost` in the config hides the cost. The footer also carries what the old status line did (mode, night, state, who needs you, context and limit gauges, tokens); those extra fields are dropped before the branch and the mode (`EXTRA_DROP_ORDER`). The link chip (`↻ reconnecting`, `○ offline`, `! service slow`, `✗ service down`) is in the header. Not done: the service-status banner row is not drawn by the app (no status feed in its state yet).
