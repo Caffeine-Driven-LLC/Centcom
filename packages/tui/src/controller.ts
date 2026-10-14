@@ -124,7 +124,7 @@ export class AppController {
   private sessionRules = new Set<string>();
   private ghostTimers: NodeJS.Timeout[] = [];
   /** The notice line above the prompt (lane C044): one at a time, a queue behind it, repeats counted, problems kept until dismissed. */
-  readonly toasts: ToastController = createToastController({ clock: { now: () => Date.now(), setTimeout: (f, ms) => { const h = setTimeout(f, ms); h.unref?.(); return h; }, clearTimeout: (h) => clearTimeout(h as NodeJS.Timeout) } });
+  readonly toasts: ToastController = createToastController({ clock: { now: () => Date.now(), setTimeout: (f, ms) => { const h = setTimeout(f, ms); h.unref?.(); return h; }, clearTimeout: (h) => clearTimeout(h as NodeJS.Timeout) }, onDismissed: (t, by) => this.bus.emit('toast.dismissed', { id: t.id, level: t.level, by }) });
   private toastActionHandler?: (id: string) => void;
   private verbTimer?: NodeJS.Timeout;
   private readonly me = 'agt_you';
