@@ -3,8 +3,8 @@
 .SH NAME
 centcom\-lan \- find sessions on this network
 .SH SYNOPSIS
-.B centcom lan scan [\-\-timeout 3] [\-\-json]
+.B centcom lan scan [\-\-timeout 3] [\-\-json] | host [\-\-name <t>] [\-\-port <n>]
 .SH DESCRIPTION
-Lists Centcom sessions on this network (mDNS; no account needed).
+Lists Centcom sessions on this network (mDNS; no account needed), or hosts one: `lan host` listens (\-\-bind <ip>, \-\-port <n>, \-\-allow\-wan, \-\-no\-announce), prints a one\-time pairing code and the fingerprint, and runs until Ctrl\-C.
 .SH SEE ALSO
 centcom help, https://centcom.dev/docs

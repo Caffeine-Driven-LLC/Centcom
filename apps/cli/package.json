@@ -16,6 +16,7 @@
     "@centcom/config": "workspace:*",
     "@centcom/net": "workspace:*",
     "@centcom/lan": "workspace:*",
+    "@centcom/session": "workspace:*",
     "@centcom/protocol": "workspace:*"
   },
   "devDependencies": {

@@ -217,6 +217,9 @@ importers:
       '@centcom/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+      '@centcom/session':
+        specifier: workspace:*
+        version: link:../../packages/session
       '@centcom/theme':
         specifier: workspace:*
         version: link:../../packages/theme
