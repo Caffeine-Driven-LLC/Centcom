@@ -24,7 +24,7 @@ describe('transcript', () => {
     expect(pending[0]).toBe('● Edit(src/a.ts)'); expect(pending[1]).toContain('waiting for your approval');
     const diff = '--- a/a.ts\n+++ b/a.ts\n@@ -1,1 +1,1 @@\n-a\n+b\n';
     const ok = itemLines(tool({ status: 'ok', approval: 'approved', result: 'Updated 1 file', diff }), 60).map(txt);
-    expect(ok[1]).toContain('└ Updated 1 file'); expect(ok[1]).toContain('+1 -1'); expect(ok.some((x) => x.includes('-') && x.includes(' a'))).toBe(true);
+    expect(ok[1]).toContain('└ Updated 1 file'); expect(ok[1]).toContain('+1 -1'); expect(ok.some((x) => /[-−]\s*a\b/.test(x))).toBe(true); expect(ok.some((x) => /\+\s*b\b/.test(x))).toBe(true); // rows from the diff module: numbered, with the change marked
   });
   it('flags high-risk commands and shows denials calmly', () => {
     expect(itemLines(tool({ name: 'Bash', command: 'rm -rf dist', path: undefined, risk: 'high' }), 80).map(txt)[0]).toContain('high risk');
