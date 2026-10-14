@@ -26,3 +26,18 @@ describe('two clients through the relay', () => {
     const { g, gp } = await start(); await g.leave(); expect(() => { gp.setActivity('typing'); gp.setCursor({ line: 1 }); gp.setStatus('busy'); }).not.toThrow(); await new Promise((x) => setTimeout(x, 50));
   });
 });
+
+describe('nudge (presence.nudge in the contract)', () => {
+  it('an editor pokes a member: it arrives once, says who sent it, and a second poke inside a minute is not sent; a viewer, yourself and a stranger are refused', { timeout: 20_000 }, async () => {
+    const { h, g, hp, gp } = await start(); const heard: string[] = []; gp.on('nudged', (from) => heard.push(from)); const hid = h.me.id; const gid = g.me.id;
+    expect(hp.nudge(gid)).toBe('sent'); await flush(); await until(() => heard.length === 1); expect(heard).toEqual([hid]);
+    expect(hp.nudge(gid)).toBe('too_soon'); expect(hp.nudge(hid)).toBe('self'); expect(hp.nudge('mem_01JA3Z8K2M5N7P9Q0R1S2T3V6Z')).toBe('unknown_member'); expect(hp.sent.nudge).toBe(1);
+    await flush(); expect(heard).toHaveLength(1); expect(r!.m.relay.frames(h.id).filter((f) => f.k === 'presence.nudge')).toHaveLength(1);
+  });
+  it('a nudge for somebody else, or from outside the roster, is not shown to us', async () => {
+    const { h, hp } = await start(); const heard: string[] = []; hp.on('nudged', (from) => heard.push(from)); const vp = await virtualPeer(r!, h.id, 'Mallory', KeyRing.create(), 'editor'); await new Promise((x) => setTimeout(x, 150));
+    vp.raw({ ...vp.encode('presence.nudge', { p: { to: 'mem_01JA3Z8K2M5N7P9Q0R1S2T3V6Z' } }) }); await flush(); expect(heard).toEqual([]);
+    vp.raw({ ...vp.encode('presence.nudge', { p: { to: h.me.id } }) }); await flush(); await until(() => heard.length === 1); expect(heard).toEqual([vp.memberId]);
+  });
+});
+
