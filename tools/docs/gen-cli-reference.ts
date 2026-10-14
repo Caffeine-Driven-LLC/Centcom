@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CONTRACT_VERSION } from '../../packages/protocol/src/index.js';
 import { COMMANDS, type CommandMeta } from '../../apps/cli/src/help/commands.js';
+import { configDoc } from './config-doc.js';
 import { ENV_VARS, EXIT_CODES, RELAY_NEVER, RELAY_VISIBLE, TRAFFIC_NOTE } from '../../apps/cli/src/help/topics.js';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
@@ -36,7 +37,9 @@ export function generated(): Record<string, string> {
   const v = version(); const out: Record<string, string> = {};
   for (const c of COMMANDS) { out[`docs/site/reference/cli/${c.name}.md`] = referencePage(c); out[`docs/man/${c.name === 'centcom' ? 'centcom' : `centcom-${c.name}`}.1`] = manPage(c, v, CONTRACT_VERSION); }
   out['docs/site/reference/cli/index.md'] = ['<!-- Generated. Do not edit. -->', '# Command line', '', ...COMMANDS.map((c) => `- [${c.name}](./${c.name}.md): ${c.summary}`), ''].join('\n');
-  out['docs/site/reference/env.md'] = envPage(); out['docs/site/reference/exit-codes.md'] = exitPage(); out['docs/site/guide/privacy-relay.md'] = privacyList(); return out;
+  out['docs/site/reference/env.md'] = envPage(); out['docs/site/reference/exit-codes.md'] = exitPage(); out['docs/site/guide/privacy-relay.md'] = privacyList();
+  const cfg = configDoc(); out['docs/configuration.md'] = cfg + '\n'; out['docs/site/reference/config.md'] = '<!-- Generated. Do not edit. -->\n' + cfg.replace(/Generated from `packages\/config\/src\/schema.ts`\. Do not edit by hand: run `[^`]*`\./, 'Generated from the settings schema of the client (`packages/config/src/schema.ts`), so it cannot drift from the code.');
+  return out;
 }
 export function check(): string[] { const bad: string[] = []; const want = generated(); for (const [p, text] of Object.entries(want)) { const f = join(ROOT, p); if (!existsSync(f) || readFileSync(f, 'utf8') !== text) bad.push(p); } for (const dir of ['docs/site/reference/cli', 'docs/man']) { const d = join(ROOT, dir); if (existsSync(d)) for (const f of readdirSync(d)) if (!(`${dir}/${f}` in want)) bad.push(`${dir}/${f} (no longer generated)`); } return bad; }
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {

@@ -1,0 +1,78 @@
+<!-- Generated. Do not edit. -->
+# Configuration
+
+Generated from the settings schema of the client (`packages/config/src/schema.ts`), so it cannot drift from the code.
+
+## Where settings come from
+
+From lowest to highest priority: **built-in defaults, your user file, the project file, environment variables, command-line flags.** A later layer overrides only the keys it sets. `/config` shows every setting in effect and which layer it came from.
+
+| Layer | Location |
+|---|---|
+| User file | `$CENTCOM_CONFIG_DIR/config.json`, else `$XDG_CONFIG_HOME/centcom/config.json` (Linux, default `~/.config/centcom`), `~/Library/Application Support/centcom/config.json` (macOS), `%APPDATA%\centcom\config.json` (Windows) |
+| Project file | `.centcom/config.json`, the nearest one from the working folder up to the git toplevel (never beyond it, at most 25 levels). Outside a git repo the search stops below your home folder, and a folder outside your home folder only looks at itself; the state folder's own `config.json` is never a project file |
+| Environment | `CENTCOM_API_URL`, `CENTCOM_RELAY_URL`, `CENTCOM_LOG_LEVEL`, `CENTCOM_REDUCED_MOTION` (or the older `CENTCOM_REDUCE_MOTION`), `CENTCOM_TELEMETRY=on|off`, `DO_NOT_TRACK`, `NO_COLOR`, `CENTCOM_CONFIG_DIR`, `CENTCOM_STATE_DIR` |
+| Flags | `--theme`, `--mascot`, `--cento-color`, `--model`, `--mode`, `--colors`, `--engine`, `--no-motion` (used for that run only, never written back) |
+
+State that is not settings (saved conversations, prompt history, the web token) lives in `$CENTCOM_STATE_DIR`, default `~/.centcom`.
+
+## Safety rules
+
+- A **project file** may only set the keys marked "yes" below, so a cloned repository cannot redirect traffic, enable telemetry or loosen permissions. Other keys are ignored with a warning.
+- Any key that looks like a credential (token, secret, password, api key, private) in any file makes Centcom ignore that file and warn, naming the key and never the value.
+- `DO_NOT_TRACK` and `CENTCOM_TELEMETRY=off` always win over every file and flag.
+- **Skip-permissions is never saved.** It can only be chosen on purpose each session (`--dangerously-skip-permissions`, `/mode bypass`, or the web menu). `client.permission_mode` only stores ask first, accept edits or plan.
+- A config file that cannot be read, parsed or validated never stops Centcom: a bad project file is ignored, a bad user file falls back to the defaults, and a warning is shown. A user file that cannot be parsed is never overwritten.
+- A project file that sets `client.model` produces a notice, since it can change what a session costs.
+- Files are written atomically with mode 0600; a crash mid-write leaves the old file intact.
+
+## What the client remembers for you
+
+When you change them in the app, these are saved to your user file: theme, Cento size and color, reduced motion, model, permission mode (not skip-permissions), auto skills, the side and session panels, and your last agent. Prompt history is kept per project (200 entries). Saved conversations are described in the README.
+
+## Keys
+
+| Key | Values | Default | Project may set | Meaning |
+|---|---|---|---|---|
+| `api.base_url` | string | `"https://api.centcom.dev"` | no | Backend REST base URL |
+| `relay.url` | string | `"wss://relay.centcom.dev/v1/ws"` | no | Hosted relay WebSocket URL |
+| `net.timeout_ms` | number (1000 to 600000) | `15000` | no | Per-request network timeout |
+| `net.max_attempts` | number (1 to 20) | `5` | no | Retry attempts for network calls |
+| `budget.session_usd` | number (0 to 100000) | `0` | no | Warn when a session's reported cost passes 80 % and 100 % of this (0 = off). Only warns; nothing is stopped |
+| `telemetry.enabled` | boolean | `false` | no | Anonymous usage reporting (off unless you turn it on) |
+| `context.board` | boolean | `true` | no | The shared context board: what agents and people note (decisions, warnings, findings, who is changing which file) goes along with the other agents' next messages. Turn off to share nothing |
+| `context.digest_tokens` | number (100 to 2000) | `500` | no | The most the board adds to one message (about four characters per token) |
+| `log.level` | debug \| info \| warn \| error \| silent | `"info"` | yes | How much to write to the log file |
+| `log.max_file_bytes` | number (65536 to 268435456) | `5242880` | no | Rotate the log file at this size |
+| `log.max_files` | number (1 to 20) | `3` | no | How many rotated log files to keep |
+| `ui.theme` | auto \| dark \| light \| hc | `"auto"` | yes | Graphite (dark), Paper (light), high contrast (hc), or follow the system |
+| `ui.mascot` | boolean | `true` | yes | Show Cento |
+| `ui.restore_prompt` | boolean | `true` | no | When Centcom starts in a folder you have worked in before, ask in a small popup whether to restore your last session (yes or no) |
+| `ui.mouse` | boolean | `true` | no | Scroll with the mouse wheel in the terminal app (off gives the terminal its own text selection back) |
+| `ui.spinner` | fun \| plain | `"fun"` | no | The waiting line: rotating fun verbs, or a plain "Working…" |
+| `ui.show_cost` | boolean | `true` | no | Show the running cost in the header line (off hides it; the cost is still counted and reported) |
+| `ui.density` | comfortable \| compact | `"comfortable"` | no | Blank rows between messages: comfortable, or compact to fit more on screen |
+| `ui.bell` | boolean | `false` | no | Ring the terminal bell when an approval or question needs you, or a long task finishes |
+| `ui.title` | boolean | `true` | no | Show the folder and what the agent is doing in the terminal tab title |
+| `ui.reduced_motion` | boolean | `false` | yes | Turn animation off |
+| `ui.color` | auto \| truecolor \| 256 \| 16 \| never | `"auto"` | yes | Terminal color depth |
+| `a11y.screen_reader` | boolean | `false` | no | Plain text for screen readers: no colour, no boxes, no animation, no redraws; one line per event. Same as --screen-reader or CENTO_SCREEN_READER=1 |
+| `update.check` | boolean | `true` | no | Look for a newer Centcom each time it starts (in the background, never delaying the start; CENTCOM_NO_UPDATE_CHECK=1 turns it off for one run) |
+| `update.auto` | boolean | `true` | no | Bring a newer Centcom in by itself each time it starts, so the next start is the latest (off: only say that one exists) |
+| `update.check_interval_h` | number (1 to 168) | `6` | no | How many hours pass between looks for a newer Centcom (give or take 20 %, so many installs do not call in step) |
+| `update.channel` | stable \| beta \| nightly | `"stable"` | no | Which releases to follow: stable, beta or nightly |
+| `lan.enabled` | boolean | `true` | no | Allow LAN sessions |
+| `agent.max_parallel` | number (1 to 16) | `4` | yes | Most agents running at once |
+| `session.persist` | boolean | `true` | no | Save conversations and your prompt history on this computer (off is the same as --no-save) |
+| `session.retention_days` | number (1 to 3650) | `30` | no | Delete saved conversations that were not touched for this many days (checked each time Centcom starts) |
+| `agent.turn_timeout_s` | number (0 to 86400) | `0` | yes | Stop a turn that runs longer than this many seconds (0 means no limit) |
+| `agent.engine_unsupported_ok` | boolean | `false` | no | Run a Claude Code whose version is outside the range Centcom has been checked against (otherwise the turn stops and says which versions work) |
+| `agent.approval_timeout_ms` | number (1000 to 86400000) | `600000` | yes | How long an approval waits before it is declined |
+| `client.engine` | claude-code \| codex | `"claude-code"` | no | Last agent you used |
+| `client.model` | string | `""` | yes | Model id passed to the agent (empty = the CLI default) |
+| `client.permission_mode` | default \| acceptEdits \| plan | `"default"` | no | Permission mode at start. Skip-permissions can only be chosen on purpose, each time |
+| `client.cento_color` | violet \| red \| yellow \| green \| brown | `"violet"` | yes | Cento's color |
+| `client.mascot_size` | auto \| large \| small \| off | `"auto"` | yes | Cento size in the terminal |
+| `client.auto_skills` | boolean | `true` | yes | Pick matching skills for each message |
+| `client.side_panel` | boolean | `true` | no | Show the side panel in the web app |
+| `client.fleet_panel` | boolean | `true` | no | Show the session panel in the terminal when others join |

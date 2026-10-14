@@ -1,7 +1,10 @@
 /** pnpm exec tsx tools/docs/config-doc.ts > docs/configuration.md   (generated from the schema, so the reference cannot drift) */
 import { SCHEMA, KEYS } from '../../packages/config/src/index.ts';
+import { fileURLToPath } from 'node:url';
+
+export function configDoc(): string {
 const rows = KEYS.map((k) => { const s = SCHEMA[k] as { kind: string; default: unknown; enum?: readonly string[]; min?: number; max?: number; project?: boolean; doc: string }; const t = s.kind === 'enum' ? s.enum!.join(' \\| ') : s.kind === 'number' ? `number (${s.min} to ${s.max})` : s.kind; return `| \`${k}\` | ${t} | \`${JSON.stringify(s.default)}\` | ${s.project ? 'yes' : 'no'} | ${s.doc} |`; });
-console.log(`# Configuration
+return `# Configuration
 
 Generated from \`packages/config/src/schema.ts\`. Do not edit by hand: run \`pnpm exec tsx tools/docs/config-doc.ts > docs/configuration.md\`.
 
@@ -37,4 +40,6 @@ When you change them in the app, these are saved to your user file: theme, Cento
 | Key | Values | Default | Project may set | Meaning |
 |---|---|---|---|---|
 ${rows.join('\n')}
-`);
+`;
+}
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) process.stdout.write(configDoc() + '\n');
