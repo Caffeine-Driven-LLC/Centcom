@@ -142,16 +142,16 @@
    "note": "merged in #184"
   },
   "C081": {
-   "pct": 0.85,
-   "note": "hosted web shell beside the local app: router, theme, 17 primitives, frame, CSP, budgets; gaps: no Tailwind, Silkscreen font, axe and Lighthouse runs"
+   "pct": 1,
+   "note": "merged in #186"
   },
   "C083": {
    "pct": 0.85,
    "note": "2026-10-13: roster, presence, cursor layer and the watch link now work in the web app, found by running it against the live backend; gaps: joining members cannot get the session key yet (web sign-in registers no device key), no real-browser traces"
   },
   "C086": {
-   "pct": 0.85,
-   "note": "canvas player: state map, scheduler cap of 6, dwell and collapse, lazy categories, five colours, reduced motion; gaps: bridge and one-shot rules, real pixel-diff and timing benchmark"
+   "pct": 1,
+   "note": "merged in #186"
   },
   "C101": {
    "pct": 1,
@@ -382,16 +382,16 @@
    "note": "PKCE sign-in, single-flight refresh across tabs, 401 rules, outage backoff and queue, sign-out; gaps: WebCrypto device keys are not the keys the session engine uses, no mock-backend device check"
   },
   "C084": {
-   "pct": 0.85,
-   "note": "fleet board on the shared reducer: priority order, words and glyphs, filters, compact table, keys, mascot cap; gaps: inspector panel, colour-blind screenshots"
+   "pct": 1,
+   "note": "merged in #186"
   },
   "C085": {
    "pct": 0.9,
    "note": "2026-10-13: roster dialog, join and leave announcements, presence publishing, pixel-arrow cursor layer, avatar motion (#167); gap: nudge has no event yet"
   },
   "C087": {
-   "pct": 0.85,
-   "note": "workspace pages: rbac mirror from the contract, members, invites, settings with ETag, destructive confirmations, 429 countdown; gaps: link-invite options, axe run"
+   "pct": 1,
+   "note": "merged in #186"
   },
   "C088": {
    "pct": 0.9,
@@ -402,12 +402,12 @@
    "note": "billing pages: money, meters, statuses, checkout polling, seat preview, portal, invoices; gaps: claim and notice wiring, Lighthouse run"
   },
   "C090": {
-   "pct": 0.85,
-   "note": "inbox, preferences matrix, push registration, account, appearance, devices; gaps: missing-session follow, axe run"
+   "pct": 1,
+   "note": "merged in #186"
   },
   "C092": {
-   "pct": 0.9,
-   "note": "2026-10-13: language chosen at app start, raw words in markup held at a baseline by a test, accessibility checklist (#169); gaps: axe-core, jsx-a11y, forced-colours and 320px browser runs"
+   "pct": 1,
+   "note": "merged in #186"
   },
   "C093": {
    "pct": 1,
