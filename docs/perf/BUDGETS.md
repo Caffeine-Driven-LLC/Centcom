@@ -27,10 +27,11 @@ Run `pnpm bench` (all) or `pnpm bench --fast` (the pull request subset). `--filt
 | `cli.start.bundle` | 400 ms | no | `centcom --version` through the compiled bundle with V8's code cache, as `bin/centcom` runs it (full set only) |
 | `diff.paint.5k` | 300 ms | yes | first paint of a 5,000-line diff: parse and lay out every row (full set only) |
 | `guest.reducer.rate` | 20,000 frames/s (minimum) | yes | the guest reducer on a busy session: messages, answer deltas, tools, agent states (full set only) |
+| `memory.leak.deltas.10k` | 4 MB (maximum) | yes | the leak check: 10,000 frames of a busy session are in the guest's state, 10,000 more are added, and the heap that stays after a full collection must be at most 4 MB (measured about 0.4 MB). The card's "no growth over 5 %" cannot hold for a state that keeps the transcript, so the criterion is the absolute growth for a known amount of content. |
 | `resume.replay.5k` | 1.5 s | yes | 5,000 buffered frames arriving newest first are put in order and reduced to a state (full set only) |
 | `memory.transcript.10k` | 300 MB RSS | no | the harness alone is about 300 MB; gates when measured in the packaged CLI |
 
-Not measured here yet: the 10,000-delta leak check (it needs the garbage collector to be exposed, which the harness does not start with) and the first interactive prompt of the packaged CLI. The web budgets come from the web build report.
+Not measured here yet: the first interactive prompt of the packaged CLI. The web budgets come from the web build report.
 
 ## CI
 

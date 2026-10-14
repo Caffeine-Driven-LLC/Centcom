@@ -180,6 +180,7 @@
  "state.warning": "There is a warning",
  "state.welcome-teammate": "Welcome, teammate",
  "theme.label": "Theme",
+ "workspace.invite.shareHistory": "They can read what was said before they joined",
  "fleet.inspector.title": "Details of {name}",
  "fleet.inspector.close": "Close",
  "fleet.inspector.owner": "Owner",
