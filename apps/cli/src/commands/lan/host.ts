@@ -9,9 +9,11 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { LanAdvertiser, LanHostServer, HostPairing, MdnsUnavailableError, MemoryBanList, PublicBindRefusedError, SessionTrustStore, systemClock, tokenValidator, type LanClock } from '@centcom/lan';
 import { newIdGenerator } from '@centcom/protocol';
-import { DeviceKeyStore, initCrypto, type Keychain } from '@centcom/net';
+import { DeviceKeyStore, initCrypto, memoryKeychain, osKeychain, type Keychain } from '@centcom/net';
 import { HostSessionEngine, createFilePersistence } from '@centcom/session';
 
+/** The host's device keys: the OS keychain, or this process's memory when the environment asks for that (tests, throwaway machines). */
+export const lanHostKeychain = (): Keychain => (process.env.CENTCOM_KEYCHAIN === 'memory' ? memoryKeychain() : osKeychain());
 export const HOST_USAGE = 'Usage: centcom lan host [--name <text>] [--bind <ip>] [--port <1-65535>] [--allow-wan] [--no-announce]';
 export interface HostArgs { name: string; bind?: string; port?: number; allowWan: boolean; announce: boolean }
 /** Reads the flags; null when something is wrong. A port of 0 is not accepted here (the default is 7070, and a busy port falls back to a free one). */

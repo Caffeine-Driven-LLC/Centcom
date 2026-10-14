@@ -10,7 +10,7 @@ import { basename as pathBase, join as pathJoin, resolve as pathResolve } from '
 import { homedir } from 'node:os';
 import { stateDir } from '@centcom/config';
 import type { FlatFlags } from '@centcom/config';
-import { createAppLogger, memoryKeychain, osKeychain } from '@centcom/net';
+import { createAppLogger } from '@centcom/net';
 import { hostname } from 'node:os';
 import type { CentoColor } from '@centcom/mascot';
 import { buildPrompt, parseStreamInput, readStdin, runPrint } from './print/index.js';
@@ -24,7 +24,7 @@ import { runInitCli } from './commands/init.js';
 import { resolvedKeys, runKeys } from './commands/keys.js';
 import { runSkills, ttyAsk } from './commands/skills.js';
 import { runLanCli } from './commands/lan/scan.js';
-import { runLanHost } from './commands/lan/host.js';
+import { lanHostKeychain, runLanHost } from './commands/lan/host.js';
 import { CrashStore, installCrashHandlers, runCrash } from './crash/index.js';
 import { realDoctorContext, runDoctor } from './doctor/index.js';
 import { CONTRACT_VERSION } from '@centcom/protocol';
@@ -122,7 +122,7 @@ async function main() {
     const rl = process.stdin.isTTY ? createLineReader({ input: process.stdin }) : undefined; ac.signal.addEventListener('abort', () => rl?.close());
     await done(await runJoin(process.argv.slice(3), { account, out: (l) => console.log(l), err: (l) => console.error(l), signal: ac.signal, ...(rl ? { lines: rl } : {}) }));
   }
-  if (process.argv[2] === 'lan' && process.argv[3] === 'host') { const ac = new AbortController(); process.on('SIGINT', () => ac.abort()); process.on('SIGTERM', () => ac.abort()); const kc = process.env.CENTCOM_KEYCHAIN === 'memory' ? memoryKeychain() : osKeychain(); await done(await runLanHost(process.argv.slice(4), { out: (l) => console.log(l), err: (l) => console.error(l), signal: ac.signal, keychain: kc, stateDir: stateDir(defaultDeps()), hostName: hostname() })); }
+  if (process.argv[2] === 'lan' && process.argv[3] === 'host') { const ac = new AbortController(); process.on('SIGINT', () => ac.abort()); process.on('SIGTERM', () => ac.abort()); await done(await runLanHost(process.argv.slice(4), { out: (l) => console.log(l), err: (l) => console.error(l), signal: ac.signal, keychain: lanHostKeychain(), stateDir: stateDir(defaultDeps()), hostName: hostname() })); }
   if (process.argv[2] === 'lan') { await done(await runLanCli(process.argv.slice(3), { out: (l) => console.log(l), err: (l) => console.error(l) })); }
   { // the terminal app and print mode take only the options in the help: a typo is a clear message, not a silent no-op
     const top = findCommand('centcom')!; process.argv.splice(2, process.argv.length - 2, ...normalizeArgs(process.argv.slice(2), top.flags));
