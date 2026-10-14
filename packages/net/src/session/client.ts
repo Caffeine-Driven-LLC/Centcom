@@ -77,6 +77,8 @@ export interface SessionHandle {
 const realClock: RelayClock = { now: () => Date.now(), setTimeout: (fn, ms) => setTimeout(fn, ms), clearTimeout: (h) => clearTimeout(h as unknown as ReturnType<typeof setTimeout>) };
 /** sys.error codes that mean the relay refused the frame we just sent (it does not say which, so the oldest unechoed one). */
 const FRAME_REFUSALS = new Set<string>(['queue_full', 'queue_item_gone', 'queue_not_allowed', 'forbidden', 'role_insufficient', 'muted', 'session_locked', 'host_required', 'frame_too_large', 'invalid_frame', 'lock_denied', 'quota_exceeded', 'entitlement_required']);
+/** How long frames written offline wait for the replay after a reconnect (a relay that has nothing to replay says nothing). */
+const RESUME_WAIT_MS = 3000;
 const RECENT_EVENTS = 500; const KEY_WAIT_MS = 10_000; const MAX_PENDING = 1000;
 
 class Connection implements SessionHandle {
@@ -110,10 +112,11 @@ class Connection implements SessionHandle {
       getTicket: async () => { const g = this.guestTicket; let t: JoinToken; if (g) { if (!this.guestFirstUsed) { this.guestFirstUsed = true; t = g.first; } else t = await g.refresh(); } else t = await this.rest.joinToken(this.id, ['resume']); return { ticket: t.ticket, url: t.relay_url }; } });
     this.channel = new ReliableChannel({ link: this.relay, sessionId: this.id, seqStore: this.d.seqStore, clock: this.d.relayClock, ids: this.ids, logger: this.d.logger, memberId: () => this.me.id });
     await this.channel.init();
-    this.relay.on('link', (l) => { this.linkNow = l; this.life.fire('link', l); if (l === 'online') void this.flushOutbox(); if (this.st === 'ended') return; if (l === 'reconnecting' || l === 'offline') this.setState('reconnecting'); else this.setState(this.guest.hasKey() ? 'live' : 'waiting_for_key'); });
+    this.relay.on('link', (l) => { this.linkNow = l; this.life.fire('link', l); if (l === 'reconnecting' || l === 'offline') this.resumePending = true; if (l === 'online') void this.flushAfterResume(); if (this.st === 'ended') return; if (l === 'reconnecting' || l === 'offline') this.setState('reconnecting'); else this.setState(this.guest.hasKey() ? 'live' : 'waiting_for_key'); });
     this.relay.on('closed', (c) => { if (!c.willReconnect && !this.closed) { if (c.code === 4403) void this.removed('forbidden'); else if (c.code === 1000 || c.code === 4410 || c.code === 4409) this.finish(c.code); } });
     this.relay.on('protocol_warning', (w) => this.warn(w.reason)); this.relay.on('frame', (f) => { if (f.t === 'presence') this.onPresence(f); }); this.relay.on('notice', (n) => this.life.fire('notice', n));
     this.relay.on('error', (e) => { if (FRAME_REFUSALS.has(e.code)) this.channel.refuseOldest(e); this.life.fire('error', { code: e.code, ...(e.status !== undefined ? { status: e.status } : {}), ...(e.retryAfterS !== undefined ? { retryAfterS: e.retryAfterS } : {}) }); });
+    this.channel.on('resumed', () => { const w = this.resumeWaiters.splice(0); for (const f of w) f(); });
     this.channel.on('frame', (f) => { this.chain = this.chain.then(() => this.onFrame(f)).catch(() => this.warn('frame_handler_failed')); });
     this.channel.on('snapshot-required', (e) => this.needCatchUp(e.snapshotSeq)); this.relay.on('welcome', (w) => { if (w.resume?.snapshot_required === true) this.needCatchUp(); });
     const w = await this.relay.connect(); this.me = { ...this.me, id: w.member.id, role: w.role as Role, slot: w.slot, ...(w.member.name ? { name: w.member.name } : {}) }; this.roster_.upsert({ ...this.me, ...(keys ? { keys: { device: this.d.deviceId, ...keys } } : {}) });
@@ -203,6 +206,16 @@ class Connection implements SessionHandle {
     const id = body.id ?? this.ids.next('msg'); if (typeof body.p === 'function') throw new SessionError('too_large', 'Write the size as "$ctBytes" to send this while offline.'); await this.opts.outbox!.push({ kind, id, ...(body.p ? { p: body.p as Record<string, unknown> } : {}), ...(body.secret ? { secret: body.secret } : {}) }); return { id, seq: 0 };
   }
   /** After the link is back: send what was kept, in order. Each goes out under the key of the moment (so a rotation in between is honoured) and keeps its id. */
+  /** After a reconnect the replay of what was missed comes first (a key rotation may be in it); frames written while the link was down are sent only once that replay has been applied, so they go out under the key that is current now, not the one that was. */
+  private resumePending = false; private resumeWaiters: (() => void)[] = [];
+  private async flushAfterResume(): Promise<void> {
+    if (this.resumePending) {
+      this.resumePending = false; let h: unknown; const timeout = new Promise<void>((res) => { h = this.clock.setTimeout(() => res(), RESUME_WAIT_MS); });
+      await Promise.race([new Promise<void>((res) => this.resumeWaiters.push(res)), timeout]); this.clock.clearTimeout(h as never);
+    }
+    await this.chain.catch(() => undefined); // the frames of the replay have been handled, a rotate_key among them
+    await this.flushOutbox();
+  }
   private async flushOutbox(): Promise<void> {
     if (!this.opts.outbox || this.flushing) return; this.flushing = true;
     try { await this.opts.outbox.drain(async (d) => { if (this.linkNow !== 'online') throw new Error('link_down'); if (!this.guest.hasKey() && payloadMode(d.kind) !== 'clear') throw new Error('no_key'); if (this.pendingKid && !this.ring.get(this.pendingKid)) await this.waitForKey(this.pendingKid); const p = d.p ? Object.fromEntries(Object.entries(d.p).map(([k, v]) => [k, v === CT_BYTES ? CT_BYTES : v])) : undefined; return this.sendRaw(d.kind, { id: d.id, ...(p ? { p } : {}), ...(d.secret ? { secret: d.secret } : {}) }, this.pendingKid && this.ring.get(this.pendingKid) ? this.pendingKid : undefined); }); } catch { this.warn('offline_flush_failed'); } finally { this.flushing = false; }
