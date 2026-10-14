@@ -21,4 +21,4 @@ export class PresencePublisher {
   dispose(): void { this.off = true; for (const t of [this.updTimer, this.typeTimer, this.clearTimer, this.awayTimer, this.curTimer]) if (t !== undefined) this.c.clearTimeout(t); }
 }
 /** One nudge per person per minute. */
-export class NudgeLimiter { private last = new Map<string, number>(); constructor(private readonly now: () => number = Date.now) {} allow(to: string): boolean { const t = this.now(); const l = this.last.get(to); if (l !== undefined && t - l < 60_000) return false; this.last.set(to, t); return true; } }
+export class NudgeLimiter { private last = new Map<string, number>(); constructor(private readonly now: () => number = Date.now) {} peek(to: string): boolean { const l = this.last.get(to); return l === undefined || this.now() - l >= 60_000; } allow(to: string): boolean { const t = this.now(); const l = this.last.get(to); if (l !== undefined && t - l < 60_000) return false; this.last.set(to, t); return true; } }

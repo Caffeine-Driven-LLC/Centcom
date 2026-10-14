@@ -18,11 +18,14 @@
 - **Snapshot blob:** `{"v":1,"cts":[{alg,kid,n,c},...]}`, the document cut into parts below the 192 KiB limit, each encrypted under the epoch key with AAD `{t:'event', id:'<snp>:<part>', from_dev:'snapshot', k:'snapshot'}`.
 - **Share links:** the fragment is `#k=<key>&kid=<kid>` (the key of the current epoch; `kid` defaults to `k1`).
 
+## Frames written while the link was down
+
+They are kept as plain content in the encrypted outbox and sealed only when they are sent. After a reconnect the client waits for the relay's replay (`sys.resumed`, at most 3 s) and for the frames of that replay to be handled before it sends them, so a key rotation that happened meanwhile (CT-CRYPTO 5.3) is applied first and they go out under the new epoch. Test: `packages/net/test/offline/session-offline.test.ts` (it fails with the first frame under the old epoch without this).
+
 ## Not done yet
 
-- Re-encrypting frames that were queued but never sent when an epoch changes (CT-CRYPTO section 5.3): they go out under the epoch that is current when they are sent.
 - Splitting a message larger than 192 KiB into chunks (it is refused with `too_large`).
-- Share-link guests end to end (parsing and view-only checks are tested; the mock has no share-link relay path).
+- Share-link guests on the mock relay (the mock has no share-link relay path); against the real backend they run in `pnpm dev:share` (a visitor reads the agent and cannot ask).
 - Host hand-over key transfer: a new host that never held the older epochs cannot grant them.
 - `control.policy` and `control.role` changes are applied to the local policy only.
 

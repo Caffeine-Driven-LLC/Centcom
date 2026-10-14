@@ -31,4 +31,11 @@ describe('the session page shows who is here (C083 roster wiring, C085)', () => 
     const a = fakeConn(fold([], 'editor')); const one = openPage(a.conn); await screen.findByLabelText('Message'); cleanup(); const b = fakeConn(fold([], 'editor')); const two = openPage(b.conn); await screen.findByLabelText('Message');
     const id1 = (one.connects[0] as { deviceId: string }).deviceId; const id2 = (two.connects[0] as { deviceId: string }).deviceId; expect(id1).toMatch(/^dev_[0-9A-F]{32}$/); expect(id1).not.toBe(id2);
   });
+  it('the roster Nudge button pokes a member (one presence.nudge, in the clear), a second poke inside a minute is refused, and a poke for you is announced', async () => {
+    const f = fakeConn(fold([], 'editor')); openPage(f.conn); fireEvent.click(await screen.findByRole('button', { name: /Participants, 2 online/ })); const dlg = await screen.findByRole('dialog', { name: 'Participants' });
+    const nudge = within(dlg).getAllByRole('button', { name: /Nudge/i })[0]!; fireEvent.click(nudge);
+    await waitFor(() => expect(f.sent.filter((x) => x.kind === 'presence.nudge')).toHaveLength(1)); expect(f.sent.find((x) => x.kind === 'presence.nudge')!.body).toEqual({ p: { to: HOST } });
+    fireEvent.click(nudge); await new Promise((r) => setTimeout(r, 50)); expect(f.sent.filter((x) => x.kind === 'presence.nudge')).toHaveLength(1);
+    act(() => f.emit({ kind: 'presence.nudge', from: HOST, p: { to: fold([], 'editor').me.member } })); expect(await screen.findByText(/Hana nudged you/)).toBeTruthy();
+  });
 });

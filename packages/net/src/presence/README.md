@@ -6,4 +6,6 @@
 - **Hearing:** `members()` gives each member's status, activity, agent count and cursor. A cursor disappears after 10 s without an update; a new update replaces the old one; a member who left shows `offline`; frames from someone outside the roster and our own are ignored. The post-welcome burst fills the model without us sending anything.
 - **Session side:** presence frames are not sequenced, so the session client reads them off the socket directly, verifies and decrypts cursors, and drops anything that does not verify without a word (`session.presenceDropped()` counts them). Encrypted presence frames carry a frame id (the signature covers it); the delivery channel's `sendEphemeral` now takes an `id` for that.
 
+- **Nudge:** `nudge(memberId)` sends `presence.nudge { to }` (a clear event the contract already has). Only an editor or the host may poke, one per target per 60 s (`NUDGE_GAP_MS`; the relay drops extras silently, so the client does not send them); it answers `sent`, `too_soon`, `not_allowed`, `unknown_member` or `self`. A nudge addressed to us from a member on the roster is the `nudged` event with the sender's id; others are ignored. The web app's roster Nudge button and its "Hana nudged you" announcement use the same rule.
+
 `ActivitySource` is `{ lastInputAt(): number; onInput(fn): () => void }`, for the TUI or web app to provide.

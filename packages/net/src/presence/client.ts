@@ -7,7 +7,10 @@ import { LatestWins, type Clock } from './throttle.js';
 
 export interface ActivitySource { lastInputAt(): number; onInput(fn: () => void): () => void }
 export interface PresenceOptions { clock: Clock; activity: ActivitySource; awayAfterMs?: number; warn?: (msg: string) => void }
-export interface PresenceEvents { changed: [string, MemberPresence]; cursor: [string, CursorInfo | undefined] }
+export interface PresenceEvents { changed: [string, MemberPresence]; cursor: [string, CursorInfo | undefined]; /** Someone poked us (`presence.nudge` addressed to this member); the argument is who. */ nudged: [string] }
+/** At most one nudge per target per 60 s (the relay drops extras silently, so the client does not send them). */
+export const NUDGE_GAP_MS = 60_000;
+export type NudgeResult = 'sent' | 'too_soon' | 'not_allowed' | 'unknown_member' | 'self';
 export const UPDATE_GAP_MS = 1000; export const CURSOR_GAP_MS = 100; export const TYPING_REFRESH_MS = 3000; export const TYPING_IDLE_MS = 5000; export const AWAY_AFTER_MS = 300_000;
 
 export class PresenceClient extends TypedEmitter<PresenceEvents> {
@@ -16,7 +19,7 @@ export class PresenceClient extends TypedEmitter<PresenceEvents> {
   private typingUntil = 0; private refreshTimer: unknown; private idleTimer: unknown; private awayTimer: unknown; private expiryTimer: unknown; private sentKey = ''; private cursorKey = '';
   private readonly updates: LatestWins<Record<string, unknown>>; private readonly cursors: LatestWins<Record<string, unknown>>; private disposed = false;
   /** how many presence frames we handed to the session (for tests and status) */
-  sent = { update: 0, cursor: 0 };
+  sent = { update: 0, cursor: 0, nudge: 0 }; private lastNudge = new Map<string, number>();
   constructor(private readonly session: SessionHandle, private readonly o: PresenceOptions) {
     super(); this.clock = o.clock; this.awayAfter = o.awayAfterMs ?? AWAY_AFTER_MS;
     this.updates = new LatestWins(this.clock, UPDATE_GAP_MS, (p) => this.emitUpdate(p)); this.cursors = new LatestWins(this.clock, CURSOR_GAP_MS, (s) => this.emitCursor(s));
@@ -49,6 +52,13 @@ export class PresenceClient extends TypedEmitter<PresenceEvents> {
     if (this.awayTimer !== undefined) this.clock.clearTimeout(this.awayTimer as never); const due = this.o.activity.lastInputAt() + this.awayAfter - this.clock.now();
     this.awayTimer = this.clock.setTimeout(() => { this.awayTimer = undefined; if (this.disposed) return; if (this.clock.now() - this.o.activity.lastInputAt() >= this.awayAfter) { if (!this.away) { this.away = true; if (this.userStatus !== 'busy') this.publish(); } } else this.armAway(); }, Math.max(0, due));
   }
+  /** Poke a member (editor or host only, one per target per minute). Best effort: the answer says what was done, nothing waits for the relay. */
+  nudge(to: string): NudgeResult {
+    const me = this.session.me; if (this.disposed) return 'not_allowed'; if (to === me.id) return 'self'; if (me.role !== 'editor' && me.role !== 'host') return 'not_allowed';
+    if (!this.session.roster().some((m) => m.id === to)) return 'unknown_member';
+    const now = this.clock.now(); const last = this.lastNudge.get(to); if (last !== undefined && now - last < NUDGE_GAP_MS) return 'too_soon';
+    this.lastNudge.set(to, now); this.sent.nudge++; void this.session.sendEvent('presence.nudge', { p: { to } }).catch(() => undefined); return 'sent';
+  }
   /** `null` clears it. Identical positions send nothing; at most 10 a second go out, the latest one. */
   setCursor(c: { path?: string; line?: number; col?: number; selEndLine?: number; selEndCol?: number } | null): void {
     const s: Record<string, unknown> = c ? { ...(c.path !== undefined ? { path: c.path } : {}), ...(c.line !== undefined ? { line: c.line } : {}), ...(c.col !== undefined ? { col: c.col } : {}), ...(c.selEndLine !== undefined ? { sel_end_line: c.selEndLine } : {}), ...(c.selEndCol !== undefined ? { sel_end_col: c.selEndCol } : {}) } : {};
@@ -58,6 +68,7 @@ export class PresenceClient extends TypedEmitter<PresenceEvents> {
   /* ------------------------------------------------------------- what we hear */
   private onEvent(e: DecodedEvent): void {
     if (e.kind === 'control.member_left' && typeof e.p?.member === 'string') { const m = this.model.offline(e.p.member, this.clock.now()); this.emit('changed', e.p.member, m); return; }
+    if (e.kind === 'presence.nudge') { if (e.from !== this.session.me.id && e.p?.to === this.session.me.id && this.session.roster().some((m) => m.id === e.from)) this.emit('nudged', e.from); return; }
     if (e.kind !== 'presence.update' && e.kind !== 'presence.cursor') return;
     if (e.from === this.session.me.id) return; if (!this.session.roster().some((m) => m.id === e.from)) { this.o.warn?.('presence.unknown_sender'); return; }
     const now = this.clock.now();
