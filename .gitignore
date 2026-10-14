@@ -25,3 +25,5 @@ apps/desktop/dist
 test-results/
 playwright-report/
 apps/site/dist
+docs/site/.vitepress/dist
+docs/site/.vitepress/cache

@@ -4,6 +4,7 @@ export default {
   title: 'Centcom', description: 'Documentation for Centcom', cleanUrls: true, lastUpdated: false,
   head: [],
   themeConfig: {
+    search: { provider: 'local' },
     nav: [{ text: 'Guide', link: '/guide/getting-started' }, { text: 'Reference', link: '/reference/cli/' }],
     sidebar: [
       { text: 'Start', items: guide([['getting-started', 'Getting started'], ['install', 'Install'], ['login', 'Login'], ['billing', 'Accounts and plans']]) },
