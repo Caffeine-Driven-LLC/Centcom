@@ -10,6 +10,8 @@ import { keypressSamples } from '../../packages/tui/src/perf/keypress.js';
 import { parseUnifiedDiff, renderDiffRows } from '../../packages/tui/src/diff/index.js';
 import { GuestIngest, initialGuestState, reduceGuestState, type DecodedFrame } from '../../packages/session/src/guest/index.js';
 import { mkdtempSync, rmSync } from 'node:fs';
+import v8 from 'node:v8';
+import vm from 'node:vm';
 import { tmpdir } from 'node:os';
 
 
@@ -68,6 +70,10 @@ export const BENCHES: Bench[] = [
   { id: 'cli.start.bundle', unit: 'ms', fast: false, budget: 400, gated: false, run: () => {
     const dir = mkdtempSync(join(tmpdir(), 'bench-bundle-')); try { const out = join(dir, 'cli.mjs'); execFileSync(process.execPath, [join(ROOT, 'tools/dev/bundle-cli.mjs'), out]); const env = { ...process.env, NODE_ENV: 'production', NODE_COMPILE_CACHE: join(dir, 'v8') };
       return time(() => { execFileSync(process.execPath, [out, '--version'], { env, stdio: 'ignore' }); }, 6, 2); } finally { rmSync(dir, { recursive: true, force: true }); } } },
+  /** The leak check of the card, with a criterion that can be measured: after 10,000 frames of a busy session are in the guest's state, 10,000 more are added; the heap that stays (after a full collection) must be at most 4 MB. It measures about 0.4 MB (the state keeps a bounded window, and the frames carry about 0.4 MB of text), so 4 MB leaves ten times that and a leak of whole frames or of the state itself would break it. */
+  { id: 'memory.leak.deltas.10k', unit: 'MB', fast: false, budget: 4, gated: true, run: () => {
+    v8.setFlagsFromString('--expose_gc'); const gc = vm.runInNewContext('gc') as () => void; const frames = sessionFrames(10_000); const later = sessionFrames(10_000).map((f, i) => ({ ...f, id: 'msg_g' + i, seq: 10_000 + i + 1 })) as DecodedFrame[];
+    const out: number[] = []; for (let r = 0; r < 3; r++) { let s = initialGuestState({ member: 'mem_x', role: 'editor' }); for (const f of frames) s = reduceGuestState(s, f); gc(); gc(); const h0 = process.memoryUsage().heapUsed; for (const f of later) s = reduceGuestState(s, f); gc(); gc(); out.push(Math.max(0, process.memoryUsage().heapUsed - h0) / 1024 / 1024); void s; } return out; } },
   { id: 'memory.transcript.10k', unit: 'MB', fast: false, budget: 300, gated: false /* the harness itself (tsx and the loaded packages) uses about 300 MB; this gates once it is measured in the packaged CLI */, run: () => { const items = transcriptItems(10_000); const l = new TranscriptLayout().update(items, 100); l.slice(0, 40); globalThis.gc?.(); return [process.memoryUsage().rss / 1024 / 1024]; } },
 ];
 function join(...p: string[]) { return p.join('/'); }
