@@ -282,8 +282,8 @@
    "note": "merged in #187"
   },
   "C098": {
-   "pct": 0.88,
-   "note": "bench harness (calibration, stats, budgets, baseline compare with normalisation, noise handling, results schema, nightly workflow) with 12 metrics: crypto, envelope, mascot, transcript scroll and layout, diff paint (5,000 lines), guest reducer rate, resume replay (5,000 frames), version, memory, keypress; gaps: first-prompt and the 10,000-delta leak check not measured; version/memory not gating until the packaged CLI"
+   "pct": 1,
+   "note": "merged in #191"
   },
   "C096": {
    "pct": 0.8,
@@ -391,7 +391,7 @@
   },
   "C087": {
    "pct": 1,
-   "note": "merged in #186"
+   "note": "merged in #191"
   },
   "C088": {
    "pct": 0.9,
