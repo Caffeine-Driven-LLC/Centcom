@@ -15,11 +15,12 @@ export function PresenceAvatar({ member, selfSlot, status = 'online', phase }: {
 export const ENTER_MS = 160; export const LEAVE_MS = 280;
 export function PresenceStack({ members, me, status, onOpen }: { members: Member[]; me: string; status(id: string): Status; onOpen(): void }): React.JSX.Element {
   const reduced = useReducedMotion(); const seen = useRef<Map<string, Member> | undefined>(undefined); const [entering, setEntering] = useState<ReadonlySet<string>>(new Set()); const [leaving, setLeaving] = useState<Member[]>([]);
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]); const later = (f: () => void, ms: number): void => { timers.current.push(setTimeout(f, ms)); }; useEffect(() => () => { for (const t of timers.current) clearTimeout(t); timers.current = []; }, []); // a page that closes leaves no timer behind
   useEffect(() => { // people who come and go are animated; the first list is not, and nothing moves under reduced motion
     const prev = seen.current; const now = new Map(members.map((m) => [m.id, m])); seen.current = now; if (!prev || reduced) return;
     const added = members.filter((m) => !prev.has(m.id)).map((m) => m.id); const gone = [...prev.values()].filter((m) => !now.has(m.id));
-    if (added.length) { setEntering((e) => new Set([...e, ...added])); setTimeout(() => setEntering((e) => new Set([...e].filter((x) => !added.includes(x)))), ENTER_MS); }
-    if (gone.length) { setLeaving((l) => [...l.filter((x) => !gone.some((g) => g.id === x.id)), ...gone]); setTimeout(() => setLeaving((l) => l.filter((x) => !gone.some((g) => g.id === x.id))), LEAVE_MS); }
+    if (added.length) { setEntering((e) => new Set([...e, ...added])); later(() => setEntering((e) => new Set([...e].filter((x) => !added.includes(x)))), ENTER_MS); }
+    if (gone.length) { setLeaving((l) => [...l.filter((x) => !gone.some((g) => g.id === x.id)), ...gone]); later(() => setLeaving((l) => l.filter((x) => !gone.some((g) => g.id === x.id))), LEAVE_MS); }
   }, [members, reduced]);
   const self = members.find((m) => m.id === me) ?? leaving.find((m) => m.id === me); const online = members.filter((m) => status(m.id) !== 'offline').length; const shown = members.slice(0, 5); const more = members.length - shown.length;
   return <button type="button" className="cc-pstack" aria-label={`Participants, ${online} online`} onClick={onOpen}>{shown.map((m) => <PresenceAvatar key={m.id} member={m} selfSlot={self?.slot ?? 0} status={status(m.id)} {...(entering.has(m.id) ? { phase: 'enter' as const } : {})} />)}{leaving.filter((m) => !members.some((x) => x.id === m.id)).map((m) => <PresenceAvatar key={`gone-${m.id}`} member={m} selfSlot={self?.slot ?? 0} status="offline" phase="leave" />)}{more > 0 ? <span className="cc-pmore">+{more}</span> : null}</button>;
