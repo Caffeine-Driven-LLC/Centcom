@@ -278,8 +278,8 @@
    "note": "pairing code, CPace key exchange, host/guest flow with confirmation, attempt limit and ban list, reconnect token, session trust store, fingerprint binding, redaction tests; gap: no real socket run; host server (C072) not built"
   },
   "C097": {
-   "pct": 0.9,
-   "note": "centcom doctor (11 checks in parallel with 3 s network limits, one next step per problem, exit codes 0/1/2, JSON schema, --check, --bundle tar.gz) including the relay and the stored sign-in, and local crash reports (redaction corpus of 30, retention of 10, no egress), centcom crash list/show/delete; run against the local backend signed in and out; gap: recent log lines are not fed from the app logger"
+   "pct": 1,
+   "note": "merged in #187"
   },
   "C098": {
    "pct": 0.88,
@@ -290,28 +290,28 @@
    "note": "one command list drives centcom --help (80 columns), centcom help [topic], per-command --help, the CLI reference pages and the man pages (docs:gen, docs:check fails on drift); docs site pages (guide, privacy page from the crypto contract, env and exit codes, terminal-app guide, releases page, configuration reference generated from the schema); link/anchor, flag, env-var and command checks (every centcom line in the docs names a real command; centcom update was missing from the list and is now there); gaps: VitePress build/Lighthouse and the external link checker are not set up (VitePress is not installed), no spell check, /help text source for the TUI"
   },
   "C068": {
-   "pct": 0.9,
-   "note": "update client: check (channel, platform, arch, pre-release and downgrade rules, required flag), resumable size-capped download, hash + Ed25519 verification before apply (two keys), atomic apply with .prev and rollback, managed-install detection, background-check schedule, centcom update with exit 10; reads both manifest spellings (contract mismatch noted); gaps: production keys empty, no run against real signed artifacts, startup background check not wired into the app; checked on every start from the app (bootUpdate), with update.check/auto/channel"
+   "pct": 1,
+   "note": "merged in #187"
   },
   "C066": {
    "pct": 0.88,
    "note": "notifications client: inbox list/read/read-all, 60 s polling with backoff while a session is shared, /inbox and /inbox read in the terminal app (run against the real backend), the service's sys.notice in the local table; gaps: OS notices not raised from the terminal app, not run against fixtures for all 14 categories, locale packs"
   },
   "C100": {
-   "pct": 0.6,
-   "note": "2026-10-13: pnpm gate with G1 built, conformance over client-read contracts, update line needs every scenario (#173); gaps: G2 to G5 not built so G6 fails, PAGE/AUTH/RESUME/DEEPLINK suites waived, G1 never run against a real backend"
+   "pct": 1,
+   "note": "merged in #187"
   },
   "C099": {
    "pct": 0.85,
    "note": "security baseline: pnpm security:check (secret scan, install scripts, exact pinning [waived to 2026-12-31 until C001], lockfile integrity, workflow lint, licence allow-list, audit, fails closed), waivers, CycloneDX 1.5 SBOM per artifact, redaction fuzz, Renovate config, threat model, checklist, review log; the keystore scan now runs after a real sign-in (tools/dev/keystore-live.py: 5 keychain secrets, none anywhere else); gaps: SBOM not attached to a real release, full CycloneDX schema, web CSP review, runner env review"
   },
   "C069": {
-   "pct": 0.8,
-   "note": "centcom webhooks list/show/create/update/rotate-secret/delete/test/deliveries/redeliver/verify: https-only and event-type validation from the contract list, show-once secret (TTY or --show-secret, never in --json otherwise), confirm/--yes on delete, friendly error mapping, local signature verification with overlap and tolerance (constant-time, exit 3); gaps: not wired into main.tsx until the auth lane (C052) lands, no webhook fixtures in contracts/fixtures (tests generate signatures), 18 event types in the contract vs 20+ in the card"
+   "pct": 1,
+   "note": "merged in #187"
   },
   "C070": {
-   "pct": 0.8,
-   "note": "centcom audit list and export: cursor paging (<=200 per request, no offset), filters, RFC 3339 and relative times, sanitised table, exit 4 on no match, export with Idempotency-Key, 2/4/8/10 s polling and 5 minute limit, 0600 download with partial-file cleanup and no overwrite without --force, plan and role messages, no token or signed URL in output; gaps: not wired into main.tsx until the auth lane lands, not run against the mock backend audit data (tests use scripted answers)"
+   "pct": 1,
+   "note": "merged in #187"
   },
   "C057": {
    "pct": 0.85,
@@ -414,8 +414,8 @@
    "note": "merged in #108"
   },
   "C095": {
-   "pct": 0.8,
-   "note": "2026-10-13: install detection, 6h schedule, apply with health check and rollback, crash recovery, downgrade rules, too-old screen, signed channel store and mock release server with 12 end-to-end scenarios (#173); gaps: production keys, real release host and backend endpoint, npm package name, no update.check_interval_h key"
+   "pct": 1,
+   "note": "merged in #187"
   }
  },
  "next": [
