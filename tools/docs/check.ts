@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { COMMANDS } from '../../apps/cli/src/help/commands.js';
 import { topHelp } from '../../apps/cli/src/help/render.js';
 import { ENV_VARS, RELAY_NEVER, RELAY_VISIBLE, TRAFFIC_NOTE } from '../../apps/cli/src/help/topics.js';
+import { spellProblems } from './spell.js';
 import { check as generatedDrift, sourcesText } from './gen-cli-reference.js';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url)); const SITE = join(ROOT, 'docs/site');
@@ -46,12 +47,19 @@ export function commandProblems(pages: Record<string, string>): Problem[] {
   return out;
 }
 
+/** Every page of the guide must be reachable from the sidebar (an orphan page is one nobody can find). */
+export function orphanProblems(files: string[], sidebar: string): Problem[] {
+  return files.filter((f) => /\/guide\/[^/]+\.md$/.test(f) && !f.endsWith('privacy-relay.md')).filter((f) => !new RegExp(`'${f.replace(/^.*\/guide\//, '').replace(/\.md$/, '')}'`).test(sidebar)).map((f) => ({ where: relative(ROOT, f), what: 'is not in the sidebar of docs/site/.vitepress/config.ts' }));
+}
+
 export function all(): Problem[] {
   const out: Problem[] = generatedDrift().map((p) => ({ where: p, what: 'is out of date (run pnpm docs:gen)' }));
   out.push(...flagProblems(topHelp('0.0.0')));
   out.push(...envProblems(readFileSync(join(SITE, 'reference/env.md'), 'utf8'), sourcesText()));
   out.push(...commandProblems(Object.fromEntries(walk(SITE).filter((f) => f.endsWith('.md')).map((f) => [relative(ROOT, f), readFileSync(f, 'utf8')]))));
   out.push(...privacyProblems(readFileSync(join(SITE, 'guide/privacy-relay.md'), 'utf8'))); out.push(...linkProblems(walk(SITE).filter((f) => f.endsWith('.md'))));
+  const pages = walk(SITE).filter((f) => f.endsWith('.md')); out.push(...spellProblems(Object.fromEntries(pages.map((f) => [relative(ROOT, f), readFileSync(f, 'utf8')]))));
+  out.push(...orphanProblems(pages, readFileSync(join(SITE, '.vitepress/config.ts'), 'utf8')));
   const priv = readFileSync(join(SITE, 'guide/privacy.md'), 'utf8'); if (!priv.includes('privacy-relay.md')) out.push({ where: 'docs/site/guide/privacy.md', what: 'does not include the generated relay list' });
   return out;
 }

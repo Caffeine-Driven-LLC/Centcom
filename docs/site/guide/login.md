@@ -8,4 +8,8 @@ centcom whoami
 centcom logout
 ```
 
-Your sign-in is stored in the operating system's keychain, never in a file. `centcom devices` lists the computers signed in to your account and can remove one.
+Your sign-in and your device keys are stored in the operating system's keychain, never in a file. `centcom devices` lists the computers signed in to your account and can remove one (`centcom devices revoke <dev_id>`). `centcom logout --revoke-device` also removes this computer from the account.
+
+On a computer with no keychain (a server or a container), `centcom login` signs in for that run only. `centcom doctor` checks the keychain.
+
+Plans and limits are in [Accounts and plans](./billing.md).
