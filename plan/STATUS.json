@@ -30,8 +30,8 @@
    "note": "runner and runnerd; gaps: windows pipe, preflight wiring, runnerd logs, daemon-level tests"
   },
   "C014": {
-   "pct": 1,
-   "note": "merged in #177"
+   "pct": 0.9,
+   "note": "state machine and emitter; property test over random legal streams (400 runs: states on the contract list, calm state after a turn, idle after interrupt, open approval never displaced, crash is final); gaps: golden transcripts from real parsers"
   },
   "C015": {
    "pct": 1,
@@ -46,16 +46,16 @@
    "note": "context view in the app: engine-reported warnings at 75% and when nearly full, /compact through the engine when it has the capability; meter from usage reports"
   },
   "C020": {
-   "pct": 1,
-   "note": "merged in #181"
+   "pct": 0.9,
+   "note": "bundled pack (5 skills + checksummed manifest, checked in CI), installer with plan/apply/planHash, Claude Code files and a delimited AGENTS.md block, modified-file protection with a per-file overwrite prompt (--overwrite for all), atomic writes and symlink/escape refusal, install record, centcom skills command, /skills loaded lists what Claude Code itself loaded (from its start message, run against the real claude); gap: Codex has no loaded-skills list to read"
   },
   "C025": {
    "pct": 1,
    "note": "@centcom/agent/events: createBus (ordered, re-entrancy queue, error isolation, bounded streams, MaxListeners), AgentEventMap catalogue of 18 events with wire-safe marking; nothing emits to it yet (runner C013 will)"
   },
   "C026": {
-   "pct": 1,
-   "note": "merged in #181"
+   "pct": 0.95,
+   "note": "append-only redacted session log with header v2, flush cadence, segments, line cap, lock, index rebuild, engine session map, resumeSession with fresh-with-summary fallback, toSnapshotEvents, app and CLI wired (-c, --resume [id] with picker), old saves migrated; session.retention_days and session.persist now exist and retention actually runs at start (it was never called before), checked in a real terminal; gap: none known"
   },
   "C028": {
    "pct": 0.95,
@@ -66,12 +66,12 @@
    "note": "ledger (reported cost only, running-total deltas, agent minutes, budget alerts, outbox with cap and drop order), /usage, wired into the app; gap: ledger replay from the golden transcripts of real CLIs"
   },
   "C030": {
-   "pct": 1,
-   "note": "merged in #177"
+   "pct": 0.9,
+   "note": "interrupt controller, 3 s/8 s signal ladder to whole process groups, registered pids only, Codex protocol-then-ladder with restart on the same thread, approvals denied and late ones refused, partial answer kept, ctrl+c semantics with exit 130 in the app and -p; agent.turn_timeout_s stops a turn that runs too long (checked in a real terminal); gaps: interrupt receipt (the CLI advertises none), stale index.lock cleanup (needs a decision on deleting a lock automatically)"
   },
   "C031": {
-   "pct": 1,
-   "note": "merged in #179"
+   "pct": 0.9,
+   "note": "terminal capability module (tier matrix, unicode, half-block, hyperlink/paste flags, typed CENTO_* env with warnings, OSC 11 background query with 150 ms bound, layout class, mascotAllowed, debounced watchSize); the app now starts from it for colour depth (shared detection, the colour setting on top) and says an unclear CENTO_* value in words; gaps: components still use the older theme helpers, Unicode/ASCII fallback is not switched by caps.unicode yet"
   },
   "C032": {
    "pct": 0.85,
@@ -82,8 +82,8 @@
    "note": "Cento component with per-frame durations, frame cache, hero/mini sizes (8x14 and 2x6), 256-colour and ASCII fallbacks, recolouring, animation budget of 6; gaps: no golden files against play.py, app still draws through PixelView"
   },
   "C034": {
-   "pct": 1,
-   "note": "merged in #179"
+   "pct": 0.92,
+   "note": "Shell frame (header/scrollback/toast/prompt/footer, 100-col rail, overlay, too-small state), renderApp with debounced resize, alt-screen guard for exit/SIGINT/SIGTERM/uncaught error, action registry with focus stack, grapheme-aware text helpers; --no-alt-screen wired and checked in a real terminal; gaps: App.tsx not moved onto the Shell, no lint rule for raw Text; resize repaints the whole frame, small-terminal layouts (pickers, help, overlays), width tests, tab title and terminal restore on every exit path"
   },
   "C035": {
    "pct": 0.95,
@@ -94,32 +94,32 @@
    "note": "virtualised layout with per-block cache (10k blocks), follow tail with \"N new\" indicator, ctrl+home/end, resize anchor, 5,000-block cap, terminal sanitising of every string, session-event reducer (seq order, delta reorder/dedupe/gap) and member identity rendering; loadRange for older blocks waits for remote history"
   },
   "C037": {
-   "pct": 1,
-   "note": "merged in #176"
+   "pct": 0.9,
+   "note": "unified-diff parser with caps (2,000 lines, 200 files, 50k lines in <300 ms), two-string differ, camelCase-aware word highlights, row layout with numbered gutter, wrapping, gap folding/expansion, binary/rename rows, DiffView with focusable gaps, diff.share adapter; the approval prompt now shows an edit's numbered diff (checked with the real Claude Code); gap: the transcript still uses util/diff.ts; diff view notes rows"
   },
   "C038": {
-   "pct": 1,
-   "note": "merged in #176"
+   "pct": 0.95,
+   "note": "ApprovalView from either engine or a shared session, key state machine (scopes, edit only when editable, 300 ms grace, y+Enter for risky, expiry deny), PermissionPrompt box in the app (heavy border for destructive, diff, clickable answers, no deadline shown when the engine gives none), checked in a real terminal with the real Claude Code; gap: queue host and view-all screen not built; role-awareness and the edit key are not reachable from the app path yet"
   },
   "C039": {
    "pct": 0.8,
    "note": "status fields and layout with the drop order constant, branch cut, quota/role/connectivity chips as words, cost format, service banner from a local table, statusText sentence, StatusHeader/Footer/ServiceBanner; gap: the app still draws its own header/status line; status.showCost not read from config; footer shows context, session and week limits; narrow layouts"
   },
   "C040": {
-   "pct": 1,
-   "note": "merged in #176"
+   "pct": 0.92,
+   "note": "spinner module in the app: 10-frame glyph at 80 ms, time after 2 s, tokens after 5 s, interrupt hint, verb pools by state, plain words in serious states or with ui.spinner plain; gap: the older VerbRotator still feeds the title"
   },
   "C041": {
    "pct": 0.9,
    "note": "palette core: DP fuzzy matcher with indices, engine (debounce, abort, slow-provider append, fixed group order, recent), list and file providers (git ls-files or walk, 20k cap, sliced scoring), view and live component (60/cols-4 wide, 8 rows + more row, wrap-around keys), palette.* actions; gap: the app still shows its older palette, sessions/skills providers not wired; palette with ranking and click, entries from the command list; /settings and pickers on one picker model"
   },
   "C042": {
-   "pct": 1,
-   "note": "merged in #176"
+   "pct": 0.85,
+   "note": "state labels with tier for all 64 states, sort (tier, needs you, age), event reducer, rail/overlay FleetPanel, exit outcomes, key handling; the panel in the app takes its words, glyphs and order from the same table; gaps: the app keeps its panel with mini mascots instead of the rail rows, memberColor from theme; /fleet as a menu: start, list, preview, stop, remove, clean; Team section in the desktop session panel"
   },
   "C044": {
-   "pct": 1,
-   "note": "merged in #176"
+   "pct": 0.9,
+   "note": "toast controller in the app (one at a time, queue of 20, severity preemption, errors stay until ctrl+y/Esc, repeats counted xN, action keys), sys.notice table shown for the service's notices; gaps: bus event toast.dismissed not wired"
   },
   "C045": {
    "pct": 1,
@@ -154,20 +154,20 @@
    "note": "canvas player: state map, scheduler cap of 6, dwell and collapse, lazy categories, five colours, reduced motion; gaps: bridge and one-shot rules, real pixel-diff and timing benchmark"
   },
   "C101": {
-   "pct": 1,
-   "note": "merged in #177"
+   "pct": 0.9,
+   "note": "engine layer: bounded event queue (past 5,000 waiting events text is merged without gaps in the sequence, chatter dropped with one notice, everything else kept), the stream validator run over the Claude adapter, 8 golden transcripts including denial and rate limit; gap: the validator over the Codex adapter's recorded run"
   },
   "C102": {
-   "pct": 1,
-   "note": "merged in #177"
+   "pct": 0.92,
+   "note": "claude engine with a secured approval bridge (per-run token, private socket, timeout, fail closed); prompt over stdin (checked with the real claude), first-event timeout, subagent.started/done always paired and tools closed on exit; AskUserQuestion becomes a list or typed answer; --effort; gaps: bypass gate, version check at spawn (done in C104's detector, not in the engine), fake CLI executable"
   },
   "C103": {
    "pct": 0.9,
    "note": "codex app-server engine tested against a protocol-faithful fake; no real turn yet. Real-Codex checklist: docs/codex-verification.md, recorder: tools/codex/record.ts; verified on a real Codex (codex-cli 0.161.0): a real turn, questions (needs the default_mode_request_user_input flag, passed per process), /effort, models, cancel. Not tried live: secret and multi-question requests"
   },
   "C104": {
-   "pct": 1,
-   "note": "merged in #179"
+   "pct": 0.9,
+   "note": "provider detection and commands; the app now checks at start, in the background, that the tool is signed in and in range and says so with the next step (run against the real claude and codex); gaps: message copy sign-off (the app's error guide and the provider messages are two sets of words), runtime fs spy, CLI-level hang test"
   },
   "C105": {
    "pct": 0.8,
@@ -178,20 +178,20 @@
    "note": "one CI job (typecheck, tests, web build, plan, progress, protocol); card gaps: job split and OS matrix, SHA pins, policy scripts, pr-title, actionlint"
   },
   "C050": {
-   "pct": 1,
-   "note": "merged in #177"
+   "pct": 0.9,
+   "note": "print mode with text/json/stream-json in the card shape, --input-format stream-json (one user message per line, one conversation), normalised-name allow-list, redaction, exit-code table (0-6, 124, 130), stdin cap with fenced input, --allow rules, --permission-mode, --timeout, --max-turns, --cwd, -c/--resume, EPIPE handled; run through bin/centcom with piped input; gap: automated spawned-binary pipe tests"
   },
   "C004": {
-   "pct": 1,
-   "note": "merged in #177"
+   "pct": 0.95,
+   "note": "layered config used everywhere; precedence tested for every key (flag > env > project > user > default), project files limited to project keys, the short CENTO_* names; new keys agent.turn_timeout_s, session.persist, session.retention_days; a setting named like a credential (context.digest_tokens) used to void the whole user file, fixed; gaps vs card: a bad file or a secret key warns and ignores that file instead of throwing, sync writer"
   },
   "C003": {
    "pct": 0.95,
    "note": "protocol package complete in practice; gaps: exit 2 on bad contract input, unknown-keyword rejection, --contracts flag"
   },
   "C005": {
-   "pct": 1,
-   "note": "merged in #179"
+   "pct": 0.9,
+   "note": "redacting logger and file sink; file sink tested on a real disk (12 MiB gives 3 files, 0600/0700, planted token in no file, full-disk note) with an injected clock for the dropped note; gap: redaction table size"
   },
   "C007": {
    "pct": 0.95,
@@ -262,48 +262,48 @@
    "note": "entitlements fetch with ETag, schema check, memory and disk cache, gates for hosted features with reasons and upgrade links, LAN/local never gated; built and tested against the mock; gap: no real billing links exercised"
   },
   "C065": {
-   "pct": 1,
-   "note": "merged in #178"
+   "pct": 0.9,
+   "note": "usage reporter wired to a shared session: the ledger outbox goes to the reporter tagged with the hosted session id, only events made while sharing, hosted-only boundary, spool with caps and crash recovery, batches with stable idempotency keys, quota tracker; gap: a batch reaching the real backend was not observed (sessions shorter than the flush interval)"
   },
   "C067": {
-   "pct": 1,
-   "note": "merged in #178"
+   "pct": 0.9,
+   "note": "flags client in the app for the two agent kill switches (provider.claude_code, provider.codex): cached, never waited for, a switched-off agent is not started, a running one is never stopped; gaps: the local backend has no /v1/flags (404), so only the fail-safe path ran live; no other feature has registered a flag"
   },
   "C071": {
-   "pct": 0.85,
-   "note": "mDNS advertiser and browser (probe, announce, goodbye, query schedule, TTL expiry, name conflicts, member-count updates), DNS-SD codec, TXT validation, fuzz, no-secrets packet scan, --no-announce, mdns-unavailable path, centcom lan scan; gap: not run on a real network (fake bus only)"
+   "pct": 0.9,
+   "note": "mDNS advertiser and browser (probe, announce, goodbye, query schedule, TTL expiry, name conflicts, member-count updates), DNS-SD codec, TXT validation, fuzz, no-secrets packet scan, --no-announce, centcom lan scan; run on the real network (real UDP multicast on wlan0/docker/tailscale interfaces: found by the real centcom lan scan, goodbye removes it, tools/dev/lan-live.ts); gap: it also announces container and virtual interface addresses"
   },
   "C073": {
    "pct": 0.85,
    "note": "pairing code, CPace key exchange, host/guest flow with confirmation, attempt limit and ban list, reconnect token, session trust store, fingerprint binding, redaction tests; gap: no real socket run; host server (C072) not built"
   },
   "C097": {
-   "pct": 1,
-   "note": "merged in #180"
+   "pct": 0.9,
+   "note": "centcom doctor (11 checks in parallel with 3 s network limits, one next step per problem, exit codes 0/1/2, JSON schema, --check, --bundle tar.gz) including the relay and the stored sign-in, and local crash reports (redaction corpus of 30, retention of 10, no egress), centcom crash list/show/delete; run against the local backend signed in and out; gap: recent log lines are not fed from the app logger"
   },
   "C098": {
-   "pct": 1,
-   "note": "merged in #180"
+   "pct": 0.88,
+   "note": "bench harness (calibration, stats, budgets, baseline compare with normalisation, noise handling, results schema, nightly workflow) with 12 metrics: crypto, envelope, mascot, transcript scroll and layout, diff paint (5,000 lines), guest reducer rate, resume replay (5,000 frames), version, memory, keypress; gaps: first-prompt and the 10,000-delta leak check not measured; version/memory not gating until the packaged CLI"
   },
   "C096": {
-   "pct": 1,
-   "note": "merged in #181"
+   "pct": 0.8,
+   "note": "one command list drives centcom --help (80 columns), centcom help [topic], per-command --help, the CLI reference pages and the man pages (docs:gen, docs:check fails on drift); docs site pages (guide, privacy page from the crypto contract, env and exit codes, terminal-app guide, releases page, configuration reference generated from the schema); link/anchor, flag, env-var and command checks (every centcom line in the docs names a real command; centcom update was missing from the list and is now there); gaps: VitePress build/Lighthouse and the external link checker are not set up (VitePress is not installed), no spell check, /help text source for the TUI"
   },
   "C068": {
    "pct": 0.9,
    "note": "update client: check (channel, platform, arch, pre-release and downgrade rules, required flag), resumable size-capped download, hash + Ed25519 verification before apply (two keys), atomic apply with .prev and rollback, managed-install detection, background-check schedule, centcom update with exit 10; reads both manifest spellings (contract mismatch noted); gaps: production keys empty, no run against real signed artifacts, startup background check not wired into the app; checked on every start from the app (bootUpdate), with update.check/auto/channel"
   },
   "C066": {
-   "pct": 1,
-   "note": "merged in #178"
+   "pct": 0.88,
+   "note": "notifications client: inbox list/read/read-all, 60 s polling with backoff while a session is shared, /inbox and /inbox read in the terminal app (run against the real backend), the service's sys.notice in the local table; gaps: OS notices not raised from the terminal app, not run against fixtures for all 14 categories, locale packs"
   },
   "C100": {
    "pct": 0.6,
    "note": "2026-10-13: pnpm gate with G1 built, conformance over client-read contracts, update line needs every scenario (#173); gaps: G2 to G5 not built so G6 fails, PAGE/AUTH/RESUME/DEEPLINK suites waived, G1 never run against a real backend"
   },
   "C099": {
-   "pct": 1,
-   "note": "merged in #180"
+   "pct": 0.85,
+   "note": "security baseline: pnpm security:check (secret scan, install scripts, exact pinning [waived to 2026-12-31 until C001], lockfile integrity, workflow lint, licence allow-list, audit, fails closed), waivers, CycloneDX 1.5 SBOM per artifact, redaction fuzz, Renovate config, threat model, checklist, review log; the keystore scan now runs after a real sign-in (tools/dev/keystore-live.py: 5 keychain secrets, none anywhere else); gaps: SBOM not attached to a real release, full CycloneDX schema, web CSP review, runner env review"
   },
   "C069": {
    "pct": 0.8,
@@ -338,8 +338,8 @@
    "note": "fleet sync: publishers (spawn with plan-limit error, state with map validation, local-only states refused, 2/s per agent and no repeats, exit, encrypted branch.update, conflicts), lock arbitration through the relay with keyed path hashes (grant, deny, release, expire, reconnect re-ask), pure fleet model (replay deterministic, sender owns the agent, unknown states generic), bus bridge; three members on the mock relay incl. a lock clash and a conflict; mock relay gained lock arbitration and an agent limit; gaps: not wired to the real LockClient and fleet panel, state map has 64 names (card says 60); 2026-10-13: branch mode now live: publishers wired through the session bridge, TeamModel, locks and conflicts, handoff offers, mode chosen at session creation; checked against a live backend with two accounts (pnpm dev:branch-check)"
   },
   "C063": {
-   "pct": 1,
-   "note": "merged in #178"
+   "pct": 0.85,
+   "note": "offline: NetStateMonitor now wired to a shared session (status chip and notices in words; reads the status feed in the contract's words), encrypted durable outbox with caps, corruption recovery and in-order replay after reconnect, file seq store, resume reporting, wake detector, requireOnline and 24 h display rule; tested on the mock relay with maintenance mode; gaps: frames buffered offline may go under the older key if the rotate_key replay is still coming, no real kill/restart of the relay run live"
   },
   "C072": {
    "pct": 0.8,
@@ -351,7 +351,7 @@
   },
   "C075": {
    "pct": 0.8,
-   "note": "host session engine over the LAN server: role matrix, queue machine with caps and auto-approval, kick/mute/role/transfer/policy/end, approvals, locks with ttl, roster, file history with snapshots (latest 3), host actions through the loopback link; tested with unit tests and host plus guests over loopback; gaps: no host failover, no payload schema check per kind, the history window and snapshot serving to late joiners are tested only at the persistence level, the agent runner and event bus are not wired; 2026-10-13: HostBridge decides approvals for the owner, and in branch mode every person runs their own agent"
+   "note": "host session engine over the LAN server: role matrix, queue machine with caps and auto-approval, kick/mute/role/transfer/policy/end, approvals, locks with ttl, roster, file history with snapshots (latest 3), host actions through the loopback link; tested with unit tests and host plus guests over loopback; gaps: no host failover, no payload schema check per kind, the history window and snapshot serving to late joiners are tested only at the persistence level, the agent runner and event bus are not wired; 2026-10-13: HostBridge decides approvals for the owner, and in branch mode every person runs their own agent; 2026-10-14: a request's own message could lose its queue item when the store told the bridge late (CI only): fixed with a test that reproduces it"
   },
   "C076": {
    "pct": 0.75,
