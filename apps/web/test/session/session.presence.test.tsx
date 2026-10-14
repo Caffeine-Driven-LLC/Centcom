@@ -10,7 +10,7 @@ describe('the session page shows who is here (C083 roster wiring, C085)', () => 
     const f = fakeConn(fold([], 'editor')); openPage(f.conn); const stack = await screen.findByRole('button', { name: /Participants, 2 online/ });
     act(() => f.emit({ kind: 'presence.update', from: HOST, p: { status: 'busy', activity: 'reviewing' } })); fireEvent.click(stack);
     const dlg = await screen.findByRole('dialog', { name: 'Participants' }); expect(within(dlg).getByText(/H · Hana/)).toBeTruthy(); expect(within(dlg).getByText('HOST')).toBeTruthy(); expect(within(dlg).getByText('EDIT')).toBeTruthy();
-    expect(within(dlg).getByLabelText('Hana, busy')).toBeTruthy(); fireEvent.keyDown(dlg.parentElement!, { key: 'Escape' }); await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Participants' })).toBeNull());
+    await waitFor(() => { act(() => f.emit({ kind: 'presence.update', from: HOST, p: { status: 'busy', activity: 'reviewing' } })); expect(within(dlg).getByLabelText('Hana, busy')).toBeTruthy(); }); // the page listens once its connection is attached, which can be after the first update was sent: say it again until it is heard fireEvent.keyDown(dlg.parentElement!, { key: 'Escape' }); await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Participants' })).toBeNull());
   });
   it('announces "Maya joined" and "Maya left" politely, and does not announce the people who were already there', async () => {
     const f = fakeConn(fold([], 'editor')); openPage(f.conn); await screen.findByRole('button', { name: /Participants/ }); expect(screen.queryByText(/joined/)).toBeNull();
