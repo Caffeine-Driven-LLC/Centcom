@@ -8,7 +8,8 @@ export function parseJoinTarget(raw: string): JoinTarget | undefined {
     if (u.protocol !== 'https:' && u.protocol !== 'http:' && u.protocol !== 'centcom:') return undefined;
     const parts = (u.protocol === 'centcom:' ? [u.hostname, ...u.pathname.split('/')] : u.pathname.split('/')).filter(Boolean);
     const [kind, token] = parts; if (!token || !TOKEN.test(token)) return undefined;
-    if (kind === 'i') return { kind: 'invite', token }; if (kind === 'j') return { kind: 'watch', token, fragment: u.hash };
+    /* the links of CT-DEEPLINK (contracts/08-integrations.md): /j/ (join) and /i/ (workspace invite) carry an invite token, /g/ (share) a watch-only token, /s/ a session id */
+    if (kind === 'j' || kind === 'i' || kind === 'join' || kind === 'invite') return { kind: 'invite', token }; if (kind === 'g' || kind === 'share') return { kind: 'watch', token, fragment: u.hash };
     const sid = parts.find((p) => SES.test(p)); return sid ? { kind: 'session', id: sid } : undefined;
   }
   return TOKEN.test(s) ? { kind: 'invite', token: s } : undefined;

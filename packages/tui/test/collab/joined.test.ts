@@ -11,7 +11,9 @@ describe('what people paste to join', () => {
   it('knows a session id, an invite link or token, and a watch-only link (with its key kept apart)', () => {
     expect(parseJoinTarget(SID)).toEqual({ kind: 'session', id: SID }); expect(parseJoinTarget(`  ${SID}\n`)).toEqual({ kind: 'session', id: SID });
     expect(parseJoinTarget(`https://centcom.dev/i/${TOK}`)).toEqual({ kind: 'invite', token: TOK }); expect(parseJoinTarget(`centcom://i/${TOK}`)).toEqual({ kind: 'invite', token: TOK }); expect(parseJoinTarget(TOK)).toEqual({ kind: 'invite', token: TOK });
-    expect(parseJoinTarget(`https://centcom.dev/j/${TOK}#k=${'B'.repeat(43)}&kid=k1`)).toEqual({ kind: 'watch', token: TOK, fragment: `#k=${'B'.repeat(43)}&kid=k1` });
+    expect(parseJoinTarget(`https://centcom.dev/g/${TOK}#k=${'B'.repeat(43)}&kid=k1`)).toEqual({ kind: 'watch', token: TOK, fragment: `#k=${'B'.repeat(43)}&kid=k1` }); expect(parseJoinTarget(`centcom://share/${TOK}`)).toMatchObject({ kind: 'watch', token: TOK });
+    /* a session invite is /j/ (the contract's "Join a session"), never a watch link: its token goes to acceptInvite */
+    expect(parseJoinTarget(`https://centcom.dev/j/${TOK}#k=${'B'.repeat(43)}`)).toEqual({ kind: 'invite', token: TOK }); expect(parseJoinTarget(`centcom://join/${TOK}`)).toEqual({ kind: 'invite', token: TOK }); expect(parseJoinTarget(`centcom://invite/${TOK}`)).toEqual({ kind: 'invite', token: TOK });
     expect(parseJoinTarget(`https://centcom.dev/s/${SID}`)).toEqual({ kind: 'session', id: SID });
   });
   it('refuses anything else', () => { for (const x of ['', 'hello world', 'ftp://x/i/' + TOK, 'https://centcom.dev/i/short', 'javascript:alert(1)', 'a'.repeat(3000)]) expect(parseJoinTarget(x), x).toBeUndefined(); });
