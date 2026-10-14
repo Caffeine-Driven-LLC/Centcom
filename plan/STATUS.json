@@ -1,5 +1,5 @@
 {
- "updated": "2026-10-13",
+ "updated": "2026-10-14",
  "lanes": {
   "C001": {
    "pct": 0.5,
@@ -46,16 +46,16 @@
    "note": "context view in the app: engine-reported warnings at 75% and when nearly full, /compact through the engine when it has the capability; meter from usage reports"
   },
   "C020": {
-   "pct": 0.8,
-   "note": "bundled pack (5 skills + checksummed manifest, checked in CI), installer with plan/apply/planHash, Claude Code files and a delimited AGENTS.md block, modified-file protection, atomic writes and symlink/escape refusal, install record, centcom skills command, docs/skills.md; gaps: listing what the engine reports as loaded, per-file overwrite prompt in the CLI"
+   "pct": 1,
+   "note": "merged in #181"
   },
   "C025": {
    "pct": 1,
    "note": "@centcom/agent/events: createBus (ordered, re-entrancy queue, error isolation, bounded streams, MaxListeners), AgentEventMap catalogue of 18 events with wire-safe marking; nothing emits to it yet (runner C013 will)"
   },
   "C026": {
-   "pct": 0.9,
-   "note": "append-only redacted session log with header v2, flush cadence, segments, line cap, lock, index rebuild, retention, engine session map, resumeSession with fresh-with-summary fallback, toSnapshotEvents, app and CLI wired (-c, --resume [id] with picker), old saves migrated; gaps: session.retentionDays/persist config keys, pty-level CLI test"
+   "pct": 1,
+   "note": "merged in #181"
   },
   "C028": {
    "pct": 0.95,
@@ -286,8 +286,8 @@
    "note": "merged in #180"
   },
   "C096": {
-   "pct": 0.7,
-   "note": "one command list drives centcom --help (80 columns), centcom help [topic], per-command --help, the CLI reference pages and the man pages (docs:gen, docs:check fails on drift); docs site pages written (guide, privacy page from the crypto contract, env and exit codes); link/anchor, flag and env-var checks; gaps: VitePress build/Lighthouse and the link checker for external links are not set up (VitePress is not installed), no spell check, install-page command test, /help text source for the TUI; terminal-app guide, releases page, configuration reference generated from the schema"
+   "pct": 1,
+   "note": "merged in #181"
   },
   "C068": {
    "pct": 0.9,
