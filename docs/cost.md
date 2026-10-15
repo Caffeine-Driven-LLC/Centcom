@@ -74,6 +74,5 @@ Rows are added here as the cost work lands.
 |---|---|
 | Fixed tokens Centcom adds to each request | about 1.1k |
 | Default model | the user's own default (Opus 5.5 in the SAT session) |
-| Carry-over summary after switching engines | in the system prompt, every turn | | 
 | Run limit | none |
 | Sub-agents per run | unlimited |
