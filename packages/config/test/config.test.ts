@@ -91,6 +91,11 @@ describe('a bad config file never stops Centcom', () => {
     const w: [string, string?][] = []; await loadConfig(deps(f, {}, REPO, w), { 'client.model': 'haiku' }); expect(w.map(([c]) => c)).not.toContain('project_sets_model');
     expect((await run({ [USER]: json({ client: { model: 'opus' } }) })).w.map(([c]) => c)).not.toContain('project_sets_model');
   });
+  it('tells you when the project file sets the default agent model, but not when your own file does', async () => {
+    expect((await run({ [PROJ]: json({ agent: { model: 'opus' } }) })).w).toContainEqual(['project_sets_model', 'opus']);
+    expect((await run({ [USER]: json({ agent: { model: 'opus' } }) })).w.map(([c]) => c)).not.toContain('project_sets_model');
+    expect((await run({})).c.agent).toMatchObject({ model: 'sonnet', effort: 'medium', subagent_model: 'sonnet' });
+  });
   it('reads the short CENTO_* variables that `centcom help env` lists, ignores bad values, and lets the flag and the files order as usual', async () => {
     const c = await loadConfig(deps({}, { CENTO_THEME: 'HC', CENTO_SPINNER: 'plain', CENTO_MASCOT: 'off', CENTO_REDUCE_MOTION: '1', CENTO_SCREEN_READER: 'yes' }));
     expect(c.ui).toMatchObject({ theme: 'hc', spinner: 'plain', mascot: false, reduced_motion: true }); expect(c.a11y.screen_reader).toBe(true);
