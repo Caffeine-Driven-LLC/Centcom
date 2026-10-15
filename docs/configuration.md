@@ -61,6 +61,9 @@ When you change them in the app, these are saved to your user file: theme, Cento
 | `update.check_interval_h` | number (1 to 168) | `6` | no | How many hours pass between looks for a newer Centcom (give or take 20 %, so many installs do not call in step) |
 | `update.channel` | stable \| beta \| nightly | `"stable"` | no | Which releases to follow: stable, beta or nightly |
 | `lan.enabled` | boolean | `true` | no | Allow LAN sessions |
+| `agent.model` | string | `"sonnet"` | yes | Model Claude Code uses when you have not picked one (/model, --model, or a remembered pick). 'sonnet' is the mid-tier model for routine work; 'opus' or 'fable' cost several times more per token. Empty means your own Claude Code default, which may be the most expensive model |
+| `agent.effort` |  \| low \| medium \| high \| xhigh \| max | `"medium"` | yes | How hard Claude Code thinks when you have not picked a level (/effort). Higher levels use more output tokens. Empty means Claude Code's own default |
+| `agent.subagent_model` | string | `"sonnet"` | yes | Model for the sub-agents Claude Code starts, so picking Opus for the main conversation does not make every helper Opus. Empty leaves it to Claude Code. Your own CLAUDE_CODE_SUBAGENT_MODEL wins |
 | `agent.max_parallel` | number (1 to 16) | `4` | yes | Most agents running at once |
 | `session.persist` | boolean | `true` | no | Save conversations and your prompt history on this computer (off is the same as --no-save) |
 | `session.retention_days` | number (1 to 3650) | `30` | no | Delete saved conversations that were not touched for this many days (checked each time Centcom starts) |

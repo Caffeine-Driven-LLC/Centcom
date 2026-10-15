@@ -43,6 +43,10 @@ export const MAX_MESSAGE = 65_536;
 export interface ControllerOptions {
   /** How long an approval waits before the engine declines it (shown as a countdown). */
   approvalTimeoutMs?: number;
+  /** `agent.effort`: the reasoning effort Claude Code starts with (empty: the engine's own). */
+  defaultEffort?: string;
+  /** `agent.subagent_model`: the model Claude Code's sub-agents run on (empty: the engine's own). */
+  subagentModel?: string;
   /** `agent.turn_timeout_s`: a turn running longer than this is stopped like an interrupt, with a notice (0 or unset: no limit). */
   turnTimeoutS?: number;
   /** Ask the launcher to step the screen aside and run `task` with the real terminal. Without it these keys say they are not available. */
@@ -187,6 +191,8 @@ export class AppController {
 
   /* ------------------------------------------------------------------ lifecycle */
   async start() {
+    if (this.o.engine.id === 'claude-code' && this.o.defaultEffort && !this.effort) this.effort = this.o.defaultEffort; // the configured starting effort (agent.effort); /effort changes it
+    if (this.effort) this.setSettings({ effort: this.effort });
     { const m = this.o.sessions?.list(this.o.cwd, 1)[0]; if (m) this.patch({ lastSession: { title: m.title, when: m.updatedAt } }); }
     this.driver.start();
     this.mascotState('ready');
@@ -211,7 +217,7 @@ export class AppController {
   private startOptions(resumeToken?: string, carry?: string): EngineStartOptions {
     const gate: PermissionGate = { decide: (r) => this.decide(r) };
     const questionGate: QuestionGate = { ask: (qs) => this.askEngine(qs) };
-    return { agentId: this.me, cwd: this.o.cwd, permissionMode: this.state.settings.permissionMode, allowBypass: !!this.o.dangerous || this.bypassChosen, model: this.state.settings.model || undefined, addDirs: this.o.demo ? undefined : [MASTER_DIR, LIBRARY_DIR], approvalGate: gate, questionGate, ...(resumeToken ? { resume: { engine_session_id: resumeToken } } : {}), ...(carry ? { carryOver: carry } : {}) };
+    return { agentId: this.me, cwd: this.o.cwd, permissionMode: this.state.settings.permissionMode, allowBypass: !!this.o.dangerous || this.bypassChosen, model: this.state.settings.model || undefined, addDirs: this.o.demo ? undefined : [MASTER_DIR, LIBRARY_DIR], approvalGate: gate, questionGate, ...(this.o.engine.id === 'claude-code' && this.o.subagentModel ? { subagentModel: this.o.subagentModel } : {}), ...(resumeToken ? { resume: { engine_session_id: resumeToken } } : {}), ...(carry ? { carryOver: carry } : {}) };
   }
   private async startEngine(resumeToken?: string, carry?: string) { this.adopt(await this.o.engine.start(this.startOptions(resumeToken, carry))); }
   /** A conversation saved with the other engine cannot be resumed by this one (its session id means nothing here): this one starts fresh with a summary of what was said. */
@@ -573,7 +579,7 @@ export class AppController {
   }
 
   /** Reasoning effort for the next turns, if the engine has the setting (Codex). Returns false when it does not. */
-  setEffort(effort: string): boolean { if (!this.session?.setEffort) return false; this.session.setEffort(effort); this.effort = effort; this.toast('ok', `Reasoning effort: ${effort || 'default'}`); return true; }
+  setEffort(effort: string): boolean { if (!this.session?.setEffort) return false; this.session.setEffort(effort); this.effort = effort; this.setSettings({ effort }); this.toast('ok', `Reasoning effort: ${effort || 'default'}`); return true; }
   private effort = '';
   private shareHandler?: (arg: string) => Promise<void>;
   /** The app that has an account hands in what `/share` does. */

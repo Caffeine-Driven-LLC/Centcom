@@ -70,13 +70,19 @@ class ClaudeSession implements EngineSession {
   private bridge?: ApprovalBridge;
 
   constructor(private o: EngineStartOptions, private deps: ClaudeEngineDeps) {
-    this.agentId = o.agentId; this.sessionId = o.resume?.engine_session_id; this.carryPending = !!o.carryOver && !o.resume; this.mode = o.permissionMode ?? 'default'; this.model = o.model;
+    this.agentId = o.agentId; this.sessionId = o.resume?.engine_session_id; this.carryPending = !!o.carryOver && !o.resume; this.mode = o.permissionMode ?? 'default'; this.model = o.model; this.effort = o.effort || undefined;
     if (this.mode === 'bypassPermissions' && !o.allowBypass) { this.mode = 'default'; this.bypassRefused = true; } // never skip approvals because a default said so: the person has to have asked
   }
   /** The carry-over goes in front of the first message of a session that has nothing to resume, once. */
   private carryPending = false;
   private bypassRefused = false; private versionAllowed?: boolean;
 
+  /** The child's environment: as configured, plus the sub-agent model when one is set and the person has not set their own. */
+  private childEnv(): NodeJS.ProcessEnv {
+    const base = this.o.envExact ? { ...this.o.env } : { ...process.env, ...this.o.env };
+    if (this.o.subagentModel && !base.CLAUDE_CODE_SUBAGENT_MODEL) base.CLAUDE_CODE_SUBAGENT_MODEL = this.o.subagentModel;
+    return base;
+  }
   resumeToken() { return this.sessionId; }
   setModel(m: string) { this.model = m; }
   setEffort(e: string) { this.effort = e || undefined; }
@@ -101,7 +107,7 @@ class ClaudeSession implements EngineSession {
     const parser = new ClaudeStreamParser(); this.parser = parser; this.receiptCap = false;
     const spawnFn = this.deps.spawn ?? nodeSpawn;
     let child: ChildProcess;
-    try { child = spawnFn(this.deps.bin ?? 'claude', argv, { cwd: this.o.cwd, env: this.o.envExact ? { ...this.o.env } : { ...process.env, ...this.o.env }, stdio: ['pipe', 'pipe', 'pipe'], detached: GROUPS }); }
+    try { child = spawnFn(this.deps.bin ?? 'claude', argv, { cwd: this.o.cwd, env: this.childEnv(), stdio: ['pipe', 'pipe', 'pipe'], detached: GROUPS }); }
     catch (e) { this.fail(e); return { turn_id: turn }; }
     child.stdin?.on('error', () => undefined); child.stdin?.write(JSON.stringify({ type: 'user', message: { role: 'user', content: this.carryPending && this.o.carryOver ? `${this.o.carryOver}\n\n${prompt}` : prompt } }) + '\n'); // the prompt goes in over stdin as one stream-json message (never on the command line); stdin stays open for a control request until the turn is over
     this.carryPending = false;

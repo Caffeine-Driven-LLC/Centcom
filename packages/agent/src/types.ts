@@ -63,6 +63,10 @@ export interface EngineStartOptions {
   systemPromptAppend?: string;
   /** Background the engine should have once (a summary of an earlier conversation). Claude Code gets it in front of the first message of a fresh session and never again, so the system prompt stays short and identical on every turn; Codex gets it as its developer instructions. */
   carryOver?: string;
+  /** Reasoning effort to start with (Claude Code `--effort`); `setEffort` changes it later. */
+  effort?: string;
+  /** The model sub-agents run on (Claude Code: CLAUDE_CODE_SUBAGENT_MODEL). Unset leaves it to the engine, and the person's own variable always wins. */
+  subagentModel?: string;
   /** Extra directories the agent may read (e.g. the bundled skills). */
   addDirs?: string[];
   allowedTools?: string[];

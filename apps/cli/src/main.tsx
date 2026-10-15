@@ -2,7 +2,7 @@
 import React from 'react';
 import { execFileSync } from 'node:child_process';
 import { render } from 'ink';
-import { ClaudeCodeEngine, CodexEngine, DemoEngine, claudeVersionProbe, createProviderDetector, makeWhich, runProbe, detectClaude, detectCodex, isInstalled, type AgentEngine, type PermissionMode } from '@centcom/agent';
+import { ClaudeCodeEngine, CodexEngine, resolveModelPolicy, isTopTier, DemoEngine, claudeVersionProbe, createProviderDetector, makeWhich, runProbe, detectClaude, detectCodex, isInstalled, type AgentEngine, type PermissionMode } from '@centcom/agent';
 import { chooseEngine } from './engine-pick.js';
 import { Account, ShareSession, App, AppController, ClientConfig, FirstRun, SessionStore, TITLE_POP, TITLE_PUSH, resolveA11yMode, runLinear, queryBackground, detectCapabilities, buildRuntime, initialSettings, isFirstRun, markFirstRunDone, settingsFromConfig } from '@centcom/tui';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -153,7 +153,8 @@ async function main() {
     const dangerous = has('--dangerously-skip-permissions') || has('--yolo');
     let resume = arg('--resume');
     if (has('-c') || has('--continue')) { const c = chooseSession(new SessionStore(), { cwd, continue: true }); if ('exit' in c) { process.stderr.write(c.message + '\n'); process.exit(c.exit); } if ('id' in c) resume = c.id; }
-    const code = await runPrint({ engine, demo, cwd, branch: br, version: VERSION, mode: dangerous || arg('--mode') === 'bypassPermissions' ? 'bypassPermissions' : pm ? modes[pm]! : pc.cfg.client.permission_mode, prompt: streamMsgs ? streamMsgs[0]! : buildPrompt(text, piped), ...(streamMsgs && streamMsgs.length > 1 ? { followUps: streamMsgs.slice(1) } : {}), format: fmt, save: !has('--no-save'), resume, model: arg('--model') ?? (pc.cfg.client.model || undefined), allow, timeoutS: num('--timeout'), maxTurns: num('--max-turns') });
+    const printPolicy = resolveModelPolicy({ chosen: arg('--model') ?? pc.cfg.client.model, config: pc.cfg.agent, envSubagentModel: process.env.CLAUDE_CODE_SUBAGENT_MODEL });
+    const code = await runPrint({ engine, demo, cwd, branch: br, version: VERSION, mode: dangerous || arg('--mode') === 'bypassPermissions' ? 'bypassPermissions' : pm ? modes[pm]! : pc.cfg.client.permission_mode, prompt: streamMsgs ? streamMsgs[0]! : buildPrompt(text, piped), ...(streamMsgs && streamMsgs.length > 1 ? { followUps: streamMsgs.slice(1) } : {}), format: fmt, save: !has('--no-save'), resume, model: engine.id === 'claude-code' && !demo ? (printPolicy.model || undefined) : arg('--model') ?? (pc.cfg.client.model || undefined), ...(engine.id === 'claude-code' && !demo ? { effort: printPolicy.effort || undefined, subagentModel: printPolicy.subagentModel || undefined } : {}), allow, timeoutS: num('--timeout'), maxTurns: num('--max-turns') });
     await done(code);
   }
   if (!process.stdin.isTTY || !process.stdout.isTTY) { console.error('Centcom needs an interactive terminal. Try `centcom --help`.'); process.exit(2); }
@@ -170,6 +171,8 @@ async function main() {
   const dangerous = has('--dangerously-skip-permissions') || has('--yolo');
   const mode: PermissionMode = dangerous || arg('--mode') === 'bypassPermissions' ? 'bypassPermissions' : cc.cfg.client.permission_mode;
   const settings = { ...settingsFromConfig(cc.cfg), permissionMode: mode, reducedMotion: a11y.reducedMotion, ...(a11y.screenReader ? { mascot: 'off' as const } : {}) };
+  const policy = resolveModelPolicy({ chosen: settings.model, config: cc.cfg.agent, envSubagentModel: process.env.CLAUDE_CODE_SUBAGENT_MODEL }); // what runs when nothing was picked: agent.model, not the CLI's own (often the dearest) default
+  const policyOn = engine.id === 'claude-code' && !demo; if (policyOn) settings.model = policy.model;
   if (bgAnswer && (await bgAnswer) === 'light') settings.theme = 'light';
   let pendingExternal: ExternalTask | undefined; // set by ctrl+z and ctrl+g: the screen steps aside, the task runs, the screen comes back
   let quitLinear: () => void = () => undefined; const linearStop = new Promise<void>((r) => { quitLinear = r; });
@@ -189,7 +192,7 @@ async function main() {
     else if ('pick' in c) { resumeId = await pickSession(c.pick, { input: process.stdin, output: process.stdout }); if (!resumeId) process.exit(0); }
     else resumeId = c.id;
   }
-  const ctl = new AppController({ ...rt.options, turnTimeoutS: cc.cfg.agent.turn_timeout_s || undefined, views: appViews(process.cwd(), { doctor: () => realDoctorContext({ version: VERSION, contract: CONTRACT_VERSION, apiBase: cc.cfg.api.base_url, stateDir: stateDir(defaultDeps()), relayUrl: process.env.CENTCOM_RELAY_URL || cc.cfg.relay.url, account: doctorAccount() }) }),
+  const ctl = new AppController({ ...rt.options, turnTimeoutS: cc.cfg.agent.turn_timeout_s || undefined, ...(policyOn ? { defaultEffort: policy.effort || undefined, subagentModel: policy.subagentModel || undefined } : {}), views: appViews(process.cwd(), { doctor: () => realDoctorContext({ version: VERSION, contract: CONTRACT_VERSION, apiBase: cc.cfg.api.base_url, stateDir: stateDir(defaultDeps()), relayUrl: process.env.CENTCOM_RELAY_URL || cc.cfg.relay.url, account: doctorAccount() }) }),
     engine, demo, engines: demo ? undefined : { ...(hasClaude ? { 'claude-code': () => claudeEngine(cc.cfg.agent.engine_unsupported_ok) } : {}), ...(hasCodex ? { codex: () => new CodexEngine() } : {}) }, onEngine: (id) => cc.set('client.engine', id), cwd: process.cwd(), branch, version: VERSION, permissionMode: mode, dangerous: dangerous || mode === 'bypassPermissions', ghosts: has('--demo-team'),
     logger, settings, external: (task) => { pendingExternal = task; instance?.unmount(); }, bell: () => { try { process.stdout.write('\x07'); } catch { /* no terminal */ } }, ...cc.options({ ...initialSettings(), ...settings }, { saveHistory: persist }),
     sessions: sessionStore, night: demo ? undefined : { dir: pathJoin(homedir(), '.centcom', 'night') },
@@ -234,6 +237,7 @@ async function main() {
   for (const w of rt.warnings) ctl.notice('warn', w);
   if (firstRunNote) ctl.notice('warn', firstRunNote);
   const sayOnce = (w: string) => !/^invalid_env: CENTO_/.test(w); // a CENTO_* switch that was not understood is already said, in words, from the terminal check above
+  if (policyOn && policy.source === 'chosen' && isTopTier(policy.model)) ctl.notice('info', `Starting on ${policy.model}, a top-tier model you picked earlier. It costs several times more than Sonnet: /model sonnet for routine work.`);
   for (const w of cc.warnings.filter(sayOnce)) { ctl.notice('warn', 'Settings: ' + w); process.stderr.write('centcom: settings: ' + w + '\n'); }
   cc.onWarn = (w) => { if (sayOnce(w)) ctl.notice('warn', 'Settings: ' + w); };
   if (mode === 'bypassPermissions') ctl.notice('warn', 'Dangerously skip permissions is ON', 'Cento will run commands and edit files without asking. Use /mode default to turn approvals back on.');

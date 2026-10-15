@@ -66,6 +66,24 @@ None of this is in the system prompt. Centcom adds nothing to `--append-system-p
 
 What does invalidate it, and Centcom cannot hide: changing the model or the effort between turns (`/model`, `/effort`), the five-minute or one-hour cache lifetime running out while the agent waits for you, and compaction.
 
+## Which model a turn runs on
+
+Before, Centcom passed `--model` only when you had set one, so a plain start used your own Claude Code default (Opus 5.5 in the SAT session). Now:
+
+| Setting | Default | What it does |
+|---|---|---|
+| `agent.model` | `sonnet` | the model when you have not picked one |
+| `agent.effort` | `medium` | the reasoning effort (`--effort`) when you have not picked one |
+| `agent.subagent_model` | `sonnet` | the model of the sub-agents Claude Code starts (`CLAUDE_CODE_SUBAGENT_MODEL`) |
+
+- A choice of yours always wins and is passed as given: `--model`, `/model`, or a model remembered from an earlier run (`client.model`). `/model` has a "Default" entry for your own Claude Code default.
+- Set `agent.model` to an empty string to get your own Claude Code default back.
+- Your own `CLAUDE_CODE_SUBAGENT_MODEL` is never overridden. A sub-agent model dearer than the main one is not set. Effort is not sent to Haiku.
+- A folder's `.centcom/config.json` may set these; Centcom says so at start, because a cloned repo could otherwise pick a dearer model for you.
+- When a top-tier model you picked earlier is restored at start, a notice says so and how to go back.
+- The header always shows the model the turn ran on, and the effort.
+- Checked against the real CLI with one small call each: a sub-agent started under a Sonnet main conversation ran on Haiku when `CLAUDE_CODE_SUBAGENT_MODEL=haiku` was set, and `--effort medium` was accepted.
+
 ## Before and after
 
 Rows are added here as the cost work lands.
@@ -73,6 +91,6 @@ Rows are added here as the cost work lands.
 | Number | Before |
 |---|---|
 | Fixed tokens Centcom adds to each request | about 1.1k |
-| Default model | the user's own default (Opus 5.5 in the SAT session) |
+| Default model | the user's own default (Opus 5.5 in the SAT session); now Sonnet, medium effort, Sonnet sub-agents |
 | Run limit | none |
 | Sub-agents per run | unlimited |

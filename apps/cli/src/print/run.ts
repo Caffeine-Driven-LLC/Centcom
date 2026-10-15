@@ -10,7 +10,7 @@ export interface PrintOptions {
   /** Where permissions.json lives (tests point it at a temp folder). */ configDir?: string;
   engine: AgentEngine; demo: boolean; cwd: string; branch: string; version: string; mode: PermissionMode; prompt: string;
   /** Where ctrl+c comes from (tests pass an emitter). */ proc?: NodeJS.Process;
-  format: 'text' | 'json' | 'stream-json'; save: boolean; resume?: string; model?: string; out?: NodeJS.WritableStream; err?: NodeJS.WritableStream;
+  format: 'text' | 'json' | 'stream-json'; save: boolean; resume?: string; model?: string; /** Claude Code's starting reasoning effort and sub-agent model (`agent.effort`, `agent.subagent_model`). */ effort?: string; subagentModel?: string; out?: NodeJS.WritableStream; err?: NodeJS.WritableStream;
   /** Extra allow rules for this run, in the permission rule syntax (`Bash(npm test)`, `Edit(src/**)`). */ allow?: string[];
   /** More user messages after `prompt` (from `--input-format stream-json`): each runs as the next turn of the same conversation; the run stops at the first one that fails. */ followUps?: string[];
   /** Stop after this many seconds (exit 124). */ timeoutS?: number;
@@ -37,7 +37,7 @@ export async function runPrint(o: PrintOptions): Promise<number> {
   let finish: (() => void) | undefined; const hold = new Holdback();
   const ctl: AppController = new AppController({ ...rt.options,
     engine: o.engine, demo: o.demo, cwd: o.cwd, branch: o.branch, version: o.version, permissionMode: o.mode, skills: [], dangerous: o.mode === 'bypassPermissions',
-    settings: o.model ? { model: o.model } : undefined, sessions: o.save ? new SessionStore(o.dataDir) : undefined, resume: o.resume,
+    settings: o.model ? { model: o.model } : undefined, defaultEffort: o.effort, subagentModel: o.subagentModel, sessions: o.save ? new SessionStore(o.dataDir) : undefined, resume: o.resume,
     onEvent: (ev: NormalisedEvent) => {
       if (o.format === 'stream-json') {
         if (ev.type === 'text.delta') { const safe = hold.push(ev.text); if (safe) { const l = streamLine({ ...ev, text: safe }); if (l) write(l); } }
