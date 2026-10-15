@@ -11,7 +11,7 @@ const WIN: Record<string, string> = { five_hour: 'session', seven_day: 'week' };
 export function statusFieldsFor(s: AppState, o: { home?: string; now?: number } = {}): StatusFields {
   const me = s.agents.find((a) => a.mine); const others = s.agents.filter((a) => !a.mine);
   const kind = me?.loginKind === 'subscription' ? 'subscription' : me?.loginKind === 'api_key' ? 'API key' : me?.loginKind === 'cloud' ? 'cloud' : s.demo ? 'demo' : '';
-  const engine = [s.engineLabel, me?.model ? truncate(me.model, 22) : '', kind].filter(Boolean).join(' · ');
+  const engine = [s.engineLabel, me?.model ? truncate(me.model, 22) : '', s.settings.effort && s.engineId === 'claude-code' ? s.settings.effort : '', kind].filter(Boolean).join(' · ');
   const cost = s.agents.reduce((n, a) => n + (a.cost || 0), 0); const need = others.filter((a) => a.state === 'awaiting-approval').length + s.approvals.length;
   const night = s.night.running || s.night.armed || s.night.tasks.length ? (() => { const c = nightCounts(s.night); return s.night.running ? `night ${c.done + c.failed}/${c.total}` : c.queued ? `night · ${c.queued} queued` : 'night ready'; })() : undefined;
   return {
