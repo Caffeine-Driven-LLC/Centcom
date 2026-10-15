@@ -19,7 +19,7 @@ export function limitText(key: string, v: number | boolean | null): string {
 
 function priceHtml(plan: Plan): string {
   const pr = plan.price;
-  if (pr.status === 'free') return '<p class="price">Free</p>';
+  if (pr.status === 'free') return '<p class="price">No charge</p>';
   if (pr.status === 'tbd') return '<p class="price"><span class="tag tag-tbd">Price to be announced</span></p>';
   const amount = new Intl.NumberFormat('en-US', { style: 'currency', currency: pr.currency }).format(pr.amountMinor / 100);
   return `<p class="price">${esc(amount)} <span class="per">per seat per month</span></p>`;
