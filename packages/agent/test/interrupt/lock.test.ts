@@ -1,4 +1,5 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
+import { lstat } from 'node:fs/promises';
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -31,6 +32,23 @@ describe('a leftover index.lock of the stopped turn', () => {
   it('is left alone when it changes during the settle time (something is still writing it)', async () => {
     const d = repo(); writeFileSync(lockOf(d), ''); const r = await removeStaleIndexLock(base(d, { settleMs: 50, sleep: async () => { writeFileSync(lockOf(d), 'more'); } }));
     expect(r).toEqual({ removed: false, reason: 'changed' }); expect(existsSync(lockOf(d))).toBe(true);
+  });
+  it('is left alone while a process of the person still holds it open, even when it was made during the turn and has not changed', async () => {
+    const d = repo(); // the person's own `git commit`, started a moment before the interrupt: git creates index.lock with O_EXCL and keeps it open while it works
+    const holder = spawn(process.execPath, ['-e', "require('fs').openSync(process.argv[1], 'wx'); console.log('held'); setInterval(() => {}, 1000)", lockOf(d)], { stdio: ['ignore', 'pipe', 'ignore'] });
+    try {
+      await new Promise<void>((r) => holder.stdout!.once('data', () => r()));
+      const r = await removeStaleIndexLock(base(d)); expect(r).toEqual({ removed: false, reason: 'in_use' }); expect(existsSync(lockOf(d))).toBe(true);
+    } finally { holder.kill(); }
+    await new Promise((r) => holder.once('exit', r)); expect(await removeStaleIndexLock(base(d))).toEqual({ removed: true, reason: 'removed' }); // the holder is gone: now it is a leftover
+  });
+  it('is left alone when nobody can say whether something holds it', async () => {
+    const d = repo(); writeFileSync(lockOf(d), ''); expect(await removeStaleIndexLock(base(d, { holders: async () => 'unsure' }))).toEqual({ removed: false, reason: 'unsure' }); expect(existsSync(lockOf(d))).toBe(true);
+    expect(await removeStaleIndexLock(base(d, { holders: async () => 'held' }))).toEqual({ removed: false, reason: 'in_use' });
+  });
+  it('is left alone when it belongs to another user', async () => {
+    const d = repo(); writeFileSync(lockOf(d), ''); const other = { lstat: async (p: string) => { const st = await lstat(p); return { isFile: () => st.isFile(), mtimeMs: st.mtimeMs, size: st.size, uid: (process.getuid?.() ?? 0) + 1 }; }, unlink: async () => { throw new Error('must not be deleted'); } };
+    expect(await removeStaleIndexLock(base(d, { fs: other }))).toEqual({ removed: false, reason: 'not_ours' }); expect(existsSync(lockOf(d))).toBe(true);
   });
   it('says none when there is no lock, git_failed outside a repository, and never follows a link or removes a folder', async () => {
     const d = repo(); expect(await removeStaleIndexLock(base(d))).toEqual({ removed: false, reason: 'none' });
