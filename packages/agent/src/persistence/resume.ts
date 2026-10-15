@@ -11,7 +11,7 @@ export async function resumeSession(d: ResumeDeps, id: string, o: { agentId?: st
   const s = await d.store.open(id); const last = s.engineSessions.at(-1); const engineId = o.engine ?? last?.engine; const engine = engineId ? d.engines.get(engineId) : undefined;
   if (!engine) return { mode: 'read-only', reason: engineId ? `${engineId} is not available here.` : 'No engine to continue with.' };
   const base: EngineStartOptions = { agentId: o.agentId ?? 'agt_resume', cwd: s.summary.cwd || process.cwd(), ...o.start };
-  const fresh = async (reason: string): Promise<ResumeOutcome> => { const summary = `This conversation is being continued. Summary of it so far:\n\n${summaryText(s.records)}`; const session = await engine.start({ ...base, systemPromptAppend: [base.systemPromptAppend, summary].filter(Boolean).join('\n\n') }); d.log?.info('session.resume_fresh'); return { mode: 'fresh-with-summary', reason, session, summary }; };
+  const fresh = async (reason: string): Promise<ResumeOutcome> => { const summary = `This conversation is being continued. Summary of it so far:\n\n${summaryText(s.records)}`; const session = await engine.start({ ...base, carryOver: [base.carryOver, summary].filter(Boolean).join('\n\n') }); d.log?.info('session.resume_fresh'); return { mode: 'fresh-with-summary', reason, session, summary }; };
   if (!last) return fresh('This conversation has no engine session to continue.');
   if (last.engine !== engine.id) return fresh(`This conversation was with ${last.engine}.`);
   if (!engine.capabilities().has('resume')) return fresh(`${engine.label} cannot resume conversations.`);

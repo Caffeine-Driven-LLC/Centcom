@@ -61,6 +61,8 @@ export interface EngineStartOptions {
   model?: string;
   resume?: { engine_session_id: string };
   systemPromptAppend?: string;
+  /** Background the engine should have once (a summary of an earlier conversation). Claude Code gets it in front of the first message of a fresh session and never again, so the system prompt stays short and identical on every turn; Codex gets it as its developer instructions. */
+  carryOver?: string;
   /** Extra directories the agent may read (e.g. the bundled skills). */
   addDirs?: string[];
   allowedTools?: string[];

@@ -40,11 +40,11 @@ function fakeChild(sessionId: string, tokens: { input: number; cacheWrite: numbe
   return c;
 }
 
-export interface CapturedTurns { argv: string[][]; prompts: string[]; events: NormalisedEvent[] }
+export interface CapturedTurns { argv: string[][]; prompts: string[]; /** What each turn sent to claude on standard input (the user message, as text). */ sent: string[]; events: NormalisedEvent[] }
 /** Runs the real Claude engine for `prompts.length` turns of one session against the stand-in and returns what it launched `claude` with each time. */
 export async function captureTurns(prompts: string[], start: Partial<EngineStartOptions> = {}, hooks: { beforeSend?: (turn: number) => void } = {}): Promise<CapturedTurns> {
-  const argv: string[][] = []; const events: NormalisedEvent[] = [];
-  const spawn = ((_bin: string, args: readonly string[]) => { argv.push([...args]); return fakeChild('sess-1', { input: 3, cacheWrite: 500, cacheRead: 30000, output: 20 }); }) as unknown as typeof nodeSpawn;
+  const argv: string[][] = []; const sent: string[] = []; const events: NormalisedEvent[] = [];
+  const spawn = ((_bin: string, args: readonly string[]) => { argv.push([...args]); const c = fakeChild('sess-1', { input: 3, cacheWrite: 500, cacheRead: 30000, output: 20 }); let text = ''; sent.push(''); const at = sent.length - 1; c.stdin?.on('data', (b: Buffer) => { text += String(b); sent[at] = text; }); return c; }) as unknown as typeof nodeSpawn;
   const engine = new ClaudeCodeEngine({ spawn, bin: 'claude' });
   const s = await engine.start({ agentId: 'agt_cost', cwd: process.cwd(), ...start });
   for (let i = 0; i < prompts.length; i++) {
@@ -52,7 +52,7 @@ export async function captureTurns(prompts: string[], start: Partial<EngineStart
     for await (const ev of s.events) { events.push(ev); if (ev.type === 'turn.done') break; }
   }
   await s.stop();
-  return { argv, prompts, events };
+  return { argv, prompts, sent, events };
 }
 
 export interface PrefixChange { flag: string; turn: number; before: string[]; after: string[] }

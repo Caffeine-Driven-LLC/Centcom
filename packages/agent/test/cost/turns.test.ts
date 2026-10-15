@@ -17,4 +17,14 @@ describe('what Centcom launches claude with', () => {
     expect(prefixChanges(cap.argv)).toEqual([]);
     expect(cap.events.filter((e) => e.type === 'turn.done')).toHaveLength(3);
   });
+  it('sends a carried-over summary once, in front of the first message, and never in the system prompt', async () => {
+    const cap = await captureTurns(['one', 'two'], { carryOver: 'SUMMARY OF BEFORE' });
+    expect(cap.argv.every((a) => !a.includes('--append-system-prompt'))).toBe(true);
+    expect(cap.sent[0]).toContain('SUMMARY OF BEFORE'); expect(cap.sent[0]).toContain('one'); expect(cap.sent[1]).not.toContain('SUMMARY OF BEFORE');
+    expect(prefixChanges(cap.argv)).toEqual([]);
+  });
+  it('does not repeat a summary the resumed session already holds', async () => {
+    const cap = await captureTurns(['one'], { carryOver: 'SUMMARY', resume: { engine_session_id: 's9' } });
+    expect(cap.sent[0]).not.toContain('SUMMARY');
+  });
 });
