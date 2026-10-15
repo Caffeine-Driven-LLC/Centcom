@@ -23,7 +23,9 @@
 }
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
-body { margin: 0; background: var(--bg); color: var(--text); font: 1rem/1.6 var(--font); overflow-wrap: break-word; }
+body { margin: 0; min-height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--text); font: 1rem/1.6 var(--font); overflow-wrap: break-word; }
+body > main { flex: 1 0 auto; }
+body > .site-footer { flex: none; }
 img { max-width: 100%; height: auto; }
 a { color: var(--link); text-underline-offset: 3px; }
 a:hover { color: var(--accent-hover); }

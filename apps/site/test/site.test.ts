@@ -104,6 +104,10 @@ describe('accessibility basics', () => {
     expect(css).toMatch(/color-scheme:\s*dark light/);
     for (const [p, h] of html) expect(h, p).toContain('name="color-scheme"');
   });
+  it('keeps the footer at the bottom of a short page, and the free plan card does not say Free twice', () => {
+    const css = readFileSync(`${pagesDir}style.css`, 'utf8'); expect(css).toMatch(/body\s*\{[^}]*min-height:\s*100vh[^}]*display:\s*flex[^}]*flex-direction:\s*column/); expect(css).toMatch(/body > main\s*\{\s*flex:\s*1/);
+    const card = pricingHtml().match(/<article class="card plan"[^>]*aria-labelledby="plan-free"[\s\S]*?<\/article>/)![0]; expect(card.match(/>Free</g)).toHaveLength(1);
+  });
 });
 
 describe('config files', () => {
