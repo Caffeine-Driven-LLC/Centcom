@@ -5,6 +5,7 @@ import { writeBundle } from './bundle.js';
 import { ALL_CHECKS } from './checks.js';
 import { DEFAULT_TIMEOUT_MS, exitCodeOf, runChecks, type Timers } from './run.js';
 import type { DoctorContext } from './types.js';
+import { runCost } from './cost.js';
 
 export interface DoctorIo { out(l: string): void; err(l: string): void }
 const MARK = { pass: 'ok  ', warn: 'warn', fail: 'FAIL', skip: 'skip' } as const;
@@ -16,6 +17,7 @@ export function logTail(ctx: DoctorContext): { name: string; text: string } | un
   if (text.length > LOG_TAIL_BYTES) text = text.slice(text.length - LOG_TAIL_BYTES).replace(/^[^\n]*\n/, ''); return lines.length ? { name: 'log-tail.jsonl', text } : undefined;
 }
 export async function runDoctor(argv: string[], ctx: DoctorContext, io: DoctorIo, extra: { crashes?: CrashStore; timers?: Timers } = {}): Promise<number> {
+  if (argv.includes('--cost')) return runCost(argv, io);
   const only: string[] = []; let json = false; let bundle: string | undefined; let timeoutMs = DEFAULT_TIMEOUT_MS;
   for (let i = 0; i < argv.length; i++) { const a = argv[i]!; if (a === '--json') json = true; else if (a === '--bundle') bundle = argv[++i]; else if (a === '--check') { const v = argv[++i]; if (v) only.push(v); } else if (a === '--timeout-ms') timeoutMs = Number(argv[++i]); else { io.err('Usage: centcom doctor [--json] [--bundle <path>] [--check <id>...] [--timeout-ms <n>]'); return 2; } }
   if (!Number.isFinite(timeoutMs) || timeoutMs < 100 || timeoutMs > 120_000) { io.err('--timeout-ms must be between 100 and 120000'); return 2; } if (bundle !== undefined && !bundle) { io.err('--bundle needs a file name'); return 2; }
