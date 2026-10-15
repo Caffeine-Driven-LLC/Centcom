@@ -103,7 +103,7 @@ A run is one task you gave and everything done for it, sub-agents included. Cent
 
 Set a limit to 0 to switch that one off. `/budget` shows what this run and conversation have used against them; `/budget continue` lets a paused run go on; `/budget off` turns the guard off for the conversation. In `centcom -p` nobody can be asked, so the run stops and exits with code 5.
 
-- **The SAT session would have paused after about 60 requests**, not 683: its sub-agents alone made 569 requests and 2.4M output tokens. Replaying its numbers through the guard is a test.
+- **The SAT session would have paused after 60 of its 683 requests**, before 97 % of its output tokens were written (`centcom doctor --cost` replays a transcript through the guard; with "keep going" every time it would have asked 12 times in all). The sub-agents alone made 569 requests and 2.4M output tokens. A test replays the same shape of numbers.
 - **"Continue" loops.** A short message such as "continue" or "choose whatever you want" stays in the run it continues, so it does not reset the allowance, and the fourth one in a row asks. A new task starts a new run.
 - **Big prompts.** A prompt of 2,000 tokens or more, or a shorter one that asks for a whole application from scratch, shows an estimate (its size, the model and effort, and what the run may use) and asks before it is sent. Declining puts your text back in the prompt box.
 - **Night cycle.** Each night task is a run of its own with the same request, token and cost limits. Nothing is asked at night: a task that passes a limit is stopped and the night goes on to the next.
@@ -118,6 +118,10 @@ Set a limit to 0 to switch that one off. `/budget` shows what this run and conve
 | A hook that cannot reach Centcom | Lets the call through: it is a cost limit, not a security check. The stream count (`subagent.started`) then stops the run |
 | A cost cap inside a turn | Yes: `--max-budget-usd`, set each turn to what the run still has |
 | A request or token cap inside a turn | Only by Centcom: the CLI has no such flag, so Centcom counts the stream and interrupts |
+
+## The live meter
+
+While a run works, the footer of the terminal app shows `run 12/60 req · ↓36k/400k · $0.41/5.00 · 2 sub-agents · ~18k/min`: requests, output tokens and engine-reported cost so far against the run's limits, and the output rate. It turns to a warning at 80 % of a limit and says `paused` when a limit has stopped the run. The header keeps the conversation's total cost, and the footer keeps the share of your plan's windows where the provider reports them (`session`, `week`). The side panel of the desktop app has the same numbers under "This run", with a bar for the nearest limit. The header also names the model and effort the turn runs on.
 
 ## Before and after
 
