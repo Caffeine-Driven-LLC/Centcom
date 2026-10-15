@@ -41,7 +41,7 @@ export async function openHolders(path: string): Promise<'held' | 'none' | 'unsu
     }
     return unsure ? 'unsure' : 'none';
   }
-  return new Promise((resolve) => { execFile('lsof', ['-t', '--', real], { timeout: 5000 }, (err, out) => { if (!err) resolve(out.trim() ? 'held' : 'none'); else resolve((err as NodeJS.ErrnoException & { code?: number | string }).code === 1 && !String(out).trim() ? 'none' : 'unsure'); }); });
+  return new Promise((resolve) => { execFile('lsof', ['-t', '--', real], { timeout: 5000 }, (err, out) => { if (!err) resolve(out.trim() ? 'held' : 'none'); else resolve((err as { code?: number | string }).code === 1 && !String(out).trim() ? 'none' : 'unsure'); }); });
 }
 const realSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
