@@ -84,13 +84,49 @@ Before, Centcom passed `--model` only when you had set one, so a plain start use
 - The header always shows the model the turn ran on, and the effort.
 - Checked against the real CLI with one small call each: a sub-agent started under a Sonnet main conversation ran on Haiku when `CLAUDE_CODE_SUBAGENT_MODEL=haiku` was set, and `--effort medium` was accepted.
 
+## The budget guard (on by default)
+
+A run is one task you gave and everything done for it, sub-agents included. Centcom counts each request to the model as it finishes (the engine reports it as a `usage.progress` event, for the main conversation and for every sub-agent) and the cost the engine reports at the end of a turn. At a limit it stops the run, says which limit and why, and asks whether to keep going with a fresh allowance. It never prices anything itself.
+
+| Setting | Default | Limit |
+|---|---|---|
+| `budget.run_requests` | 60 | requests in one run |
+| `budget.run_output_tokens` | 400,000 | output tokens in one run |
+| `budget.run_usd` | 5 | engine-reported cost of one run (also passed to Claude Code as `--max-budget-usd` for the turn) |
+| `budget.session_requests` | 400 | requests in one conversation |
+| `budget.session_output_tokens` | 1,500,000 | output tokens in one conversation |
+| `budget.session_usd` | 0 (off) | engine-reported cost of one conversation |
+| `budget.max_continues` | 3 | messages like "continue" in a row before it asks |
+| `agent.max_subagents` | 6 | sub-agents in one run (0 none, -1 no limit) |
+| `budget.big_prompt_tokens` | 2,000 | a prompt this big is confirmed first |
+| `budget.enabled` | true | the whole guard |
+
+Set a limit to 0 to switch that one off. `/budget` shows what this run and conversation have used against them; `/budget continue` lets a paused run go on; `/budget off` turns the guard off for the conversation. In `centcom -p` nobody can be asked, so the run stops and exits with code 5.
+
+- **The SAT session would have paused after about 60 requests**, not 683: its sub-agents alone made 569 requests and 2.4M output tokens. Replaying its numbers through the guard is a test.
+- **"Continue" loops.** A short message such as "continue" or "choose whatever you want" stays in the run it continues, so it does not reset the allowance, and the fourth one in a row asks. A new task starts a new run.
+- **Big prompts.** A prompt of 2,000 tokens or more, or a shorter one that asks for a whole application from scratch, shows an estimate (its size, the model and effort, and what the run may use) and asks before it is sent. Declining puts your text back in the prompt box.
+- **Night cycle.** Each night task is a run of its own with the same request, token and cost limits. Nothing is asked at night: a task that passes a limit is stopped and the night goes on to the next.
+
+### Sub-agents: what the claude CLI lets Centcom enforce
+
+| Control | Enforceable? |
+|---|---|
+| No sub-agents at all (`agent.max_subagents = 0`) | Yes: `--disallowedTools Agent Task` removes the tool, which also saves its description from every request |
+| A count per run (the default 6) | Yes, with a hook: Centcom adds a `PreToolUse` hook on the sub-agent tool through `--settings`. It asks Centcom before each one and Claude Code refuses the over-limit call with a reason the model reads. Checked against the real CLI (`tools/dev/cost-live.ts`, one Haiku call): the first sub-agent ran and the second was refused |
+| `CLAUDE_CODE_MAX_SUBAGENTS_PER_SESSION` | No: the variable exists in the binary but did not limit anything in a test (two sub-agents ran with it set to 1), so Centcom does not rely on it |
+| A hook that cannot reach Centcom | Lets the call through: it is a cost limit, not a security check. The stream count (`subagent.started`) then stops the run |
+| A cost cap inside a turn | Yes: `--max-budget-usd`, set each turn to what the run still has |
+| A request or token cap inside a turn | Only by Centcom: the CLI has no such flag, so Centcom counts the stream and interrupts |
+
 ## Before and after
 
-Rows are added here as the cost work lands.
-
-| Number | Before |
-|---|---|
-| Fixed tokens Centcom adds to each request | about 1.1k |
-| Default model | the user's own default (Opus 5.5 in the SAT session); now Sonnet, medium effort, Sonnet sub-agents |
-| Run limit | none |
-| Sub-agents per run | unlimited |
+| | Before | After |
+|---|---|---|
+| Fixed tokens Centcom adds to each request | about 1.1k (the approval bridge's tool list) | the same: the CLI needs it for approvals, and the only way to drop it loads every other MCP tool into the prompt |
+| Centcom's text in the system prompt | the carry-over summary on every turn (up to 2k tokens) | none; the prefix is byte-identical |
+| Model on a plain start | your Claude Code default (Opus 5.5 in the SAT session) | Sonnet, medium effort, Sonnet sub-agents; your own choices untouched |
+| What stops a long job | nothing (683 requests, 2.5M output tokens in the SAT session) | a pause at 60 requests, 400k output tokens or $5 |
+| Sub-agents per run | unlimited (48 calls in the SAT session) | 6, enforced by a hook |
+| "Continue" loops | unlimited | the fourth in a row asks |
+| Big prompts | sent at once | estimate and confirmation |

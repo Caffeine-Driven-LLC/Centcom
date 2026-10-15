@@ -14,6 +14,9 @@ import { editDiff } from './diff.js';
 type J = Record<string, unknown>;
 export const PERMISSION_TOOL = 'mcp__centcom__approve';
 const SCRIPT = fileURLToPath(new URL('./mcp-permission.mjs', import.meta.url));
+const GATE_SCRIPT = fileURLToPath(new URL('./subagent-gate.mjs', import.meta.url));
+/** The tool names Claude Code has used for starting a sub-agent. */
+export const SUBAGENT_TOOLS = ['Agent', 'Task'] as const;
 
 /** Turn claude's (tool_name, input) into what the approval UI shows. Pure, so it is easy to test. */
 export function describeTool(name: string, input: J): { summary: string; path?: string; command?: string; diff?: string } {
@@ -35,10 +38,12 @@ export class ApprovalBridge {
   private dir?: string;
   private sockets = new Set<Socket>();
   mcpConfigPath?: string;
+  /** Claude Code settings (a PreToolUse hook on the sub-agent tool) when the sub-agent limit is wired in. */
+  settingsPath?: string;
 
   /** A secret for this run only: the permission script must send it with every request, so no other local process can ask in its name. */
   private token = randomBytes(32).toString('hex');
-  constructor(private deps: { agentId: string; cwd: string; gate: PermissionGate; emit: (b: EventBody) => void; node?: string; /** No answer by then: denied (default 10 min). */ timeoutMs?: number; setTimeout?: (f: () => void, ms: number) => unknown; clearTimeout?: (h: unknown) => void }) {}
+  constructor(private deps: { agentId: string; cwd: string; gate: PermissionGate; emit: (b: EventBody) => void; node?: string; /** No answer by then: denied (default 10 min). */ timeoutMs?: number; /** Asked before each sub-agent starts; answering no makes Claude Code refuse the tool call with the reason. */ subagentGate?: () => { allow: boolean; reason?: string }; setTimeout?: (f: () => void, ms: number) => unknown; clearTimeout?: (h: unknown) => void }) {}
 
   /** Start listening and write the MCP config that points claude at our script. Idempotent. */
   async start(): Promise<void> {
@@ -49,10 +54,15 @@ export class ApprovalBridge {
     await new Promise<void>((res, rej) => { this.server!.once('error', rej); this.server!.listen(sock, res); });
     if (process.platform !== 'win32') chmodSync(sock, 0o600); /* the socket is only for this user (its folder is 0700 too) */
     this.mcpConfigPath = join(this.dir, 'mcp.json');
+    if (this.deps.subagentGate) {
+      const conf = join(this.dir, 'gate.json'); writeFileSync(conf, JSON.stringify({ sock, token: this.token }), { mode: 0o600 });
+      this.settingsPath = join(this.dir, 'settings.json');
+      writeFileSync(this.settingsPath, JSON.stringify({ hooks: { PreToolUse: [{ matcher: SUBAGENT_TOOLS.join('|'), hooks: [{ type: 'command', command: `"${this.deps.node ?? process.execPath}" "${GATE_SCRIPT}" "${conf}"`, timeout: 10 }] }] } }), { mode: 0o600 });
+    }
     writeFileSync(this.mcpConfigPath, JSON.stringify({ mcpServers: { centcom: { command: this.deps.node ?? process.execPath, args: [SCRIPT], env: { CENTCOM_APPROVAL_SOCK: sock, CENTCOM_APPROVAL_TOKEN: this.token } } } }), { mode: 0o600 });
   }
 
-  argv(): string[] { return this.mcpConfigPath ? ['--mcp-config', this.mcpConfigPath, '--permission-prompt-tool', PERMISSION_TOOL] : []; }
+  argv(): string[] { return this.mcpConfigPath ? ['--mcp-config', this.mcpConfigPath, '--permission-prompt-tool', PERMISSION_TOOL, ...(this.settingsPath ? ['--settings', this.settingsPath] : [])] : []; }
 
   private onConnection(s: Socket) {
     this.sockets.add(s); s.setEncoding('utf8'); let buf = ''; let open = true;
@@ -60,9 +70,10 @@ export class ApprovalBridge {
     s.on('error', () => undefined);
     s.on('data', (c: string) => {
       buf += c; const i = buf.indexOf('\n'); if (i < 0) return;
-      let req: { tool_name: string; input: J; tool_use_id: string; token?: string };
+      let req: { kind?: string; tool_name: string; input: J; tool_use_id: string; token?: string };
       try { req = JSON.parse(buf.slice(0, i)); } catch { s.end(JSON.stringify({ behavior: 'deny', message: 'Bad request' }) + '\n'); return; }
       if (!this.tokenOk(req.token)) { s.end(JSON.stringify({ behavior: 'deny', message: 'Not allowed.' }) + '\n'); return; } // a request without this run's token is refused before anything is shown
+      if (req.kind === 'subagent') { const g = this.deps.subagentGate?.() ?? { allow: true }; s.end(JSON.stringify(g.allow ? { behavior: 'allow' } : { behavior: 'deny', message: g.reason }) + '\n'); return; }
       void this.ask(req).then((v) => { if (open) s.end(JSON.stringify(v) + '\n'); });
     });
   }

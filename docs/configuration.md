@@ -37,7 +37,15 @@ When you change them in the app, these are saved to your user file: theme, Cento
 | `relay.url` | string | `"wss://relay.centcom.dev/v1/ws"` | no | Hosted relay WebSocket URL |
 | `net.timeout_ms` | number (1000 to 600000) | `15000` | no | Per-request network timeout |
 | `net.max_attempts` | number (1 to 20) | `5` | no | Retry attempts for network calls |
-| `budget.session_usd` | number (0 to 100000) | `0` | no | Warn when a session's reported cost passes 80 % and 100 % of this (0 = off). Only warns; nothing is stopped |
+| `budget.enabled` | boolean | `true` | no | The budget guard: pauses a run and asks before it goes on when it passes one of the limits below, confirms a very big prompt, and limits sub-agents and runs of "continue". Turn off only if you want nothing to interrupt a long job |
+| `budget.run_requests` | number (0 to 100000) | `60` | yes | Pause and ask after this many requests to the model in one run, sub-agents included (0 = no limit). A run is one task you gave and everything done for it |
+| `budget.run_output_tokens` | number (0 to 1000000000) | `400000` | yes | Pause and ask after this many output tokens in one run, sub-agents included (0 = no limit) |
+| `budget.run_usd` | number (0 to 100000) | `5` | yes | Pause and ask after a run has cost this much as the engine reports it (0 = no limit). Also passed to Claude Code as its own per-turn cap |
+| `budget.session_requests` | number (0 to 1000000) | `400` | yes | Pause and ask after this many requests in one conversation (0 = no limit) |
+| `budget.session_output_tokens` | number (0 to 1000000000) | `1500000` | yes | Pause and ask after this many output tokens in one conversation (0 = no limit) |
+| `budget.session_usd` | number (0 to 100000) | `0` | no | Warn when a session's reported cost passes 80 % and 100 % of this, and pause and ask at 100 % (0 = off) |
+| `budget.max_continues` | number (0 to 1000) | `3` | yes | Ask before the fourth "continue" in a row (messages like "continue" or "choose whatever you want" that give no new task). 0 = no limit |
+| `budget.big_prompt_tokens` | number (0 to 1000000) | `2000` | yes | Show an estimate and ask before sending a prompt this big (about four characters per token), or a short one that asks to build a whole application (0 = never ask) |
 | `telemetry.enabled` | boolean | `false` | no | Anonymous usage reporting (off unless you turn it on) |
 | `context.board` | boolean | `true` | no | The shared context board: what agents and people note (decisions, warnings, findings, who is changing which file) goes along with the other agents' next messages. Turn off to share nothing |
 | `context.digest_tokens` | number (100 to 2000) | `500` | no | The most the board adds to one message (about four characters per token) |
@@ -64,6 +72,7 @@ When you change them in the app, these are saved to your user file: theme, Cento
 | `agent.model` | string | `"sonnet"` | yes | Model Claude Code uses when you have not picked one (/model, --model, or a remembered pick). 'sonnet' is the mid-tier model for routine work; 'opus' or 'fable' cost several times more per token. Empty means your own Claude Code default, which may be the most expensive model |
 | `agent.effort` |  \| low \| medium \| high \| xhigh \| max | `"medium"` | yes | How hard Claude Code thinks when you have not picked a level (/effort). Higher levels use more output tokens. Empty means Claude Code's own default |
 | `agent.subagent_model` | string | `"sonnet"` | yes | Model for the sub-agents Claude Code starts, so picking Opus for the main conversation does not make every helper Opus. Empty leaves it to Claude Code. Your own CLAUDE_CODE_SUBAGENT_MODEL wins |
+| `agent.max_subagents` | number (-1 to 1000) | `6` | yes | Most sub-agents Claude Code may start in one run (0 = none, -1 = no limit). Enforced by a hook Centcom adds to Claude Code, which refuses the next one with the reason |
 | `agent.max_parallel` | number (1 to 16) | `4` | yes | Most agents running at once |
 | `session.persist` | boolean | `true` | no | Save conversations and your prompt history on this computer (off is the same as --no-save) |
 | `session.retention_days` | number (1 to 3650) | `30` | no | Delete saved conversations that were not touched for this many days (checked each time Centcom starts) |

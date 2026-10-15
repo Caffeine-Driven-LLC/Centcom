@@ -3,7 +3,7 @@
  * turn, continuing with --resume. Never reads credentials; auth is whatever the user's `claude` is signed in with.
  */
 import { redact as redactSecrets } from '@centcom/protocol';
-import { ApprovalBridge } from './bridge.js';
+import { ApprovalBridge, SUBAGENT_TOOLS } from './bridge.js';
 import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process';
 import { realClock, signalLadder, type LadderClock } from '../interrupt/ladder.js';
 import { sharedProcessRegistry, type Killed, type ProcessRegistry } from '../interrupt/procs.js';
@@ -38,7 +38,7 @@ export class ClaudeCodeEngine implements AgentEngine {
 }
 
 /** `viaStdin`: the prompt is not on the command line (it would show in `ps`, and the system limits its size); `claude -p` then reads it from standard input. */
-export function buildArgv(prompt: string, o: { viaStdin?: boolean; /** The prompt and later control requests go in as stream-json lines (`--input-format stream-json`); needs `viaStdin`. */ streamInput?: boolean; resume?: string; permissionMode?: PermissionMode; model?: string; effort?: string; allowedTools?: string[]; systemPromptAppend?: string; addDirs?: string[]; extra?: string[] }): string[] {
+export function buildArgv(prompt: string, o: { viaStdin?: boolean; /** The prompt and later control requests go in as stream-json lines (`--input-format stream-json`); needs `viaStdin`. */ streamInput?: boolean; resume?: string; permissionMode?: PermissionMode; model?: string; effort?: string; allowedTools?: string[]; systemPromptAppend?: string; addDirs?: string[]; extra?: string[]; disallowedTools?: string[]; /** The engine's own cap on what this turn may cost (`--max-budget-usd`). */ maxBudgetUsd?: number }): string[] {
   const a = [...(o.viaStdin ? ['-p', ...(o.streamInput ? ['--input-format', 'stream-json'] : [])] : ['-p', prompt]), '--output-format', 'stream-json', '--verbose', '--include-partial-messages'];
   if (o.resume) a.push('--resume', o.resume);
   // 'default' is Centcom's "ask first"; say so explicitly, otherwise the user's own claude settings (e.g. defaultMode: auto) decide silently
@@ -46,6 +46,8 @@ export function buildArgv(prompt: string, o: { viaStdin?: boolean; /** The promp
   if (o.model) a.push('--model', o.model);
   if (o.effort) a.push('--effort', o.effort);
   if (o.allowedTools?.length) a.push('--allowedTools', ...o.allowedTools);
+  if (o.disallowedTools?.length) a.push('--disallowedTools', ...o.disallowedTools);
+  if (o.maxBudgetUsd && o.maxBudgetUsd > 0) a.push('--max-budget-usd', o.maxBudgetUsd.toFixed(2));
   if (o.systemPromptAppend) a.push('--append-system-prompt', o.systemPromptAppend);
   a.push(...(o.extra ?? []));
   for (const d of o.addDirs ?? []) a.push('--add-dir', d); // one flag per directory: the option is variadic and must not swallow later arguments
@@ -84,6 +86,8 @@ class ClaudeSession implements EngineSession {
     return base;
   }
   resumeToken() { return this.sessionId; }
+  private limits: { noSubagents?: boolean; maxBudgetUsd?: number } = {};
+  setTurnLimits(l: { noSubagents?: boolean; maxBudgetUsd?: number }) { this.limits = { ...l }; }
   setModel(m: string) { this.model = m; }
   setEffort(e: string) { this.effort = e || undefined; }
   setPermissionMode(m: PermissionMode) { this.mode = m; }
@@ -97,13 +101,13 @@ class ClaudeSession implements EngineSession {
     if (this.closed) throw new Error('session closed');
     if (this.child && !this.sawResult) throw new Error('a turn is already running');
     if (this.child) await this.exitWait; // the previous turn already reported its result; let the process finish exiting
-    if (this.o.approvalGate && !this.bridge) { this.bridge = new ApprovalBridge({ agentId: this.agentId, cwd: this.o.cwd, gate: this.o.approvalGate, emit: (b) => this.emit(b) }); try { await this.bridge.start(); } catch (e) { this.bridge = undefined; /* fail closed: never run Claude without Centcom's approvals */ const turn = newId('trn'); this.turn = turn; this.emit({ type: 'turn.started', turn_id: turn }); this.emit({ type: 'error', code: 'provider_protocol_error', tool_message: `Approvals could not be set up (${redact(String((e as Error)?.message ?? e))}), so nothing was run.`, fatal: false }); this.emit({ type: 'turn.done', outcome: 'error', stop_reason: 'approval_bridge_failed' }); return { turn_id: turn }; } }
+    if (this.o.approvalGate && !this.bridge) { this.bridge = new ApprovalBridge({ agentId: this.agentId, cwd: this.o.cwd, gate: this.o.approvalGate, emit: (b) => this.emit(b), ...(this.o.subagentGate ? { subagentGate: this.o.subagentGate } : {}) }); try { await this.bridge.start(); } catch (e) { this.bridge = undefined; /* fail closed: never run Claude without Centcom's approvals */ const turn = newId('trn'); this.turn = turn; this.emit({ type: 'turn.started', turn_id: turn }); this.emit({ type: 'error', code: 'provider_protocol_error', tool_message: `Approvals could not be set up (${redact(String((e as Error)?.message ?? e))}), so nothing was run.`, fatal: false }); this.emit({ type: 'turn.done', outcome: 'error', stop_reason: 'approval_bridge_failed' }); return { turn_id: turn }; } }
     const turn = newId('trn'); this.turn = turn; this.sawResult = false; this.interrupted = false;
     this.emit({ type: 'turn.started', turn_id: turn });
     if (this.bypassRefused) { this.bypassRefused = false; this.emit({ type: 'engine.warning', code: 'bypass_not_allowed', text: 'Approvals stay on: skipping them has to be asked for (/mode bypass, or --dangerously-skip-permissions).' }); }
     if (!(await this.versionOk())) return { turn_id: turn };
     this.emit({ type: 'status', state: 'prompt-received' });
-    const argv = buildArgv(prompt, { viaStdin: true, streamInput: true, resume: this.sessionId, permissionMode: this.mode, model: this.model, effort: this.effort, allowedTools: this.o.allowedTools, systemPromptAppend: this.o.systemPromptAppend, addDirs: this.o.addDirs, extra: this.bridge?.argv() });
+    const argv = buildArgv(prompt, { viaStdin: true, streamInput: true, resume: this.sessionId, permissionMode: this.mode, model: this.model, effort: this.effort, allowedTools: this.o.allowedTools, disallowedTools: this.limits.noSubagents ? [...SUBAGENT_TOOLS] : undefined, maxBudgetUsd: this.limits.maxBudgetUsd, systemPromptAppend: this.o.systemPromptAppend, addDirs: this.o.addDirs, extra: this.bridge?.argv() });
     const parser = new ClaudeStreamParser(); this.parser = parser; this.receiptCap = false;
     const spawnFn = this.deps.spawn ?? nodeSpawn;
     let child: ChildProcess;

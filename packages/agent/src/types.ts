@@ -29,6 +29,8 @@ export type EventBody =
   | { type: 'subagent.text'; subagent_id: string; text: string }
   | { type: 'subagent.done'; subagent_id: string; status: 'ok' | 'error' | 'canceled' }
   | { type: 'usage.report'; /** The engine's id of the message this usage belongs to; used to keep a replay from counting twice. */ message_id?: string; input_tokens: number; output_tokens: number; cache_read_tokens?: number; cost_usd?: number; cost_is_estimate: true; context_used_pct?: number; context_tokens?: number; context_window?: number }
+  /** One request to the model finished (the main conversation or a sub-agent): what the live meter and the budget guard count while a turn is still running. `usage.report` follows at the end of the turn with the totals and the cost. */
+  | { type: 'usage.progress'; message_id: string; scope: 'main' | 'subagent'; input_tokens: number; output_tokens: number; cache_read_tokens?: number }
   | { type: 'limits.report'; windows: { name: string; utilization: number; resets_at: number }[] }
   | { type: 'model.changed'; model: string; reason: 'user' | 'fallback' | 'engine' }
   | { type: 'status'; state: string; detail?: string }
@@ -67,6 +69,8 @@ export interface EngineStartOptions {
   effort?: string;
   /** The model sub-agents run on (Claude Code: CLAUDE_CODE_SUBAGENT_MODEL). Unset leaves it to the engine, and the person's own variable always wins. */
   subagentModel?: string;
+  /** Asked before each sub-agent starts (Claude Code, through a hook on its sub-agent tool); a no refuses that one with the reason. Needs `approvalGate`. */
+  subagentGate?: () => { allow: boolean; reason?: string };
   /** Extra directories the agent may read (e.g. the bundled skills). */
   addDirs?: string[];
   allowedTools?: string[];
@@ -95,6 +99,8 @@ export interface EngineSession {
   setModel?(model: string): void;
   /** Reasoning effort for the next turns (Codex: low … max). Empty clears it. */
   setEffort?(effort: string): void;
+  /** Limits for the next turn: no sub-agent tool at all, and the engine's own cap on what the turn may cost. Replaces the ones before. */
+  setTurnLimits?(l: { noSubagents?: boolean; maxBudgetUsd?: number }): void;
   /** Asks the engine to compact the conversation now (Codex: thread/compact/start). */
   compact?(): Promise<void>;
   setPermissionMode?(mode: PermissionMode): void;
