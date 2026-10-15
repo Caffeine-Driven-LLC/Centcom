@@ -56,9 +56,9 @@ Measured by `tools/dev/cost-report.ts` (about 4 characters per token):
 | board digest | start of the user message | up to 500 tokens (`context.digest_tokens`), 356 in the sample | only when another agent or person posted something new; each note once |
 | auto skills | start of the user message | about 45 tokens per matched skill | only when the prompt matches a skill |
 | team notice | start of the user message | one line | once per conflict |
-| carry-over summary | `--append-system-prompt` | up to 8 KiB | only after switching engines |
+| carry-over summary | start of the first message of a fresh session | up to 8 KiB | only after switching engines or a resume that could not be continued; sent once |
 
-None of this is in the system prompt except the carry-over summary, which is sent unchanged on every turn of that session.
+None of this is in the system prompt. Centcom adds nothing to `--append-system-prompt` at all: the carry-over summary used to be sent there on every turn of its session (up to 8 KiB, 2k tokens, every request); it now goes into the first message once, and a resumed session is never sent it again. The skills pack is 3.3 KB in all (about 800 tokens), so it was left as it is.
 
 ## Is the prompt cache kept?
 
@@ -74,5 +74,6 @@ Rows are added here as the cost work lands.
 |---|---|
 | Fixed tokens Centcom adds to each request | about 1.1k |
 | Default model | the user's own default (Opus 5.5 in the SAT session) |
+| Carry-over summary after switching engines | in the system prompt, every turn | | 
 | Run limit | none |
 | Sub-agents per run | unlimited |

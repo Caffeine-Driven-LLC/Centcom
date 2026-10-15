@@ -98,7 +98,7 @@ class CodexSession implements EngineSession {
       const pol = policyFor(this.mode);
       const sandbox = ({ readOnly: 'read-only', workspaceWrite: 'workspace-write', dangerFullAccess: 'danger-full-access' } as Record<string, string>)[pol.sandboxPolicy.type];
       // No `sandbox` here: on 0.161.0 a thread/start with workspace-write marks the folder trusted in ~/.codex/config.toml, which lets a repo's own MCP servers and hooks run. The sandbox is passed on every turn instead.
-      const params = { cwd: this.o.cwd, approvalPolicy: pol.approvalPolicy, config: { shell_environment_policy: { inherit: 'all', exclude: ENV_EXCLUDE } }, ...(this.model ? { model: this.model } : {}), ...(this.o.systemPromptAppend ? { developerInstructions: this.o.systemPromptAppend } : {}) };
+      const params = { cwd: this.o.cwd, approvalPolicy: pol.approvalPolicy, config: { shell_environment_policy: { inherit: 'all', exclude: ENV_EXCLUDE } }, ...(this.model ? { model: this.model } : {}), ...([this.o.systemPromptAppend, this.o.carryOver].filter(Boolean).length ? { developerInstructions: [this.o.systemPromptAppend, this.o.carryOver].filter(Boolean).join('\n\n') } : {}) };
       const r = this.o.resume?.engine_session_id ? await rpc.request('thread/resume', { threadId: this.o.resume.engine_session_id, excludeTurns: true, ...params }, 30_000) : await rpc.request('thread/start', params, 30_000);
       this.threadId = r.thread?.id; this.ready = true;
       this.emit({ type: 'session.started', engine: 'codex', engine_session_id: this.threadId ?? '', model: r.model ?? this.model ?? 'codex', tools: ['shell', 'apply_patch'], mcp_servers: [], capabilities: [...CAPS], login_kind: login });

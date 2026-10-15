@@ -211,7 +211,7 @@ export class AppController {
   private startOptions(resumeToken?: string, carry?: string): EngineStartOptions {
     const gate: PermissionGate = { decide: (r) => this.decide(r) };
     const questionGate: QuestionGate = { ask: (qs) => this.askEngine(qs) };
-    return { agentId: this.me, cwd: this.o.cwd, permissionMode: this.state.settings.permissionMode, allowBypass: !!this.o.dangerous || this.bypassChosen, model: this.state.settings.model || undefined, addDirs: this.o.demo ? undefined : [MASTER_DIR, LIBRARY_DIR], approvalGate: gate, questionGate, ...(resumeToken ? { resume: { engine_session_id: resumeToken } } : {}), ...(carry ? { systemPromptAppend: carry } : {}) };
+    return { agentId: this.me, cwd: this.o.cwd, permissionMode: this.state.settings.permissionMode, allowBypass: !!this.o.dangerous || this.bypassChosen, model: this.state.settings.model || undefined, addDirs: this.o.demo ? undefined : [MASTER_DIR, LIBRARY_DIR], approvalGate: gate, questionGate, ...(resumeToken ? { resume: { engine_session_id: resumeToken } } : {}), ...(carry ? { carryOver: carry } : {}) };
   }
   private async startEngine(resumeToken?: string, carry?: string) { this.adopt(await this.o.engine.start(this.startOptions(resumeToken, carry))); }
   /** A conversation saved with the other engine cannot be resumed by this one (its session id means nothing here): this one starts fresh with a summary of what was said. */
