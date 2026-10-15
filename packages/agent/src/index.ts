@@ -33,3 +33,4 @@ export * from './persistence/index.js';
 export * from './models/index.js';
 export * from './skills/index.js';
 export * from './board/index.js';
+export * from './cost/index.js';
