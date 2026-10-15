@@ -8,13 +8,25 @@ const MODE = { default: 'ask', acceptEdits: 'accept-edits', plan: 'plan', bypass
 const WIN: Record<string, string> = { five_hour: 'session', seven_day: 'week' };
 
 /** Header and footer fields from the app state. `home` is the folder to show as `~`. */
+/** The run so far against its limits, as one short phrase: `run 12/60 req · ↓34k/400k · $0.41 · ~3.1k/min`. */
+export function runMeterText(s: AppState, now = Date.now()): { text: string; warn: boolean } | undefined {
+  const m = s.meter; if (!m || (m.run.requests === 0 && !s.busy)) return undefined; const r = m.run; const l = m.limits; const on = m.enabled;
+  const lim = (n: number, f: (x: number) => string) => (on && n > 0 ? '/' + f(n) : '');
+  const mins = (now - m.startedAt) / 60_000; const rate = s.busy && mins >= 0.5 && r.outputTokens > 0 ? ` · ~${formatTokens(Math.round(r.outputTokens / mins))}/min` : '';
+  const text = `run ${r.requests}${lim(l.runRequests, String)} req · ↓${formatTokens(r.outputTokens)}${lim(l.runOutputTokens, formatTokens)}${r.usd > 0 ? ` · $${r.usd.toFixed(2)}${lim(l.runUsd, (x) => x.toFixed(2))}` : ''}${r.subagents > 0 ? ` · ${r.subagents} sub-agent${r.subagents === 1 ? '' : 's'}` : ''}${rate}${m.paused ? ' · paused' : ''}`;
+  const near = on && ((l.runRequests > 0 && r.requests >= l.runRequests * 0.8) || (l.runOutputTokens > 0 && r.outputTokens >= l.runOutputTokens * 0.8) || (l.runUsd > 0 && r.usd >= l.runUsd * 0.8));
+  return { text, warn: near || !!m.paused };
+}
+
 export function statusFieldsFor(s: AppState, o: { home?: string; now?: number } = {}): StatusFields {
   const me = s.agents.find((a) => a.mine); const others = s.agents.filter((a) => !a.mine);
   const kind = me?.loginKind === 'subscription' ? 'subscription' : me?.loginKind === 'api_key' ? 'API key' : me?.loginKind === 'cloud' ? 'cloud' : s.demo ? 'demo' : '';
   const engine = [s.engineLabel, me?.model ? truncate(me.model, 22) : '', s.settings.effort && s.engineId === 'claude-code' ? s.settings.effort : '', kind].filter(Boolean).join(' · ');
   const cost = s.agents.reduce((n, a) => n + (a.cost || 0), 0); const need = others.filter((a) => a.state === 'awaiting-approval').length + s.approvals.length;
   const night = s.night.running || s.night.armed || s.night.tasks.length ? (() => { const c = nightCounts(s.night); return s.night.running ? `night ${c.done + c.failed}/${c.total}` : c.queued ? `night · ${c.queued} queued` : 'night ready'; })() : undefined;
+  const run = runMeterText(s, o.now);
   return {
+    ...(run ? { run: run.text, runWarn: run.warn } : {}),
     cwd: s.cwd, home: o.home, branch: s.branch || undefined, engine, agents: s.agents.length, costMicroUsd: cost > 0 ? Math.round(cost * 1_000_000) : undefined, showCost: s.settings.showCost !== false,
     connectivity: s.net === 'backend-down' ? 'down' : s.net && s.net !== 'online' ? s.net : undefined,
     mode: MODE[s.settings.permissionMode], night, ...(s.share ? { runsOn: s.share.runsOn, ...(s.share.guests ? { guests: { text: s.share.guests, stale: s.share.guestsStale } } : {}) } : {}),

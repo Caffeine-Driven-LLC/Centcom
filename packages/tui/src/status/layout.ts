@@ -1,14 +1,14 @@
 /** The header and footer lines: which fields exist, what they say, and what is dropped first when the terminal gets narrow. */
 import { textWidth } from '../util/text.js';
 
-export type StatusFieldName = 'cwd' | 'branch' | 'mode' | 'agents' | 'online' | 'cost' | 'quota' | 'role' | 'connectivity' | 'hints' | 'engine' | 'night' | 'state' | 'need' | 'context' | 'limits' | 'tokens' | 'runs' | 'guests';
-export interface StatusFields { cwd: string; home?: string; branch?: string; mode?: 'ask' | 'accept-edits' | 'plan' | 'bypass'; /** The engine and model, as the app header shows them. */ engine?: string; /** Night cycle, as a short phrase (`night 2/5`). */ night?: string; /** What the agent is doing (`thinking`) or `idle`. */ state?: string; /** Agents (and permission prompts) waiting for you. */ needYou?: number; context?: { pct: number; tokens?: string }; limits?: { name: string; pct: number; resets?: string }[]; tokens?: string; agents?: number; online?: number; costMicroUsd?: number; showCost?: boolean; quota?: { used: number; limit: number | null; warnPct?: number }; role?: 'host' | 'editor' | 'viewer'; connectivity?: 'online' | 'offline' | 'reconnecting' | 'degraded' | 'down'; hints?: string[]; /** C105: `runs on <name> · <provider>`. */ runsOn?: string; /** C105: `N guests can spend your <provider> usage` and how to pause, or `Guests paused`. */ guests?: { text: string; stale?: boolean } }
+export type StatusFieldName = 'cwd' | 'branch' | 'mode' | 'agents' | 'online' | 'cost' | 'quota' | 'role' | 'connectivity' | 'hints' | 'engine' | 'night' | 'state' | 'need' | 'context' | 'limits' | 'tokens' | 'runs' | 'guests' | 'run';
+export interface StatusFields { cwd: string; home?: string; branch?: string; mode?: 'ask' | 'accept-edits' | 'plan' | 'bypass'; /** The engine and model, as the app header shows them. */ engine?: string; /** Night cycle, as a short phrase (`night 2/5`). */ night?: string; /** What the agent is doing (`thinking`) or `idle`. */ state?: string; /** Agents (and permission prompts) waiting for you. */ needYou?: number; context?: { pct: number; tokens?: string }; limits?: { name: string; pct: number; resets?: string }[]; tokens?: string; /** What the current run has used so far, against its limits (`run 12/60 req · ↓34k/400k · $0.41`). */ run?: string; runWarn?: boolean; agents?: number; online?: number; costMicroUsd?: number; showCost?: boolean; quota?: { used: number; limit: number | null; warnPct?: number }; role?: 'host' | 'editor' | 'viewer'; connectivity?: 'online' | 'offline' | 'reconnecting' | 'degraded' | 'down'; hints?: string[]; /** C105: `runs on <name> · <provider>`. */ runsOn?: string; /** C105: `N guests can spend your <provider> usage` and how to pause, or `Guests paused`. */ guests?: { text: string; stale?: boolean } }
 export type Tone = 'muted' | 'warning' | 'danger';
 export interface StatusSegment { field: StatusFieldName; text: string; tone: Tone; side: 'left' | 'right' }
 /** What goes first when the line is too wide. The mode goes last; quota, role and connectivity are never dropped. */
 export const STATUS_DROP_ORDER: StatusFieldName[] = ['hints', 'cost', 'online', 'agents', 'branch', 'mode'];
 /** Fields the app adds on top of the DESIGN lines; they go before the branch and the mode when the line is too wide (hints and cost still go first). */
-export const EXTRA_DROP_ORDER: StatusFieldName[] = ['tokens', 'engine', 'night', 'limits', 'state', 'context', 'runs'];
+export const EXTRA_DROP_ORDER: StatusFieldName[] = ['tokens', 'engine', 'night', 'limits', 'state', 'context', 'runs', 'run'];
 export const SEP = ' · ';
 export const MAX_BRANCH = 24;
 
@@ -44,6 +44,7 @@ function build(f: StatusFields, line: 'header' | 'footer'): StatusSegment[] {
     if (f.state) out.push(seg('state', f.state, 'left')); if (f.needYou) out.push(seg('need', `${f.needYou} need${f.needYou === 1 ? 's' : ''} you`, 'left', 'warning'));
     if (f.context) out.push(seg('context', `context ${bar(f.context.pct)} ${Math.round(f.context.pct)}%${f.context.tokens ? ' ' + f.context.tokens : ''}`, 'left', gaugeTone(f.context.pct)));
     for (const l of f.limits ?? []) out.push(seg('limits', `${l.name} ${bar(l.pct)} ${Math.round(l.pct)}%${l.resets ? ' ↻ ' + l.resets : ''}`, 'left', gaugeTone(l.pct)));
+    if (f.run) out.push(seg('run', f.run, 'left', f.runWarn ? 'warning' : 'muted'));
     if (f.tokens) out.push(seg('tokens', f.tokens, 'left')); if (f.branch) out.push(seg('branch', shortBranch(f.branch), 'left')); for (const h of f.hints ?? []) out.push(seg('hints', h, 'right'));
   }
   return out;
@@ -71,6 +72,7 @@ export function statusText(f: StatusFields): string {
   const p: string[] = [`Cento in ${shortCwd(f.cwd, f.home).replace(/^~/, 'home')}`]; if (f.branch) p[0] += ` on ${shortBranch(f.branch)}`;
   if (f.mode) p.push(f.mode === 'accept-edits' ? 'accept edits on' : f.mode === 'plan' ? 'plan mode' : f.mode === 'bypass' ? 'no approvals' : 'asking before edits');
   if (f.needYou) p.push(`${f.needYou} waiting for you`);
+  if (f.run) p.push(f.run);
   if (f.agents !== undefined) p.push(`${f.agents} agent${f.agents === 1 ? '' : 's'}`); if (f.online !== undefined) p.push(`${f.online} online`);
   if (f.costMicroUsd !== undefined && f.showCost !== false) { const c = f.costMicroUsd / 1_000_000; p.push(c < 1 ? `cost ${Math.round(c * 100)} cents` : `cost $${c.toFixed(2)}`); }
   const q = quotaChip(f.quota); if (q) p.push(q.text); if (f.role) p.push(`${f.role} role`); if (f.connectivity && f.connectivity !== 'online') p.push(CONNECTIVITY[f.connectivity].slice(2));

@@ -268,7 +268,7 @@ export class AppController {
   async newSession() {
     if (this.state.busy) { this.toast('warn', 'Cento is still working. Press Esc to interrupt, then try again.'); return; }
     this.persist(); this.o.sessions?.close(this.state.sessionId); await this.dropSession(); this.o.board?.resetAgent(this.me);
-    this.createdAt = undefined; this.lastItems = undefined; this.guard.resetSession();
+    this.createdAt = undefined; this.lastItems = undefined; this.guard.resetSession(); this.patch({ meter: undefined });
     this.set({ items: [], scroll: 0, sessionId: newId('ses'), approvals: [], tasks: [] });
     await this.startEngine();
   }
@@ -345,7 +345,7 @@ export class AppController {
   apply(ev: NormalisedEvent) {
     this.o.onEvent?.(ev);
     this.logEvent(ev);
-    { const stop = this.guard.note(ev); if (stop) void this.onBudgetStop(stop); }
+    { const stop = this.guard.note(ev); if (ev.type === 'usage.progress' || ev.type === 'usage.report' || ev.type === 'subagent.started') this.syncMeter(); if (stop) void this.onBudgetStop(stop); }
     try { this.ctxView?.onEvent(ev); } catch { /* the meter never breaks the transcript */ }
     for (const ob of this.o.observers ?? []) { try { ob(this.me, ev); } catch { /* an observer never breaks the transcript */ } }
     this.account(this.me, ev, this.o.engine.id); this.models.onEvent(this.me, ev as never);
@@ -719,10 +719,12 @@ export class AppController {
         if (!(await this.askKeepGoing('This is a big job', note, 'Go ahead'))) { this.set({ input: text, cursor: text.length }); return false; }
       }
     }
-    const stop = g.startRun(kind);
+    const stop = g.startRun(kind); this.syncMeter();
     if (stop) { if (!this.interactive) return refuse(stop); if (!(await this.askKeepGoing('Another "continue"?', stop.text + ' Is it still doing what you want?', 'Keep going'))) { this.set({ input: text, cursor: text.length }); return false; } g.extend(); }
     return true;
   }
+  /** Copies the guard's counters into the state the footer and the side panel draw. */
+  private syncMeter() { this.patch({ meter: this.guard.meter() }); }
   /** A limit was passed: stop the run at once, say why, and ask whether to go on. */
   private async onBudgetStop(stop: Stop): Promise<void> {
     const wasBusy = this.state.busy; this.budgetStop = stop;
