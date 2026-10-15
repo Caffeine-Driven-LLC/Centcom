@@ -1,6 +1,6 @@
 # The Centcom app screens (apps/web)
 
-The screens of the desktop app (`apps/desktop` runs them in Electron; `pnpm web:dev` shows them in a browser tab): React 19, TanStack Router, the Cento theme in dark and light, shared accessible primitives and the app frame. `pnpm web:dev` runs it (set `VITE_API_BASE` to the mock backend) and `pnpm web:build` builds it into `apps/web/dist/`.
+The screens of the desktop app (`apps/desktop` runs them in Electron; `pnpm web:dev` shows them in a browser tab): React 19, TanStack Router, the Cento theme in dark and light, shared accessible primitives and the app frame. `pnpm web:dev` runs it (set `VITE_API_BASE` to the mock backend) and `pnpm web:build` builds it into `apps/web/dist/`. Paths in the build are relative so the desktop app can load it from its own address; a hosted build that serves `/g/<token>` or `/s/<id>` directly must be built with `CENTCOM_WEB_BASE=/ pnpm web:build`, or the page's script and styles are looked up under the deep path and not found.
 
 - **Areas plug in by file:** `src/<area>/routes.tsx` exports `routeModule: RouteModule` (`{routes, nav?}`) with routes hung on `rootRoute` from `src/app/root.tsx`. Nothing in `src/app/` names an area (`import.meta.glob`).
 - **Primitives** (`src/ui`): Button, Input, Card, Chip, Tabs, Banner, Toast (`useToast`), Modal, Table, Avatar, PresenceDot, Skeleton, Tooltip, EmptyState, PixelIcon, VisuallyHidden, LiveRegion. Semantic tokens only; raw hex fails `csp.test.ts`.

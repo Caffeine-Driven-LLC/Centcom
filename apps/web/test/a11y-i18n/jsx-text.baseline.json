@@ -2,7 +2,7 @@
   "app/Frame.tsx": 5,
   "app/root.tsx": 3,
   "auth/routes.tsx": 7,
-  "billing/routes.tsx": 35,
+  "billing/routes.tsx": 37,
   "fleet/components.tsx": 12,
   "fleet/routes.tsx": 5,
   "home/routes.tsx": 3,
@@ -26,8 +26,8 @@
   "session/page.tsx": 11,
   "session/queue.tsx": 9,
   "session/transcript.tsx": 15,
-  "settings/routes.tsx": 31,
+  "settings/routes.tsx": 36,
   "ui/primitives.tsx": 2,
   "workspace/components.tsx": 5,
-  "workspace/routes.tsx": 35
+  "workspace/routes.tsx": 38
 }
