@@ -75,6 +75,8 @@ export class ClaudeStreamParser {
   /** Tools asked for and not yet answered: a turn must never end with one open (CT-PROVIDER stream rules). */
   private openTools = new Set<string>();
   private usage = { input: 0, output: 0, cacheRead: 0 };
+  /** Usage of the message being streamed, per stream (the main conversation and each sub-agent stream on their own), so parallel sub-agents do not mix. */
+  private prog = new Map<string, { id: string; inp: number; out: number; read: number }>();
   sessionId?: string;
   /** What the CLI said it can do in `system/init` (`interrupt_receipt_v1` among them). Undefined until the init message. */
   initCapabilities?: string[];
@@ -125,6 +127,7 @@ export class ClaudeStreamParser {
         this.seenStream.add(this.messageId);
         this.textIndex = 0; this.blocks.clear();
         if (e.message?.usage) { this.usage.input = e.message.usage.input_tokens ?? 0; this.usage.cacheRead = e.message.usage.cache_read_input_tokens ?? 0; }
+        this.prog.set(parent ?? '', { id: this.messageId, inp: Number(e.message?.usage?.input_tokens ?? 0) + Number(e.message?.usage?.cache_creation_input_tokens ?? 0), out: Number(e.message?.usage?.output_tokens ?? 0), read: Number(e.message?.usage?.cache_read_input_tokens ?? 0) });
         break;
       case 'content_block_start': {
         const b = e.content_block as J; const idx = Number(e.index);
@@ -162,9 +165,11 @@ export class ClaudeStreamParser {
       }
       case 'message_delta':
         if (e.usage?.output_tokens !== undefined) this.usage.output = e.usage.output_tokens;
+        { const pr = this.prog.get(parent ?? ''); if (pr && e.usage?.output_tokens !== undefined) pr.out = Number(e.usage.output_tokens); }
         break;
       case 'message_stop':
         if (!parent) { if (this.openText === this.messageId) this.openText = undefined; out.push({ type: 'text.done', message_id: this.messageId, input_tokens: this.usage.input, output_tokens: this.usage.output }); }
+        { const pr = this.prog.get(parent ?? ''); if (pr) { this.prog.delete(parent ?? ''); out.push({ type: 'usage.progress', message_id: pr.id, scope: parent ? 'subagent' : 'main', input_tokens: pr.inp, output_tokens: pr.out, cache_read_tokens: pr.read }); } } // one request finished: the live meter and the budget count it now, not at the end of the turn
         break;
     }
     return out;
@@ -182,6 +187,7 @@ export class ClaudeStreamParser {
     const m = d.message as J | undefined;
     if (!m || (m.id && this.seenStream.has(String(m.id)))) return [];
     const out: EventBody[] = [];
+    { const u = m.usage as J | undefined; if (u) out.push({ type: 'usage.progress', message_id: String(m.id ?? 'msg'), scope: d.parent_tool_use_id ? 'subagent' : 'main', input_tokens: Number(u.input_tokens ?? 0) + Number(u.cache_creation_input_tokens ?? 0), output_tokens: Number(u.output_tokens ?? 0), cache_read_tokens: Number(u.cache_read_input_tokens ?? 0) }); } // a message that was not streamed still counts as a request
     for (const b of (m.content ?? []) as J[]) {
       if (b.type === 'text' && b.text) { out.push({ type: 'status', state: 'streaming' }, { type: 'text.delta', message_id: String(m.id), index: 0, text: String(b.text) }, { type: 'text.done', message_id: String(m.id) }); }
       if (b.type === 'tool_use') {

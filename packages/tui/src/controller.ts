@@ -3,7 +3,7 @@
  * answers approvals through the permission policy, runs slash commands, and drives the mascot.
  * The React tree only reads the store and calls the controller's methods.
  */
-import { CLAUDE_MODELS, type Board, createAgentBus, createCheckpointManager, createContextView, modelLabel, newId, nodeGit } from '@centcom/agent';
+import { BudgetGuard, allowanceText, bigPrompt, classifyPrompt, compact as compactNumber, CLAUDE_MODELS, type Stop, type Board, createAgentBus, createCheckpointManager, createContextView, modelLabel, newId, nodeGit } from '@centcom/agent';
 import { createInterruptController, createModelRegistry, removeStaleIndexLock, sharedProcessRegistry, usageTable, type InterruptController, type ModelRegistry } from '@centcom/agent';
 import type { AgentBus, AgentId, FleetManager, FleetNode, Ledger, Checkpoint, CheckpointManager, ContextConfig, ContextView, EngineId, EngineStartOptions, GitRunner, PermissionEngine, PolicyMode, RewindMode } from '@centcom/agent';
 import type { PendingApproval as PolicyPending } from '@centcom/agent';
@@ -43,6 +43,10 @@ export const MAX_MESSAGE = 65_536;
 export interface ControllerOptions {
   /** How long an approval waits before the engine declines it (shown as a countdown). */
   approvalTimeoutMs?: number;
+  /** The budget guard (on by default; `budget.*`, `agent.max_subagents`). Without one the defaults apply. */
+  budget?: BudgetGuard;
+  /** False when nobody can answer a question (print mode): a limit then stops the run instead of asking. */
+  interactive?: boolean;
   /** `agent.effort`: the reasoning effort Claude Code starts with (empty: the engine's own). */
   defaultEffort?: string;
   /** `agent.subagent_model`: the model Claude Code's sub-agents run on (empty: the engine's own). */
@@ -136,7 +140,12 @@ export class AppController {
   private bus: AgentBus = createAgentBus({ onError: () => undefined });
   private ctxView?: ContextView; private cp?: CheckpointManager; private pendingReqs = new Map<string, ApprovalRequest>(); private lastEsc = 0;
 
+  /** What a run and the conversation have used, and whether a limit has stopped the run. */
+  readonly guard: BudgetGuard;
+  /** Set when a limit stopped the run and nobody could be asked (print mode reads it). */
+  budgetStop?: Stop;
   constructor(private o: ControllerOptions) {
+    this.guard = o.budget ?? new BudgetGuard();
     this.verbs = o.verbs ?? new VerbRotator();
     const settings = { ...initialSettings(), permissionMode: o.permissionMode ?? 'default', ...o.settings }; settings.mouse = o.mouse ?? (settings.mouse && !!process.stdout.isTTY); // the wheel only makes sense in a terminal
     const me: AgentView = { id: this.me, name: 'you', color: settings.color, mine: true, engine: o.engine.label, provider: o.engine.provider, model: '', loginKind: 'unknown', state: 'idle', mini: 'idle', busy: false, branch: o.branch ?? '', runsOn: 'you', cost: 0, inTok: 0, outTok: 0 };
@@ -217,7 +226,7 @@ export class AppController {
   private startOptions(resumeToken?: string, carry?: string): EngineStartOptions {
     const gate: PermissionGate = { decide: (r) => this.decide(r) };
     const questionGate: QuestionGate = { ask: (qs) => this.askEngine(qs) };
-    return { agentId: this.me, cwd: this.o.cwd, permissionMode: this.state.settings.permissionMode, allowBypass: !!this.o.dangerous || this.bypassChosen, model: this.state.settings.model || undefined, addDirs: this.o.demo ? undefined : [MASTER_DIR, LIBRARY_DIR], approvalGate: gate, questionGate, ...(this.o.engine.id === 'claude-code' && this.o.subagentModel ? { subagentModel: this.o.subagentModel } : {}), ...(resumeToken ? { resume: { engine_session_id: resumeToken } } : {}), ...(carry ? { carryOver: carry } : {}) };
+    return { agentId: this.me, cwd: this.o.cwd, permissionMode: this.state.settings.permissionMode, allowBypass: !!this.o.dangerous || this.bypassChosen, model: this.state.settings.model || undefined, addDirs: this.o.demo ? undefined : [MASTER_DIR, LIBRARY_DIR], approvalGate: gate, questionGate, ...(this.o.engine.id === 'claude-code' && this.o.subagentModel ? { subagentModel: this.o.subagentModel } : {}), ...(this.o.engine.id === 'claude-code' ? { subagentGate: () => this.guard.allowSubagent() } : {}), ...(resumeToken ? { resume: { engine_session_id: resumeToken } } : {}), ...(carry ? { carryOver: carry } : {}) };
   }
   private async startEngine(resumeToken?: string, carry?: string) { this.adopt(await this.o.engine.start(this.startOptions(resumeToken, carry))); }
   /** A conversation saved with the other engine cannot be resumed by this one (its session id means nothing here): this one starts fresh with a summary of what was said. */
@@ -259,7 +268,7 @@ export class AppController {
   async newSession() {
     if (this.state.busy) { this.toast('warn', 'Cento is still working. Press Esc to interrupt, then try again.'); return; }
     this.persist(); this.o.sessions?.close(this.state.sessionId); await this.dropSession(); this.o.board?.resetAgent(this.me);
-    this.createdAt = undefined; this.lastItems = undefined;
+    this.createdAt = undefined; this.lastItems = undefined; this.guard.resetSession();
     this.set({ items: [], scroll: 0, sessionId: newId('ses'), approvals: [], tasks: [] });
     await this.startEngine();
   }
@@ -336,6 +345,7 @@ export class AppController {
   apply(ev: NormalisedEvent) {
     this.o.onEvent?.(ev);
     this.logEvent(ev);
+    { const stop = this.guard.note(ev); if (stop) void this.onBudgetStop(stop); }
     try { this.ctxView?.onEvent(ev); } catch { /* the meter never breaks the transcript */ }
     for (const ob of this.o.observers ?? []) { try { ob(this.me, ev); } catch { /* an observer never breaks the transcript */ } }
     this.account(this.me, ev, this.o.engine.id); this.models.onEvent(this.me, ev as never);
@@ -530,7 +540,7 @@ export class AppController {
   private cancelQuestions() { const a = this.pendingAnswer; this.pendingAnswer = undefined; if (this.state.maskInput) this.set({ maskInput: false }); if (a) this.restoreDraft(); a?.(undefined); if (this.questionPick && this.state.mode === 'pick') this.pickKey('cancel'); }
 
   /** A question waiting for y (memory notes, rewinds): the answer never goes to the engine or into history. */
-  async submit(raw: string, opts: { wire?: string; /** Send as a message to the agent even when the night panel is open (an answer to its question). */ asMessage?: boolean } = {}) {
+  async submit(raw: string, opts: { /** Continues a run the person just let go on after a limit: not counted as a new message. */ resume?: boolean; wire?: string; /** Send as a message to the agent even when the night panel is open (an answer to its question). */ asMessage?: boolean } = {}) {
     const text = raw.trim();
     if (!text) return;
     const expanded = this.pastes.expand(text);
@@ -548,6 +558,7 @@ export class AppController {
     this.o.onHistory?.(this.state.history);
     if (text.startsWith('/')) { await this.runCommand(text); return; }
     if (this.state.busy) { this.toast('warn', 'Cento is still working. Press Esc to interrupt, then send again.'); return; }
+    if (!opts.resume && !(await this.budgetGate(text, expanded, opts))) return;
     this.addItem({ kind: 'user', id: nid('u'), text, ts: Date.now() }); this.o.sessions?.noteUser(this.state.sessionId, this.o.cwd, text);
     this.setAgentState(this.me, 'prompt-received');
     let outgoing = opts.wire ?? expanded; // the transcript keeps what the person typed; night tasks carry their rules on the wire only
@@ -563,6 +574,7 @@ export class AppController {
     await this.checkpointBefore(text);
     this.pastes.clear(); // the chips are spent
     if (!this.session && !this.stopped) { try { this.starting ??= this.startEngine(this.deadToken).then(() => { this.deadToken = undefined; }).finally(() => { this.starting = undefined; }); await this.starting; } catch (e) { this.addItem({ kind: 'notice', id: nid('n'), level: 'error', text: `Could not start ${this.o.engine.label} again`, detail: String((e as Error).message ?? e) }); this.set({ busy: false }); return; } }
+    this.session?.setTurnLimits?.({ noSubagents: this.guard.enabled && this.guard.config.maxSubagents === 0, maxBudgetUsd: this.guard.remainingRunUsd() });
     try { await this.session?.send(outgoing); } catch (e) { this.addItem({ kind: 'notice', id: nid('n'), level: 'error', text: 'Could not send the prompt', detail: String(e) }); }
   }
 
@@ -683,6 +695,59 @@ export class AppController {
   /** True when the latest turn was stopped by an interrupt. */
   turnInterrupted(): boolean { return this.interrupts.cancelledTurn(this.currentTurn); }
   async interrupt(hard = false) { if (this.pendingAnswer) { this.cancelQuestions(); return; } /* Esc on a question only declines the question; the next Esc stops the turn */ this.cancelQuestions(); if (!this.state.busy) return; await this.interrupts.interrupt(this.me, { mode: hard ? 'hard' : 'soft', reason: 'user' }); }
+
+  /* ------------------------------------------------------------------ budget guard */
+  private get interactive(): boolean { return this.o.interactive !== false && !this.o.demo && !this.night.active(); }
+  /** One question with two answers, in the list the other questions use. */
+  private async askKeepGoing(title: string, note: string, goLabel: string): Promise<boolean> {
+    const ids = await this.pick({ title, note, multi: false, confirm: 'ok', options: [{ id: 'go', label: goLabel }, { id: 'stop', label: 'Stop here' }] });
+    return ids?.[0] === 'go';
+  }
+  /** Before a message is sent: confirms a very big prompt and a long row of "continue"s, and asks again when a limit has already paused the run. False = do not send. */
+  private async budgetGate(text: string, expanded: string, opts: { wire?: string }): Promise<boolean> {
+    const g = this.guard; if (opts.wire && !/^\[night/.test(text)) return true; // Centcom's own prompts (handoff) are not the person's work
+    const kind = opts.wire ? 'task' : classifyPrompt(text); // a night task is a task of its own: its run limits apply, and nothing waits for an answer in the night
+    if (!g.enabled) { g.startRun(kind); return true; }
+    const refuse = (stop: Stop) => { this.budgetStop = stop; this.notice('warn', `Not sent: ${stop.text}`, 'Raise the limit in your settings (budget.*), or /budget continue, or /budget off.'); this.set({ input: text, cursor: text.length }); return false; };
+    const paused = g.stop;
+    if (paused && (kind === 'continue' || paused.reason.startsWith('session'))) { if (!this.interactive) return refuse(paused); if (!(await this.askKeepGoing('Paused by the budget', `${paused.text} Go on with a fresh allowance?`, 'Keep going'))) { this.set({ input: text, cursor: text.length }); return false; } g.extend(); }
+    if (kind === 'task') {
+      const big = bigPrompt(expanded, g.config);
+      if (big && this.interactive) {
+        const model = this.state.agents.find((a) => a.mine)?.model || this.state.settings.model || 'the default model';
+        const note = [big.why === 'long' ? `This message is about ${compactNumber(big.tokens)} tokens long.` : 'This asks for a whole application, which tends to run for hundreds of requests.', `It would run on ${model}${this.state.settings.effort ? ` at ${this.state.settings.effort} effort` : ''}.`, allowanceText(g.config), 'The meter in the header shows what it uses.'].join(' ');
+        if (!(await this.askKeepGoing('This is a big job', note, 'Go ahead'))) { this.set({ input: text, cursor: text.length }); return false; }
+      }
+    }
+    const stop = g.startRun(kind);
+    if (stop) { if (!this.interactive) return refuse(stop); if (!(await this.askKeepGoing('Another "continue"?', stop.text + ' Is it still doing what you want?', 'Keep going'))) { this.set({ input: text, cursor: text.length }); return false; } g.extend(); }
+    return true;
+  }
+  /** A limit was passed: stop the run at once, say why, and ask whether to go on. */
+  private async onBudgetStop(stop: Stop): Promise<void> {
+    const wasBusy = this.state.busy; this.budgetStop = stop;
+    this.notice('warn', `Paused: ${stop.text}`, wasBusy ? 'The run was stopped so it does not keep spending. /budget shows the numbers.' : undefined);
+    if (wasBusy) { try { await this.interrupt(); } catch { /* the turn may already be over */ } }
+    if (!this.interactive) return;
+    if (await this.askKeepGoing('Paused by the budget', `${stop.text} Keep going with a fresh allowance?`, 'Keep going')) {
+      this.guard.extend(); this.budgetStop = undefined;
+      if (wasBusy) await this.submit('Continue where you stopped.', { resume: true });
+    }
+  }
+  /** `/budget`: what this run and the conversation have used against the limits; `/budget continue`, `/budget on`, `/budget off`. */
+  private async budgetCommand(arg: string): Promise<void> {
+    const a = arg.trim().toLowerCase(); const g = this.guard;
+    if (a === 'off' || a === 'on') { g.setEnabled(a === 'on'); this.notice(a === 'on' ? 'ok' : 'warn', a === 'on' ? 'Budget guard on.' : 'Budget guard off for this conversation: nothing will pause a long run.'); return; }
+    if (a === 'continue' || a === 'go' || a === 'raise') { g.extend(); this.budgetStop = undefined; this.notice('ok', 'Fresh allowance for this run.'); return; }
+    if (a) { this.toast('info', 'Try /budget, /budget continue, /budget on or /budget off. The limits are settings: budget.* and agent.max_subagents.'); return; }
+    const m = g.meter(); const l = m.limits; const lim = (n: number, f: (x: number) => string = String) => (n > 0 ? f(n) : 'no limit');
+    const line = (c: { requests: number; outputTokens: number; usd: number; subagents: number }) => `${c.requests} requests · ${compactNumber(c.outputTokens)} output tokens${c.usd > 0 ? ` · about $${c.usd.toFixed(2)}` : ''} · ${c.subagents} sub-agents`;
+    this.addItem({ kind: 'notice', id: nid('n'), level: m.paused ? 'warn' : 'info', text: m.enabled ? 'Budget' : 'Budget (guard off)', detail: [
+      `This run: ${line(m.run)}`, `  pauses at ${lim(l.runRequests)} requests · ${lim(l.runOutputTokens, compactNumber)} output tokens · ${lim(l.runUsd, (x) => '$' + x.toFixed(2))} · ${l.maxSubagents < 0 ? 'no sub-agent limit' : l.maxSubagents + ' sub-agents'}`,
+      `This conversation: ${line(m.session)}`, `  pauses at ${lim(l.sessionRequests)} requests · ${lim(l.sessionOutputTokens, compactNumber)} output tokens · ${lim(l.sessionUsd, (x) => '$' + x.toFixed(2))}`,
+      `Messages like "continue" in a row: ${m.continues} (asks after ${l.maxContinues > 0 ? l.maxContinues : 'no limit'})`,
+      ...(m.paused ? [`Paused: ${m.paused.text} /budget continue lets it go on.`] : []), 'Change the limits in your settings: budget.* and agent.max_subagents.'].join('\n') });
+  }
 
   /** Leave the app (the `app.quit` action). */
   quit(code = 0) { void this.o.ledger?.flush().catch(() => undefined); this.o.onExit?.(code); }
@@ -988,6 +1053,7 @@ export class AppController {
       case 'context': case 'board': await this.contextCommand(); break;
       case 'fleet': await this.fleetCommand(arg); break;
       case 'usage': this.usageCommand(); break;
+      case 'budget': await this.budgetCommand(arg); break;
       case 'mcp': case 'hooks': case 'memory': case 'doctor': case 'init': {
         const view = this.o.views?.[cmd]; if (!view) { this.toast('info', `/${cmd} is not available here. Use \`centcom ${cmd}\` in a terminal.`); break; }
         const lines = await view(arg.split(/\s+/).filter(Boolean)).catch((e: unknown) => [String((e as Error)?.message ?? e)]); this.notice('info', lines[0] ?? `(nothing to show)`, lines.slice(1).join('\n') || undefined); break;

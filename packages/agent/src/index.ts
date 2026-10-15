@@ -9,7 +9,7 @@ export { ClaudeCodeEngine, buildArgv, redact, claudeVersionProbe } from './claud
 export { ClaudeStreamParser, loginKindFrom, questionFrom, todosFrom } from './claude/parse.js';
 export { editDiff } from './claude/diff.js';
 export * from './models.js';
-export { ApprovalBridge, describeTool, PERMISSION_TOOL } from './claude/bridge.js';
+export { ApprovalBridge, describeTool, PERMISSION_TOOL, SUBAGENT_TOOLS } from './claude/bridge.js';
 export { CodexEngine, policyFor, loginKindFromAccount } from './codex/engine.js';
 export { CodexMapper, diffFor, errorCodeFor } from './codex/map.js';
 export * from './events/index.js';

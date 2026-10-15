@@ -2,7 +2,7 @@
  *  object, or normalised events); everything for people goes to stderr. Exit codes are in exit-codes.ts. */
 import { AppController, SessionStore, buildRuntime } from '@centcom/tui';
 import { redact } from '@centcom/protocol';
-import type { AgentEngine, NormalisedEvent, PermissionMode } from '@centcom/agent';
+import { BudgetGuard, type AgentEngine, type BudgetLimits, type NormalisedEvent, type PermissionMode } from '@centcom/agent';
 import { EXIT_CODES, exitCodeFor } from './exit-codes.js';
 import { Holdback, formatResult, streamLine, type PrintResult } from './format.js';
 
@@ -10,7 +10,7 @@ export interface PrintOptions {
   /** Where permissions.json lives (tests point it at a temp folder). */ configDir?: string;
   engine: AgentEngine; demo: boolean; cwd: string; branch: string; version: string; mode: PermissionMode; prompt: string;
   /** Where ctrl+c comes from (tests pass an emitter). */ proc?: NodeJS.Process;
-  format: 'text' | 'json' | 'stream-json'; save: boolean; resume?: string; model?: string; /** Claude Code's starting reasoning effort and sub-agent model (`agent.effort`, `agent.subagent_model`). */ effort?: string; subagentModel?: string; out?: NodeJS.WritableStream; err?: NodeJS.WritableStream;
+  format: 'text' | 'json' | 'stream-json'; save: boolean; resume?: string; model?: string; /** The budget guard's limits (`budget.*`); a run that passes one stops with exit code 5. */ budget?: Partial<BudgetLimits>; /** Claude Code's starting reasoning effort and sub-agent model (`agent.effort`, `agent.subagent_model`). */ effort?: string; subagentModel?: string; out?: NodeJS.WritableStream; err?: NodeJS.WritableStream;
   /** Extra allow rules for this run, in the permission rule syntax (`Bash(npm test)`, `Edit(src/**)`). */ allow?: string[];
   /** More user messages after `prompt` (from `--input-format stream-json`): each runs as the next turn of the same conversation; the run stops at the first one that fails. */ followUps?: string[];
   /** Stop after this many seconds (exit 124). */ timeoutS?: number;
@@ -37,7 +37,7 @@ export async function runPrint(o: PrintOptions): Promise<number> {
   let finish: (() => void) | undefined; const hold = new Holdback();
   const ctl: AppController = new AppController({ ...rt.options,
     engine: o.engine, demo: o.demo, cwd: o.cwd, branch: o.branch, version: o.version, permissionMode: o.mode, skills: [], dangerous: o.mode === 'bypassPermissions',
-    settings: o.model ? { model: o.model } : undefined, defaultEffort: o.effort, subagentModel: o.subagentModel, sessions: o.save ? new SessionStore(o.dataDir) : undefined, resume: o.resume,
+    settings: o.model ? { model: o.model } : undefined, defaultEffort: o.effort, subagentModel: o.subagentModel, budget: new BudgetGuard(o.budget), interactive: false, sessions: o.save ? new SessionStore(o.dataDir) : undefined, resume: o.resume,
     onEvent: (ev: NormalisedEvent) => {
       if (o.format === 'stream-json') {
         if (ev.type === 'text.delta') { const safe = hold.push(ev.text); if (safe) { const l = streamLine({ ...ev, text: safe }); if (l) write(l); } }
@@ -56,7 +56,7 @@ export async function runPrint(o: PrintOptions): Promise<number> {
   const unsub = ctl.store.subscribe(() => { const a = ctl.state.approvals[0]; if (a) { declined.push(`${a.req.tool}: ${a.req.summary}`); ctl.answerApproval('deny'); } });
   // ctrl+c stops the turn (exit 130); a second one within 1 s forces it
   const offSig = ctl.interrupts.onSignal(o.proc ?? process, { exit: (code) => { stopped = code || EXIT_CODES.interrupted; finish?.(); }, hint: () => undefined });
-  const offTurn = ctl.store.subscribe(() => { if (ctl.turnInterrupted() && stopped === undefined && !failure) stopped = EXIT_CODES.interrupted; });
+  const offTurn = ctl.store.subscribe(() => { if (ctl.turnInterrupted() && stopped === undefined && !failure && !ctl.budgetStop) stopped = EXIT_CODES.interrupted; });
   const timer = o.timeoutS ? clock.setTimeout(() => { stopped = EXIT_CODES.timeout; void ctl.interrupt(true); finish?.(); }, o.timeoutS * 1000) : undefined;
   const settle = () => new Promise<void>((resolve) => {
     finish = resolve; if (gone) { resolve(); return; }
@@ -72,6 +72,7 @@ export async function runPrint(o: PrintOptions): Promise<number> {
   if (gone) { void ctl.interrupt(true); ctl.stop(); return EXIT_CODES.ok; } // the reader went away: not our failure
   const s = ctl.state;
   const answer = [...s.items].reverse().find((i) => i.kind === 'assistant'); const text = answer && answer.kind === 'assistant' ? answer.text : '';
+  if (ctl.budgetStop && !failure) failure = { code: 'budget_reached', message: `${ctl.budgetStop.text} Stopped by the budget guard: raise the limit in the settings (budget.*) or turn it off (budget.enabled).` };
   const notice = [...s.items].reverse().find((i) => i.kind === 'notice' && i.level === 'error');
   if (!failure && notice && notice.kind === 'notice') failure = { code: 'error', message: notice.detail ?? notice.text };
   for (const d of declined) say(`Declined (needs approval): ${d}`);
