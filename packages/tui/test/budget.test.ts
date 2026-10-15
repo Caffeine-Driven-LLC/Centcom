@@ -1,12 +1,12 @@
 import { BudgetGuard, type EventBody } from '@centcom/agent';
-import { FakeEngine } from '@centcom/testkit';
+import { FakeEngine, type FakeEngineOptions } from '@centcom/testkit';
 import { describe, expect, it } from 'vitest';
 import { AppController } from '../src/controller.js';
 
 const until = async (f: () => boolean, ms = 4000) => { const t0 = Date.now(); while (!f()) { if (Date.now() - t0 > ms) throw new Error('timeout'); await new Promise((r) => setTimeout(r, 10)); } };
 const clock = { now: () => Date.now(), setTimeout: (f: () => void, ms: number) => setTimeout(f, ms) };
 const progress = (n: number, out = 1000): EventBody[] => Array.from({ length: n }, (_, i) => ({ type: 'usage.progress', message_id: `m${i}`, scope: 'main', input_tokens: 10, output_tokens: out }));
-const rig = async (limits: ConstructorParameters<typeof BudgetGuard>[0], script: ConstructorParameters<typeof FakeEngine>[0]['script'], interactive = true) => {
+const rig = async (limits: ConstructorParameters<typeof BudgetGuard>[0], script: NonNullable<FakeEngineOptions['script']>, interactive = true) => {
   const engine = new FakeEngine({ id: 'claude-code', clock, script }); const guard = new BudgetGuard(limits);
   const ctl = new AppController({ engine: engine as never, demo: false, cwd: '/tmp', version: 't', skills: [], budget: guard, interactive }); await ctl.start(); return { ctl, engine, guard };
 };
