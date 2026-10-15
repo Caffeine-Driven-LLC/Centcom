@@ -1,4 +1,4 @@
-import type { ApprovalDecision, ApprovalRequest, EngineId, LoginKind, PermissionMode, Risk } from '@centcom/agent';
+import type { ApprovalDecision, ApprovalRequest, EngineId, LoginKind, Meter, PermissionMode, Risk } from '@centcom/agent';
 import type { CentoColor, MiniState } from '@centcom/mascot';
 import type { SessionMeta } from '../sessions.js';
 
@@ -40,6 +40,8 @@ export interface AppState {
   busy: boolean; turnStartedAt?: number; verb: string;
   limits: { name: string; utilization: number; resets_at: number }[];
   cwd: string; branch: string;
+  /** What the run and the conversation have used so far against the budget (the live meter in the footer and the side panel). */
+  meter?: Meter;
   engineId: EngineId; engineLabel: string; demo: boolean; /** The newest saved conversation of this folder, offered on the welcome screen. */ lastSession?: { title: string; when: number };
   fleet: boolean;
   /** The agent's plan (TodoWrite / Codex plan) and whether the panel above the prompt is open (ctrl+t). */

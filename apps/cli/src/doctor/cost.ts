@@ -6,7 +6,7 @@
  */
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { captureTurns, flagValues, formatTranscriptSummary, prefixChanges, summarizeTranscript, PREFIX_FLAGS } from '@centcom/agent';
+import { captureTurns, flagValues, formatTranscriptSummary, prefixChanges, replayThroughGuard, summarizeTranscript, PREFIX_FLAGS } from '@centcom/agent';
 
 export interface CostIo { out(l: string): void; err(l: string): void }
 const MAX_BYTES = 256 * 1024 * 1024;
@@ -47,7 +47,11 @@ export async function runCost(argv: string[], io: CostIo): Promise<number> {
   if (paths.length) {
     const r = resolveTranscripts(paths); if (typeof r === 'string') { io.err(r); return 2; }
     const s = summarizeTranscript(r.main, r.subs);
-    if (json) io.out(JSON.stringify(s)); else { io.out('Session cost report'); for (const l of formatTranscriptSummary(s)) io.out(l); }
+    const g = replayThroughGuard(r.main, r.subs);
+    if (json) io.out(JSON.stringify({ ...s, guard_replay: g })); else {
+      io.out('Session cost report'); for (const l of formatTranscriptSummary(s)) io.out(l);
+      io.out(g.firstPause ? `budget guard (default limits): would first have paused after ${g.firstPause.atRequest} of ${g.total.requests} requests (${g.firstPause.reason.replace(/_/g, ' ')}), before ${Math.round(g.savedOutputShare * 100)} % of the output tokens; it would have asked ${g.asks} times in all` : 'budget guard (default limits): would not have paused this session');
+    }
     return 0;
   }
   const l = await launchReport();

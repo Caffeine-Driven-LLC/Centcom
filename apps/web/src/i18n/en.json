@@ -214,5 +214,15 @@
  "share.confirm.yes": "Yes, share my login",
  "share.confirm.no": "No, cancel",
  "joined.payer": "Your prompt will run on {host}'s account",
- "joined.payerUnknown": "Finding out whose account would run your prompt…"
+ "joined.payerUnknown": "Finding out whose account would run your prompt…",
+ "run.title": "This run",
+ "run.paused": "paused",
+ "run.requests": "{n} requests",
+ "run.tokens": "{n} output tokens",
+ "run.subagents": "{n} sub-agents",
+ "run.aria": "Share of this run's limit used",
+ "run.used": "This run has used {used} so far.",
+ "run.limit": "It pauses and asks at {caps}.",
+ "run.noLimit": "no limit",
+ "run.off": "The budget guard is off."
 }

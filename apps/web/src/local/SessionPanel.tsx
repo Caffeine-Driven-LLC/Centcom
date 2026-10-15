@@ -5,6 +5,7 @@ import { Avatar, Badge, Button } from '../ui/shadcn/index.js';
 import { Diff } from './Diff.js';
 import { openShare } from './share-event.js';
 import { TeamSection } from './TeamSection.js';
+import { t } from '../i18n/index.js';
 import { compactNumber, duration, insights, money } from './insights.js';
 import type { LocalView } from './model.js';
 import type { ClientMsg } from '../../../desktop/src/local/protocol.js';
@@ -61,6 +62,15 @@ export function SessionPanel({ view, send, now = Date.now() }: { view: LocalView
         {[[info.steps, 'steps'], [info.files.length, 'files'], [info.failed, 'failed']].map(([n, l]) => <div key={String(l)} className="ps-stat"><dt>{l}</dt><dd>{n}</dd></div>)}
       </dl>
     </Section>
+    {s?.meter && s.meter.run.requests > 0 ? <Section icon={<Gauge />} title={t('run.title')} aside={s.meter.paused ? t('run.paused') : undefined}>
+      {(() => { const m = s.meter; const l = m.limits; const frac = Math.max(l.runRequests > 0 ? m.run.requests / l.runRequests : 0, l.runOutputTokens > 0 ? m.run.outputTokens / l.runOutputTokens : 0, l.runUsd > 0 ? m.run.usd / l.runUsd : 0) * 100;
+        const used = [t('run.requests', { n: m.run.requests }), t('run.tokens', { n: compactNumber(m.run.outputTokens) }), ...(m.run.usd > 0 ? [money(m.run.usd)] : []), ...(m.run.subagents > 0 ? [t('run.subagents', { n: m.run.subagents })] : [])].join(' · ');
+        const caps = [l.runRequests > 0 ? t('run.requests', { n: l.runRequests }) : '', l.runOutputTokens > 0 ? t('run.tokens', { n: compactNumber(l.runOutputTokens) }) : '', l.runUsd > 0 ? money(l.runUsd) : ''].filter(Boolean).join(' · ');
+        return <><progress className="lc-meter" data-level={frac >= 90 ? 'high' : frac >= 65 ? 'mid' : 'low'} value={Math.min(100, frac)} max={100} aria-label={t('run.aria')} />
+          <p className="ps-note" data-testid="run-used">{t('run.used', { used })}</p>
+          <p className="ps-note">{m.enabled ? t('run.limit', { caps: caps || t('run.noLimit') }) : t('run.off')}</p>
+          {m.paused ? <p className="ps-note" role="status">{m.paused.text}</p> : null}</>; })()}
+    </Section> : null}
     {info.context !== undefined || info.tokens > 0 ? <Section icon={<Gauge />} title="Context" aside={info.context !== undefined ? `${Math.round(info.context)}%` : undefined}>
       {info.context !== undefined ? <progress className="lc-meter" data-level={info.context >= 85 ? 'high' : info.context >= 65 ? 'mid' : 'low'} value={info.context} max={100} aria-label="Context used" /> : null}
       <p className="ps-note">{compactNumber(info.tokens)} tokens · {money(info.cost)} this session{info.context !== undefined && info.context >= 85 ? ' · compact soon' : ''}</p>

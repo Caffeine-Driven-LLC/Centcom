@@ -10,7 +10,7 @@ export class EventStreamValidator {
 
   check(ev: NormalisedEvent): void {
     if (ev.seq !== this.lastSeq + 1) this.bad(`seq ${ev.seq} after ${this.lastSeq}`); this.lastSeq = ev.seq;
-    if (this.fatalPending) { if (ev.type === 'turn.done') { if (ev.outcome !== 'error') this.bad('a fatal error must be followed by turn.done with outcome error'); } else if (ev.type !== 'status' && ev.type !== 'error' && ev.type !== 'engine.warning') this.bad(`${ev.type} after a fatal error`); }
+    if (this.fatalPending) { if (ev.type === 'turn.done') { if (ev.outcome !== 'error') this.bad('a fatal error must be followed by turn.done with outcome error'); } else if (ev.type !== 'status' && ev.type !== 'error' && ev.type !== 'engine.warning' && ev.type !== 'usage.progress') this.bad(`${ev.type} after a fatal error`); }
     switch (ev.type) {
       case 'session.started': if (this.started) this.bad('second session.started'); this.started = true; break;
       case 'turn.started': if (this.inTurn) this.bad('turn.started inside a turn'); this.inTurn = true; break;

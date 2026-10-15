@@ -4,6 +4,7 @@
  * prints nothing. It must not keep message text: only counts leave this module.
  */
 import { estimateTokens } from '../board/text.js';
+import { BudgetGuard, type BudgetLimits } from './budget.js';
 
 type J = Record<string, unknown>;
 
@@ -102,4 +103,27 @@ export function formatTranscriptSummary(s: TranscriptSummary): string[] {
   out.push(`cache hit ratio: ${(s.cacheHitRatio * 100).toFixed(1)} %; cache breaks: ${s.cacheBreaks.length} (${s.cacheBreaks.filter((b) => b.cause === 'rewrite').length} early rewrites, ${s.cacheBreaks.filter((b) => b.cause === 'idle').length} after 5 min idle; ${tok(s.cacheBreaks.reduce((a, b) => a + b.rewritten, 0))} tokens rewritten)`);
   out.push(s.centcomText.length ? `text Centcom added to your messages: ${s.centcomText.map((c) => `${c.kind} in ${c.messages} message(s), about ${tok(c.tokens)} tokens`).join('; ')}` : 'text Centcom added to your messages: none found');
   return out;
+}
+
+export interface GuardReplay {
+  /** Requests and output tokens of the whole recorded session. */
+  total: { requests: number; outputTokens: number };
+  /** Where the guard first pauses the run (undefined: it never would). */
+  firstPause?: { atRequest: number; outputTokens: number; reason: string };
+  /** How many times it would have asked if the person answered "keep going" every time. */
+  asks: number;
+  /** Share of the session's output tokens that came after the first pause. */
+  savedOutputShare: number;
+}
+/** Replays a recorded session through the budget guard, treating it as one run (the way a single big task is): where would it have paused? Requests are taken in the order they happened. */
+export function replayThroughGuard(main: Iterable<string>, subs: Iterable<string>[], limits: Partial<BudgetLimits> = {}): GuardReplay {
+  const all = [...requestsOf(main, 'main').requests, ...subs.flatMap((s) => requestsOf(s, 'sub').requests)].sort((a, b) => (a.at ?? 0) - (b.at ?? 0));
+  const guard = new BudgetGuard(limits); let outTotal = 0; for (const r of all) outTotal += r.output;
+  let seen = 0; let out = 0; let asks = 0; let first: GuardReplay['firstPause'];
+  for (const r of all) {
+    seen++; out += r.output;
+    const stop = guard.note({ type: 'usage.progress', v: 1, seq: seen, ts: '', agent_id: 'replay', message_id: r.id, scope: r.agent === 'sub' ? 'subagent' : 'main', input_tokens: r.input, output_tokens: r.output });
+    if (stop) { asks++; first ??= { atRequest: seen, outputTokens: out, reason: stop.reason }; guard.extend(); }
+  }
+  return { total: { requests: all.length, outputTokens: outTotal }, ...(first ? { firstPause: first } : {}), asks, savedOutputShare: first && outTotal ? 1 - first.outputTokens / outTotal : 0 };
 }
