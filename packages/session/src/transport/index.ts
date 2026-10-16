@@ -6,3 +6,5 @@ export * from './local-transport.js';
 export * from './join-target.js';
 export * from './open.js';
 export { transportConformance, type ConformanceRig } from './conformance.js';
+export * from './client-link.js';
+export * from './discover.js';
