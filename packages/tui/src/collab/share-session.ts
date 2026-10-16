@@ -45,6 +45,8 @@ export class ShareSession {
         case 'join': return await this.joinBranch(rest[0]);
         case 'team': return this.team();
         case 'watch': return this.watch(rest.join(' '));
+        case 'approvals': { if (!this.bridge?.remote) return this.needBranch(); const on = rest[0] ? rest[0] === 'on' : false; this.bridge.remote.setEnabled(on); ctl.toast('info', on ? 'Your agent\'s permission questions also go to your teammates; the first answer wins.' : 'Your agent\'s permission questions stay on this screen.'); return; }
+        case 'approve': case 'refuse': { const rem = this.bridge?.remote; if (!rem) return this.needBranch(); const list = rem.waiting(); const n = Number(rest[0] ?? 1); const p = list[n - 1]; if (!p) { ctl.toast('info', list.length ? `Choose 1 to ${list.length}.` : 'No teammate is waiting for an answer.'); return; } try { await rem.decide(p.approvalId, { decision: sub.toLowerCase() === 'approve' ? 'approve' : 'deny' }); ctl.toast('info', sub.toLowerCase() === 'approve' ? 'Approved.' : 'Refused.'); } catch (e) { ctl.toast('warn', (e as Error).message); } return; }
         case 'activity': { if (!this.bridge || this.bridge.mode !== 'branch') return this.needBranch(); const on = rest[0] ? rest[0] === 'on' : !this.bridge.sharingActivity; this.bridge.setShareActivity(on); ctl.toast('info', on ? 'The team sees what your agent says and does.' : 'Your agent\'s messages are not shared. State, branch and locks still are.'); return; }
         case 'handoff': return this.handoff(rest);
         case 'inbox': return await this.inboxCommand(rest[0]);
@@ -56,7 +58,7 @@ export class ShareSession {
         case 'confirm': { const b = this.bridge; if (!b || b.mode !== 'command_post') return this.need(); const ok = await b.confirmNow(); if (ok) ctl.toast('ok', 'Guests can now use your login in this session.'); return; }
         case 'run': case 'no': return await this.decide(sub.toLowerCase() === 'run', rest[0]);
         case 'stop': return await this.stop();
-        default: ctl.toast('warn', 'Use /share, /share branch, /share join <id|link>, /team, /share activity [on|off], /share handoff <number> [note], /share invite [email], /share link, /share status, /share run <n>, /share no <n>, /share auto, /share pause, /share resume, /share confirm or /share stop.');
+        default: ctl.toast('warn', 'Use /share, /share branch, /share join <id|link>, /team, /share activity [on|off], /share approvals [on|off], /share approve [n], /share refuse [n], /share handoff <number> [note], /share invite [email], /share link, /share status, /share run <n>, /share no <n>, /share auto, /share pause, /share resume, /share confirm or /share stop.');
       }
     } catch (e) { ctl.notice('error', 'Sharing', this.why(e)); }
   }
@@ -112,7 +114,7 @@ export class ShareSession {
     if (!text) { this.ctl.notice('info', `${m.name}'s agent`, a.sharing === false ? `${m.name} has not shared what their agent says and does (they can turn it on with /share activity on).` : 'Nothing to show yet.'); return; }
     this.ctl.notice('info', `${m.name}'s agent (read only)`, text);
   }
-  team(): void { const t = this.bridge?.team; if (!t) { this.ctl.toast('warn', 'No team yet. In a session where everyone runs their own agent (/share branch), /team shows who is working on what.'); return; } this.ctl.notice('info', 'Team', renderTeam(t.snapshot())); }
+  team(): void { const t = this.bridge?.team; if (!t) { this.ctl.toast('warn', 'No team yet. In a session where everyone runs their own agent (/share branch), /team shows who is working on what.'); return; } const w = this.bridge?.remote?.waiting() ?? []; const asks = w.length ? `\n\nWaiting for your answer:\n${w.map((p, i) => `${i + 1}. ${t.snapshot().members.find((m) => m.id === p.from)?.name ?? 'A teammate'}'s agent wants to ${p.command ? `run \`${p.command.slice(0, 80)}\`` : p.summary} (/share approve ${i + 1} or /share refuse ${i + 1})`).join('\n')}` : ''; this.ctl.notice('info', 'Team', renderTeam(t.snapshot()) + asks); }
   private handoff(rest: string[]): void {
     const t = this.bridge?.team; if (!this.bridge || !t) return this.needBranch(); const people = t.snapshot().members.filter((m) => !m.you); const n = Number(rest[0]); const to = people[n - 1];
     if (!to) { this.ctl.toast('warn', people.length ? `Hand your work to whom? ${people.map((m, i) => `${i + 1} ${m.name}`).join(', ')}: /share handoff <number> [note]` : 'Nobody else is here.'); return; }
