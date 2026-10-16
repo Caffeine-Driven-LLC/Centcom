@@ -7,11 +7,14 @@ import type { Colour, Line } from '../util/text.js';
 
 export const ThemeCtx = createContext<Theme>(createTheme('dark', 'truecolor'));
 export const useTheme = () => useContext(ThemeCtx);
+/** Whether the terminal shows Unicode (caps.unicode). Without it every glyph has a plain ASCII stand-in. Unset: Unicode on when there is colour. */
+export const UnicodeCtx = createContext<boolean | undefined>(undefined);
+export function useUnicode(): boolean { const u = useContext(UnicodeCtx); const t = useTheme(); return u ?? t.tier !== 'none'; }
 
 /** Resolve a semantic token or a literal hex to a colour for Ink (undefined = terminal default when colour is off). */
 export function useCol() {
-  const t = useTheme(); const given = useProvidedTheme();
-  const styled = useMemo(() => given ?? createStyledTheme({ caps: { tier: t.tier, unicode: true }, mode: t.mode }), [given, t.tier, t.mode]); // the colour module (lane C032) decides every token; a literal hex goes through the tier
+  const t = useTheme(); const given = useProvidedTheme(); const uni = useUnicode();
+  const styled = useMemo(() => given ?? createStyledTheme({ caps: { tier: t.tier, unicode: uni }, mode: t.mode }), [given, t.tier, t.mode, uni]); // the colour module (lane C032) decides every token; a literal hex goes through the tier
   return (c: Colour | undefined): string | undefined => { if (c === undefined) return undefined; if (c.startsWith('#')) return inkColor(c, t.tier); const st = styled.style(c as never); return st.color ?? st.backgroundColor; };
 }
 

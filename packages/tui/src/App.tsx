@@ -5,7 +5,7 @@ import { createTheme as createStyledTheme, ThemeProvider } from './theme/index.j
 import { bakedCategories } from '@centcom/mascot';
 import { CLAUDE_MODELS } from '@centcom/agent';
 import type { AppController } from './controller.js';
-import { ThemeCtx, useStore } from './components/ui.js';
+import { ThemeCtx, UnicodeCtx, useStore } from './components/ui.js';
 import { TaskList } from './tasks/TaskList.js';
 import { actions as allActions, createDispatcher, defaultKeymap, fromInk, HelpScreen, type KeyContext, type Keymap, type KeymapWarning } from './keys/index.js';
 import { StatusBar } from './components/StatusBars.js';
@@ -28,14 +28,15 @@ import { NightPanel } from './night/NightPanel.js';
 import { COMMANDS } from './state/commands.js';
 import * as ed from './util/editor.js';
 
-export interface AppProps { ctl: AppController; tier: ColorTier; /** The resolved keymap (defaults plus keybindings.json) and what was wrong with the file. */ keys?: { keymap: Keymap; warnings: KeymapWarning[] } }
+export interface AppProps { ctl: AppController; tier: ColorTier; /** `caps.unicode`: false draws every glyph with its ASCII stand-in, whatever the colour depth. Unset: Unicode when there is colour. */ unicode?: boolean; /** The resolved keymap (defaults plus keybindings.json) and what was wrong with the file. */ keys?: { keymap: Keymap; warnings: KeymapWarning[] } }
 
-export function App({ ctl, tier, keys }: AppProps) {
+export function App({ ctl, tier, keys, unicode: uniProp }: AppProps) {
+  const uni = uniProp ?? tier !== 'none';
   const s = useStore(ctl.store);
   const win = useWindowSize();
   const cols = win.columns; const rows = Math.max(1, win.rows - 1); // Ink clears the whole screen every frame when output is as tall as the terminal; stay one row short
   const theme = useMemo(() => createTheme(s.settings.theme, tier), [s.settings.theme, tier]);
-  const styled = useMemo(() => createStyledTheme({ caps: { tier, unicode: tier !== 'none' }, mode: s.settings.theme }), [s.settings.theme, tier]); // the colour module (lane C032) decides every colour
+  const styled = useMemo(() => createStyledTheme({ caps: { tier, unicode: uni }, mode: s.settings.theme }), [s.settings.theme, tier, uni]); // the colour module (lane C032) decides every colour
   const sinceOf = useRef(createSinceTracker()).current;
   const keymap = useMemo(() => keys?.keymap ?? defaultKeymap(allActions()), [keys]); const focusRef = useRef<KeyContext[]>(['prompt']);
   const dispatcher = useMemo(() => createDispatcher({ keymap, focus: () => focusRef.current, clock: { now: () => Date.now() } }), [keymap]);
@@ -262,14 +263,14 @@ export function App({ ctl, tier, keys }: AppProps) {
   const fleetRows = showFleet ? fleetFromAgents(s.agents, { since: sinceOf }) : [];
   const body = (
     <>
-      {nightOpen ? <NightPanel n={s.night} width={bodyW} height={bodyH} unicode={tier !== 'none'} />
-        : s.mode === 'pick' && s.pick ? <MultiSelect p={s.pick} width={bodyW} height={bodyH} unicode={tier !== 'none'} onRow={(i) => ctl.pickClick(i)} onConfirm={() => ctl.pickKey('enter')} onCancel={() => ctl.pickKey('cancel')} />
+      {nightOpen ? <NightPanel n={s.night} width={bodyW} height={bodyH} unicode={uni} />
+        : s.mode === 'pick' && s.pick ? <MultiSelect p={s.pick} width={bodyW} height={bodyH} unicode={uni} onRow={(i) => ctl.pickClick(i)} onConfirm={() => ctl.pickKey('enter')} onCancel={() => ctl.pickKey('cancel')} />
         : s.mode === 'palette' ? <CommandPalette providers={paletteProviders} cols={bodyW} onClose={() => ctl.patch({ mode: 'chat' })} />
         : s.mode === 'help' ? <HelpScreen actions={allActions()} keymap={keymap} warnings={keys?.warnings ?? []} onClose={() => ctl.patch({ mode: 'chat' })} width={bodyW} height={bodyH} />
           : s.mode === 'gallery' ? <Gallery cat={s.gallery.cat} idx={s.gallery.idx} color={s.gallery.color} width={bodyW} height={gallerySize} reduced={s.settings.reducedMotion} />
             : welcome ? <Welcome s={s} width={bodyW} height={bodyH} color={s.settings.color} reduced={s.settings.reducedMotion} calm={calm} mascot={s.settings.mascot !== 'off'} />
               : <Box paddingX={1}><Transcript layout={layout} items={s.items} width={bodyW - 2} height={bodyH} scroll={s.scroll} unseen={unseen} /></Box>}
-      <Box position="absolute" width={bodyW}><Toasts toasts={s.toasts} showing={ctl.toasts.current()?.id} width={bodyW - 1} unicode={tier !== 'none'} /></Box>
+      <Box position="absolute" width={bodyW}><Toasts toasts={s.toasts} showing={ctl.toasts.current()?.id} width={bodyW - 1} unicode={uni} /></Box>
     </>
   );
   const bottom = (
@@ -277,7 +278,7 @@ export function App({ ctl, tier, keys }: AppProps) {
       {stripH > 0 ? <Box paddingX={1} height={stripH}><LiveStrip s={s} mascot={ctl.mascot} width={mainW - 2} size={stripSize as 'large' | 'small' | 'off'} calm={calm} /></Box> : null}
       {approvalView ? <PermissionPrompt request={approvalView} canDecide cols={mainW} maxDiff={maxDiff} onDecide={(d) => { if (ctl.state.approvals[0]?.req.approval_id === d.approvalId) ctl.answerApproval(d.decision, d.scope); }} /> : (
         <>
-          {showTasks ? <Box paddingX={1} height={tasksH}><TaskList items={s.tasks} maxRows={rows >= 34 ? 10 : 5} width={mainW - 2} unicode={tier !== 'none'} /></Box> : null}
+          {showTasks ? <Box paddingX={1} height={tasksH}><TaskList items={s.tasks} maxRows={rows >= 34 ? 10 : 5} width={mainW - 2} unicode={uni} /></Box> : null}
           {mentions.length && !matches.length ? <MentionPopup items={mentions.slice(0, 6)} sel={s.mention!.sel} width={mainW} onPick={(p) => { const e = ed.completeMention({ text: s.input, cursor: s.cursor }, mentionNow!, p); ctl.setInputUndoable(e.text, e.cursor); ctl.clearMentions(); }} /> : null}
           {popupH && matches.length ? <SlashPopup matches={matches} sel={s.slashSel} width={mainW} onPick={(c) => { const t = '/' + c.name + (c.args ? ' ' : ''); ctl.patch({ input: t, cursor: t.length, anchor: undefined, slashSel: 0 }); if (!c.args) void ctl.submit('/' + c.name); }} /> : null}
           <Prompt text={s.maskInput ? s.input.replace(/[^\n]/g, '•') : s.input} cursor={s.cursor} anchor={s.anchor} maxRows={maxInput} busy={s.busy} width={mainW} active={s.mode === 'chat' || s.mode === 'night'} placeholder={nightOpen ? 'Add a task for tonight…' : placeholder} />
@@ -286,7 +287,7 @@ export function App({ ctl, tier, keys }: AppProps) {
     </>
   );
   return (
-    <ThemeCtx.Provider value={theme}>
+    <ThemeCtx.Provider value={theme}><UnicodeCtx.Provider value={uni}>
       <ThemeProvider theme={styled}>
         <ClickContext.Provider value={clicks}>
           <Shell cols={cols} rows={rows} promptRows={stripH + bottomH} promptMax={rows} slots={{
@@ -295,10 +296,10 @@ export function App({ ctl, tier, keys }: AppProps) {
             prompt: bottom,
             footer: <StatusBar s={s} width={cols} line="footer" />,
             rail: showFleet ? <FleetPanel agents={fleetRows} selfMemberId={SELF_MEMBER} selfSlot={0} mode="rail" selectedId={s.activeAgent} onSelect={() => undefined} interactive={false} width={RAIL_WIDTH}
-              mascots={{ tier, unicode: tier !== 'none', motion: s.settings.reducedMotion ? 'reduced' : 'full', stateMap: STATE_MAP }} /> : undefined,
+              mascots={{ tier, unicode: uni, motion: s.settings.reducedMotion ? 'reduced' : 'full', stateMap: STATE_MAP }} /> : undefined,
           }} />
         </ClickContext.Provider>
       </ThemeProvider>
-    </ThemeCtx.Provider>
+    </UnicodeCtx.Provider></ThemeCtx.Provider>
   );
 }

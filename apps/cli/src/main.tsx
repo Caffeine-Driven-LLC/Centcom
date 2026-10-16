@@ -246,14 +246,14 @@ async function main() {
   let resizeTimer: NodeJS.Timeout | undefined;
   if (!a11y.screenReader && process.stdout.isTTY) process.stdout.on('resize', () => {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => { if (!instance || pendingExternal) return; instance.clear(); process.stdout.write('\x1b[2J\x1b[H'); instance.rerender(<App ctl={ctl} tier={tier} keys={keys} />); }, 90); resizeTimer.unref();
+    resizeTimer = setTimeout(() => { if (!instance || pendingExternal) return; instance.clear(); process.stdout.write('\x1b[2J\x1b[H'); instance.rerender(<App ctl={ctl} tier={tier} unicode={caps.unicode} keys={keys} />); }, 90); resizeTimer.unref();
   });
   let firstPass = true;
   if (a11y.screenReader) { if (cc.cfg.ui.restore_prompt) setTimeout(() => { void ctl.offerRestore(); }, 200); await runLinear(ctl, { input: process.stdin, output: process.stdout }, linearStop); }
   else {
     for (;;) { // each pass draws the app; a task (your editor, being put in the background) unmounts it, runs on the real terminal, and the loop draws it again from the same state
       if (firstPass) { firstPass = false; if (cc.cfg.ui.restore_prompt) setTimeout(() => { void ctl.offerRestore(); }, 200); } // a small yes/no popup once the first screen is up
-      instance = render(<App ctl={ctl} tier={tier} keys={keys} />, { exitOnCtrlC: false, patchConsole: false, maxFps: 30, incrementalRendering: !process.env.CENTCOM_FULL_RENDER });
+      instance = render(<App ctl={ctl} tier={tier} unicode={caps.unicode} keys={keys} />, { exitOnCtrlC: false, patchConsole: false, maxFps: 30, incrementalRendering: !process.env.CENTCOM_FULL_RENDER });
       await instance.waitUntilExit(); const task = pendingExternal; pendingExternal = undefined; if (!task) break;
       process.stdout.write('\x1b[?1000l\x1b[?1006l\x1b[?25h' + (altScreen ? '\x1b[?1049l' : '')); // the screen is the shell's again
       if (task.kind === 'editor') task.done(editInEditor(task.text)); else { for (;;) { await stopUntilContinued(); if (await becomesForeground()) break; } } // `bg` wakes the job without the terminal: it goes back to sleep until `fg` (a moment is allowed for the shell to hand the terminal over)
