@@ -14,7 +14,7 @@ describe('model and effort policy', () => {
   it('uses what the person chose, whatever it is, and keeps helpers no dearer than the conversation', () => {
     const p = resolveModelPolicy({ chosen: 'claude-opus-5-5', config });
     expect(p).toMatchObject({ model: 'claude-opus-5-5', source: 'chosen', effort: 'medium', subagentModel: 'sonnet' });
-    const h = resolveModelPolicy({ chosen: 'haiku', config }); expect(h).toMatchObject({ model: 'haiku', effort: '', subagentModel: '' });
+    const h = resolveModelPolicy({ chosen: 'haiku', config }); expect(h).toMatchObject({ model: 'haiku', effort: 'medium', subagentModel: '' });
   });
   it('an empty agent.model leaves the CLI default alone; the person\'s own sub-agent variable wins', () => {
     expect(resolveModelPolicy({ config: { ...config, model: '', effort: '', subagent_model: '' } })).toMatchObject({ model: '', effort: '', subagentModel: '' });

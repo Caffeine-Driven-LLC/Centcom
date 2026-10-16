@@ -29,10 +29,10 @@ export interface ModelPolicy {
   subagentModel: string;
 }
 
-/** Resolves the policy. An explicit choice always wins and is used as given. Effort is not sent to Haiku, which does not take it. A sub-agent model dearer than the main one is not set (helpers never cost more than the conversation). */
+/** Resolves the policy. An explicit choice always wins and is used as given. The effort is the configured one; whether the model takes it (and at that level) is decided later from the model list Claude Code reports, never from its name. A sub-agent model dearer than the main one is not set (helpers never cost more than the conversation). */
 export function resolveModelPolicy(i: ModelPolicyInput): ModelPolicy {
   const chosen = i.chosen?.trim() ?? ''; const model = chosen || i.config.model.trim(); const source = chosen ? 'chosen' : 'config';
-  const effort = tierOf(model) === 'haiku' ? '' : i.config.effort.trim();
+  const effort = i.config.effort.trim();
   let sub = (i.envSubagentModel ?? '').trim() ? '' : i.config.subagent_model.trim(); // their own variable is theirs
   if (sub && model && RANK[tierOf(sub)] > RANK[tierOf(model)] && tierOf(sub) !== 'other') sub = '';
   return { model, source, effort, subagentModel: sub };

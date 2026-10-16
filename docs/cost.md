@@ -78,10 +78,11 @@ Before, Centcom passed `--model` only when you had set one, so a plain start use
 
 - A choice of yours always wins and is passed as given: `--model`, `/model`, or a model remembered from an earlier run (`client.model`). `/model` has a "Default" entry for your own Claude Code default.
 - Set `agent.model` to an empty string to get your own Claude Code default back.
-- Your own `CLAUDE_CODE_SUBAGENT_MODEL` is never overridden. A sub-agent model dearer than the main one is not set. Effort is not sent to Haiku.
+- Your own `CLAUDE_CODE_SUBAGENT_MODEL` is never overridden. A sub-agent model dearer than the main one is not set. `--effort` is only sent when the model takes it, at a level it takes (see below).
 - A folder's `.centcom/config.json` may set these; Centcom says so at start, because a cloned repo could otherwise pick a dearer model for you.
 - When a top-tier model you picked earlier is restored at start, a notice says so and how to go back.
-- The header always shows the model the turn ran on, and the effort.
+- The header always shows the model the turn ran on, and the effort, but only an effort that is really applied.
+- Which models take effort, and at which levels, is read from Claude Code itself (the free `initialize` control request, asked once per session, no model call), never from a list in Centcom. `/effort`, the palette and the desktop menu show only the current model's levels, and no effort control for a model without any ("This model has no effort setting."). When the model changes, the effort you asked for becomes the closest level the new model takes (xhigh becomes high on a model without xhigh, off on one without effort), with a one-line notice, and comes back when you pick a model that takes it. Model aliases (`sonnet`, `haiku`) mean whatever your installed Claude Code says they are. If the query fails, Centcom assumes the old fixed list and sends no effort to anything named Haiku.
 - Checked against the real CLI with one small call each: a sub-agent started under a Sonnet main conversation ran on Haiku when `CLAUDE_CODE_SUBAGENT_MODEL=haiku` was set, and `--effort medium` was accepted.
 
 ## The budget guard (on by default)

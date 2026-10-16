@@ -3,7 +3,7 @@
  * answers approvals through the permission policy, runs slash commands, and drives the mascot.
  * The React tree only reads the store and calls the controller's methods.
  */
-import { BudgetGuard, allowanceText, bigPrompt, classifyPrompt, compact as compactNumber, CLAUDE_MODELS, type Stop, type Board, createAgentBus, createCheckpointManager, createContextView, modelLabel, newId, nodeGit } from '@centcom/agent';
+import { BudgetGuard, allowanceText, bigPrompt, classifyPrompt, compact as compactNumber, CLAUDE_MODELS, effortsFor, fitEffort, resolveModel, type ClaudeModel, type Stop, type Board, createAgentBus, createCheckpointManager, createContextView, modelLabel, newId, nodeGit } from '@centcom/agent';
 import { createInterruptController, createModelRegistry, removeStaleIndexLock, sharedProcessRegistry, usageTable, type InterruptController, type ModelRegistry } from '@centcom/agent';
 import type { AgentBus, AgentId, FleetManager, FleetNode, Ledger, Checkpoint, CheckpointManager, ContextConfig, ContextView, EngineId, EngineStartOptions, GitRunner, PermissionEngine, PolicyMode, RewindMode } from '@centcom/agent';
 import type { PendingApproval as PolicyPending } from '@centcom/agent';
@@ -200,8 +200,8 @@ export class AppController {
 
   /* ------------------------------------------------------------------ lifecycle */
   async start() {
-    if (this.o.engine.id === 'claude-code' && this.o.defaultEffort && !this.effort) this.effort = this.o.defaultEffort; // the configured starting effort (agent.effort); /effort changes it
-    if (this.effort) this.setSettings({ effort: this.effort });
+    if (this.o.engine.id === 'claude-code') { if (this.o.defaultEffort && !this.wantedEffort) this.wantedEffort = this.o.defaultEffort; } // the configured starting effort (agent.effort); /effort changes it. It is applied (and shown) only once the model is known to take it: see revalidateEffort
+    else if (this.effort) this.setSettings({ effort: this.effort });
     { const m = this.o.sessions?.list(this.o.cwd, 1)[0]; if (m) this.patch({ lastSession: { title: m.title, when: m.updatedAt } }); }
     this.driver.start();
     this.mascotState('ready');
@@ -213,6 +213,7 @@ export class AppController {
       else this.notice('warn', this.o.resume === 'last' ? 'No saved conversation in this folder yet, so this is a new one.' : 'Could not find that saved conversation, so this is a new one.');
     }
     await this.startEngine(resumeToken, carry);
+    void this.revalidateEffort();
     if (this.o.ghosts) this.startGhosts();
     this.verbTimer = setInterval(() => { if (this.state.busy) this.set({ verb: this.verbs.next() }); }, 4200);
     this.verbTimer.unref?.();
@@ -591,8 +592,40 @@ export class AppController {
   }
 
   /** Reasoning effort for the next turns, if the engine has the setting (Codex). Returns false when it does not. */
-  setEffort(effort: string): boolean { if (!this.session?.setEffort) return false; this.session.setEffort(effort); this.effort = effort; this.setSettings({ effort }); this.toast('ok', `Reasoning effort: ${effort || 'default'}`); return true; }
-  private effort = '';
+  setEffort(effort: string): boolean {
+    if (!this.session?.setEffort) return false;
+    const problem = this.effortProblem(effort); if (problem) { this.toast('warn', problem); return false; }
+    this.session.setEffort(effort); this.effort = effort; this.wantedEffort = effort; this.setSettings({ effort }); this.toast('ok', `Reasoning effort: ${effort || 'default'}`); return true;
+  }
+  /** What is applied now (shown in the header and passed to the engine); `wantedEffort` is what the person asked for, which comes back when a model that takes it is picked again. */
+  private effort = ''; private wantedEffort = '';
+  /** The levels of the current model, once known (Claude Code only): empty = the model has no effort setting. */
+  private levelsNow?: string[]; private effortSeq = 0;
+  /** Why `effort` cannot be set now, if it cannot (clearing it always works). */
+  effortProblem(effort: string): string | undefined {
+    if (!this.session?.setEffort || !effort || this.o.engine.id !== 'claude-code' || !this.levelsNow) return undefined;
+    if (!this.levelsNow.length) return 'This model has no effort setting.';
+    return this.levelsNow.includes(effort) ? undefined : `Effort is one of: ${this.levelsNow.join(', ')} (or default).`;
+  }
+  /** The levels the palette offers for /effort. */
+  private effortChoices(): readonly string[] { return this.o.engine.id === 'claude-code' && this.levelsNow ? this.levelsNow : ['low', 'medium', 'high', 'xhigh', 'max']; }
+  /**
+   * Claude Code only. Called at start and whenever the model changes: looks the current model up in the list Claude Code reports, and applies the
+   * closest level it supports to what the person wanted (xhigh becomes high on a model without xhigh), or none for a model without effort. Says so in
+   * one line. Nothing unsupported is ever shown in the header or passed on.
+   */
+  private async revalidateEffort(): Promise<void> {
+    const s = this.session; if (this.o.engine.id !== 'claude-code' || !s?.setEffort) return;
+    const seq = ++this.effortSeq; const { levels, label } = await this.currentModelEfforts(); if (seq !== this.effortSeq || this.session !== s) return; // a newer model change is already being handled
+    this.levelsNow = levels;
+    const fit = fitEffort(this.wantedEffort, levels);
+    if (fit !== this.effort) { this.effort = fit; s.setEffort(fit); this.setSettings({ effort: fit }); }
+    if (this.wantedEffort && fit !== this.wantedEffort) this.notice('info', fit ? `${label} has no ${this.wantedEffort} effort, so ${fit} is used.` : `${label} has no effort setting, so effort is off.`);
+  }
+  private async currentModelEfforts(): Promise<{ levels: string[]; label: string }> {
+    const list = (await this.engineModels()) as ClaudeModel[]; const model = this.state.settings.model;
+    return { levels: effortsFor(list, model), label: resolveModel(list, model)?.label || model || 'This model' };
+  }
   private shareHandler?: (arg: string) => Promise<void>;
   /** The app that has an account hands in what `/share` does. */
   setShareHandler(f: ((arg: string) => Promise<void>) | undefined): void { this.shareHandler = f; }
@@ -602,15 +635,16 @@ export class AppController {
   /** Calls `fn` each time a turn ends (a sharing bridge uses it to tell when a request it ran is finished). Returns how to stop. */
   onTurnEnd(fn: (outcome: string) => void): () => void { this.turnEndListeners.add(fn); return () => { this.turnEndListeners.delete(fn); }; }
   private otherModelCache = new Map<string, import('@centcom/agent').ModelChoice[]>();
-  /** The levels the running engine accepts: Claude Code's fixed list, or the current Codex model's own. */
+  /** The levels the running engine accepts: the current Claude Code model's own (as the CLI reports them), or the current Codex model's own. */
   private async effortLevels(): Promise<string[]> {
-    if (this.state.engineId === 'claude-code') return ['low', 'medium', 'high', 'xhigh', 'max'];
+    if (this.state.engineId === 'claude-code') { const { levels } = await this.currentModelEfforts(); this.levelsNow = levels; return levels; }
     const list = await this.engineModels(); const want = this.state.settings.model; // with no model chosen, the account's default model is the one in use
     return (list.find((m) => m.id === want) ?? (want ? undefined : list.find((m) => m.isDefault)))?.efforts ?? ['low', 'medium', 'high'];
   }
   private async effortCommand(arg: string) {
     if (!this.session?.setEffort) { this.toast('warn', 'This engine has no effort setting.'); return; }
     const levels = await this.effortLevels(); const want = arg.trim().toLowerCase();
+    if (this.state.engineId === 'claude-code' && !levels.length) { this.toast('info', 'This model has no effort setting.'); return; }
     if (want === 'default' || want === 'off' || want === 'auto') { this.setEffort(''); return; }
     if (want) { if (levels.includes(want)) this.setEffort(want); else this.toast('warn', `Effort is one of: ${levels.join(', ')} (or default).`); return; }
     const ids = await this.pick({ title: 'Reasoning effort', note: 'Higher thinks longer and costs more', options: [{ id: '', label: 'default', hint: "the engine's own choice" }, ...levels.map((l) => ({ id: l, label: l }))], checked: [this.effort], multi: false, confirm: 'use' });
@@ -623,7 +657,7 @@ export class AppController {
   private otherAgents(): ('claude-code' | 'codex')[] { if (this.o.demo) return []; return (['claude-code', 'codex'] as const).filter((id) => id !== this.o.engine.id && !!this.o.engines?.[id]); }
   /** One agent's models: Claude Code's fixed list, or what the Codex account reports (a short-lived Codex session is asked, stopped again, and the answer kept). */
   private async modelsOf(id: 'claude-code' | 'codex'): Promise<import('@centcom/agent').ModelChoice[]> {
-    if (id === 'claude-code') return CLAUDE_MODELS.filter((m) => m.id);
+    if (id === 'claude-code') { if (this.o.engine.id === 'claude-code') { const live = (await this.engineModels()).filter((m) => m.id); if (live.length) return live; } return CLAUDE_MODELS.filter((m) => m.id); }
     if (this.o.engine.id === 'codex') return this.engineModels();
     const hit = this.otherModelCache.get(id); if (hit) return hit; const make = this.o.engines?.[id]; if (!make) return [];
     try { const sess = await make().start({ agentId: 'agt_models', cwd: this.o.cwd }); try { const l = (await (sess as { listModels?: () => Promise<import('@centcom/agent').ModelChoice[]> }).listModels?.()) ?? []; if (l.length) this.otherModelCache.set(id, l); return l; } finally { await sess.stop().catch(() => undefined); } } catch { return []; }
@@ -634,7 +668,7 @@ export class AppController {
     const make = this.o.engines?.[id]; if (!make) { this.toast('warn', `${id === 'codex' ? 'Codex' : 'Claude Code'} is not installed.`); return; }
     if (this.state.busy) { this.toast('warn', 'Cento is still working. Press Esc to interrupt, then try again.'); return; }
     if (this.engineGuard && !(await this.engineGuard(id))) return;
-    const was = this.o.engine.label; await this.dropSession(); const engine = make(); this.o = { ...this.o, engine }; this.effort = '';
+    const was = this.o.engine.label; await this.dropSession(); const engine = make(); this.o = { ...this.o, engine }; this.effort = ''; this.wantedEffort = ''; this.levelsNow = undefined;
     this.set({ engineId: engine.id, engineLabel: engine.label }); this.setSettings({ model }); this.updateAgent(this.me, () => ({ engine: engine.label, provider: engine.provider, model: model || 'default', loginKind: 'unknown' /* the new agent has not said which login it uses */ })); this.o.onEngine?.(id);
     const n = this.state.items.filter((i) => i.kind === 'user').length; const carry = n ? `This conversation started with another coding agent (${was}). Summary of it so far:\n\n${this.summaryUpTo(n + 1, 8 * 1024)}` : undefined;
     this.notice('info', `Switched to ${engine.label}${model ? ` (${model})` : ''}.${n ? ` It continues from a summary of what was said with ${was}.` : ''}`);
@@ -654,8 +688,9 @@ export class AppController {
       return;
     }
     if (this.state.engineId !== 'codex') {
+      const live = (await this.engineModels()).filter((m) => m.id); const known = live.length ? live : CLAUDE_MODELS.filter((m) => m.id); // what Claude Code itself lists, else the built-in list
       const OTHER = '\u0000other'; const cur = this.state.settings.model;
-      const ids = await this.pick({ title: 'Model', note: 'Applies from your next message', multi: false, confirm: 'use', checked: CLAUDE_MODELS.some((m) => m.id === cur) ? [cur === '' ? '\u0000default' : cur] : [], options: [...CLAUDE_MODELS.map((m) => ({ id: m.id === '' ? '\u0000default' : m.id, label: m.label, hint: m.note })), { id: OTHER, label: 'Another model…', hint: 'type its id' }] });
+      const ids = await this.pick({ title: 'Model', note: 'Applies from your next message', multi: false, confirm: 'use', checked: cur === '' ? ['\u0000default'] : known.some((m) => m.id === cur) ? [cur] : [], options: [{ id: '\u0000default', label: 'Default', hint: CLAUDE_MODELS[0]!.note }, ...known.map((m) => ({ id: m.id, label: m.label, hint: m.efforts ? (m.efforts.length ? `${m.note ? m.note + ' · ' : ''}effort ${m.efforts.join('/')}` : `${m.note ? m.note + ' · ' : ''}no effort setting`) : m.note })), { id: OTHER, label: 'Another model…', hint: 'type its id' }] });
       const id = ids?.[0]; if (id === undefined) return;
       if (id === OTHER) { const t = await this.askText({ id: 'model', text: 'Which model id? (for example claude-opus-5-5)' }); const v = t?.trim(); if (v) { if (/^[\w.:-]{3,}$/.test(v)) this.setModel(v); else this.toast('warn', `No model called "${v}"`); } return; }
       this.setModel(id === '\u0000default' ? '' : id); return;
@@ -668,6 +703,7 @@ export class AppController {
     this.setSettings({ model: id }); void this.models.switchTo(this.me, id, 'user').then((c) => { if (c.note?.startsWith('Already')) this.toast('info', c.note); }).catch(() => undefined); // the choice is already saved; the agent picks it up with its next message
     this.updateAgent(this.me, () => ({ model: id || 'default' }));
     this.toast('ok', `Model: ${id ? modelLabel(id) : 'Default'}${this.state.busy ? ' (from the next message)' : ''}`);
+    void this.revalidateEffort();
   }
 
   private skillCache?: Skill[];
@@ -901,9 +937,9 @@ export class AppController {
   /** What ctrl+k searches: commands, the quick settings and animations, files of this project, saved conversations and skills. */
   paletteProviders(): PaletteProvider[] {
     const run = (cmd: string) => () => this.runPaletteCommand(cmd); const item = (e: { id: string; label: string; detail: string; cmd: string }) => ({ id: e.id, label: e.label, detail: e.detail, run: run(e.cmd) });
-    const files = this.files(); const cmds = commandEntries(); const quick = quickEntries(); const anims = animationEntries();
+    const files = this.files(); const cmds = commandEntries(); const anims = animationEntries();
     return [
-      { ...listProvider('commands', 'Commands', () => [...cmds, ...quick, ...anims].map(item), { max: 8, recent: () => FIRST_LABELS }) },
+      { ...listProvider('commands', 'Commands', () => [...cmds, ...quickEntries(this.effortChoices()), ...anims].map(item), { max: 8, recent: () => FIRST_LABELS }) },
       { id: 'files', group: 'Files', search: (q, signal) => files.search(q, signal) },
       listProvider('sessions', 'Sessions', () => (this.o.sessions?.list(this.o.cwd, 30) ?? []).filter((m) => m.id !== this.state.sessionId).map((m) => ({ id: 's:' + m.id, label: m.title, detail: `${m.messages} msg`, run: () => this.resumeSession(m.id) })), { max: 5, recent: () => (this.o.sessions?.list(this.o.cwd, 3) ?? []).filter((m) => m.id !== this.state.sessionId).map((m) => m.title) }),
       listProvider('skills', 'Skills', () => this.skills().map((k) => ({ id: 'k:' + k.name, label: k.name, detail: k.description.replace(/\s+/g, ' ').slice(0, 80), run: () => this.insertIntoPrompt(k.kind === 'command' ? `/${k.name} ` : `Use the ${k.name} skill: `) })), { max: 5 }),

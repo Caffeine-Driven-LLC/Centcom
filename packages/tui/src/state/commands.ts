@@ -19,7 +19,7 @@ export const COMMANDS: SlashCommand[] = [
   { name: 'share', args: '[branch|join <id>|invite <email>|link|status|stop|run <n>|no <n>|auto|activity|handoff <n>]', desc: 'Share this conversation: invite people, watch-only link, who may run what' },
   { name: 'model', args: '[name]', desc: 'Pick the model, Claude or Codex (ctrl+o)' },
   { name: 'budget', args: '[continue|on|off]', desc: 'What this run and conversation have used against the limits that pause a long job; continue lets a paused run go on' },
-  { name: 'effort', args: '[low|medium|high|xhigh|max|default]', desc: 'How hard the agent thinks (pick from a list with no argument)' },
+  { name: 'effort', args: '[level|default]', desc: 'How hard the agent thinks (pick from a list with no argument)' },
   { name: 'density', args: '[comfortable|compact]', desc: 'Blank rows between messages, or fit more on screen' },
   { name: 'title', args: '[on|off]', desc: 'Show the folder and what the agent is doing in the terminal tab title' },
   { name: 'bell', args: '[on|off]', desc: 'Ring the terminal bell when you are needed or a long task is done' },

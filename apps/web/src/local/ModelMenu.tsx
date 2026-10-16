@@ -17,7 +17,7 @@ export function ModelMenu({ view, send }: { view: LocalView; send(m: ClientMsg):
   const groups = view.engineModels.filter((g) => g.models.length);
   const multi = groups.length > 1 && !cur.demo;
   const value = enc(cur.engine, view.state?.settings?.model ?? '');
-  if (!multi) return view.models.length ? <label className="lc-sel"><span>Model</span><select aria-label="Model" value={view.state?.settings?.model ?? ''} onChange={(e) => send({ t: 'setModel', id: e.target.value })}><option value="">Default</option>{view.models.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select></label> : null;
+  if (!multi) return view.models.length ? <label className="lc-sel"><span>Model</span><select aria-label="Model" value={view.state?.settings?.model ?? ''} onChange={(e) => send({ t: 'setModel', id: e.target.value })}><option value="">Default</option>{view.models.filter((x) => x.id).map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select></label> : null;
   return <label className="lc-sel"><span>Model</span>
     <select aria-label="Model" value={value} onChange={(e) => {
       const [eng, ...rest] = e.target.value.split('|'); const id = rest.join('|'); const engine = eng as Engine;

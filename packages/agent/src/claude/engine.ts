@@ -14,6 +14,8 @@ import { rangePosition } from '../provider/detect/semver.js';
 import { runProbe } from '../provider/detect/probe.js';
 import { providerMessage } from '../provider/messages.js';
 import { ClaudeStreamParser } from './parse.js';
+import { CLAUDE_MODELS, type ModelChoice } from '../models.js';
+import { INITIALIZE_REQUEST, MODELS_QUERY_ARGS, effortsFor, fallbackModels, parseInitializeModels, type ClaudeModel } from './models.js';
 import { ProviderError, type AgentEngine, type Capability, type EngineSession, type EngineStartOptions, type EventBody, type NormalisedEvent, type PermissionMode } from '../types.js';
 
 export interface ClaudeEngineDeps { /** Reads `claude --version` before the first turn; with it the engine refuses a version outside the supported range (`provider_version_unsupported`) unless `unsupportedOk`. */ versionProbe?: () => Promise<string | undefined>; unsupportedOk?: boolean; bin?: string; spawn?: typeof nodeSpawn; now?: () => Date; /** Where engine pids are registered for the interrupt ladder (default: the app-wide one). */ procs?: ProcessRegistry; clock?: LadderClock }
@@ -89,6 +91,27 @@ class ClaudeSession implements EngineSession {
   private limits: { noSubagents?: boolean; maxBudgetUsd?: number } = {};
   setTurnLimits(l: { noSubagents?: boolean; maxBudgetUsd?: number }) { this.limits = { ...l }; }
   setModel(m: string) { this.model = m; }
+  private models?: Promise<ClaudeModel[]>;
+  /**
+   * The models Claude Code lists, with the effort levels each takes: the answer to the free `initialize` control request (no prompt is sent),
+   * asked once per session and kept. If the query fails (no `claude`, no answer within 15 s) it is the static list with assumed levels, FALLBACK ONLY.
+   */
+  listModels(): Promise<ModelChoice[]> { return (this.models ??= this.queryModels()); }
+  private queryModels(): Promise<ClaudeModel[]> {
+    const fallback = () => fallbackModels(CLAUDE_MODELS.filter((m) => m.id));
+    return new Promise<ClaudeModel[]>((resolve) => {
+      let done = false; let child: ChildProcess | undefined; let buf = '';
+      const finish = (l: ClaudeModel[] | undefined) => { if (done) return; done = true; clearTimeout(timer); try { child?.stdin?.end(); } catch { /* gone */ } try { child?.kill('SIGTERM'); } catch { /* gone */ } resolve(l ?? fallback()); };
+      const timer = setTimeout(() => finish(undefined), this.o.limits?.models_timeout_ms ?? 15_000); timer.unref?.();
+      try {
+        child = (this.deps.spawn ?? nodeSpawn)(this.deps.bin ?? 'claude', [...MODELS_QUERY_ARGS], { cwd: this.o.cwd, env: this.childEnv(), stdio: ['pipe', 'pipe', 'ignore'] });
+        child.on('error', () => finish(undefined)); child.on('close', () => finish(undefined));
+        child.stdin?.on('error', () => undefined); child.stdin?.write(INITIALIZE_REQUEST + '\n');
+        child.stdout?.setEncoding('utf8');
+        child.stdout?.on('data', (c: string) => { buf += c; let i: number; while ((i = buf.indexOf('\n')) >= 0) { const line = buf.slice(0, i); buf = buf.slice(i + 1); if (line.includes('"control_response"')) { const l = parseInitializeModels(line); if (l || line.includes('centcom_init')) return finish(l); } } if (buf.length > 4 * MAX_LINE_BYTES) buf = ''; });
+      } catch { finish(undefined); }
+    });
+  }
   setEffort(e: string) { this.effort = e || undefined; }
   setPermissionMode(m: PermissionMode) { this.mode = m; }
 
@@ -107,7 +130,9 @@ class ClaudeSession implements EngineSession {
     if (this.bypassRefused) { this.bypassRefused = false; this.emit({ type: 'engine.warning', code: 'bypass_not_allowed', text: 'Approvals stay on: skipping them has to be asked for (/mode bypass, or --dangerously-skip-permissions).' }); }
     if (!(await this.versionOk())) return { turn_id: turn };
     this.emit({ type: 'status', state: 'prompt-received' });
-    const argv = buildArgv(prompt, { viaStdin: true, streamInput: true, resume: this.sessionId, permissionMode: this.mode, model: this.model, effort: this.effort, allowedTools: this.o.allowedTools, disallowedTools: this.limits.noSubagents ? [...SUBAGENT_TOOLS] : undefined, maxBudgetUsd: this.limits.maxBudgetUsd, systemPromptAppend: this.o.systemPromptAppend, addDirs: this.o.addDirs, extra: this.bridge?.argv() });
+    let effort = this.effort; // never sent to a model that has no effort setting, nor at a level it does not take
+    if (effort) { let levels: string[]; try { levels = effortsFor((await this.listModels()) as ClaudeModel[], this.model); } catch { levels = []; } if (!levels.includes(effort)) { this.emit({ type: 'engine.warning', code: 'effort_not_supported', text: levels.length ? `${this.model || 'This model'} does not take effort ${effort}, so none was set.` : `${this.model || 'This model'} has no effort setting, so none was set.` }); effort = undefined; } }
+    const argv = buildArgv(prompt, { viaStdin: true, streamInput: true, resume: this.sessionId, permissionMode: this.mode, model: this.model, effort, allowedTools: this.o.allowedTools, disallowedTools: this.limits.noSubagents ? [...SUBAGENT_TOOLS] : undefined, maxBudgetUsd: this.limits.maxBudgetUsd, systemPromptAppend: this.o.systemPromptAppend, addDirs: this.o.addDirs, extra: this.bridge?.argv() });
     const parser = new ClaudeStreamParser(); this.parser = parser; this.receiptCap = false;
     const spawnFn = this.deps.spawn ?? nodeSpawn;
     let child: ChildProcess;

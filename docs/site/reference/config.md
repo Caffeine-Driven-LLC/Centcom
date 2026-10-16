@@ -71,7 +71,7 @@ When you change them in the app, these are saved to your user file: theme, Cento
 | `update.channel` | stable \| beta \| nightly | `"stable"` | no | Which releases to follow: stable, beta or nightly |
 | `lan.enabled` | boolean | `true` | no | Allow LAN sessions |
 | `agent.model` | string | `"sonnet"` | yes | Model Claude Code uses when you have not picked one (/model, --model, or a remembered pick). 'sonnet' is the mid-tier model for routine work; 'opus' or 'fable' cost several times more per token. Empty means your own Claude Code default, which may be the most expensive model |
-| `agent.effort` |  \| low \| medium \| high \| xhigh \| max | `"medium"` | yes | How hard Claude Code thinks when you have not picked a level (/effort). Higher levels use more output tokens. Empty means Claude Code's own default |
+| `agent.effort` |  \| low \| medium \| high \| xhigh \| max | `"medium"` | yes | How hard Claude Code thinks when you have not picked a level (/effort). Higher levels use more output tokens. A model that does not take the level you set gets the closest one it takes, and a model without an effort setting gets none. Empty means Claude Code's own default |
 | `agent.subagent_model` | string | `"sonnet"` | yes | Model for the sub-agents Claude Code starts, so picking Opus for the main conversation does not make every helper Opus. Empty leaves it to Claude Code. Your own CLAUDE_CODE_SUBAGENT_MODEL wins |
 | `agent.max_subagents` | number (-1 to 1000) | `6` | yes | Most sub-agents Claude Code may start in one run (0 = none, -1 = no limit). Enforced by a hook Centcom adds to Claude Code, which refuses the next one with the reason |
 | `agent.max_parallel` | number (1 to 16) | `4` | yes | Most agents running at once |

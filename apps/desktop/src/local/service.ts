@@ -2,7 +2,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { CLAUDE_MODELS, CodexEngine, detectClaude, detectCodex, type ModelChoice } from '@centcom/agent';
+import { CLAUDE_MODELS, CodexEngine, fallbackModels, detectClaude, detectCodex, type ModelChoice } from '@centcom/agent';
 import { ClientConfig, SessionStore } from '@centcom/tui';
 import { Workspace } from './workspace.js';
 import { CollabService, isCollabMsg, isJoinMsg, isShareMsg } from './collab.js';
@@ -71,7 +71,7 @@ export class LocalService {
   /** The menu's content: every installed agent's models (the shown agent's list is already known). */
   private async allModels(dir: string, shown: 'claude-code' | 'codex', mine: ModelChoice[]): Promise<Extract<ServerMsg, { t: 'engineModels' }>['engines']> {
     const [st, cx] = await Promise.all([detectClaude(), detectCodex()]); const out: Extract<ServerMsg, { t: 'engineModels' }>['engines'] = [];
-    if (st.installed) out.push({ engine: 'claude-code', models: (shown === 'claude-code' ? mine : CLAUDE_MODELS.filter((x) => x.id)).map(row) });
+    if (st.installed) out.push({ engine: 'claude-code', models: (shown === 'claude-code' ? mine : fallbackModels(CLAUDE_MODELS.filter((x) => x.id))).map(row) });
     if (cx.installed) out.push({ engine: 'codex', models: (shown === 'codex' ? mine : await this.codexModels(dir)).map(row) });
     return out;
   }
@@ -105,8 +105,8 @@ export class LocalService {
       case 'pref': await this.savePref(m); break;
       case 'cycleMode': s.current?.ctl.cycleMode(); break;
       case 'setMode': s.current?.ctl.setMode(m.mode); break;
-      case 'models': { const cur = s.current; const list = await cur?.ctl.engineModels(); const mine = list?.length ? list : cur?.which === 'claude-code' && !cur.demo ? CLAUDE_MODELS.filter((x) => x.id) : []; send({ t: 'models', models: mine.map(row) }); if (cur && !cur.demo) void this.allModels(cur.dir, cur.which, mine).then((engines) => send({ t: 'engineModels', engines })); break; }
-      case 'setEffort': if (!s.current?.ctl.setEffort(m.effort)) send({ t: 'notice', level: 'info', text: 'This agent has no reasoning effort setting.' }); break;
+      case 'models': { const cur = s.current; const list = await cur?.ctl.engineModels(); const mine = list?.length ? list : cur?.which === 'claude-code' && !cur.demo ? fallbackModels(CLAUDE_MODELS.filter((x) => x.id)) : []; /* Claude Code's own list when it answered; else the built-in one (FALLBACK) */ send({ t: 'models', models: mine.map(row) }); if (cur && !cur.demo) void this.allModels(cur.dir, cur.which, mine).then((engines) => send({ t: 'engineModels', engines })); break; }
+      case 'setEffort': { const why = s.current?.ctl.effortProblem(m.effort); if (why) send({ t: 'notice', level: 'info', text: why }); else if (!s.current?.ctl.setEffort(m.effort)) send({ t: 'notice', level: 'info', text: 'This agent has no reasoning effort setting.' }); break; }
       case 'compact': void s.current?.ctl.submit('/compact'); break;
       case 'board': send({ t: 'board', ...(s.current?.notes() ?? { enabled: false, notes: [] }) }); break;
       case 'note': void s.current?.ctl.submit(`/note ${m.type}: ${m.text}`); break;
@@ -119,4 +119,5 @@ export class LocalService {
   shutdown(): void { void this.collab.leaveJoined(); this.appCfg?.flush(); for (const w of this.workspaces.values()) { this.collab.stopSharing(w); w.close(); } this.workspaces.clear(); this.lastRunning = ''; }
 }
 
-const row = (x: ModelChoice): { id: string; label: string; note: string; efforts?: string[]; defaultEffort?: string; isDefault?: boolean } => ({ id: x.id, label: x.label, note: x.note, efforts: x.efforts, defaultEffort: x.defaultEffort, isDefault: x.isDefault });
+/** One model for a window. `efforts` is the levels it takes: absent = unknown, empty = the model has no effort setting. `resolved` is the full id an alias stands for. */
+export const row = (x: ModelChoice & { resolved?: string }): { id: string; label: string; note: string; efforts?: string[]; resolved?: string; defaultEffort?: string; isDefault?: boolean } => ({ id: x.id, label: x.label, note: x.note, efforts: x.efforts, resolved: x.resolved, defaultEffort: x.defaultEffort, isDefault: x.isDefault });
