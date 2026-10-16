@@ -1,5 +1,5 @@
 {
- "updated": "2026-10-14",
+ "updated": "2026-10-16",
  "lanes": {
   "C001": {
    "pct": 0.5,
@@ -326,16 +326,16 @@
    "note": "presence client: coalesced presence.update (1/s, latest wins), typing refresh and idle, auto-away and busy rules, encrypted cursors (10/s, deduped, null clears), receiver model with 10 s cursor expiry and offline on member_left, roster check, best-effort ephemeral frames, session reads presence off the socket and drops unverifiable ones with a counter; tested with a fake clock and two clients on the mock relay; gaps: no UI, nudge not implemented, burst seeding checked against the stub only | 2026-10-14: nudge: PresenceClient.nudge (editor or host, one per target per minute) and the nudged event, using the presence.nudge event the contract already has (#185); gaps: no TUI use, burst seeding checked against the stub only"
   },
   "C060": {
-   "pct": 0.8,
-   "note": "control client: host kick/mute/unmute/role/transfer/end/policy/rotation requests with local NotHost, self-action and policy-schema checks, server-only frame authenticity and roster versioning, state model (mute expiry, host change, policy merge, effective-from-seq), removal handling (keys wiped, no reconnect, once), session-side mute and role handling; gaps: failover tested on the state model only (the mock does not emit failover), no UI"
+   "pct": 1,
+   "note": "merged in #210"
   },
   "C061": {
-   "pct": 0.8,
-   "note": "approval router: request (apr_ id reused as frame id, clear part only the five routing fields, ttl clamped to 10 min, deny on any failure), answer, authorize matrix by live roster (host, delegated approvers, any_editor, owner via supplied set, never viewer or the requester), first decision wins, dedupe and pending() across reconnects, sink with scopes, awaiting/resolved events; session client gains onAny replay; gaps: owner needs workspace roles from outside, not wired to the permission engine or the fleet panel"
+   "pct": 1,
+   "note": "merged in #210"
   },
   "C062": {
-   "pct": 0.9,
-   "note": "fleet sync: publishers (spawn with plan-limit error, state with map validation, local-only states refused, 2/s per agent and no repeats, exit, encrypted branch.update, conflicts), lock arbitration through the relay with keyed path hashes (grant, deny, release, expire, reconnect re-ask), pure fleet model (replay deterministic, sender owns the agent, unknown states generic), bus bridge; three members on the mock relay incl. a lock clash and a conflict; mock relay gained lock arbitration and an agent limit; gaps: not wired to the real LockClient and fleet panel, state map has 64 names (card says 60); 2026-10-13: branch mode now live: publishers wired through the session bridge, TeamModel, locks and conflicts, handoff offers, mode chosen at session creation; checked against a live backend with two accounts (pnpm dev:branch-check)"
+   "pct": 1,
+   "note": "merged in #210"
   },
   "C063": {
    "pct": 0.9,
