@@ -70,8 +70,8 @@
    "note": "interrupt controller, 3 s/8 s signal ladder to whole process groups, registered pids only, Codex protocol-then-ladder with restart on the same thread, approvals denied and late ones refused, partial answer kept, ctrl+c semantics with exit 130 in the app and -p; agent.turn_timeout_s stops a turn that runs too long (checked in a real terminal); gaps: interrupt receipt (the CLI advertises none), stale index.lock cleanup (needs a decision on deleting a lock automatically) | 2026-10-14: the real claude 2.1.289 advertises interrupt_receipt_v1; the engine stops a turn with a control request, gets the receipt and the result, sends no signal (checked live: tools/dev/claude-interrupt-live.ts, run again after the restart), and falls back to the signal ladder; a leftover git index.lock of the stopped turn is removed under strict rules (#184); gap: Codex has no receipt beyond its turn/interrupt answer"
   },
   "C031": {
-   "pct": 0.93,
-   "note": "terminal capability module (tier matrix, unicode, half-block, hyperlink/paste flags, typed CENTO_* env with warnings, OSC 11 background query with 150 ms bound, layout class, mascotAllowed, debounced watchSize); the app now starts from it for colour depth (shared detection, the colour setting on top) and says an unclear CENTO_* value in words; gaps: components still use the older theme helpers, Unicode/ASCII fallback is not switched by caps.unicode yet | 2026-10-14: the app uses its colour depth and every colour now comes from the colour module (#183); gaps: Unicode/ASCII fallback is chosen from the colour tier, not from caps.unicode"
+   "pct": 0.95,
+   "note": "terminal capability module (tier matrix, unicode, half-block, hyperlink/paste flags, typed CENTO_* env with warnings, OSC 11 background query with 150 ms bound, layout class, mascotAllowed, debounced watchSize); the app now starts from it for colour depth (shared detection, the colour setting on top) and says an unclear CENTO_* value in words; gaps: components still use the older theme helpers, Unicode/ASCII fallback is not switched by caps.unicode yet | 2026-10-14: the app uses its colour depth and every colour now comes from the colour module (#183); gaps: Unicode/ASCII fallback is chosen from the colour tier, not from caps.unicode | 2026-10-16: the app takes caps.unicode (App prop and context) for the mascot, toasts, night panel, pick lists, tasks and the colour helper (#212); gaps: footer gauges and borders still draw fixed glyphs"
   },
   "C032": {
    "pct": 0.92,
@@ -326,36 +326,36 @@
    "note": "presence client: coalesced presence.update (1/s, latest wins), typing refresh and idle, auto-away and busy rules, encrypted cursors (10/s, deduped, null clears), receiver model with 10 s cursor expiry and offline on member_left, roster check, best-effort ephemeral frames, session reads presence off the socket and drops unverifiable ones with a counter; tested with a fake clock and two clients on the mock relay; gaps: no UI, nudge not implemented, burst seeding checked against the stub only | 2026-10-14: nudge: PresenceClient.nudge (editor or host, one per target per minute) and the nudged event, using the presence.nudge event the contract already has (#185); gaps: no TUI use, burst seeding checked against the stub only"
   },
   "C060": {
-   "pct": 1,
-   "note": "merged in #210"
+   "pct": 0.85,
+   "note": "control client: host kick/mute/unmute/role/transfer/end/policy/rotation requests with local NotHost, self-action and policy-schema checks, server-only frame authenticity and roster versioning, state model (mute expiry, host change, policy merge, effective-from-seq), removal handling (keys wiped, no reconnect, once), session-side mute and role handling; gaps: failover tested on the state model only (the mock does not emit failover), no UI | 2026-10-16: host failover runs on the real session path (the mock relay now does auto_failover: host_changed with code failover, one became-host, the new host can act; without it the session pauses) (#210); gaps: no UI for the host actions"
   },
   "C061": {
-   "pct": 1,
-   "note": "merged in #210"
+   "pct": 0.85,
+   "note": "approval router: request (apr_ id reused as frame id, clear part only the five routing fields, ttl clamped to 10 min, deny on any failure), answer, authorize matrix by live roster (host, delegated approvers, any_editor, owner via supplied set, never viewer or the requester), first decision wins, dedupe and pending() across reconnects, sink with scopes, awaiting/resolved events; session client gains onAny replay; gaps: owner needs workspace roles from outside, not wired to the permission engine or the fleet panel | 2026-10-16: the branch bridge routes the agent's permission questions to teammates when /share approvals is on (first allowed answer wins, an answer on the owner screen withdraws the request); teammates see them in /team and answer with /share approve or refuse; the relay mock lets editors send approval.decision (#210); gaps: owner approver needs workspace roles supplied from outside (owners callback not fed), command-post mode still uses its own host-bridge events, no fleet panel row"
   },
   "C062": {
-   "pct": 1,
-   "note": "merged in #210"
+   "pct": 0.92,
+   "note": "fleet sync: publishers (spawn with plan-limit error, state with map validation, local-only states refused, 2/s per agent and no repeats, exit, encrypted branch.update, conflicts), lock arbitration through the relay with keyed path hashes (grant, deny, release, expire, reconnect re-ask), pure fleet model (replay deterministic, sender owns the agent, unknown states generic), bus bridge; three members on the mock relay incl. a lock clash and a conflict; mock relay gained lock arbitration and an agent limit; gaps: not wired to the real LockClient and fleet panel, state map has 64 names (card says 60); 2026-10-13: branch mode now live: publishers wired through the session bridge, TeamModel, locks and conflicts, handoff offers, mode chosen at session creation; checked against a live backend with two accounts (pnpm dev:branch-check) | 2026-10-16: approvals of branch agents can go to teammates (#210); gaps: state map has 64 names (card says 60), no fleet panel row for waiting approvals"
   },
   "C063": {
    "pct": 0.9,
    "note": "offline: NetStateMonitor now wired to a shared session (status chip and notices in words; reads the status feed in the contract's words), encrypted durable outbox with caps, corruption recovery and in-order replay after reconnect, file seq store, resume reporting, wake detector, requireOnline and 24 h display rule; tested on the mock relay with maintenance mode; gaps: frames buffered offline may go under the older key if the rotate_key replay is still coming, no real kill/restart of the relay run live | 2026-10-14: frames buffered offline follow a key rotation that happened while the link was down (#185); note: up to 3 s wait for the replay when the relay sends no sys.resumed"
   },
   "C072": {
-   "pct": 1,
-   "note": "merged in #211"
+   "pct": 0.9,
+   "note": "LAN host server on ws: hello/welcome with local tokens, supersede, 8 member cap, lowest free slot, one seq per session with echo and dedupe, replay buffer with resume and snapshot_required plus lan.snapshot.get, rate limits, 2 MiB outbound close, malformed frame handling, pings and dead detection, presence and cursor coalescing with typing auto-clear, member_left after 10 s, public bind refusal, 0600 JSONL transcript, interceptor, loopback link, pairing hook, ban list; tested with real RelayClient guests and raw sockets; gaps: CLI flags not wired, host engine (C075) not built, a revoked member needs the validator to say so | 2026-10-14: centcom lan host (--name, --bind, --port, --allow-wan, --no-announce) composes the host server, engine, pairing and mDNS and was paired with a real guest (#190); gaps: no agent behind the host engine yet, a revoked member needs the validator to say so | 2026-10-16: discovery finds the host for a guest transport (#211); gaps unchanged"
   },
   "C074": {
-   "pct": 1,
-   "note": "merged in #211"
+   "pct": 0.88,
+   "note": "transports: RelayTransport, LanTransport (pairing on first connect, token afterwards, fingerprint check), LocalTransport, openTransport, parseJoinTarget, close-code error mapping and a conformance suite that passes for all three; new package @centcom/session; gaps: not used by the session client yet (it still builds the relay link itself), no real discovery-driven connect | 2026-10-16: SessionClientDeps.linkFactory plus transportLinkFactory: the session client opens its link through a transport (host and guest connect and reconnect through RelayTransport on the mock relay); discoverLanTarget turns an mDNS scan into a LAN target with the advertised fingerprint and connects to a real LAN host (#211); gaps: the CLI does not call the discovery connect yet, a full session client over LAN needs key distribution without the REST API"
   },
   "C075": {
    "pct": 0.85,
    "note": "host session engine over the LAN server: role matrix, queue machine with caps and auto-approval, kick/mute/role/transfer/policy/end, approvals, locks with ttl, roster, file history with snapshots (latest 3), host actions through the loopback link; tested with unit tests and host plus guests over loopback; gaps: no host failover, no payload schema check per kind, the history window and snapshot serving to late joiners are tested only at the persistence level, the agent runner and event bus are not wired; 2026-10-13: HostBridge decides approvals for the owner, and in branch mode every person runs their own agent; 2026-10-14: a request's own message could lose its queue item when the store told the bridge late (CI only): fixed with a test that reproduces it | 2026-10-14: each frame is checked against its kind before it is numbered (#188); gaps: no host failover, the agent runner and bus are not wired behind the host engine, snapshot serving to late joiners is tested only at the persistence level"
   },
   "C076": {
-   "pct": 1,
-   "note": "merged in #211"
+   "pct": 0.8,
+   "note": "guest engine: GuestSession over any transport, pure total reducer, ordering and dedupe, key-wait buffer with caps, queue submit/cancel with local gating and idempotent resend, close-code handling, spoofed control frames ignored; tested with fixtures, a property test, a hand-driven transport and the C075 host over loopback; gaps: crypto and signature checks sit behind an injected decoder (not wired to the C057 session client yet), no acks here, no snapshot restore, not tested against the mock relay; 2026-10-13: JoinedSession joins a shared session over the real relay, in command post and branch mode | 2026-10-16: codecDecoder puts the guest engine's signature check and decrypt on the session client's own FrameCodec (waits for the key, drops forged frames) (#211); gaps: queue submit sealing and signing still injected, no acks here, no snapshot restore, not run against the live client end to end"
   },
   "C077": {
    "pct": 1,
