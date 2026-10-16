@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box } from 'ink';
 import { getBaked, logoRows, renderHalfBlock, type CentoColor } from '@centcom/mascot';
-import { useTheme, Rich } from './ui.js';
+import { useTheme, useUnicode, Rich } from './ui.js';
 import { Cento } from '../pixel/index.js';
 import { animationForState } from '../mascot/stateMap.js';
 import { sp, truncate, type Line } from '../util/text.js';
@@ -9,7 +9,7 @@ import { ago } from '../sessions.js';
 import type { AppState } from '../state/model.js';
 
 export function Welcome({ s, width, height, color, reduced, calm = 1, mascot = true }: { s: AppState; width: number; height: number; color: CentoColor; reduced: boolean; /** 1 = normal; more = the animation runs that many times slower (nothing has happened for a while). */ calm?: number; /** false when you turned the mascot off: no picture, nothing animating. */ mascot?: boolean }) {
-  const theme = useTheme();
+  const theme = useTheme(); const uni = useUnicode();
   const animation = animationForState('first-run'); const baked = getBaked(animation); const mw = Math.max(baked?.w ?? 14, 14); const mh = Math.ceil((baked?.h ?? 16) / 2);
   const logo = renderHalfBlock(logoRows('CENTCOM', 'B'), theme.tier);
   const me = s.agents.find((a) => a.mine);
@@ -36,7 +36,7 @@ export function Welcome({ s, width, height, color, reduced, calm = 1, mascot = t
   );
   return (
     <Box width={width} height={height} alignItems="center" justifyContent="center" flexDirection={wide ? 'row' : 'column'}>
-      {mascot ? <Box width={mw} height={mh} flexShrink={0}><Cento animation={animation} color={color} tier={theme.tier} unicode={theme.tier !== 'none'} motion={reduced ? 'reduced' : 'full'} playing={calm < 8} /></Box> : null}
+      {mascot ? <Box width={mw} height={mh} flexShrink={0}><Cento animation={animation} color={color} tier={theme.tier} unicode={uni} motion={reduced ? 'reduced' : 'full'} playing={calm < 8} /></Box> : null}
       {text}
     </Box>
   );

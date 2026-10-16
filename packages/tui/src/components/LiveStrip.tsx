@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { Box } from 'ink';
-import { Rich, useTheme, useTick, sameUnlessTyping } from './ui.js';
+import { Rich, useTheme, useUnicode, useTick, sameUnlessTyping } from './ui.js';
 import { Cento } from '../pixel/index.js';
 import { useMascotView, type MascotDriver } from '../mascot/index.js';
 import { createVerbPicker, isSeriousState, nextVerbDelayMs, plainVerb, spinnerLine, FRAME_MS, type VerbPicker } from '../spinner/index.js';
@@ -38,7 +38,7 @@ function infoLines(s: AppState, work: WorkLine, width: number, now: number): Lin
 
 export const LiveStrip = React.memo(LiveStripImpl, sameUnlessTyping as never) as typeof LiveStripImpl;
 function LiveStripImpl({ s, mascot, width, size, calm = 1 }: { s: AppState; /** What Cento does for the state (lane C046); the strip draws it with the `Cento` component. */ mascot: MascotDriver; width: number; size: 'large' | 'small' | 'off'; /** 1 = normal; more = the animation runs that many times slower (nothing has happened for a while). */ calm?: number }) {
-  const theme = useTheme();
+  const theme = useTheme(); const uni = useUnicode();
   const view = useMascotView(mascot, 'main');
   const spinning = s.busy && !s.settings.reducedMotion;
   const tick = useTick(FRAME_MS, spinning); void tick;
@@ -60,7 +60,7 @@ function LiveStripImpl({ s, mascot, width, size, calm = 1 }: { s: AppState; /** 
   const info = infoLines(s, work, Math.max(10, width - boxW - 2), now);
   return (
     <Box height={boxH} width={width}>
-      <Box width={boxW} height={boxH} flexShrink={0} flexDirection="column" justifyContent="flex-end" overflow="hidden"><Cento animation={view.animation} loop={view.loop} color={s.settings.color} size={small ? 'mini' : 'hero'} tier={theme.tier} unicode={theme.tier !== 'none'} motion={s.settings.reducedMotion ? 'reduced' : 'full'} playing={calm < 8} /></Box>
+      <Box width={boxW} height={boxH} flexShrink={0} flexDirection="column" justifyContent="flex-end" overflow="hidden"><Cento animation={view.animation} loop={view.loop} color={s.settings.color} size={small ? 'mini' : 'hero'} tier={theme.tier} unicode={uni} motion={s.settings.reducedMotion ? 'reduced' : 'full'} playing={calm < 8} /></Box>
       <Box flexDirection="column" justifyContent="flex-end" height={boxH} paddingBottom={small ? 0 : 1}>{info.map((l, i) => <Rich key={i} line={l} />)}</Box>
     </Box>
   );
