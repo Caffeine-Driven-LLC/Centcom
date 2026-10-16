@@ -22,7 +22,7 @@ describe('screen-reader mode runs the whole app as plain lines', () => {
     await s.end();
   });
   it('/help lists the commands as text and goes back to the prompt', async () => {
-    const s = await session(); await s.type('/help'); await s.until(() => s.out().includes('Commands:')); expect(s.out()).toContain('/effort [low|medium|high|xhigh|max|default]: ');
+    const s = await session(); await s.type('/help'); await s.until(() => s.out().includes('Commands:')); expect(s.out()).toContain('/effort [level|default]: ');
     await s.until(() => s.ctl.state.mode === 'chat'); await s.end();
   });
   it('a list is asked as numbers; bad input is asked again; the right number applies; Enter cancels', async () => {

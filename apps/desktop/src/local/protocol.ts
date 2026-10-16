@@ -113,9 +113,9 @@ export type ServerMsg =
   | { t: 'opened'; dir: string; history: string[]; engine?: 'claude-code' | 'codex'; demo?: boolean } // prompt history rides along once here, not in every state push
   | { t: 'closed' }
   | { t: 'state'; state: WebState; changed: Item[]; order: string[] }
-  | { t: 'models'; models: { id: string; label: string; note: string; efforts?: string[]; defaultEffort?: string; isDefault?: boolean }[] }
+  | { t: 'models'; models: { id: string; label: string; note: string; efforts?: string[]; resolved?: string; defaultEffort?: string; isDefault?: boolean }[] }
   /** Every installed agent's models, for the one model menu: choosing another agent's model switches to it. */
-  | { t: 'engineModels'; engines: { engine: 'claude-code' | 'codex'; models: { id: string; label: string; note: string; efforts?: string[]; defaultEffort?: string; isDefault?: boolean }[] }[] }
+  | { t: 'engineModels'; engines: { engine: 'claude-code' | 'codex'; models: { id: string; label: string; note: string; efforts?: string[]; resolved?: string; defaultEffort?: string; isDefault?: boolean }[] }[] }
   | { t: 'running'; sessions: RunningSession[] }
   | { t: 'account'; account: AccountView }
   /** The Team panel's content, or why it could not be loaded; `done` says what the last change did (and `link` is an invite to send by hand). */

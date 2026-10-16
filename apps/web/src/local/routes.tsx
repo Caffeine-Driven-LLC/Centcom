@@ -118,13 +118,13 @@ function approvalTitle(tool: string): string { return tool === 'Bash' ? 'Allow C
 const MODES: [string, string][] = [['default', 'Ask first'], ['acceptEdits', 'Accept edits'], ['plan', 'Plan (read only)'], ['bypassPermissions', 'Skip approvals']];
 
 function Workspace({ view, send }: { view: LocalView; send: Send }): React.JSX.Element {
-  const [text, setText] = useState(''); const [effort, setEffort] = useState(''); const hist = useRef<{ list: string[]; idx: number | null; draft: string }>({ list: [...view.history], idx: null, draft: '' });
+  const [text, setText] = useState(''); const hist = useRef<{ list: string[]; idx: number | null; draft: string }>({ list: [...view.history], idx: null, draft: '' });
   /** Up and Down walk through earlier messages, like a terminal; the half-typed message comes back at the end. */
   const recall = (dir: -1 | 1): boolean => {
     const h = hist.current; if (dir === -1) { if (!h.list.length) return false; if (h.idx === null) { h.draft = text; h.idx = h.list.length - 1; } else if (h.idx > 0) h.idx--; setText(h.list[h.idx]!); return true; }
     if (h.idx === null) return false; if (h.idx < h.list.length - 1) { h.idx++; setText(h.list[h.idx]!); } else { h.idx = null; setText(h.draft); } return true;
   };
-  const [slashSel, setSlashSel] = useState(0); const slash = slashMatches(COMMANDS, text); const slashAt = Math.min(slashSel, Math.max(0, slash.length - 1)); const [panel, setPanel] = useState(view.launcher?.prefs.side ?? true); const togglePanel = (): void => { send({ t: 'pref', side: !panel }); setPanel(!panel); }; /* remembered in the settings file (client.side_panel) */ const s = view.state; const model = view.models.find((x) => x.id === s?.settings?.model) ?? view.models.find((x) => x.isDefault);
+  const [slashSel, setSlashSel] = useState(0); const slash = slashMatches(COMMANDS, text); const slashAt = Math.min(slashSel, Math.max(0, slash.length - 1)); const [panel, setPanel] = useState(view.launcher?.prefs.side ?? true); const togglePanel = (): void => { send({ t: 'pref', side: !panel }); setPanel(!panel); }; /* remembered in the settings file (client.side_panel) */ const s = view.state; const picked = s?.settings?.model; const model = picked ? view.models.find((x) => x.id === picked || x.resolved === picked) : view.models.find((x) => x.isDefault); // the model the agent runs; an alias and the full id it stands for are the same model
   useEffect(() => { send({ t: 'models' }); send({ t: 'board' }); }, [send, view.opened, view.openedEngine?.engine]); const approval = s?.approvals[0];
   const submit = (): void => { const t = text.trim(); if (!t) return; send({ t: 'submit', text: t }); hist.current.list = [...hist.current.list.filter((x) => x !== t), t].slice(-200); hist.current.idx = null; setText(''); };
   const log = useRef<HTMLDivElement>(null); const stick = useRef(true); const box = useRef<HTMLTextAreaElement>(null);
@@ -164,7 +164,7 @@ function Workspace({ view, send }: { view: LocalView; send: Send }): React.JSX.E
       <div className="lc-composer-bar">
       <label className="lc-sel"><span>Mode</span><select aria-label="Mode" value={s?.settings?.permissionMode ?? 'default'} onChange={(e) => send({ t: 'setMode', mode: e.target.value as never })}>{MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
       <ModelMenu view={view} send={send} />
-      {model?.efforts?.length ? <label className="lc-sel"><span>Effort</span><select aria-label="Effort" value={effort} onChange={(e) => { setEffort(e.target.value); send({ t: 'setEffort', effort: e.target.value }); }}><option value="">Default ({model.defaultEffort ?? 'auto'})</option>{model.efforts.map((x) => <option key={x} value={x}>{x}</option>)}</select></label> : null}
+      {model?.efforts?.length ? <label className="lc-sel"><span>Effort</span><select aria-label="Effort" value={s?.settings?.effort ?? ''} onChange={(e) => { send({ t: 'setEffort', effort: e.target.value }); }}><option value="">Default ({model.defaultEffort ?? 'auto'})</option>{model.efforts.map((x) => <option key={x} value={x}>{x}</option>)}</select></label> : null}
 <span className="lc-hint">Enter to send</span><span className="lc-grow" /><SButton variant="outline" size="sm" disabled={!busy} onClick={() => send({ t: 'interrupt' })}><StopIcon />Stop</SButton><SButton size="sm" variant={approval ? 'secondary' : 'default'} disabled={!text.trim()} onClick={submit}><ArrowUp />Send</SButton></div>
     </div>
   </div>

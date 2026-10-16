@@ -7,6 +7,7 @@ import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import type { ChildProcess, spawn as nodeSpawn } from 'node:child_process';
 import { ClaudeCodeEngine } from '../claude/engine.js';
+import { isModelsQuery } from '../claude/models.js';
 import { estimateTokens } from '../board/text.js';
 import type { EngineStartOptions, NormalisedEvent } from '../types.js';
 
@@ -41,10 +42,18 @@ function fakeChild(sessionId: string, tokens: { input: number; cacheWrite: numbe
 }
 
 export interface CapturedTurns { argv: string[][]; prompts: string[]; /** What each turn sent to claude on standard input (the user message, as text). */ sent: string[]; /** The environment each turn's process got. */ envs: NodeJS.ProcessEnv[]; events: NormalisedEvent[] }
+/** What the stand-in answers to the model query when a test gives none: a few models in the shape of the CLI's `initialize` answer. */
+export const DEFAULT_MODELS_RESPONSE = JSON.stringify({ type: 'control_response', response: { subtype: 'success', request_id: 'centcom_init', response: { models: [
+  { value: 'default', resolvedModel: 'claude-sonnet-5-5', displayName: 'Default', description: '', supportsEffort: true, supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'] },
+  { value: 'sonnet', resolvedModel: 'claude-sonnet-5-5', displayName: 'Sonnet', description: '', supportsEffort: true, supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'] },
+  { value: 'opus', resolvedModel: 'claude-opus-5-5', displayName: 'Opus', description: '', supportsEffort: true, supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'] },
+  { value: 'claude-opus-4-6', resolvedModel: 'claude-opus-4-6', displayName: 'Opus 4.6', description: '', supportsEffort: true, supportedEffortLevels: ['low', 'medium', 'high', 'max'] },
+  { value: 'noeffort', resolvedModel: 'noeffort-1', displayName: 'No effort', description: '' },
+] } } });
 /** Runs the real Claude engine for `prompts.length` turns of one session against the stand-in and returns what it launched `claude` with each time. */
-export async function captureTurns(prompts: string[], start: Partial<EngineStartOptions> = {}, hooks: { beforeSend?: (turn: number) => void } = {}): Promise<CapturedTurns> {
+export async function captureTurns(prompts: string[], start: Partial<EngineStartOptions> = {}, hooks: { beforeSend?: (turn: number) => void; /** The line the stand-in answers the model query with. */ modelsResponse?: string } = {}): Promise<CapturedTurns> {
   const argv: string[][] = []; const sent: string[] = []; const envs: NodeJS.ProcessEnv[] = []; const events: NormalisedEvent[] = [];
-  const spawn = ((_bin: string, args: readonly string[], opts?: { env?: NodeJS.ProcessEnv }) => { argv.push([...args]); envs.push(opts?.env ?? {}); const c = fakeChild('sess-1', { input: 3, cacheWrite: 500, cacheRead: 30000, output: 20 }); let text = ''; sent.push(''); const at = sent.length - 1; c.stdin?.on('data', (b: Buffer) => { text += String(b); sent[at] = text; }); return c; }) as unknown as typeof nodeSpawn;
+  const spawn = ((_bin: string, args: readonly string[], opts?: { env?: NodeJS.ProcessEnv }) => { if (isModelsQuery(args)) { const q = new EventEmitter() as ChildProcess & EventEmitter; const o = new PassThrough(); Object.assign(q, { stdin: new PassThrough(), stdout: o, stderr: new PassThrough(), pid: undefined, kill: () => true }); setImmediate(() => o.write((hooks.modelsResponse ?? DEFAULT_MODELS_RESPONSE) + '\n')); return q; } argv.push([...args]); envs.push(opts?.env ?? {}); const c = fakeChild('sess-1', { input: 3, cacheWrite: 500, cacheRead: 30000, output: 20 }); let text = ''; sent.push(''); const at = sent.length - 1; c.stdin?.on('data', (b: Buffer) => { text += String(b); sent[at] = text; }); return c; }) as unknown as typeof nodeSpawn;
   const engine = new ClaudeCodeEngine({ spawn, bin: 'claude' });
   const s = await engine.start({ agentId: 'agt_cost', cwd: process.cwd(), ...start });
   for (let i = 0; i < prompts.length; i++) {

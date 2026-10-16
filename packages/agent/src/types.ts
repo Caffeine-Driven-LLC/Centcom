@@ -80,7 +80,7 @@ export interface EngineStartOptions {
   approvalGate?: PermissionGate;
   /** Where an engine's questions to the person go when it can take the answer directly (Codex). Without one the question is declined. */
   questionGate?: QuestionGate;
-  limits?: { spawn_timeout_ms?: number; first_event_timeout_ms?: number; interrupt_grace_ms?: number };
+  limits?: { spawn_timeout_ms?: number; first_event_timeout_ms?: number; models_timeout_ms?: number; interrupt_grace_ms?: number };
   /** A session that starts in `bypassPermissions` must say it may (the person chose it, or `--dangerously-skip-permissions`); without this the engine starts in ask mode and says so. A later `setPermissionMode` is the person's own call and is honoured. */
   allowBypass?: boolean;
   /** Run a CLI whose version is outside the range Centcom has been checked against (config `agent.engine_unsupported_ok`). */
