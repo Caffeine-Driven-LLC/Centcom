@@ -24,7 +24,7 @@ type Role = MemberRec['role'];
 interface Conn { id: number; ws: WebSocket; sid?: string; member?: MemberRec; device?: string; authed: boolean; lastActive: number; helloTimer?: TimerHandle; pingTimer?: TimerHandle; ackSeq: number; slowWarned: boolean; invalid: number[]; presenceCount: number; presenceWindow: number }
 
 const SERVER_ONLY = new Set(['queue.state', 'control.member_joined', 'control.member_left', 'control.roster', 'control.host_changed', 'control.session_state', 'control.rotate_key']);
-const HOST_ONLY = new Set(['queue.approve', 'queue.reject', 'queue.reorder', 'queue.drop', 'queue.claim', 'queue.done', 'control.kick', 'control.mute', 'control.unmute', 'control.role', 'control.transfer_host', 'control.end', 'control.policy', 'approval.decision']);
+const HOST_ONLY = new Set(['queue.approve', 'queue.reject', 'queue.reorder', 'queue.drop', 'queue.claim', 'queue.done', 'control.kick', 'control.mute', 'control.unmute', 'control.role', 'control.transfer_host', 'control.end', 'control.policy']);
 const VIEWER_OK = new Set(['reaction', 'comment.add']);
 const ULID_OK = (s: unknown) => typeof s === 'string' && /^[a-z]{3}_[0-9A-HJKMNP-TV-Z]{26}$/.test(s);
 
@@ -107,7 +107,12 @@ export function createRelay(d: RelayDeps) {
   /** The host is gone (socket closed, or a virtual host was "disconnected"): pause the session after the grace period. */
   function hostAway(s: SessionRec) {
     if (hostTimers.has(s.id)) return;
-    hostTimers.set(s.id, clock.setTimeout(() => { hostTimers.delete(s.id); if (s.state === 'live') sessionState(s, 'paused'); }, opts.hostGraceMs));
+    hostTimers.set(s.id, clock.setTimeout(() => { hostTimers.delete(s.id); if (s.state !== 'live') return; if (s.policy.auto_failover && failover(s)) return; sessionState(s, 'paused'); }, opts.hostGraceMs));
+  }
+  /** `auto_failover`: the connected editor with the lowest slot becomes host, as the real relay does; false when nobody can. */
+  function failover(s: SessionRec): boolean {
+    const online = new Set(sessConns(s.id).map((x) => x.member?.id)); const next = [...s.members.values()].filter((m) => m.id !== s.hostId && m.role === 'editor' && online.has(m.id)).sort((x, y) => x.slot - y.slot)[0]; if (!next) return false;
+    const old = s.members.get(s.hostId); if (old) old.role = 'editor'; next.role = 'host'; s.hostId = next.id; s.rosterV++; server(s, 'control', 'control.host_changed', { host: next.id, code: 'failover' }); return true;
   }
   /** The host is back: cancel a pending pause, or resume a paused session. */
   function hostBack(s: SessionRec) { clock.clearTimeout(hostTimers.get(s.id)); hostTimers.delete(s.id); if (s.state === 'paused') sessionState(s, 'live'); }
@@ -171,6 +176,7 @@ export function createRelay(d: RelayDeps) {
 
   /* ------------------------------------------------------------ session frames */
   function allowed(role: Role, k: string, t: string): 'ok' | 'forbidden' | 'role_insufficient' {
+    if (k === 'approval.decision') return role === 'viewer' ? 'forbidden' : 'ok'; /* the receivers check the request's approver against the live roster */
     if (HOST_ONLY.has(k)) return role === 'host' ? 'ok' : 'forbidden'; if (t === 'presence') return 'ok';
     if (role === 'viewer') return VIEWER_OK.has(k) ? 'ok' : 'role_insufficient'; return 'ok';
   }
@@ -234,7 +240,7 @@ export function createRelay(d: RelayDeps) {
       case 'control.role': if (target && (p.role === 'editor' || p.role === 'viewer')) { target.role = p.role; s.rosterV++; } return;
       case 'control.transfer_host': { const to = typeof p.to === 'string' ? s.members.get(p.to) : undefined; if (!to) return; const old = s.members.get(s.hostId); if (old) old.role = 'editor'; to.role = 'host'; s.hostId = to.id; s.rosterV++; server(s, 'control', 'control.host_changed', { host: to.id, code: 'transfer' }); return; }
       case 'control.end': sessionState(s, 'ended'); for (const x of sessConns(s.id)) close(x, 1000); return;
-      case 'control.policy': { if (typeof p.queue_limit === 'number') s.policy.queue_limit = p.queue_limit; if (typeof p.locked === 'boolean') s.policy.locked = p.locked; if (typeof p.queue_paused === 'boolean') s.policy.queue_paused = p.queue_paused; return; }
+      case 'control.policy': { if (typeof p.queue_limit === 'number') s.policy.queue_limit = p.queue_limit; if (typeof p.locked === 'boolean') s.policy.locked = p.locked; if (typeof p.auto_failover === 'boolean') s.policy.auto_failover = p.auto_failover; if (typeof p.queue_paused === 'boolean') s.policy.queue_paused = p.queue_paused; return; }
       default: return;
     }
   }
