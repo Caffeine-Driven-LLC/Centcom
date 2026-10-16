@@ -342,20 +342,20 @@
    "note": "offline: NetStateMonitor now wired to a shared session (status chip and notices in words; reads the status feed in the contract's words), encrypted durable outbox with caps, corruption recovery and in-order replay after reconnect, file seq store, resume reporting, wake detector, requireOnline and 24 h display rule; tested on the mock relay with maintenance mode; gaps: frames buffered offline may go under the older key if the rotate_key replay is still coming, no real kill/restart of the relay run live | 2026-10-14: frames buffered offline follow a key rotation that happened while the link was down (#185); note: up to 3 s wait for the replay when the relay sends no sys.resumed"
   },
   "C072": {
-   "pct": 0.9,
-   "note": "LAN host server on ws: hello/welcome with local tokens, supersede, 8 member cap, lowest free slot, one seq per session with echo and dedupe, replay buffer with resume and snapshot_required plus lan.snapshot.get, rate limits, 2 MiB outbound close, malformed frame handling, pings and dead detection, presence and cursor coalescing with typing auto-clear, member_left after 10 s, public bind refusal, 0600 JSONL transcript, interceptor, loopback link, pairing hook, ban list; tested with real RelayClient guests and raw sockets; gaps: CLI flags not wired, host engine (C075) not built, a revoked member needs the validator to say so | 2026-10-14: centcom lan host (--name, --bind, --port, --allow-wan, --no-announce) composes the host server, engine, pairing and mDNS and was paired with a real guest (#190); gaps: no agent behind the host engine yet, a revoked member needs the validator to say so"
+   "pct": 1,
+   "note": "merged in #211"
   },
   "C074": {
-   "pct": 0.8,
-   "note": "transports: RelayTransport, LanTransport (pairing on first connect, token afterwards, fingerprint check), LocalTransport, openTransport, parseJoinTarget, close-code error mapping and a conformance suite that passes for all three; new package @centcom/session; gaps: not used by the session client yet (it still builds the relay link itself), no real discovery-driven connect"
+   "pct": 1,
+   "note": "merged in #211"
   },
   "C075": {
    "pct": 0.85,
    "note": "host session engine over the LAN server: role matrix, queue machine with caps and auto-approval, kick/mute/role/transfer/policy/end, approvals, locks with ttl, roster, file history with snapshots (latest 3), host actions through the loopback link; tested with unit tests and host plus guests over loopback; gaps: no host failover, no payload schema check per kind, the history window and snapshot serving to late joiners are tested only at the persistence level, the agent runner and event bus are not wired; 2026-10-13: HostBridge decides approvals for the owner, and in branch mode every person runs their own agent; 2026-10-14: a request's own message could lose its queue item when the store told the bridge late (CI only): fixed with a test that reproduces it | 2026-10-14: each frame is checked against its kind before it is numbered (#188); gaps: no host failover, the agent runner and bus are not wired behind the host engine, snapshot serving to late joiners is tested only at the persistence level"
   },
   "C076": {
-   "pct": 0.75,
-   "note": "guest engine: GuestSession over any transport, pure total reducer, ordering and dedupe, key-wait buffer with caps, queue submit/cancel with local gating and idempotent resend, close-code handling, spoofed control frames ignored; tested with fixtures, a property test, a hand-driven transport and the C075 host over loopback; gaps: crypto and signature checks sit behind an injected decoder (not wired to the C057 session client yet), no acks here, no snapshot restore, not tested against the mock relay; 2026-10-13: JoinedSession joins a shared session over the real relay, in command post and branch mode"
+   "pct": 1,
+   "note": "merged in #211"
   },
   "C077": {
    "pct": 1,

@@ -13,7 +13,7 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 
 ![Progress](docs/progress.svg)
 
-**89% built** (weighted by lane size across 105 lanes). Details and how this is computed: [`tools/plan/progress.py`](tools/plan/progress.py). Update [`plan/STATUS.json`](plan/STATUS.json) when you finish or advance a lane, then run `python3 tools/plan/progress.py`.
+**90% built** (weighted by lane size across 105 lanes). Details and how this is computed: [`tools/plan/progress.py`](tools/plan/progress.py). Update [`plan/STATUS.json`](plan/STATUS.json) when you finish or advance a lane, then run `python3 tools/plan/progress.py`.
 
 ## Next steps
 
@@ -36,7 +36,7 @@ Command many hands. A terminal-first, multiplayer platform for running coding ag
 | [C014](plan/client/C014.md) | Agent session state machine emitting contract state names | 93% | state machine and emitter; property test over random legal streams (400 runs: states on the contract list, calm state after a turn, idle after interrupt, open approval never displaced, crash is final); gaps: golden transcripts from real parsers | 2026-10-14: the state machine is run over the real claude recordings (a plain answer and an interrupted turn: the agent ends idle with no error on the way) (#184); gap: golden transcripts from the real Codex parser |
 | [C031](plan/client/C031.md) | Terminal capability detection and colour tiers | 93% | terminal capability module (tier matrix, unicode, half-block, hyperlink/paste flags, typed CENTO_* env with warnings, OSC 11 background query with 150 ms bound, layout class, mascotAllowed, debounced watchSize); the app now starts from it for colour depth (shared detection, the colour setting on top) and says an unclear CENTO_* value in words; gaps: components still use the older theme helpers, Unicode/ASCII fallback is not switched by caps.unicode yet | 2026-10-14: the app uses its colour depth and every colour now comes from the colour module (#183); gaps: Unicode/ASCII fallback is chosen from the colour tier, not from caps.unicode |
 
-+57 more in [`plan/STATUS.json`](plan/STATUS.json).
++54 more in [`plan/STATUS.json`](plan/STATUS.json).
 
 ### Ready to pick up (all dependencies done)
 
