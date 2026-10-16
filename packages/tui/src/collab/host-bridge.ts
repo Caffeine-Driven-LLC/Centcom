@@ -20,6 +20,7 @@ import { gitBranchInfo, type BranchProbe } from './git-info.js';
 import { TeamModel } from './team.js';
 import { BoardSync } from './board-sync.js';
 import { PolicyGate, type Blocked, type PolicyOptions } from './policy.js';
+import { RemoteApprovals, type Approver } from './remote-approvals.js';
 import { MESSAGES } from '../provider/messages.js';
 
 export interface HostBridgeOptions {
@@ -32,6 +33,7 @@ export interface HostBridgeOptions {
   /** branch mode: reads the branch of the working folder (default: git) */ branchProbe?: BranchProbe;
   /** branch mode: where the session plugs into this runtime's file locks */ locks?: LockHub;
   /** branch mode: a teammate's agent is working on a file this person's agent is changing */ onConflict?(c: { agents: string[]; hmacs: string[] }): void;
+  /** branch mode: send this agent's permission questions to teammates too (the first allowed answer wins). `owners` lists workspace owners/admins, which the roster does not carry. */ askTeammates?: { approver?: Approver; owners?: () => ReadonlySet<string> };
   /** The who-pays gate (C105): flags, the host's confirmation, login lookup, notices. Whatever is left out resolves to the safe answer: a command post on a subscription login does not run guests' prompts. */ policy?: PolicyOptions;
 }
 export interface PendingRequest { item: string; from: string; slot: number; text: string; ts: string }
@@ -41,6 +43,7 @@ const RISKS = new Set(['low', 'medium', 'high']);
 export class HostBridge {
   readonly queue: QueueClient;
   /** branch mode: who is working on what, built from the session */ readonly team?: TeamModel;
+  /** branch mode: questions to and from teammates */ remote?: RemoteApprovals;
   /** branch mode: shared notes, when the context board is on */ private boardSync?: BoardSync;
   readonly mode: 'command_post' | 'branch'; private shareActivity: boolean; private offLink?: () => void; private offAny?: () => void; private offLockEvents?: () => void; private lastBranchAt = 0; private wasWaiting = false; private branchTimer?: ReturnType<typeof setTimeout>;
   private readonly ids = newIdGenerator({ now: () => Date.now(), random: (n) => crypto.getRandomValues(new Uint8Array(n)) });
@@ -54,7 +57,7 @@ export class HostBridge {
     this.autoApprove = o.autoApprove === true; this.queue = new QueueClient(handle); this.mode = o.mode ?? 'command_post'; this.shareActivity = o.shareActivity !== false;
     this.gate = new PolicyGate(o.policy ?? {}, { sessionId: () => handle.id, engine: () => ctl.state.engineId, mode: this.mode, loginKind: () => ctl.state.agents.find((a) => a.mine)?.loginKind ?? 'unknown' });
     if (this.mode === 'command_post') { this.spend = createGuestSpendControl({ roster: () => handle.roster().map((m) => ({ id: m.id as MemberId, role: m.role, connected: m.online !== false })), hostId: handle.me.id as MemberId, provider: providerOf(ctl.state.engineId), setGuestsPaused: (p) => this.setGuestsPaused(p) }); this.spend.on('change', () => { this.o.onChange?.(); if (!this.spend!.held()) void this.pump(); }); }
-    if (this.mode === 'branch') { this.team = new TeamModel(); this.team.setRoster(handle.roster(), handle.me.id); }
+    if (this.mode === 'branch') { this.team = new TeamModel(); this.team.setRoster(handle.roster(), handle.me.id); this.remote = new RemoteApprovals(ctl, handle, { ...(o.askTeammates ?? {}), agentId: () => this.agent(), onChange: () => o.onChange?.() }); this.remote.setEnabled(!!o.askTeammates); }
   }
 
   start(): void {
@@ -66,9 +69,9 @@ export class HostBridge {
     this.handle.on('roster', () => { if (this.handle.me.role !== 'host') this.gate.drop(); /* the host role moved: the new host is asked */ this.o.onChange?.(); });
     const who = computeWhoPays({ mode: this.mode, engine: this.ctl.state.engineId, loginKind: this.ctl.state.agents.find((a) => a.mine)?.loginKind ?? 'unknown', owner: this.handle.me.id as MemberId, host: (this.handle.roster().find((m) => m.role === 'host')?.id ?? this.handle.me.id) as MemberId, prompter: this.handle.me.id as MemberId });
     this.emit('agent.spawn', { p: { agent_id: this.agent(), owner: this.handle.me.id, mode: this.mode, ...buildSpawnClearFields(who) }, secret: { label: this.ctl.state.engineLabel, ...(this.mode === 'branch' ? { worktree: this.ctl.state.cwd } : {}) } });
-    if (this.mode === 'command_post') { this.emitActivity('message.system', { secret: { level: 'info', text: 'This conversation is now shared.' } }); void this.pump(); } else this.startBranch();
+    if (this.mode === 'command_post') { this.emitActivity('message.system', { secret: { level: 'info', text: 'This conversation is now shared.' } }); void this.pump(); } else { this.startBranch(); this.remote?.start(); }
   }
-  stop(): void { if (this.mode === 'branch' && !this.stopped) this.emit('agent.exit', { p: { agent_id: this.agent(), outcome: 'ok' } }); this.offAny?.(); this.offLink?.(); this.boardSync?.stop(); if (this.mode === 'branch') { this.ctl.setTeamDigest(undefined); this.ctl.setRemoteAgentNamer(undefined); } if (this.branchTimer) clearTimeout(this.branchTimer); for (const t of this.reannounceTimers) clearTimeout(t); this.stopped = true; this.gate.drop(); this.offStore?.(); this.offTurn?.(); this.queue.dispose(); if (this.flushTimer) clearTimeout(this.flushTimer); if (this.stateTimer) clearTimeout(this.stateTimer); for (const w of this.busyWaiters.splice(0)) w(); for (const f of [...this.stoppers]) f(); }
+  stop(): void { this.remote?.stop(); if (this.mode === 'branch' && !this.stopped) this.emit('agent.exit', { p: { agent_id: this.agent(), outcome: 'ok' } }); this.offAny?.(); this.offLink?.(); this.boardSync?.stop(); if (this.mode === 'branch') { this.ctl.setTeamDigest(undefined); this.ctl.setRemoteAgentNamer(undefined); } if (this.branchTimer) clearTimeout(this.branchTimer); for (const t of this.reannounceTimers) clearTimeout(t); this.stopped = true; this.gate.drop(); this.offStore?.(); this.offTurn?.(); this.queue.dispose(); if (this.flushTimer) clearTimeout(this.flushTimer); if (this.stateTimer) clearTimeout(this.stateTimer); for (const w of this.busyWaiters.splice(0)) w(); for (const f of [...this.stoppers]) f(); }
 
   /** Turning it on goes through the gate (the host may be asked); returns whether it is on now. */
   async setAutoApprove(on: boolean): Promise<boolean> {
@@ -245,7 +248,7 @@ export class HostBridge {
 const withTimeout = <T,>(p: Promise<T>, ms: number, what: string): Promise<T> => new Promise<T>((resolve, reject) => { const t = setTimeout(() => reject(new Error(`${what} was not confirmed by the relay`)), ms); t.unref?.(); p.then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); }); });
 
 /** What a branch-mode member's app needs from a bridge: built on the controller's own file-lock hub, so locks reach the team and the team's locks reach this person's agent. */
-export function startBranchBridge(ctl: AppController, handle: SessionHandle, o: { policy?: PolicyOptions; shareActivity?: boolean; onChange?(): void; onConflict?(c: { agents: string[]; hmacs: string[] }): void; onError?(e: unknown): void; branchProbe?: BranchProbe } = {}): HostBridge {
+export function startBranchBridge(ctl: AppController, handle: SessionHandle, o: { policy?: PolicyOptions; askTeammates?: HostBridgeOptions['askTeammates']; shareActivity?: boolean; onChange?(): void; onConflict?(c: { agents: string[]; hmacs: string[] }): void; onError?(e: unknown): void; branchProbe?: BranchProbe } = {}): HostBridge {
   const bridge = new HostBridge(ctl, handle, { mode: 'branch', ...(ctl.lockHub ? { locks: ctl.lockHub } : {}), ...o }); bridge.start(); return bridge;
 }
 

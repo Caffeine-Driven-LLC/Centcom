@@ -486,6 +486,12 @@ export class AppController {
     return { decision: d.decision, scope: 'once', ...(d.reason ? { reason: d.reason } : {}) };
   }
 
+  /** Answers one waiting question by its id (a teammate's decision arriving from the session). False when it was already answered. */
+  answerApprovalById(id: string, decision: 'approve' | 'deny', scope: 'once' | 'session' | 'always' = 'once'): boolean {
+    const p = this.state.approvals.find((a) => a.req.approval_id === id); if (!p) return false;
+    this.set({ approvals: this.state.approvals.filter((a) => a !== p) }); p.resolve({ decision, scope, ...(decision === 'deny' ? { reason: 'teammate' } : {}) });
+    this.mascotState(decision === 'approve' ? 'approved' : 'denied'); return true;
+  }
   answerApproval(decision: 'approve' | 'deny', scope: 'once' | 'session' | 'always' = 'once') {
     const [first, ...rest] = this.state.approvals;
     if (!first) return;
