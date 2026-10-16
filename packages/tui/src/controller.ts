@@ -1136,10 +1136,10 @@ export class AppController {
         break;
       }
       case 'effort': await this.effortCommand(arg); break;
-      case 'watch': { if (!this.shareHandler) { this.toast('warn', 'No team here. /share branch starts a session where everyone runs their own agent.'); break; } await this.shareHandler('watch ' + arg); break; }
-      case 'team': { if (!this.shareHandler) { this.toast('warn', 'No team here. /share branch starts a session where everyone runs their own agent.'); break; } await this.shareHandler('team'); break; }
+      case 'watch': { if (!this.shareHandler) { this.toast('warn', 'No team here. Start one with /share branch.'); break; } await this.shareHandler('watch ' + arg); break; }
+      case 'team': { if (!this.shareHandler) { this.toast('warn', 'No team here. Start one with /share branch.'); break; } await this.shareHandler('team'); break; }
       case 'inbox': { if (!this.shareHandler) { this.toast('warn', 'The inbox needs an account. Run `centcom login` in a terminal first.'); break; } await this.shareHandler('inbox ' + arg); break; }
-      case 'share': { if (!this.shareHandler) { this.toast('warn', 'Sharing is not available here. Use the terminal app with an account (centcom login).'); break; } await this.shareHandler(arg); break; }
+      case 'share': { if (!this.shareHandler) { this.toast('warn', 'Sharing needs an account: run centcom login.'); break; } await this.shareHandler(arg); break; }
       case 'model': {
         if (!arg) { await this.openModels(); break; }
         const named = /^(codex|claude(?:[ -]?code)?)(?:[:\s]+(.*))?$/i.exec(arg.trim());
