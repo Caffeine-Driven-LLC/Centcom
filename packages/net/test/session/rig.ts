@@ -17,7 +17,7 @@ export class Peer {
   private stores = new Map<string, string>(); keyringStore(sid: string) { return { read: async () => this.stores.get(sid), write: async (t: string) => { this.stores.set(sid, t); } }; }
   seen: { method: string; path: string; headers: Record<string, string>; body?: unknown }[] = []; http!: HttpClient; client!: SessionClient; handle?: SessionHandle; warnings: string[] = []; fetched: string[] = [];
   constructor(readonly name: string, readonly sub: string | undefined, private m: MockBackend, private reg: Registry, private role: 'host' | 'editor', private register = true) {}
-  async init(extra: { seqStore?: import('../../src/index.js').SeqStore; keyrings?: boolean; fetch?: typeof fetch; clock?: import('../../src/index.js').RelayClock; logger?: import('../../src/index.js').Logger } = {}): Promise<this> {
+  async init(extra: { seqStore?: import('../../src/index.js').SeqStore; keyrings?: boolean; fetch?: typeof fetch; clock?: import('../../src/index.js').RelayClock; logger?: import('../../src/index.js').Logger; linkFactory?: (ctx: import('../../src/index.js').LinkContext) => unknown } = {}): Promise<this> {
     await initCrypto(); const keys = await this.device.getOrCreatePublicKeys(); const token = this.m.mintToken({ ...(this.sub ? { sub: this.sub } : {}), expSeconds: 86_400 });
     const rec = (async (input: string | URL, init?: RequestInit) => { const u = new URL(String(input)); this.seen.push({ method: init?.method ?? 'GET', path: u.pathname, headers: Object.fromEntries(new Headers(init?.headers).entries()), body: init?.body ? safeJson(init.body) : undefined }); return globalThis.fetch(input, init); }) as typeof fetch;
     const base = createHttpClient({ baseUrl: this.m.url, getAccessToken: async () => token, userAgent: defaultUserAgent('0.1.0'), timeoutMs: 3_600_000, fetch: rec });
@@ -46,7 +46,7 @@ export class Peer {
       const b = reg.blobs.get(id); return b ? new Response(b as BodyInit, { status: 200 }) : new Response('nope', { status: 404 });
     }) as typeof fetch;
     this.http = overlay;
-    this.client = createSessionClient({ http: overlay, crypto: { device: this.device, trust: this.trust, ...(extra.keyrings ? { keyringStore: (sid: string) => this.keyringStore(sid), keychain: this.keychain } : {}) }, ...(extra.seqStore ? { seqStore: extra.seqStore } : {}), deviceId: this.deviceId, clientInfo: { name: 'centcom-cli', version: '0.1.0', contract: '1.2.0' }, relayUrl: this.m.wsUrl, allowPlainWs: true, fetch: extra.fetch ?? fakeFetch, ...(extra.clock ? { clock: extra.clock } : {}), ...(extra.logger ? { logger: extra.logger } : {}) });
+    this.client = createSessionClient({ ...(extra.linkFactory ? { linkFactory: extra.linkFactory } : {}), http: overlay, crypto: { device: this.device, trust: this.trust, ...(extra.keyrings ? { keyringStore: (sid: string) => this.keyringStore(sid), keychain: this.keychain } : {}) }, ...(extra.seqStore ? { seqStore: extra.seqStore } : {}), deviceId: this.deviceId, clientInfo: { name: 'centcom-cli', version: '0.1.0', contract: '1.2.0' }, relayUrl: this.m.wsUrl, allowPlainWs: true, fetch: extra.fetch ?? fakeFetch, ...(extra.clock ? { clock: extra.clock } : {}), ...(extra.logger ? { logger: extra.logger } : {}) });
     return this;
   }
 }
