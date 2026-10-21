@@ -137,6 +137,15 @@ export class RelayClient extends TypedEmitter<RelayEvents> implements FrameLink 
     return this.limiter.submit(sendClassOf(t), text, bytes);
   }
 
+  private readonly rawTaps = new Set<(raw: Record<string, unknown>) => boolean>();
+  /** Hears every inbound JSON object before it is parsed as a session frame; returning true consumes it. For link-specific frames only (the LAN host's snapshot transfer); the session protocol never goes through here. */
+  onRawFrame(fn: (raw: Record<string, unknown>) => boolean): () => void { this.rawTaps.add(fn); return () => { this.rawTaps.delete(fn); }; }
+  /** Writes one link-specific object as it is (no schema check; the size cap still applies). Only while the link is ready. */
+  sendRaw(obj: Record<string, unknown>): Promise<void> {
+    const text = JSON.stringify({ v: 1, ...obj }); const bytes = byteLength(text); if (bytes > Math.min(MAX_FRAME_BYTES, this._limits.maxFrameBytes)) return Promise.reject(new FrameTooLargeError(bytes, MAX_FRAME_BYTES));
+    if (this._state !== 'ready') return Promise.reject(new RelayError('not_connected', { kind: 'network' })); return this.writeRaw(text);
+  }
+
   /** Close for good (no reconnect). Resolves when the socket is closed, at most CLOSE_GRACE_MS later on the injected clock. */
   close(code = 1000, reason = ''): Promise<void> {
     this.userClosing = true; this.clearTimer('reconnect'); this.clearTimer('stable');
@@ -204,6 +213,7 @@ export class RelayClient extends TypedEmitter<RelayEvents> implements FrameLink 
     const bytes = byteLength(text); if (bytes > MAX_FRAME_BYTES) return this.warn('oversize', bytes);
     let raw: unknown; try { raw = JSON.parse(text); } catch { return this.warn('not_json', bytes); }
     if (this._state === 'handshaking' && (raw as { t?: unknown } | null)?.t === 'sys.welcome' && !checkProtocol(raw, this.protocols)) return this.protocolMismatch();
+    if (raw && typeof raw === 'object' && this.rawTaps.size) { for (const tap of [...this.rawTaps]) { let used = false; try { used = tap(raw as Record<string, unknown>) === true; } catch { used = false; } if (used) return; } } /* a host-specific frame (the LAN snapshot transfer) that is not part of the session protocol */
     const r = parseFrame(raw); if (!r.ok) return this.warn('invalid_frame', bytes);
     const f = r.value;
     if (!KNOWN_TYPES.has(f.t)) { this.log?.debug('relay.unknown_type', { bytes }); return; }

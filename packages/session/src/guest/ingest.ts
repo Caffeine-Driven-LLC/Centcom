@@ -7,5 +7,6 @@ export class GuestIngest<F extends { seq?: number }> {
     this.pending.set(seq, f); const out: F[] = []; for (let n = this.last + 1; this.pending.has(n); n++) { out.push(this.pending.get(n)!); this.pending.delete(n); this.last = n; } return out;
   }
   /** after a resume with a snapshot the base moves forward */
-  rebase(seq: number): void { this.last = Math.max(this.last, seq); for (const k of [...this.pending.keys()]) if (k <= this.last) this.pending.delete(k); }
+  /** Returns the frames that were waiting and can now be delivered in order. */
+  rebase(seq: number): F[] { this.last = Math.max(this.last, seq); for (const k of [...this.pending.keys()]) if (k <= this.last) this.pending.delete(k); const out: F[] = []; for (let n = this.last + 1; this.pending.has(n); n++) { out.push(this.pending.get(n)!); this.pending.delete(n); this.last = n; } return out; }
 }

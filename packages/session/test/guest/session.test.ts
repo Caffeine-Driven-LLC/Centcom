@@ -10,7 +10,8 @@ import { CLIENT, SID, dev, lanServer, mem, token } from '../rigs.js';
 const ME = mem(2), HOST = mem(1); let n = 0; const msg = () => `msg_${String(++n).padStart(26, 'A')}`.slice(0, 30); const que = () => `que_${String(++n).padStart(26, 'A')}`.slice(0, 30);
 const passthrough: FrameDecoder = { decode: (f) => ({ kind: 'ok', frame: f }) };
 const clock = (): GuestClock & { advance(ms: number): void; timers: number } => { let t = 0; const q: { at: number; fn: () => void }[] = []; return { now: () => t, setTimeout: (fn, ms) => { q.push({ at: t + ms, fn }); return q.length; }, clearTimeout: () => undefined, advance(ms) { t += ms; for (const x of q.filter((y) => y.at <= t)) { q.splice(q.indexOf(x), 1); x.fn(); } }, get timers() { return q.length; } }; };
-const sign = async () => 'A'.repeat(86); const sealBody = async (b: string) => ({ alg: 'xchacha20poly1305', kid: 'k1', n: 'A'.repeat(32), c: Buffer.from(b).toString('base64') });
+/** stands in for the session client's codec: the ciphertext is the base64 of the body, the signature a placeholder */
+const encoder = { encode: (kind: string, id: string, body: { p?: Record<string, unknown> | ((i: { ctBytes: number }) => Record<string, unknown>); secret?: Record<string, unknown> }) => { const t = kind.startsWith('queue.') ? 'queue' : 'event'; if (!body.secret) return { t, id, k: kind, ...(body.p ? { p: typeof body.p === 'function' ? body.p({ ctBytes: 0 }) : body.p } : {}) } as never; const c = Buffer.from(String(body.secret.body)).toString('base64'); const ctBytes = Buffer.from(c, 'base64').length; return { t, id, k: kind, p: typeof body.p === 'function' ? body.p({ ctBytes }) : body.p, ct: { alg: 'xchacha20poly1305', kid: 'k1', n: 'A'.repeat(32), c }, sig: 'A'.repeat(86) } as never; } };
 
 /** A transport the test drives by hand. */
 function fake(role: 'host' | 'editor' | 'viewer' = 'editor') {
@@ -21,10 +22,10 @@ function fake(role: 'host' | 'editor' | 'viewer' = 'editor') {
 }
 const sf = (seq: number, k: string, from: string, p: Record<string, unknown>, t: Frame['t'] = 'control'): Frame => ({ v: 1, t, id: msg(), sid: SID, from, ts: '2026-10-07T00:00:00.000Z', k, seq, p }) as Frame;
 const rosterFrame = (role: string) => sf(1, 'control.roster', SERVER, { version: 1, members: [{ id: HOST, name: 'H', slot: 0, role: 'host' }, { id: ME, name: 'Me', slot: 1, role }] });
-async function open(role: 'host' | 'editor' | 'viewer' = 'editor', extra: Partial<Parameters<typeof GuestSession.join>[0]> = {}) { const f = fake(role); const c = clock(); const g = await GuestSession.join({ transport: f.t, decoder: passthrough, clock: c, ids: { msg, que }, sealBody, sign, sid: SID, random: () => 0, ...extra }); f.emit('frame', rosterFrame(role)); return { f, c, g }; }
+async function open(role: 'host' | 'editor' | 'viewer' = 'editor', extra: Partial<Parameters<typeof GuestSession.join>[0]> = {}) { const f = fake(role); const c = clock(); const g = await GuestSession.join({ transport: f.t, decoder: passthrough, clock: c, ids: { msg, que }, encoder, sid: SID, random: () => 0, ...extra }); f.emit('frame', rosterFrame(role)); return { f, c, g }; }
 
 describe('join and queue', () => {
-  it('is live after welcome and the roster', async () => { const f = fake(); const g = await GuestSession.join({ transport: f.t, decoder: passthrough, clock: clock(), ids: { msg, que }, sealBody, sign, sid: SID }); expect(g.state.phase).toBe('connecting'); f.emit('frame', rosterFrame('editor')); expect(g.state.phase).toBe('live'); expect(g.state.me).toMatchObject({ member: ME, role: 'editor', slot: 1 }); });
+  it('is live after welcome and the roster', async () => { const f = fake(); const g = await GuestSession.join({ transport: f.t, decoder: passthrough, clock: clock(), ids: { msg, que }, encoder, sid: SID }); expect(g.state.phase).toBe('connecting'); f.emit('frame', rosterFrame('editor')); expect(g.state.phase).toBe('live'); expect(g.state.me).toMatchObject({ member: ME, role: 'editor', slot: 1 }); });
   it('submit sends a queue.submit with a fresh item id, size = ciphertext bytes and no plaintext, and resolves on the echo', async () => {
     const { f, g } = await open(); const pr = g.submit('hello world'); await Promise.resolve(); await new Promise((r) => setTimeout(r, 5)); const out = f.sent[0]!; expect(out.k).toBe('queue.submit'); expect(out.p).toMatchObject({ size: 11, kind: 'message' }); expect(String((out.p as { item: string }).item)).toMatch(/^que_/); expect(JSON.stringify(out)).not.toContain('hello world'); let done = false; void pr.then(() => { done = true; }); await new Promise((r) => setTimeout(r, 5)); expect(done).toBe(false);
     f.emit('frame', { ...out, from: ME, seq: 2, ts: 'x' }); expect(await pr).toBe((out.p as { item: string }).item);
@@ -64,10 +65,24 @@ const stops: (() => Promise<void>)[] = []; afterEach(async () => { for (const s 
 describe('against the host engine over loopback', () => {
   it('a guest joins, submits, sees the approval and the queue, and survives a forced disconnect with one item only', async () => {
     await initCrypto(); const env = await lanServer(); const engine = new HostSessionEngine({ server: env.server, persistence: createFilePersistence(pjoin(env.dir, 'h')), tokens: new ReconnectTokens(), clock: { now: () => Date.now(), setTimeout: (f, ms) => setTimeout(f, ms), clearTimeout: (h: never) => clearTimeout(h as unknown as ReturnType<typeof setTimeout>) } }); await engine.start(); stops.push(() => engine.stop());
-    const kc = memoryKeychain(); const device = new DeviceKeyStore(kc, dev(2)); await device.getOrCreatePublicKeys(); const t = new LanTransport({ host: '127.0.0.1', port: env.port, sessionId: SID, reconnectToken: token('guest-token'), keychain: kc, device, deviceInfo: { id: dev(2), name: 'Guest' }, clientInfo: CLIENT }); const g = await GuestSession.join({ transport: t, decoder: passthrough, clock: { now: () => Date.now(), setTimeout: (f, ms) => setTimeout(f, ms), clearTimeout: (h: never) => clearTimeout(h as unknown as ReturnType<typeof setTimeout>) }, ids: { msg, que }, sealBody, sign, sid: SID }); stops.push(() => g.leave());
+    const kc = memoryKeychain(); const device = new DeviceKeyStore(kc, dev(2)); await device.getOrCreatePublicKeys(); const t = new LanTransport({ host: '127.0.0.1', port: env.port, sessionId: SID, reconnectToken: token('guest-token'), keychain: kc, device, deviceInfo: { id: dev(2), name: 'Guest' }, clientInfo: CLIENT }); const g = await GuestSession.join({ transport: t, decoder: passthrough, clock: { now: () => Date.now(), setTimeout: (f, ms) => setTimeout(f, ms), clearTimeout: (h: never) => clearTimeout(h as unknown as ReturnType<typeof setTimeout>) }, ids: { msg, que }, encoder, sid: SID }); stops.push(() => g.leave());
     const until = async (fn: () => boolean) => { const t0 = Date.now(); while (!fn()) { if (Date.now() - t0 > 3000) throw new Error('timed out'); await new Promise((r) => setTimeout(r, 10)); } };
     await until(() => g.state.phase === 'live'); expect(g.state.me.role).toBe('editor'); const item = await g.submit('do the thing'); await until(() => g.state.queue.items.some((i) => i.item === item)); expect(g.state.queue.items[0]).toMatchObject({ submitter: mem(2), state: 'queued', size: 12 });
     await engine.approveItem(item); await until(() => g.state.queue.items[0]?.state === 'approved'); expect(g.state.queue.version).toBe(engine.queue().version);
     env.server.kickConnection(mem(2), 1001); await until(() => g.state.phase === 'reconnecting' || g.state.phase === 'live'); await until(() => g.state.phase === 'live' && g.state.lastSeq === engine.headSeq()); expect(engine.queue().items).toHaveLength(1);
   }, 20_000);
+});
+
+describe('acks (CT-WS-ENVELOPE)', () => {
+  it('a standalone ack goes out after 64 frames in order, and at the latest 5 s after the first one that was not acked', async () => {
+    const { f, c } = await open('editor'); const acks = () => f.sent.filter((x) => x.t === 'ack').map((x) => x.ack);
+    for (let i = 2; i <= 64; i++) f.emit('frame', sf(i, 'message.system', HOST, {}, 'event')); await new Promise((r) => setTimeout(r, 5)); expect(acks()).toEqual([64]);
+    f.emit('frame', sf(65, 'message.system', HOST, {}, 'event')); await new Promise((r) => setTimeout(r, 5)); expect(acks()).toEqual([64]); c.advance(5000); await new Promise((r) => setTimeout(r, 5)); expect(acks()).toEqual([64, 65]);
+  });
+  it('a duplicate or a frame out of order is not acked ahead of its turn', async () => {
+    const { f, c } = await open('editor'); f.emit('frame', sf(5, 'message.system', HOST, {}, 'event')); c.advance(5000); await new Promise((r) => setTimeout(r, 5)); expect(f.sent.filter((x) => x.t === 'ack').map((x) => x.ack)).toEqual([1]); /* the roster at seq 1 was in order; seq 5 is held and not acked */
+  });
+  it('leaving sends the last ack first', async () => {
+    const { f, g } = await open('editor'); f.emit('frame', sf(2, 'message.system', HOST, {}, 'event')); await g.leave(); expect(f.sent.filter((x) => x.t === 'ack').map((x) => x.ack)).toEqual([2]);
+  });
 });

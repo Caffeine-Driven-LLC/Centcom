@@ -4,3 +4,4 @@ export { GuestIngest } from './ingest.js';
 export { KeyWaitBuffer, KEY_WAIT_FRAMES, KEY_WAIT_BYTES } from './key-wait.js';
 export { initialGuestState, SERVER, WARNING_RING, type GuestState, type Phase, type QueueItemView, type TranscriptEntry, type ProtocolWarning, type DecodedFrame, type Role as GuestRole, type RosterEntry as GuestRosterEntry } from './state.js';
 export { codecDecoder } from './codec-decoder.js';
+export { applyLanSnapshot, SNAPSHOT_TRANSCRIPT_MAX, type LanSnapshotDoc } from './snapshot.js';
