@@ -1,11 +1,12 @@
 /** GuestSession: a guest's live, ordered, decrypted copy of a command post, over any transport (lane C076). Crypto stays behind `FrameDecoder` (signature check and decrypt are the session client's job); this class never logs `ct`, bodies or paths. */
-import { CentcomError } from '@centcom/net';
+import { AckScheduler, CentcomError, type FrameCodec } from '@centcom/net';
 import type { Frame } from '@centcom/protocol';
 import { transportCloseError } from '../transport/errors.js';
 import type { SessionTransport } from '../transport/types.js';
 import { GuestIngest } from './ingest.js';
 import { KeyWaitBuffer } from './key-wait.js';
 import { reduceGuestState } from './reduce.js';
+import { applyLanSnapshot, type LanSnapshotDoc } from './snapshot.js';
 import { WARNING_RING, initialGuestState, type DecodedFrame, type GuestState, type Role } from './state.js';
 
 export type DecodeResult = { kind: 'ok'; frame: DecodedFrame } | { kind: 'wait_key' } | { kind: 'drop'; reason: string };
@@ -13,18 +14,22 @@ export interface FrameDecoder { decode(f: Frame): DecodeResult }
 export interface GuestClock { now(): number; setTimeout(fn: () => void, ms: number): unknown; clearTimeout(h: never): void }
 export interface GuestOptions {
   transport: SessionTransport; decoder: FrameDecoder; clock: GuestClock; ids: { msg(): string; que(): string; };
-  /** encrypts a queue body with the session key: the guest sends `ct` and `p.size` from it */
-  sealBody(body: string): Promise<{ alg: string; kid: string; n: string; c: string }>;
-  /** signs a hybrid frame over its canonical JSON (the device key lives behind this) */
-  sign(frame: Omit<Frame, 'sig'>): Promise<string>;
+  /** the session client's own codec (C057): `encode` seals a queue body under the session key and signs the frame with the device key (`p.size` is the ciphertext size it measured) */
+  encoder: Pick<FrameCodec, 'encode'>;
+  /** opens a host snapshot (still encrypted, with the seq the host named); throws when it cannot (no key yet, damaged) */
+  openSnapshot?(bytes: Uint8Array, seq: number): LanSnapshotDoc;
   /** called once after a 4401 before the transport reconnects */ refreshTicket?(): Promise<void>; random?: () => number; sid: string;
 }
 const MEMBER_CAP = 5; const LIVE_STATES = new Set(['queued', 'approved', 'running', 'held']);
 const err = (code: string, status: number): CentcomError => new CentcomError({ kind: 'api', code: code as never, status });
 
 export class GuestSession {
-  private st: GuestState; private readonly fns = new Set<(s: GuestState) => void>(); private readonly ingest = new GuestIngest<Frame>(); private readonly wait = new KeyWaitBuffer(); private readonly pending = new Map<string, { frame: Frame; resolve: () => void; reject: (e: unknown) => void }>(); private refreshed = false; private off: (() => void)[] = []; private left = false;
-  private constructor(private readonly o: GuestOptions) { this.st = initialGuestState({ member: '' }); }
+  private st: GuestState; private readonly fns = new Set<(s: GuestState) => void>(); private readonly ingest = new GuestIngest<Frame>(); private readonly wait = new KeyWaitBuffer(); private readonly pending = new Map<string, { frame: Frame; resolve: () => void; reject: (e: unknown) => void }>(); private refreshed = false; private off: (() => void)[] = []; private left = false; private readonly acks: AckScheduler; private snapshotNeeded?: number; private catchUps: number[] = []; private catching = false;
+  private constructor(private readonly o: GuestOptions) {
+    this.st = initialGuestState({ member: '' });
+    /* acks (CT-WS-ENVELOPE): after every 64 frames, and at the latest 5 s after the first unacked one; the host trims what it keeps for a resume from them */
+    this.acks = new AckScheduler({ clock: o.clock as never, lastSeq: () => (this.ingest.lastSeq > 0 ? this.ingest.lastSeq : null), send: async (seq) => { try { await o.transport.send({ v: 1, t: 'ack', sid: o.sid, ack: seq } as never); return true; } catch { return false; } } });
+  }
 
   static async join(o: GuestOptions): Promise<GuestSession> {
     const g = new GuestSession(o); g.off.push(o.transport.on('frame', (f) => g.onFrame(f)), o.transport.on('closed', (c) => g.onClosed(c)), o.transport.on('welcome', (w) => g.onWelcome(w as never))); await o.transport.connect(); return g;
@@ -41,9 +46,10 @@ export class GuestSession {
   private warnPush(kind: string, reason: string, seq?: number): void { this.set({ ...this.st, warnings: [...this.st.warnings, { kind, reason, ...(seq !== undefined ? { seq } : {}) }].slice(-WARNING_RING) }); }
 
   private onFrame(f: Frame): void {
+    if (f.t === 'sys.resumed' && (f.p as { snapshot_required?: unknown } | undefined)?.snapshot_required === true) { const head = (f.p as { snapshot_seq?: unknown }).snapshot_seq; this.snapshotNeeded = typeof head === 'number' ? head : 0; return void this.catchUp(); }
     if (typeof f.seq !== 'number') return; /* presence and other unsequenced frames are not part of the transcript */
     const own = this.pending.get(String(f.id)); if (own && f.from === this.st.me.member) { this.pending.delete(String(f.id)); own.resolve(); }
-    for (const g of this.ingest.push(f)) this.apply(g);
+    for (const g of this.ingest.push(f)) { this.apply(g); this.acks.onDelivered(); }
   }
   private apply(f: Frame): void {
     const r = this.o.decoder.decode(f);
@@ -52,7 +58,24 @@ export class GuestSession {
     const ev = this.wait.push(f); if (ev > 0) this.warnPush(String(f.k), 'key_wait_evicted', f.seq); this.set({ ...this.st, lastSeq: Math.max(this.st.lastSeq, f.seq ?? 0), phase: 'waiting_for_key' });
   }
   /** The key grant was opened: everything that waited is decoded in order in one pass. */
+  /**
+   * The host says our position is older than its replay window: take its newest snapshot, restore the state from it, then ask for what came after.
+   * No snapshot, or one we cannot open: the view starts at the host's head and says so in the warnings (earlier history is not available).
+   */
+  private async catchUp(): Promise<void> {
+    if (this.catching || this.left) return; const now = this.o.clock.now(); this.catchUps = this.catchUps.filter((t) => now - t < 60_000); if (this.catchUps.length >= 3) { this.snapshotNeeded = undefined; return this.warnPush('snapshot', 'catch_up_loop'); } this.catchUps.push(now); this.catching = true;
+    try {
+      const head = this.snapshotNeeded ?? 0; const snap = this.o.transport.fetchSnapshot ? await this.o.transport.fetchSnapshot().catch(() => null) : null; let base = head;
+      if (snap && this.o.openSnapshot) {
+        try { const doc = this.o.openSnapshot(snap.bytes, snap.seq); this.set(applyLanSnapshot(this.st, doc)); base = doc.seq; this.snapshotNeeded = undefined; }
+        catch (e) { if ((e as { code?: string }).code === 'unknown_kid' || (e as { code?: string }).code === 'no_key') { this.set({ ...this.st, phase: 'waiting_for_key' }); return; /* tried again when the key arrives */ } this.warnPush('snapshot', 'snapshot_invalid'); this.snapshotNeeded = undefined; }
+      } else { this.warnPush('snapshot', snap ? 'snapshot_unreadable' : 'earlier_history_unavailable'); this.snapshotNeeded = undefined; }
+      const ready = this.ingest.rebase(base); this.set({ ...this.st, lastSeq: Math.max(this.st.lastSeq, base) }); for (const g of ready) { this.apply(g); this.acks.onDelivered(); } /* frames that arrived while the snapshot was on its way */
+      await this.o.transport.send({ v: 1, t: 'sys.resume', sid: this.o.sid, p: { last_seq: base } } as never).catch(() => undefined);
+    } finally { this.catching = false; }
+  }
   keyArrived(): void {
+    if (this.snapshotNeeded !== undefined) void this.catchUp();
     const frames = this.wait.drain().sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0)); let s = this.st; const was = s.phase;
     for (const f of frames) { const r = this.o.decoder.decode(f); if (r.kind === 'ok') s = reduceGuestState(s, r.frame); else if (r.kind === 'wait_key') this.wait.push(f); }
     const transcript = [...s.transcript].sort((a, b) => a.seq - b.seq); this.set({ ...s, transcript, phase: this.wait.size > 0 ? 'waiting_for_key' : was === 'waiting_for_key' ? (s.roster.length ? 'live' : 'connecting') : s.phase });
@@ -74,13 +97,13 @@ export class GuestSession {
   async submit(body: string, kind: 'message' | 'command' = 'message'): Promise<string> {
     const me = this.st.me; if (me.role === 'viewer') throw err('forbidden', 403); if (me.muted) throw err('forbidden', 403); if (this.st.phase === 'ended' || this.st.phase === 'kicked') throw err('forbidden', 403);
     if (this.st.queue.items.filter((i) => i.submitter === me.member && LIVE_STATES.has(i.state)).length + [...this.pending.values()].filter((p) => p.frame.k === 'queue.submit').length >= MEMBER_CAP) throw err('queue_full', 429);
-    const ct = await this.o.sealBody(body); const item = this.o.ids.que(); const size = Buffer.from(ct.c, 'base64').length; const unsigned = { v: 1, t: 'queue', k: 'queue.submit', id: this.o.ids.msg(), sid: this.o.sid, p: { item, size, kind }, ct } as unknown as Frame; const frame = { ...unsigned, sig: await this.o.sign(unsigned) } as Frame;
+    const item = this.o.ids.que(); const out = this.o.encoder.encode('queue.submit', this.o.ids.msg(), { p: ({ ctBytes }) => ({ item, size: ctBytes, kind }), secret: { body } }); const frame = { v: 1, sid: this.o.sid, ...out } as unknown as Frame;
     await this.sendAndWait(frame); return item;
   }
   async cancel(item: string): Promise<void> {
     const it = this.st.queue.items.find((i) => i.item === item); if (!it) throw err('queue_item_gone', 404); if (it.submitter !== this.st.me.member) throw err('forbidden', 403); if (it.state !== 'queued' && it.state !== 'approved') throw err('queue_item_gone', 404);
-    await this.sendAndWait({ v: 1, t: 'queue', k: 'queue.cancel', id: this.o.ids.msg(), sid: this.o.sid, p: { item } } as unknown as Frame);
+    await this.sendAndWait({ v: 1, sid: this.o.sid, ...this.o.encoder.encode('queue.cancel', this.o.ids.msg(), { p: { item } }) } as unknown as Frame);
   }
   private sendAndWait(frame: Frame): Promise<void> { return new Promise<void>((resolve, reject) => { this.pending.set(String(frame.id), { frame, resolve, reject }); this.o.transport.send(frame as never).catch((e: unknown) => { if (this.st.phase === 'live') { this.pending.delete(String(frame.id)); reject(e); } /* offline: it stays pending and goes out again with the same id after the welcome */ }); }); }
-  async leave(): Promise<void> { this.left = true; for (const o of this.off) o(); this.off = []; for (const p of this.pending.values()) p.reject(err('forbidden', 403)); this.pending.clear(); await this.o.transport.close(); this.set({ ...this.st, phase: 'ended' }); }
+  async leave(): Promise<void> { this.left = true; for (const o of this.off) o(); this.off = []; for (const p of this.pending.values()) p.reject(err('forbidden', 403)); this.pending.clear(); await this.acks.flush().catch(() => undefined); this.acks.stop(); await this.o.transport.close(); this.set({ ...this.st, phase: 'ended' }); }
 }

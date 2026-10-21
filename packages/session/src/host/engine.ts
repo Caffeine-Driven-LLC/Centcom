@@ -12,13 +12,13 @@ import { DEFAULT_LIMIT, QueueMachine } from './queue-machine.js';
 import { HostRoster } from './roster.js';
 
 export interface SessionPolicy { auto_approve: 'ask' | 'trusted' | 'everyone'; share_history: boolean; queue_limit: number; locked?: boolean; auto_failover?: boolean; trusted?: string[]; approvers?: string[]; queue_paused?: boolean }
-export interface EngineOptions { server: LanHostServer; persistence: SessionPersistence; policy?: Partial<SessionPolicy>; mode?: Mode; tokens: ReconnectTokens; clock: Clock; snapshotBuilder?: () => Promise<Uint8Array>; initialEpoch?: number; logger?: { warn(m: string, c?: Record<string, unknown>): void; info?(m: string, c?: Record<string, unknown>): void }; hostMember?: HostMember }
-export interface EngineEvents { 'member-joined': [{ id: string }]; 'member-left': [{ id: string; code: string }]; 'queue-changed': [unknown]; 'approval-request': [{ approvalId: string; requester: string }]; 'protocol-violation': [{ member: string; kind: string }]; ended: [{ code: string }]; denied: [{ member: string; kind: string; code: string }] }
+export interface EngineOptions { server: LanHostServer; persistence: SessionPersistence; policy?: Partial<SessionPolicy>; mode?: Mode; tokens: ReconnectTokens; clock: Clock; /** builds the encrypted snapshot of the state at `seq` (read the engine's views before the first await: the state then is the state at that seq) */ snapshotBuilder?: (info: { seq: number }) => Promise<Uint8Array>; initialEpoch?: number; logger?: { warn(m: string, c?: Record<string, unknown>): void; info?(m: string, c?: Record<string, unknown>): void }; hostMember?: HostMember; /** how long a host that dropped may come back before `auto_failover` moves the role (default 10 s) */ failoverGraceMs?: number }
+export interface EngineEvents { 'member-joined': [{ id: string }]; 'member-left': [{ id: string; code: string }]; 'queue-changed': [unknown]; 'approval-request': [{ approvalId: string; requester: string }]; 'protocol-violation': [{ member: string; kind: string }]; ended: [{ code: string }]; 'host-changed': [{ host: string; code: 'transfer' | 'failover' }]; denied: [{ member: string; kind: string; code: string }] }
 const MAX_CT = 196_608; const STATE_TABLE_CAP = 1024; const reject = (code: string, status = 403, extra: Record<string, unknown> = {}): { reject: ProblemBody } => ({ reject: { code, status, title: code, ...extra } });
 
 export class HostSessionEngine extends TypedEmitter<EngineEvents> implements FrameInterceptor {
   private readonly server: LanHostServer; readonly roster: HostRoster; private readonly qm: QueueMachine; private readonly locks: LockArbiter; private readonly book: ApprovalBook; private policy_: SessionPolicy; private readonly muted = new Map<string, number>(); private muteTimers = new Map<string, unknown>();
-  private readonly mode: Mode; private epoch: number; private framesSinceSnapshot = 0; private snapTimer?: unknown; private snapshotting = false; private ended = false; /** `agent.state` send times per member and agent (a member's own limit, never shared with another member's frames); expired entries are swept and the table is capped */ private readonly stateAt = new Map<string, number[]>(); private readonly sid: string;
+  private readonly mode: Mode; private epoch: number; private framesSinceSnapshot = 0; private hostTimer?: unknown; private snapTimer?: unknown; private snapshotting = false; private ended = false; /** `agent.state` send times per member and agent (a member's own limit, never shared with another member's frames); expired entries are swept and the table is capped */ private readonly stateAt = new Map<string, number[]>(); private readonly sid: string;
   constructor(private readonly o: EngineOptions) {
     super(); this.server = o.server; this.mode = o.mode ?? 'command_post'; this.epoch = o.initialEpoch ?? 1; this.sid = (o.server as unknown as { o: { sessionId: string } }).o.sessionId;
     this.policy_ = { auto_approve: 'ask', share_history: true, queue_limit: DEFAULT_LIMIT, ...o.policy }; const host = o.hostMember ?? (o.server as unknown as { o: { hostMember: HostMember } }).o.hostMember; this.roster = new HostRoster(host);
@@ -29,7 +29,7 @@ export class HostSessionEngine extends TypedEmitter<EngineEvents> implements Fra
     if (this.o.snapshotBuilder) this.armSnapshotTimer();
   }
   async stop(code: 'done' | 'abandoned' | 'error' = 'done'): Promise<void> {
-    if (this.ended) return; this.ended = true; this.server.broadcast({ t: 'control', k: 'control.session_state', p: { state: 'ended' } } as never); this.o.tokens.endSession(); this.locks.stop(); if (this.snapTimer !== undefined) this.o.clock.clearTimeout(this.snapTimer as never); for (const t of this.muteTimers.values()) this.o.clock.clearTimeout(t as never);
+    if (this.ended) return; this.ended = true; this.server.broadcast({ t: 'control', k: 'control.session_state', p: { state: 'ended' } } as never); this.o.tokens.endSession(); this.locks.stop(); this.clearHostTimer(); if (this.snapTimer !== undefined) this.o.clock.clearTimeout(this.snapTimer as never); for (const t of this.muteTimers.values()) this.o.clock.clearTimeout(t as never);
     if (this.o.snapshotBuilder) await this.snapshot().catch(() => undefined); await this.server.stop(1000); this.emit('ended', { code });
   }
 
@@ -66,7 +66,7 @@ export class HostSessionEngine extends TypedEmitter<EngineEvents> implements Fra
 
   /* ------------------------------------------------------------- after it was numbered and sent */
   onSequenced(f: Frame): void {
-    void this.o.persistence.appendFrame(this.sid, f as SequencedFrame).catch(() => this.o.logger?.warn('host.persist_failed')); this.framesSinceSnapshot++; if (this.framesSinceSnapshot >= SNAPSHOT_FRAMES && this.o.snapshotBuilder) void this.snapshot().catch(() => undefined);
+    void this.o.persistence.appendFrame(this.sid, f as SequencedFrame).catch(() => this.o.logger?.warn('host.persist_failed')); this.framesSinceSnapshot++; if (this.framesSinceSnapshot >= SNAPSHOT_FRAMES && this.o.snapshotBuilder) queueMicrotask(() => { void this.snapshot().catch(() => undefined); }); /* after this frame's effects are in the queue and roster, so the snapshot's state is the state at its seq */
     if (f.from === 'srv' || !f.k) return; const from = String(f.from); const p = (f.p ?? {}) as Record<string, unknown>; const kind = f.k;
     if (kind.startsWith('queue.')) { if (this.qm.apply(kind, from, p, String(f.ts))) { if (kind === 'queue.submit') this.autoApprove(from, String(p.item)); this.broadcastQueue(); } return; }
     if (kind.startsWith('control.')) return this.afterControl(kind, from, p);
@@ -86,7 +86,7 @@ export class HostSessionEngine extends TypedEmitter<EngineEvents> implements Fra
       case 'control.mute': { const until = typeof p.until === 'string' ? Date.parse(p.until) : NaN; this.muted.set(target, Number.isFinite(until) ? until : Infinity); const old = this.muteTimers.get(target); if (old !== undefined) this.o.clock.clearTimeout(old as never); if (Number.isFinite(until)) this.muteTimers.set(target, this.o.clock.setTimeout(() => { this.muted.delete(target); this.muteTimers.delete(target); }, Math.max(0, until - this.o.clock.now()))); break; }
       case 'control.unmute': this.muted.delete(target); { const t = this.muteTimers.get(target); if (t !== undefined) this.o.clock.clearTimeout(t as never); this.muteTimers.delete(target); } break;
       case 'control.role': this.server.setRole(target, p.role as 'editor' | 'viewer'); this.roster.setRole(target, p.role as 'editor' | 'viewer'); this.broadcastRoster(); break;
-      case 'control.transfer_host': { const to = String(p.to); this.releaseRunning(); /* only here: the frame was accepted and numbered, so a refused transfer never requeues live work */ this.server.setRole(from, 'editor'); this.roster.setRole(from, 'editor'); this.server.setRole(to, 'host'); this.roster.setRole(to, 'host'); this.server.broadcast({ t: 'control', k: 'control.host_changed', p: { host: to, code: 'transfer' } } as never); this.broadcastRoster(); break; }
+      case 'control.transfer_host': { const to = String(p.to); this.releaseRunning(); /* only here: the frame was accepted and numbered, so a refused transfer never requeues live work */ this.server.setRole(from, 'editor'); this.roster.setRole(from, 'editor'); this.server.setRole(to, 'host'); this.roster.setRole(to, 'host'); this.server.broadcast({ t: 'control', k: 'control.host_changed', p: { host: to, code: 'transfer' } } as never); this.broadcastRoster(); this.emit('host-changed', { host: to, code: 'transfer' }); break; }
       case 'control.policy': { const { ...rest } = p; this.policy_ = { ...this.policy_, ...rest } as SessionPolicy; break; }
       case 'control.rotate_request': this.epoch++; this.server.broadcast({ t: 'control', k: 'control.rotate_key', p: { kid: `k${this.epoch}`, reason: String(p.reason) } } as never); break;
       case 'control.end': void this.stop(p.code as 'done' | 'abandoned' | 'error'); break;
@@ -96,14 +96,29 @@ export class HostSessionEngine extends TypedEmitter<EngineEvents> implements Fra
 
   /* ------------------------------------------------------------- members */
   private onConnected(m: ConnectedMember, first: boolean): void {
-    const isNew = this.roster.connected(m); if (m.role === 'host' || m.memberId === this.roster.hostId()) this.qm.setHostAway(false) && this.broadcastQueue();
+    const isNew = this.roster.connected(m); /* a host that was replaced while away comes back as what the roster says */ const rosterRole = this.server.roleOf(m.memberId); if (rosterRole && rosterRole !== m.role) this.roster.setRole(m.memberId, rosterRole); if (m.memberId === this.roster.hostId()) { this.clearHostTimer(); this.qm.setHostAway(false) && this.broadcastQueue(); }
     if (isNew || first) { this.emit('member-joined', { id: m.memberId }); this.broadcastRoster(); this.broadcastQueue(); } else { this.broadcastRoster(); }
   }
-  private onDisconnected(m: ConnectedMember): void { this.roster.disconnected(m.memberId); if (m.memberId === this.roster.hostId() && this.qm.setHostAway(true)) this.broadcastQueue(); }
+  private onDisconnected(m: ConnectedMember): void {
+    this.roster.disconnected(m.memberId); if (m.memberId !== this.roster.hostId()) return; if (this.qm.setHostAway(true)) this.broadcastQueue();
+    if (this.policy_.auto_failover === true && !this.ended) { this.clearHostTimer(); this.hostTimer = this.o.clock.setTimeout(() => { this.hostTimer = undefined; if (!this.ended && this.roster.get(m.memberId)?.connected === false) this.failover(); }, this.o.failoverGraceMs ?? 10_000); }
+  }
+  private clearHostTimer(): void { if (this.hostTimer !== undefined) { this.o.clock.clearTimeout(this.hostTimer as never); this.hostTimer = undefined; } }
+  /**
+   * The host is gone and `auto_failover` is on: the connected editor with the lowest slot becomes host (as the hosted relay does). What the old host
+   * had running goes back to approved (`adoptQueue`'s rule), so the new host runs it once; everyone hears `control.host_changed {code:'failover'}`, the
+   * roster and the queue. With nobody to take over the session pauses. Returns the new host, or null.
+   */
+  failover(): string | null {
+    if (this.ended) return null; const old = this.roster.hostId(); const next = this.roster.list().filter((e) => e.role === 'editor' && e.connected).sort((a, b) => a.slot - b.slot)[0];
+    if (!next) { this.server.broadcast({ t: 'control', k: 'control.session_state', p: { state: 'paused' } } as never); return null; }
+    this.releaseRunning(); if (old) { this.server.setRole(old, 'editor'); this.roster.setRole(old, 'editor'); } this.server.setRole(next.id, 'host'); this.roster.setRole(next.id, 'host'); this.qm.setHostAway(false);
+    this.server.broadcast({ t: 'control', k: 'control.host_changed', p: { host: next.id, code: 'failover' } } as never); this.broadcastRoster(); this.broadcastQueue(); this.emit('host-changed', { host: next.id, code: 'failover' }); return next.id;
+  }
 
   /* ------------------------------------------------------------- snapshots */
   private armSnapshotTimer(): void { this.snapTimer = this.o.clock.setTimeout(() => { if (this.framesSinceSnapshot > 0) void this.snapshot().catch(() => undefined); if (!this.ended) this.armSnapshotTimer(); }, SNAPSHOT_MS); }
-  async snapshot(): Promise<void> { if (!this.o.snapshotBuilder || this.snapshotting) return; this.snapshotting = true; try { const seq = this.server.headSeq(); const bytes = await this.o.snapshotBuilder(); await this.o.persistence.saveSnapshot(this.sid, { seq, bytes }); this.framesSinceSnapshot = 0; } finally { this.snapshotting = false; } }
+  async snapshot(): Promise<void> { if (!this.o.snapshotBuilder || this.snapshotting) return; this.snapshotting = true; try { const seq = this.server.headSeq(); const bytes = await this.o.snapshotBuilder({ seq }); await this.o.persistence.saveSnapshot(this.sid, { seq, bytes }); this.framesSinceSnapshot = 0; } finally { this.snapshotting = false; } }
 
   /* ------------------------------------------------------------- the host's own actions: the same path as remote frames */
   /** The host's own member, online through memory the first time it is needed. */

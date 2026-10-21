@@ -9,9 +9,9 @@ import type { ConformanceRig } from '../src/transport/conformance.js';
 
 export const SID = 'ses_01JA3Z8K2M5N7P9Q0R1S2T3V4W'; export const CLIENT: ClientIdent = { name: 'centcom-cli', version: '1.0.0', contract: '1.2.0' };
 export const mem = (n: number) => `mem_${String(n).padStart(26, 'A')}`.slice(0, 30); export const dev = (n: number) => `dev_${String(n).padStart(26, 'A')}`.slice(0, 30); export const token = (s: string) => s.padEnd(43, '_');
-export async function lanServer(o: { tokens?: Map<string, { memberId: string; deviceId: string; name: string; role: 'host' | 'editor' | 'viewer' }> } = {}) {
+export async function lanServer(o: { tokens?: Map<string, { memberId: string; deviceId: string; name: string; role: 'host' | 'editor' | 'viewer' }>; server?: Partial<ConstructorParameters<typeof LanHostServer>[0]> } = {}) {
   const tokens = o.tokens ?? new Map([[token('guest-token'), { memberId: mem(2), deviceId: dev(2), name: 'Guest', role: 'editor' as const }]]); const dir = mkdtempSync(join(tmpdir(), 'cc-session-')); let n = 0;
-  const server = new LanHostServer({ sessionId: SID, sessionName: 'demo', hostMember: { id: mem(1), name: 'Host', slot: 0, role: 'host' }, port: 0, bind: '127.0.0.1', tokens: { validate: async (t) => tokens.get(t) ?? null }, transcriptPath: join(dir, 't.jsonl'), clock: { now: () => Date.now(), setTimeout: (f, ms) => setTimeout(f, ms), clearTimeout: (h: never) => clearTimeout(h as unknown as ReturnType<typeof setTimeout>) }, ids: { next: (p) => `${p}_${String(++n).padStart(26, 'A')}`.slice(0, 30) } });
+  const server = new LanHostServer({ sessionId: SID, sessionName: 'demo', hostMember: { id: mem(1), name: 'Host', slot: 0, role: 'host' }, port: 0, bind: '127.0.0.1', tokens: { validate: async (t) => tokens.get(t) ?? null }, transcriptPath: join(dir, 't.jsonl'), clock: { now: () => Date.now(), setTimeout: (f, ms) => setTimeout(f, ms), clearTimeout: (h: never) => clearTimeout(h as unknown as ReturnType<typeof setTimeout>) }, ids: { next: (p) => `${p}_${String(++n).padStart(26, 'A')}`.slice(0, 30) }, ...o.server });
   const { port } = await server.start(); return { server, port, tokens, dir };
 }
 export async function relayRig(): Promise<ConformanceRig & { m: Awaited<ReturnType<typeof startMockBackend>>; joinTokens(): number }> {

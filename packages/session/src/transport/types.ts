@@ -6,6 +6,7 @@ export type TransportEvents = { welcome: [Welcome]; frame: [Frame]; notice: [Rec
 export interface SessionTransport extends Omit<FrameLink, 'on'> {
   readonly kind: 'relay' | 'lan' | 'local'; readonly capabilities: TransportCapabilities;
   connect(): Promise<Welcome>; close(code?: number): Promise<void>;
+  /** LAN only: the host's newest snapshot, still encrypted (null: none yet). */ fetchSnapshot?(timeoutMs?: number): Promise<{ seq: number; bytes: Uint8Array } | null>;
   on<K extends 'welcome' | 'frame' | 'link' | 'closed'>(ev: K, fn: (...a: RelayEvents[K]) => void): () => void;
   on<K extends keyof TransportEvents>(ev: K, fn: (...a: TransportEvents[K]) => void): () => void;
 }

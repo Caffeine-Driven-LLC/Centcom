@@ -427,6 +427,9 @@ importers:
 
   packages/session:
     dependencies:
+      '@centcom/agent':
+        specifier: workspace:*
+        version: link:../agent
       '@centcom/lan':
         specifier: workspace:*
         version: link:../lan
