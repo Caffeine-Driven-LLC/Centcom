@@ -20,7 +20,7 @@ async function world(o: { snapshots?: boolean } = {}) {
   let view: GuestState = initialGuestState({ member: mem(1), slot: 0, role: 'host' }); let eng: { queue(): never; members(): never } | undefined;
   const builder = lanSnapshotBuilder({ sid: SID, ring, engine: { queue: () => eng!.queue(), members: () => eng!.members() } as never, view: () => view });
   const r = await setup({ server: { replayMinFrames: 12, replayMinMs: 0 }, engine: o.snapshots === false ? { snapshotBuilder: undefined } : { snapshotBuilder: builder } }); eng = r.engine as never;
-  const link = r.engine.hostLink(); link.on('frame', (f: Frame) => { const d = hostCodec.decode(f as never); if (d.ok) view = reduceGuestState(view, { ...f, k: d.event.kind, ...(d.event.p !== undefined ? { p: d.event.p } : {}), secret: d.event.secret ?? null } as never); } );
+  const link = r.engine.hostLink() as unknown as { send(f: never): Promise<void>; on(ev: 'frame', fn: (f: Frame) => void): () => void }; link.on('frame', (f: Frame) => { const d = hostCodec.decode(f as never); if (d.ok) view = reduceGuestState(view, { ...f, k: d.event.kind, ...(d.event.p !== undefined ? { p: d.event.p } : {}), secret: d.event.secret ?? null } as never); } );
   const say = async (text: string): Promise<void> => { const n = view.transcript.length; await link.send(hostCodec.encode('message.user', nextId(), { secret: { text, agent_id: AGENT } }) as never); await wait(() => view.transcript.length === n + 1); };
   /** a guest that is far behind: its hello says it last saw seq 2 */
   const lateGuest = async (withKey: boolean) => {
